@@ -406,6 +406,10 @@ class SWGTrackerAPI:
         params = {"since_id": since_id} if since_id else None
         return self._request('GET', 'api/alerts.php', params=params)
 
+    def get_inventory_sales(self, inventory_id: int) -> tuple[bool, dict | str]:
+        """GET /api/inventory.php?action=sales - sales that depleted one item."""
+        return self._request('GET', f'api/inventory.php?action=sales&id={int(inventory_id)}')
+
     def delete_mail(self, mail_id: str) -> tuple[bool, dict | str]:
         """DELETE /api/mail.php - purge a mail server-side (incoming_mail, sales, purchases)."""
         from urllib.parse import quote

@@ -11,6 +11,7 @@ const STK_COLUMNS = [
   ['SR', 'sr', 'stat'], ['UT', 'ut', 'stat'], ['FL', 'fl', 'stat'],
   ['PE', 'pe', 'stat'],
   ['Amount', 'stock', 'stat', 'Click a value to edit — supports shorthand like 300k / 4.5m'],
+  ['Added', 'date_added', 'col-text', 'When you stockpiled it — click to see your newest first'],
   ['My CPU', 'my_cpu', 'stat', 'Your cost per unit — what you paid (0 = mined it yourself). Click to edit; the Lab uses this for cost math.'],
 ];
 const STK_NUMERIC = new Set([...STAT_FIELDS, 'stock', 'score', 'my_cpu']);
@@ -28,6 +29,7 @@ function stkRowHtml(item, idx) {
     if (field === 'name') return `<td class="col-name res-name">${escapeHtml(item.name || '')}</td>`;
     if (field === 'type_name') return `<td class="col-text res-type">${escapeHtml(item.type_name || '')}</td>`;
     if (field === 'stock') return `<td class="stat stk-stock" data-stock="${idx}">${fmtNum(item.stock)}</td>`;
+    if (field === 'date_added') return `<td class="col-text">${fmtAgoTip(item.date_added)}</td>`;
     if (field === 'my_cpu') {
       const has = item.my_cpu !== null && item.my_cpu !== undefined && item.my_cpu !== '';
       return `<td class="stat stk-stock" data-mycpu="${idx}" title="Your cost per unit — what you paid (0 = mined it yourself)">${has ? Number(item.my_cpu) : '—'}</td>`;
@@ -56,6 +58,9 @@ function stkVisibleItems() {
   const { sortField, sortOrder } = stkState;
   const dir = sortOrder === 'DESC' ? -1 : 1;
   return [...items].sort((a, b) => {
+    // added-order lives in the auto-increment id — also right for rows
+    // stockpiled before date_added existed
+    if (sortField === 'date_added') return dir * (safeInt(a.stockpile_id) - safeInt(b.stockpile_id));
     if (STK_NUMERIC.has(sortField)) return dir * (safeInt(a[sortField]) - safeInt(b[sortField]));
     return dir * String(a[sortField] ?? '').toLowerCase().localeCompare(String(b[sortField] ?? '').toLowerCase());
   });
@@ -115,8 +120,6 @@ async function syncStockpile() {
   all.forEach((i) => { if (i.score == null) i.score = safeInt(i.value_rating); });
   stkState.items = all;
   stkState.resourceIds = new Set(all.map((i) => String(i.id)));
-  $('#stk-sync').textContent = `Last synced: ${new Date().toLocaleString('en-US',
-    { month: '2-digit', day: '2-digit', hour: 'numeric', minute: '2-digit' })}`;
   renderStockpile(`Synced ${all.length} items from server`);
   refreshAddIcons();
 }
@@ -232,7 +235,7 @@ function initStockpile() {
       stkState.sortOrder = stkState.sortOrder === 'DESC' ? 'ASC' : 'DESC';
     } else {
       stkState.sortField = field;
-      stkState.sortOrder = STK_NUMERIC.has(field) ? 'DESC' : 'ASC';
+      stkState.sortOrder = (STK_NUMERIC.has(field) || field === 'date_added') ? 'DESC' : 'ASC'; // Added: newest first
     }
     renderStockpile();
   });

@@ -994,6 +994,16 @@ body:not(.dev-mode) .dev-only { display: none !important; }
 .mm-del.confirm-del i { animation: mm-del-flash .5s ease-in-out infinite alternate; }
 @keyframes mm-del-flash { from { opacity: 1; } to { opacity: .35; } }
 
+/* Inventory sales expander */
+.inv-sales { cursor: pointer; color: var(--q-fair); font-weight: 700; }
+.inv-sales:hover { text-decoration: underline; }
+.inv-sales-detail > td { background: var(--bg-secondary); padding: 10px 14px; }
+.inv-sales-box { max-width: 640px; }
+.inv-sales-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.inv-sales-table th { text-align: left; color: var(--text-muted); font-weight: 600; padding: 2px 10px 6px 0; }
+.inv-sales-table td { padding: 3px 10px 3px 0; color: var(--text-primary); }
+.inv-sales-table .col-num { text-align: right; }
+
 /* Add-inventory dialog */
 .inv-add-card { max-width: 460px; text-align: left; }
 .inv-add-card h2 { font-size: 16px; text-align: left; margin: 0 0 12px; }

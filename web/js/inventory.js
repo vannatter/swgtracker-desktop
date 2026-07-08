@@ -7,6 +7,7 @@ const INV_COLUMNS = [
   ['Threshold', 'threshold', 'stat'],
   ['Vendor', 'vendor', 'col-text'],
   ['Match Price', 'match_price', 'col-num'],
+  ['Sales', 'sales_count', 'stat', 'Sales the mail parser matched to this item — click a count to see them'],
   ['Updated', 'last_updated', 'col-text'],
 ];
 
@@ -27,6 +28,7 @@ function invRowHtml(item, idx) {
     <td class="stat inv-edit" data-edit="threshold" data-idx="${idx}" title="Click to edit">${fmtNum(threshold)}</td>
     <td class="col-text">${escapeHtml(item.vendor || '') || '<span class="stat_off">—</span>'}</td>
     <td class="col-num">${item.match_price != null && item.match_price !== '' ? fmtNum(item.match_price) : '<span class="stat_off">—</span>'}</td>
+    <td class="stat ${safeInt(item.sales_count) ? 'inv-sales' : ''}" ${safeInt(item.sales_count) ? `data-sales="${idx}" title="Click to see the matched sales"` : ''}>${safeInt(item.sales_count) ? fmtNum(item.sales_count) : '<span class="stat_off">—</span>'}</td>
     <td class="col-text res-type">${fmtAgoTip(item.last_updated)}</td>
     <td class="pin-cell" data-iremove="${idx}" title="Remove item"><i class="fa-solid fa-trash-can"></i></td>
   </tr>`;
@@ -197,6 +199,36 @@ function initInventory() {
   $('#inv-add-modal').addEventListener('click', (e) => {
     if (e.target === $('#inv-add-modal')) $('#inv-add-modal').hidden = true;
   });
+  // Sales expander: one open at a time, click the count again to close
+  $('#inv-body').addEventListener('click', async (e) => {
+    const cell = e.target.closest('[data-sales]');
+    if (!cell) return;
+    const tr = cell.closest('tr');
+    const item = invState.items[Number(cell.dataset.sales)];
+    const open = tr.nextElementSibling?.classList.contains('inv-sales-detail');
+    document.querySelectorAll('.inv-sales-detail').forEach((r) => r.remove());
+    if (open || !item) return;
+    const detail = document.createElement('tr');
+    detail.className = 'inv-sales-detail';
+    detail.innerHTML = `<td colspan="${INV_COLUMNS.length + 1}"><div class="inv-sales-box">Loading…</div></td>`;
+    tr.after(detail);
+    let rows = [];
+    try {
+      const res = await api().inventory_sales(item.id);
+      rows = (res.ok && res.data && res.data.results) || [];
+    } catch (_) { /* renders the empty message */ }
+    detail.querySelector('.inv-sales-box').innerHTML = rows.length
+      ? `<table class="inv-sales-table"><thead><tr>
+           <th>When</th><th>Buyer</th><th>Vendor</th><th class="col-num">Amount</th>
+         </tr></thead><tbody>${rows.map((s) => `<tr>
+           <td>${fmtAgoTip(s.sale_timestamp)}</td>
+           <td>${escapeHtml(s.buyer || '')}</td>
+           <td>${escapeHtml(s.vendor || '')}</td>
+           <td class="col-num sale-amount">${fmtNum(s.sale_amount)} cr</td>
+         </tr>`).join('')}</tbody></table>`
+      : '<span class="stat_off">No matched sales recorded for this item.</span>';
+  });
+
   $('#inv-add').addEventListener('click', addInvItem);
   // Enter anywhere in the dialog submits
   $('#inv-add-modal').addEventListener('keydown', (e) => { if (e.key === 'Enter') addInvItem(); });

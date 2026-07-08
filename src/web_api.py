@@ -664,6 +664,13 @@ class WebApi:
         except Exception as e:
             return _err(e)
 
+    def inventory_sales(self, inventory_id):
+        """Sales linked to one inventory item (what auto-depleted it)."""
+        try:
+            return _wrap(*self.api.get_inventory_sales(int(inventory_id)))
+        except Exception as e:
+            return _err(e)
+
     def remove_inventory_item(self, inventory_id):
         try:
             return _wrap(*self.api.remove_inventory_item(int(inventory_id)))

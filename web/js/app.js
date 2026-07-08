@@ -89,9 +89,9 @@ async function showBuildId() {
 
 async function checkForUpdate() {
   let res;
-  try { res = await api().check_update(); } catch (_) { return; }
+  try { res = await api().check_update(); } catch (_) { return null; }
   const info = res.ok ? res.data : null;
-  if (!info?.update_available) return;
+  if (!info?.update_available) return null;
   const chip = $('#update-chip');
   chip.hidden = false;
   chip.innerHTML = `<i class="fa-solid fa-circle-up"></i> Update v${escapeHtml(info.latest)}`;
@@ -99,19 +99,7 @@ async function checkForUpdate() {
   chip.onclick = () => api().open_external(info.url);
   // dim the build id once we know it's stale
   $('#build-id').classList.add('stale');
-
-  // shell updates need a real download — give them offline-bar prominence
-  if (!sessionStorage.getItem('updateBarDismissed')) {
-    $('#update-bar-text').textContent = `App version ${info.latest} is available — this update needs a quick download`;
-    $('#update-bar').hidden = false;
-    document.body.classList.add('update-avail');
-    $('#update-bar-go').onclick = () => api().open_external(info.url);
-    $('#update-bar-x').onclick = () => {
-      $('#update-bar').hidden = true;
-      document.body.classList.remove('update-avail');
-      sessionStorage.setItem('updateBarDismissed', '1'); // back next launch
-    };
-  }
+  return info;
 }
 
 // Manual update check — clicking the version/badge asks the shell to fetch
@@ -119,11 +107,14 @@ async function checkForUpdate() {
 async function checkUpdatesNow() {
   toast('Checking for updates…');
   let st = null;
+  let shell = null;
   try { const r = await api().bundle_check_now(); st = r?.ok && r.data; } catch (_) { /* offline */ }
-  try { checkForUpdate(); } catch (_) { /* shell check is best-effort */ }
+  try { shell = await checkForUpdate(); } catch (_) { /* best-effort */ }
   if (st?.pending) {
     renderBundleChip(st.pending);
     toast(`UI update ${st.pending.version} is ready — click the chip to apply`);
+  } else if (shell) {
+    toast(`App version ${shell.latest} is available — click the Update chip to download`);
   } else if (st?.gated) {
     toast(`Update ${st.gated.version} needs app version ${st.gated.min_shell} — update the app itself first`, false);
   } else {

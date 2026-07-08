@@ -620,13 +620,16 @@
       </div>
       <div class="cust-bar">
         <span>Bought within</span>
-        <select id="cust-days" class="form-select filter-select settings-select-narrow">
+        <select id="cust-days" class="form-select filter-select cust-days">
           <option value="7">7 days</option>
           <option value="30" selected>30 days</option>
           <option value="90">90 days</option>
           <option value="180">180 days</option>
           <option value="0">All time</option>
         </select>
+        <span>with ≥</span>
+        <input id="cust-min" type="number" class="form-control filter-input cust-min" value="1" min="1">
+        <span>purchases</span>
         <span id="cust-count" class="settings-sub"></span>
         <button id="cust-copy" class="btn btn-sm btn-accent cust-copy"><i class="fa-solid fa-copy"></i> Copy names</button>
       </div>

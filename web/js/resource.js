@@ -74,7 +74,9 @@ function renderResourcePage(data) {
     : '';
   $('#rd-crumbs').innerHTML = [
     '<a role="button" data-nav="resources">Resources</a>',
-    escapeHtml(r.type_name || ''),
+    r.type_code
+      ? `<a role="button" data-navcat="${escapeHtml(r.type_code)}" title="See all ${escapeHtml(r.type_name || '')} spawns">${escapeHtml(r.type_name || '')}</a>`
+      : escapeHtml(r.type_name || ''),
     `<span class="crumb-current">${escapeHtml(r.name || '')}</span>${ext}`,
   ].filter(Boolean).join('<span class="crumb-sep">›</span>');
 
@@ -305,6 +307,18 @@ function initResourcePage() {
     const ext = e.target.closest('[data-ext]');
     if (ext) {
       try { await api().open_external(ext.dataset.ext); } catch (_) { /* ignore */ }
+      return;
+    }
+    const cat = e.target.closest('[data-navcat]');
+    if (cat) {
+      // jump to the resources grid pre-filtered to this category
+      const sel = $('#res-category');
+      if ([...sel.options].some((o) => o.value === cat.dataset.navcat)) {
+        sel.value = cat.dataset.navcat;
+      }
+      resState.page = 1;
+      showPage('resources');
+      loadResources();
       return;
     }
     const link = e.target.closest('[data-nav]');

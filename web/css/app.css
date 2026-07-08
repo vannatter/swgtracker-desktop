@@ -1005,9 +1005,14 @@ body:not(.dev-mode) .dev-only { display: none !important; }
 .inv-sales-table .col-num { text-align: right; }
 
 /* Customers dialog */
-.cust-card { max-width: 620px; text-align: left; }
-.cust-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 13px; color: var(--text-muted); }
+.cust-card { max-width: 680px; text-align: left; }
+.cust-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 13px; color: var(--text-muted); flex-wrap: wrap; }
+.cust-days { width: auto; min-width: 110px; }
+.cust-min { width: 64px; max-width: 64px; text-align: center; }
 .cust-copy { margin-left: auto; }
+#sales-customers { height: 34px; } /* match the head bar's selects/inputs */
+.inv-sales-table th[data-csort] { cursor: pointer; user-select: none; white-space: nowrap; }
+.inv-sales-table th[data-csort]:hover { color: var(--text-hover); }
 
 /* Add-inventory dialog */
 .inv-add-card { max-width: 460px; text-align: left; }

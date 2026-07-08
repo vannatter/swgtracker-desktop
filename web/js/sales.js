@@ -102,28 +102,45 @@ function showSalesEmpty(msg) {
   el.hidden = false;
 }
 
-let custBuyers = [];
-async function loadCustomers() {
-  const days = safeInt($('#cust-days').value);
-  $('#cust-body').innerHTML = 'Loading…';
-  let rows = [];
-  try {
-    const res = await api().sale_buyers(days);
-    rows = (res.ok && res.data && res.data.results) || [];
-  } catch (_) { /* renders empty below */ }
-  custBuyers = rows.map((r) => r.buyer);
-  $('#cust-count').textContent = rows.length
-    ? `${rows.length} customer${rows.length > 1 ? 's' : ''}` : '';
+const custState = { rows: [], visible: [], sortField: 'total', sortOrder: 'DESC' };
+
+function renderCustomers() {
+  const min = Math.max(1, safeInt($('#cust-min').value) || 1);
+  const { sortField, sortOrder } = custState;
+  const dir = sortOrder === 'DESC' ? -1 : 1;
+  const rows = custState.rows
+    .filter((r) => safeInt(r.purchases) >= min)
+    .sort((a, b) => sortField === 'buyer'
+      ? dir * String(a.buyer).toLowerCase().localeCompare(String(b.buyer).toLowerCase())
+      : dir * (safeInt(a[sortField]) - safeInt(b[sortField])));
+  custState.visible = rows.map((r) => r.buyer); // copy copies what you see
+  $('#cust-count').textContent =
+    `${rows.length} of ${custState.rows.length} customer${custState.rows.length === 1 ? '' : 's'}`;
+  const arrow = (f) => (f === sortField ? (sortOrder === 'DESC' ? ' ▼' : ' ▲') : '');
   $('#cust-body').innerHTML = rows.length
     ? `<table class="inv-sales-table"><thead><tr>
-         <th>Customer</th><th class="col-num">Purchases</th><th class="col-num">Total</th><th>Last</th>
+         <th data-csort="buyer">Customer${arrow('buyer')}</th>
+         <th class="col-num" data-csort="purchases">Purchases${arrow('purchases')}</th>
+         <th class="col-num" data-csort="total">Total${arrow('total')}</th>
+         <th data-csort="last_purchase">Last${arrow('last_purchase')}</th>
        </tr></thead><tbody>${rows.map((r) => `<tr>
          <td>${escapeHtml(r.buyer)}</td>
          <td class="col-num">${fmtNum(r.purchases)}</td>
          <td class="col-num sale-amount">${fmtNum(r.total)} cr</td>
          <td>${fmtAgoTip(r.last_purchase)}</td>
        </tr>`).join('')}</tbody></table>`
-    : '<span class="stat_off">No customers in this window.</span>';
+    : '<span class="stat_off">No customers match this window/threshold.</span>';
+}
+
+async function loadCustomers() {
+  $('#cust-body').innerHTML = 'Loading…';
+  let rows = [];
+  try {
+    const res = await api().sale_buyers(safeInt($('#cust-days').value));
+    rows = (res.ok && res.data && res.data.results) || [];
+  } catch (_) { /* renders empty below */ }
+  custState.rows = rows;
+  renderCustomers();
 }
 
 function initSales() {
@@ -135,13 +152,26 @@ function initSales() {
     loadCustomers();
   });
   $('#cust-days').addEventListener('change', loadCustomers);
+  $('#cust-min').addEventListener('input', renderCustomers);
+  $('#cust-body').addEventListener('click', (e) => {
+    const th = e.target.closest('[data-csort]');
+    if (!th) return;
+    const f = th.dataset.csort;
+    if (custState.sortField === f) {
+      custState.sortOrder = custState.sortOrder === 'DESC' ? 'ASC' : 'DESC';
+    } else {
+      custState.sortField = f;
+      custState.sortOrder = f === 'buyer' ? 'ASC' : 'DESC';
+    }
+    renderCustomers();
+  });
   $('#cust-close').addEventListener('click', () => { $('#cust-modal').hidden = true; });
   $('#cust-modal').addEventListener('click', (e) => {
     if (e.target === $('#cust-modal')) $('#cust-modal').hidden = true;
   });
   $('#cust-copy').addEventListener('click', async () => {
     // "; " is the in-game mail To-field separator
-    const list = custBuyers.join('; ');
+    const list = custState.visible.join('; ');
     if (!list) { toast('No customers to copy', false); return; }
     try {
       await navigator.clipboard.writeText(list);
@@ -150,7 +180,7 @@ function initSales() {
       ta.value = list; document.body.appendChild(ta);
       ta.select(); document.execCommand('copy'); ta.remove();
     }
-    toast(`Copied ${custBuyers.length} names for in-game mail`);
+    toast(`Copied ${custState.visible.length} names for in-game mail`);
   });
 
   // typeahead (server-side search → debounced) + Enter for instant

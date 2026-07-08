@@ -12,7 +12,12 @@ from pathlib import Path
 
 import webview
 
-ROOT = Path(__file__).parent
+FROZEN = bool(getattr(sys, "frozen", False))
+# frozen: bundled read-only assets live in the PyInstaller extraction/Resources
+# dir; mutable data (config/db/log) moves to ~/.swgtracker
+ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))
+DATA_DIR = Path.home() / ".swgtracker" if FROZEN else Path(__file__).parent
+DATA_DIR.mkdir(parents=True, exist_ok=True)
 sys.path.insert(0, str(ROOT))
 
 from src.core.config_manager import ConfigManager
@@ -24,12 +29,13 @@ from src.core.alert_poller import AlertPoller
 from src.core.bundle_manager import BundleManager
 from src.web_api import WebApi
 
-APP_VERSION = "0.11.11"  # keep in sync with pyproject.toml — bump with every change batch
+APP_VERSION = "0.11.12"  # keep in sync with pyproject.toml — bump with every change batch
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.FileHandler("swg_tracker_desktop.log"), logging.StreamHandler()],
+    handlers=[logging.FileHandler(str(DATA_DIR / "swg_tracker_desktop.log")),
+              logging.StreamHandler()],
 )
 logger = logging.getLogger(__name__)
 
@@ -61,9 +67,9 @@ def _set_mac_dock_icon():
 
 def main():
     _set_mac_dock_icon()
-    config = ConfigManager()
+    config = ConfigManager(str(DATA_DIR / "config.json"))
     api_client = SWGTrackerAPI(config.get("api_key", "") or "")
-    local_db = LocalDB()
+    local_db = LocalDB(str(DATA_DIR / "swgtracker_local.db"))
 
     # thin client: the web UI can ship as a server-hosted bundle; the packaged
     # web/ dir is the always-works fallback (and the whole story when running

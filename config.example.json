@@ -1,0 +1,12 @@
+{
+    "mail_paths": [],
+    "api_key": "",
+    "start_with_windows": false,
+    "minimize_to_tray": true,
+    "show_notifications": true,
+    "auto_start_monitoring": false,
+    "alert_poll_interval": 300,
+    "alerts": [],
+    "pinned_schematics": [],
+    "pinned_resources": []
+}

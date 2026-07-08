@@ -1,0 +1,22 @@
+# secrets — config.json carries the live API key (config.example.json is the template)
+config.json
+
+# local state
+swgtracker_local.db*
+swg_tracker_desktop.log
+
+# python
+venv/
+__pycache__/
+*.pyc
+
+# build artifacts (build/ scripts stay tracked)
+SWG Tracker Desktop.app/
+dist/
+
+# editors / os
+.idea/
+.DS_Store
+
+# legacy standalone project with its own git history
+swg-mail-tracker/

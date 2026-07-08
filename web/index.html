@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SWG Tracker Desktop</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.1/css/all.min.css">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <!-- Header -->
+  <header class="app-header">
+    <div class="app-header-brand">
+      <img src="icon.png" alt="" class="app-logo" onerror="this.style.display='none'">
+      <span class="app-titles">
+        <span class="app-title">SWG Tracker Desktop</span>
+        <span class="app-subtitle">swgtracker.com companion</span>
+      </span>
+    </div>
+    <div class="app-header-controls">
+      <span id="build-id" class="build-id" title="App version"></span>
+      <button id="update-chip" class="update-chip" hidden></button>
+      <span id="monitor-status" class="monitor-status"></span>
+      <button id="btn-start" class="btn btn-sm btn-accent">Start Mail Monitor</button>
+      <button id="btn-stop" class="btn btn-sm btn-outline-secondary" disabled>Stop</button>
+    </div>
+  </header>
+
+  <div class="app-body">
+    <!-- Sidebar -->
+    <nav class="app-sidebar">
+      <ul class="nav-list">
+        <li class="nav-item active" data-page="resources"><i class="fa-solid fa-gem"></i> Resources</li>
+        <li class="nav-item" data-page="schematics"><i class="fa-solid fa-scroll"></i> Schematics</li>
+        <li class="nav-item" data-page="myschematics"><i class="fa-solid fa-screwdriver-wrench"></i> My Schematics</li>
+        <li class="nav-item" data-page="stockpile"><i class="fa-solid fa-cubes"></i> My Stockpile</li>
+        <li class="nav-item" data-page="wishlist"><i class="fa-solid fa-heart"></i> My Wishlist</li>
+        <li class="nav-item" data-page="sales"><i class="fa-solid fa-tags"></i> My Sales</li>
+        <li class="nav-item" data-page="inventory"><i class="fa-solid fa-warehouse"></i> My Inventory</li>
+        <li class="nav-item" data-page="alerts"><i class="fa-solid fa-bell"></i> Spawn Alerts</li>
+        <li class="nav-item" data-page="lab"><i class="fa-solid fa-flask"></i> The Laboratory</li>
+        <li class="nav-item" data-page="settings"><i class="fa-solid fa-gear"></i> Settings</li>
+      </ul>
+
+      <div class="sidebar-spacer"></div>
+
+      <button id="side-collapse" class="btn btn-icon side-collapse" title="Collapse menu"><i class="fa-solid fa-angles-left"></i></button>
+
+      <!-- collapsed-mode stand-in for the pulse panel: pulsing dot, hover for numbers -->
+      <div id="pulse-mini" class="pulse-mini"><span class="pulse-mini-dot"></span></div>
+
+      <!-- Server pulse -->
+      <div class="pulse-panel">
+        <div class="pulse-heading">SERVER PULSE</div>
+        <div id="pulse-status" class="pulse-status">--</div>
+        <div id="pulse-online" class="pulse-line"></div>
+        <div id="pulse-peak" class="pulse-line muted"></div>
+        <div id="pulse-resources" class="pulse-line muted"></div>
+        <div class="pulse-chart-wrap">
+          <canvas id="pulse-chart" class="pulse-chart"></canvas>
+          <span id="pulse-dot" class="pulse-dot" hidden></span>
+          <div id="pulse-tip" class="pulse-tip" hidden></div>
+        </div>
+      </div>
+
+      <button id="btn-test" class="btn btn-sm btn-outline-secondary test-btn">Test Connection</button>
+    </nav>
+
+    <!-- Content -->
+    <main class="app-content">
+      <!-- Resources page -->
+      <section id="page-resources" class="page active">
+        <div class="page-head">
+          <h1>Resources</h1>
+          <button class="btn btn-icon" data-refresh="resources" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
+        </div>
+
+        <div class="filter-bar">
+          <input id="res-search" type="text" class="form-control filter-input" placeholder="Search resources...">
+          <select id="res-planet" class="form-select filter-select"></select>
+          <select id="res-category" class="form-select filter-select"></select>
+          <button id="res-search-btn" class="btn btn-accent"><i class="fa-solid fa-magnifying-glass"></i> Search</button>
+          <label class="pin-toggle ms-auto">
+            <input id="res-stocked-only" type="checkbox"> Stockpiled only
+          </label>
+          <label class="pin-toggle">
+            <input id="res-pinned-only" type="checkbox"> Pinned only
+          </label>
+        </div>
+
+        <div class="table-wrap">
+          <table class="data-grid" id="res-grid">
+            <thead><tr id="res-head"></tr></thead>
+            <tbody id="res-body"></tbody>
+          </table>
+          <div id="res-loading" class="grid-loading" hidden><span class="spinner"></span> Loading…</div>
+          <div id="res-empty" class="grid-empty" hidden></div>
+        </div>
+
+        <div class="pager">
+          <span id="res-status" class="pager-status"></span>
+          <div class="pager-nav">
+            <button id="res-prev" class="btn btn-sm btn-outline-secondary" disabled>&lsaquo; Prev</button>
+            <button id="res-next" class="btn btn-sm btn-outline-secondary" disabled>Next &rsaquo;</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Resource detail page (mirrors swgtracker.com/?r=<name>; opened from grids) -->
+      <section id="page-resource" class="page">
+        <div class="rd-head">
+          <nav class="crumbs" id="rd-crumbs"></nav>
+          <span class="rd-actions">
+            <button id="rd-wish" class="btn btn-sm btn-outline-secondary" hidden><i class="fa-regular fa-heart"></i> Wishlist</button>
+            <button id="rd-add" class="btn btn-sm btn-accent" hidden><i class="fa-solid fa-plus"></i> Add to Stockpile</button>
+          </span>
+        </div>
+
+        <div class="rd-cards" id="rd-cards"></div>
+        <div class="rd-subrow">
+          <span id="rd-meta" class="rd-scoreline"></span>
+          <span id="rd-scoreline" class="rd-scoreline"></span>
+          <span class="rd-planets" id="rd-planets"></span>
+        </div>
+
+        <!-- Tabs mirror the site's resource page: Top Uses / Other <type> / Related / Used In -->
+        <ul class="scd-tabs" id="rd-tabs"></ul>
+        <div class="table-wrap scd-table-wrap rd-table-wrap">
+          <table class="data-grid" id="rd-grid">
+            <thead><tr id="rd-head"></tr></thead>
+            <tbody id="rd-body"></tbody>
+          </table>
+          <div id="rd-empty" class="grid-empty" hidden></div>
+          <div id="rd-loading" class="grid-loading" hidden><span class="spinner"></span> Loading…</div>
+        </div>
+      </section>
+
+      <!-- Schematics page -->
+      <section id="page-schematics" class="page">
+        <div class="page-head">
+          <h1>Schematics</h1>
+          <i class="fa-solid fa-circle-info info-tip"
+             title="Pin schematics to track the best available resources for crafting. Click a row for details."></i>
+          <button class="btn btn-icon" data-refresh="schematics" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
+        </div>
+
+        <div class="filter-bar">
+          <input id="sch-search" type="text" class="form-control filter-input" placeholder="Search schematics...">
+          <select id="sch-category" class="form-select filter-select"></select>
+          <button id="sch-search-btn" class="btn btn-accent"><i class="fa-solid fa-magnifying-glass"></i> Search</button>
+          <label class="pin-toggle ms-auto">
+            <input id="sch-pinned-only" type="checkbox"> Pinned only
+          </label>
+        </div>
+
+        <div class="table-wrap">
+          <table class="data-grid" id="sch-grid">
+            <thead><tr id="sch-head"></tr></thead>
+            <tbody id="sch-body"></tbody>
+          </table>
+          <div id="sch-loading" class="grid-loading" hidden><span class="spinner"></span> Loading…</div>
+          <div id="sch-empty" class="grid-empty" hidden></div>
+        </div>
+
+        <div class="pager">
+          <span id="sch-status" class="pager-status"></span>
+          <div class="pager-nav">
+            <button id="sch-prev" class="btn btn-sm btn-outline-secondary" disabled>&lsaquo; Prev</button>
+            <button id="sch-next" class="btn btn-sm btn-outline-secondary" disabled>Next &rsaquo;</button>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- Schematic detail page (mirrors swgtracker.com/?s=<id>; opened from the Schematics grid) -->
+      <section id="page-schematic" class="page">
+        <div class="rd-head">
+          <nav class="crumbs" id="scd-crumbs"></nav>
+          <span class="rd-actions">
+            <button id="scd-mys" class="btn btn-sm btn-accent" hidden></button>
+          </span>
+        </div>
+
+        <div class="scd-top">
+          <div class="scd-card scd-info">
+            <h2 id="scd-name"></h2>
+            <p id="scd-desc" class="scd-desc"></p>
+            <p id="scd-meta" class="scd-meta"></p>
+            <p id="scd-benefit" class="scd-benefit"></p>
+          </div>
+          <div class="scd-card">
+            <h6>Resources Needed:</h6>
+            <div id="scd-resneeded" class="scd-list"></div>
+          </div>
+          <div class="scd-card">
+            <h6>Components Needed:</h6>
+            <div id="scd-components" class="scd-list"></div>
+          </div>
+        </div>
+
+        <div id="scd-formulas" class="scd-formulas"></div>
+
+        <!-- Buttons, not <a href="#"> — anchor navigation can blank pywebview's WKWebView.
+             Custom tabs (not Bootstrap nav-tabs): constant size in all states, flush with the grid. -->
+        <ul class="scd-tabs" id="scd-tabs">
+          <li><button type="button" class="scd-tab" data-tab="current">Current Resources</button></li>
+          <li><button type="button" class="scd-tab active" data-tab="best">Best Resources</button></li>
+        </ul>
+
+        <div class="table-wrap scd-table-wrap">
+          <table class="data-grid" id="scd-grid">
+            <thead><tr id="scd-head"></tr></thead>
+            <tbody id="scd-body"></tbody>
+          </table>
+          <div id="scd-loading" class="grid-loading" hidden><span class="spinner"></span> Loading…</div>
+        </div>
+      </section>
+
+      <!-- Stockpile page -->
+      <section id="page-stockpile" class="page">
+        <div class="page-head">
+          <h1>My Stockpile</h1>
+          <i class="fa-solid fa-circle-info info-tip"
+             title="Click a stock number to edit it. Changes push to swgtracker.com immediately."></i>
+          <span id="stk-sync" class="page-hint-inline"></span>
+          <input id="stk-search" type="text" class="form-control filter-input head-search" placeholder="Search stockpile...">
+          <button class="btn btn-icon" data-refresh="stockpile" title="Sync with server"><i class="fa-solid fa-rotate-right"></i></button>
+        </div>
+
+        <div class="table-wrap">
+          <table class="data-grid" id="stk-grid">
+            <thead><tr id="stk-head"></tr></thead>
+            <tbody id="stk-body"></tbody>
+          </table>
+          <div id="stk-loading" class="grid-loading" hidden><span class="spinner"></span> Loading…</div>
+          <div id="stk-empty" class="grid-empty" hidden></div>
+        </div>
+
+        <div class="pager">
+          <span id="stk-status" class="pager-status"></span>
+        </div>
+      </section>
+
+      <!-- My Schematics page (crafting list; write ops pending API deploy) -->
+      <section id="page-myschematics" class="page">
+        <div class="page-head">
+          <h1>My Schematics</h1>
+          <i class="fa-solid fa-circle-info info-tip"
+             title="Your crafting list — each schematic tracks which resource you're using for every ingredient."></i>
+          <span class="mys-badge" id="mys-total-badge" hidden></span>
+          <input id="mys-search" type="text" class="form-control filter-input head-search" placeholder="Search schematics...">
+          <button class="btn btn-icon" data-refresh="myschematics" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
+        </div>
+        <div class="table-wrap">
+          <table class="data-grid" id="mys-grid">
+            <thead><tr id="mys-head"></tr></thead>
+            <tbody id="mys-body"></tbody>
+          </table>
+          <div id="mys-loading" class="grid-loading" hidden><span class="spinner"></span> Loading…</div>
+          <div id="mys-empty" class="grid-empty" hidden></div>
+        </div>
+        <div class="pager"><span id="mys-status" class="pager-status"></span></div>
+      </section>
+
+      <!-- My Schematic detail: per-slot resource assignment + upgrade analysis -->
+      <section id="page-myschematic" class="page">
+        <div class="rd-head">
+          <nav class="crumbs" id="mysd-crumbs"></nav>
+          <span class="rd-actions">
+            <span class="mys-badge" id="mysd-badge" hidden></span>
+            <button id="mysd-open-schem" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-scroll"></i> View Schematic</button>
+            <button id="mysd-remove" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-trash-can"></i> Remove</button>
+          </span>
+        </div>
+        <div class="mysd-chips" id="mysd-chips"></div>
+
+        <div class="table-wrap">
+          <table class="data-grid" id="mysd-grid">
+            <thead><tr>
+              <th class="col-text">Ingredient</th>
+              <th class="col-text">Using <i class="fa-solid fa-circle-info info-tip"
+                 title="Click a resource to change it — type any name, or pick from that slot's known spawns."></i></th>
+              <th class="col-text">Best Known</th>
+              <th>Status</th>
+            </tr></thead>
+            <tbody id="mysd-body"></tbody>
+          </table>
+          <div id="mysd-loading" class="grid-loading" hidden><span class="spinner"></span> Loading…</div>
+        </div>
+      </section>
+
+      <!-- Wishlist page -->
+      <section id="page-wishlist" class="page">
+        <div class="page-head">
+          <h1>My Wishlist</h1>
+          <i class="fa-solid fa-circle-info info-tip"
+             title="Resources you're hunting. When one spawns, hit the cubes icon to promote it straight into your stockpile."></i>
+          <input id="wish-search" type="text" class="form-control filter-input head-search" placeholder="Search wishlist...">
+          <button class="btn btn-icon" data-refresh="wishlist" title="Sync with server"><i class="fa-solid fa-rotate-right"></i></button>
+        </div>
+
+        <div class="table-wrap">
+          <table class="data-grid" id="wish-grid">
+            <thead><tr id="wish-head"></tr></thead>
+            <tbody id="wish-body"></tbody>
+          </table>
+          <div id="wish-loading" class="grid-loading" hidden><span class="spinner"></span> Loading…</div>
+          <div id="wish-empty" class="grid-empty" hidden></div>
+        </div>
+
+        <div class="pager">
+          <span id="wish-status" class="pager-status"></span>
+        </div>
+      </section>
+
+      <!-- Spawn Alerts: server-evaluated rules; desktop notifications + optional email -->
+      <section id="page-alerts" class="page">
+        <div class="page-head">
+          <h1>Spawn Alerts</h1>
+          <i class="fa-solid fa-circle-info info-tip"
+             title="Rules run on the server the moment new spawns land — desktop notifications while the app is open, email works even when it isn't."></i>
+          <button id="al-new" class="btn btn-sm btn-accent head-filter"><i class="fa-solid fa-plus"></i> New Rule</button>
+          <button class="btn btn-icon" data-refresh="alerts" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
+        </div>
+
+        <div id="al-rules" class="al-rules"></div>
+        <div id="al-rules-empty" class="al-empty" hidden></div>
+
+        <div class="page-head al-feed-head">
+          <h1 class="al-feed-title">Recent Matches</h1>
+          <span id="al-unseen" class="mys-badge up" hidden></span>
+          <button id="al-seen" class="btn btn-sm btn-outline-secondary head-filter">Mark all seen</button>
+        </div>
+        <div class="table-wrap">
+          <table class="data-grid">
+            <thead><tr>
+              <th class="col-text">When</th><th class="col-name">Resource</th>
+              <th class="col-text">Match</th><th class="col-text">Rule</th>
+            </tr></thead>
+            <tbody id="al-feed"></tbody>
+          </table>
+          <div id="al-feed-empty" class="grid-empty" hidden></div>
+        </div>
+      </section>
+
+      <!-- Sales page -->
+      <section id="page-sales" class="page">
+        <div class="page-head">
+          <h1>My Sales</h1>
+          <select id="sales-type" class="form-select filter-select head-filter">
+            <option value="">All Types</option>
+            <option value="1">Vendor</option>
+            <option value="2">Bazaar</option>
+          </select>
+          <input id="sales-search" type="text" class="form-control filter-input head-search" placeholder="Search item, buyer, vendor...">
+          <button class="btn btn-icon" data-refresh="sales" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
+        </div>
+
+        <div class="summary-cards" id="sales-cards"></div>
+
+        <div class="table-wrap">
+          <table class="data-grid" id="sales-grid">
+            <thead><tr id="sales-head"></tr></thead>
+            <tbody id="sales-body"></tbody>
+          </table>
+          <div id="sales-loading" class="grid-loading" hidden><span class="spinner"></span> Loading…</div>
+          <div id="sales-empty" class="grid-empty" hidden></div>
+        </div>
+
+        <div class="pager">
+          <span id="sales-status" class="pager-status"></span>
+          <div class="pager-nav">
+            <button id="sales-prev" class="btn btn-sm btn-outline-secondary" disabled>&lsaquo; Prev</button>
+            <button id="sales-next" class="btn btn-sm btn-outline-secondary" disabled>Next &rsaquo;</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Inventory page -->
+      <section id="page-inventory" class="page">
+        <div class="page-head">
+          <h1>My Inventory</h1>
+          <i class="fa-solid fa-circle-info info-tip"
+             title="Crafted-item stock. Click a Stocked or Threshold number to edit it."></i>
+          <select id="inv-filter" class="form-select filter-select head-filter">
+            <option value="">All items</option>
+            <option value="negative_stock">Negative stock</option>
+            <option value="low">Low stock (≤)</option>
+          </select>
+          <input id="inv-low" type="number" class="form-control filter-input inv-num" value="5" min="0" title="Low-stock cutoff" hidden>
+          <input id="inv-search" type="text" class="form-control filter-input head-search" placeholder="Search item or vendor...">
+          <button class="btn btn-icon" data-refresh="inventory" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
+        </div>
+
+        <div class="filter-bar add-bar">
+          <span class="add-bar-label">Add item:</span>
+          <input id="inv-new-name" type="text" class="form-control filter-input" placeholder="Item name...">
+          <input id="inv-new-stocked" type="number" class="form-control filter-input inv-num" placeholder="Stocked" value="10">
+          <input id="inv-new-threshold" type="number" class="form-control filter-input inv-num" placeholder="Threshold" value="1">
+          <button id="inv-add" class="btn btn-outline-secondary btn-sm">+ Add</button>
+        </div>
+
+        <div class="table-wrap">
+          <table class="data-grid" id="inv-grid">
+            <thead><tr id="inv-head"></tr></thead>
+            <tbody id="inv-body"></tbody>
+          </table>
+          <div id="inv-loading" class="grid-loading" hidden><span class="spinner"></span> Loading…</div>
+          <div id="inv-empty" class="grid-empty" hidden></div>
+        </div>
+
+        <div class="pager">
+          <span id="inv-status" class="pager-status"></span>
+          <div class="pager-nav">
+            <button id="inv-prev" class="btn btn-sm btn-outline-secondary" disabled>&lsaquo; Prev</button>
+            <button id="inv-next" class="btn btn-sm btn-outline-secondary" disabled>Next &rsaquo;</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Mail Monitor (next pass — needs new bridge methods) -->
+      <section id="page-monitor" class="page">
+        <div class="coming-soon">
+          <i class="fa-solid fa-envelope"></i>
+          <h2>Mail Monitor</h2>
+          <p>Coming soon — watches your SWG mail folders and uploads sales &amp; resource mails to swgtracker.com automatically.</p>
+        </div>
+      </section>
+
+      <!-- The Laboratory — experiments live here before they graduate to real pages -->
+      <section id="page-lab" class="page">
+        <div class="page-head">
+          <h1>The Laboratory</h1>
+          <i class="fa-solid fa-circle-info info-tip"
+             title="Min/max workbench: find the cheapest resources that still cap an experiment line, factor in crafting buffs, and keep notes per experiment."></i>
+          <span class="lab-head-actions">
+            <button id="lab-back" class="btn btn-sm btn-outline-secondary" hidden><i class="fa-solid fa-arrow-left"></i> Experiments</button>
+            <button id="lab-new" class="btn btn-sm btn-accent"><i class="fa-solid fa-plus"></i> New Experiment</button>
+            <button id="lab-save" class="btn btn-sm btn-accent" hidden disabled><i class="fa-solid fa-flask"></i> Save Experiment</button>
+          </span>
+        </div>
+
+        <!-- Home: every saved experiment as a card, notes front and center -->
+        <div id="lab-home">
+          <div id="lab-exps" class="lab-exps"></div>
+          <div id="lab-home-empty" class="al-empty" hidden>
+            No experiments yet — hit <b>New Experiment</b>, pick a schematic, fill the slots, and save.
+            Each experiment keeps its picks, verdict, cost, and your notes.
+          </div>
+        </div>
+
+        <!-- Workbench -->
+        <div id="lab-work" hidden>
+          <div id="lab-bench" class="lab-bench"></div>
+
+          <div class="lab-cols">
+            <div class="lab-left">
+              <div class="al-picker">
+                <div class="al-picker-bar">
+                  <select id="lab-schem-cat" class="form-select filter-select"><option value="">All professions</option></select>
+                  <input id="lab-schem-search" type="text" class="form-control filter-input" placeholder="Filter schematics…" autocomplete="off">
+                </div>
+                <div id="lab-schem-list" class="al-schem-list lab-schem-list"></div>
+              </div>
+
+              <div class="sp-section-head">Experiment lines</div>
+              <div id="lab-formulas" class="sp-formulas"></div>
+
+              <div class="sp-section-head">Boosts &amp; cap <span class="settings-sub">— flat quality added at the end</span></div>
+              <div id="lab-boosts" class="lab-boosts"></div>
+              <div class="lab-threshold">
+                <label class="al-cond">Caps at ≥
+                  <input id="lab-threshold" type="number" class="form-control filter-input al-cond-input" min="1" max="1000" value="960"></label>
+              </div>
+            </div>
+
+            <div class="lab-main">
+              <div id="lab-slots"></div>
+              <div id="lab-notes-wrap" hidden>
+                <div class="sp-section-head">Notes</div>
+                <div class="lab-notes-toolbar">
+                  <button type="button" data-cmd="bold" title="Bold"><i class="fa-solid fa-bold"></i></button>
+                  <button type="button" data-cmd="italic" title="Italic"><i class="fa-solid fa-italic"></i></button>
+                  <button type="button" data-cmd="underline" title="Underline"><i class="fa-solid fa-underline"></i></button>
+                  <button type="button" data-cmd="insertUnorderedList" title="Bullet list"><i class="fa-solid fa-list-ul"></i></button>
+                  <button type="button" data-cmd="insertOrderedList" title="Numbered list"><i class="fa-solid fa-list-ol"></i></button>
+                </div>
+                <div id="lab-notes-editor" class="lab-notes-editor" contenteditable="true"
+                  data-placeholder="Why these picks, buff setup, results in game…"></div>
+              </div>
+              <div id="lab-empty" class="al-empty">Pick a schematic to start experimenting — the bench shows whether your picks cap, and what they cost.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Settings page -->
+      <section id="page-settings" class="page">
+        <div class="page-head"><h1>Settings</h1></div>
+
+        <div class="settings-grid">
+        <div class="settings-section">
+          <h2>SWGTracker.com API Key</h2>
+          <p class="page-hint">Required for all features. Get your key from swgtracker.com.</p>
+          <div class="settings-keyrow">
+            <input id="set-apikey" type="password" class="form-control filter-input settings-input-wide"
+                   placeholder="Enter your API Key" autocomplete="off">
+            <button id="set-apikey-eye" class="btn btn-sm btn-outline-secondary" type="button" title="Show / hide key">
+              <i class="fa-solid fa-eye"></i>
+            </button>
+          </div>
+          <div id="set-apikey-hint" class="settings-hint"></div>
+        </div>
+
+        <div class="settings-section">
+          <h2>SWG Mail Directories <span class="settings-sub">Up to 4 characters</span></h2>
+          <div id="set-mailpaths"></div>
+          <button id="set-addpath" class="btn btn-sm btn-outline-secondary">+ Add Character</button>
+        </div>
+
+        <div class="settings-section">
+          <h2>Alert Settings</h2>
+          <div class="settings-row">
+            <span>Check for new spawns every</span>
+            <select id="set-poll" class="form-select filter-select settings-select-narrow">
+              <option>1</option><option>2</option><option>5</option>
+              <option>10</option><option>15</option><option>30</option>
+            </select>
+            <span>minutes</span>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <h2>Preferences</h2>
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="set-tray">
+            <label class="form-check-label" for="set-tray">Minimize to system tray</label>
+          </div>
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="set-notify">
+            <label class="form-check-label" for="set-notify">Show desktop notifications</label>
+          </div>
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="set-autostart">
+            <label class="form-check-label" for="set-autostart">Auto-start mail monitoring on launch</label>
+          </div>
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="set-delmail">
+            <label class="form-check-label" for="set-delmail">Delete mail files after upload <span class="settings-sub">(keeps the SWG mail folders small)</span></label>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <h2>Offline Data <span class="settings-sub">Resources &amp; schematics keep working without a connection</span></h2>
+          <div id="set-ds-status" class="settings-hint">Checking…</div>
+          <button id="set-ds-sync" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-rotate"></i> Sync now</button>
+          <div class="form-check form-switch" style="margin-top:10px">
+            <input class="form-check-input" type="checkbox" id="set-ds-simulate">
+            <label class="form-check-label" for="set-ds-simulate">Simulate offline <span class="settings-sub">(testing — fails all live API calls until unchecked or restart)</span></label>
+          </div>
+        </div>
+
+        </div>
+
+        <div class="settings-actions">
+          <span id="set-status" class="settings-status"></span>
+          <button id="set-save" class="btn btn-accent settings-save"><i class="fa-solid fa-floppy-disk"></i> Save Settings</button>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Offline banner — driven by setOffline() (pulse poll + cached search responses) -->
+  <div id="offline-bar" hidden>
+    <i class="fa-solid fa-wifi"></i> Offline — showing cached data where available
+  </div>
+
+  <!-- Alert rule editor: what to watch for + optional schematic-rank clause -->
+  <div id="al-modal" class="key-gate" hidden>
+    <div class="key-gate-card sp-card al-card">
+      <h2 id="al-editor-title">New Alert Rule</h2>
+
+      <div class="al-row">
+        <div class="al-field al-field-grow">
+          <label class="sp-field-label">Rule name <span class="settings-sub">(optional)</span></label>
+          <input id="al-name" type="text" class="form-control filter-input sp-name-input" placeholder="e.g. Weapon steel watch">
+        </div>
+        <div class="al-field al-field-grow">
+          <label class="sp-field-label">Class</label>
+          <div class="cselect al-class-combo" id="al-class-combo">
+            <button type="button" class="cselect-btn" id="al-class-btn">
+              <span id="al-class-current">Any class</span><i class="fa-solid fa-caret-down"></i>
+            </button>
+            <div class="cselect-menu al-class-menu" hidden>
+              <div class="cselect-search">
+                <input id="al-class-filter" type="text" class="form-control filter-input al-class-filter"
+                       placeholder="Type to filter — e.g. gravitonic" autocomplete="off">
+              </div>
+              <div id="al-class-opts"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sp-section-head">Minimum stats <span class="settings-sub">— blank stats are ignored</span></div>
+      <div id="al-stats" class="al-stats"></div>
+
+      <div class="sp-section-head">Schematic <span class="settings-sub">— optional: alert when the spawn ranks high or scores a weighted quality for a schematic</span></div>
+      <div class="al-picker">
+        <div class="al-picker-bar">
+          <select id="al-schem-cat" class="form-select filter-select"><option value="">All professions</option></select>
+          <input id="al-schem-search" type="text" class="form-control filter-input" placeholder="Filter schematics…" autocomplete="off">
+        </div>
+        <div id="al-schem-list" class="al-schem-list"></div>
+      </div>
+      <div id="al-schem-conds" hidden>
+        <div id="al-formulas" class="sp-formulas al-formulas"></div>
+        <div class="al-row al-conds-row">
+          <label class="al-cond">Ranks top
+            <input id="al-rank" type="number" class="form-control filter-input al-cond-input" value="3" min="1" max="50">
+            of its class</label>
+          <span class="al-cond-sep">and / or</span>
+          <label class="al-cond">Weighted quality ≥
+            <input id="al-quality" type="number" class="form-control filter-input al-cond-input" min="1" max="1000" placeholder="—"></label>
+          <span class="settings-sub">blank = not required</span>
+        </div>
+      </div>
+
+      <div class="al-row al-editor-foot">
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" id="al-email">
+          <label class="form-check-label" for="al-email">Also send email</label>
+        </div>
+        <div class="sp-actions">
+          <button id="al-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
+          <button id="al-save" class="btn btn-sm btn-accent"><i class="fa-solid fa-bell"></i> Save Rule</button>
+        </div>
+      </div>
+      <div id="al-editor-status" class="key-gate-status"></div>
+    </div>
+  </div>
+
+  <!-- Add-to-My-Schematics setup: name + formulas + per-slot resources -->
+  <div id="slot-picker" class="key-gate" hidden>
+    <div class="key-gate-card sp-card">
+      <h2 id="sp-title">Set up</h2>
+      <p class="key-gate-hint">Add the same schematic again for a different setup.</p>
+
+      <label class="sp-field-label">Loadout name <span class="settings-sub">(optional)</span></label>
+      <input id="sp-name" type="text" class="form-control filter-input sp-name-input"
+             placeholder="e.g. Fill focus, Duration setup…">
+
+      <div id="sp-formula-wrap" hidden>
+        <div class="sp-section-head">Craft toward <span class="settings-sub">— formulas weight the upgrade analysis</span></div>
+        <div id="sp-formulas" class="sp-formulas"></div>
+      </div>
+
+      <div class="sp-section-head">Resources <span class="settings-sub">— one per slot</span></div>
+      <div id="sp-rows" class="sp-rows"></div>
+
+      <div class="sp-actions">
+        <button id="sp-skip" class="btn btn-sm btn-outline-secondary">Cancel</button>
+        <button id="sp-save" class="btn btn-sm btn-accent">Add to My Schematics</button>
+      </div>
+      <div id="sp-status" class="key-gate-status"></div>
+    </div>
+  </div>
+
+  <!-- API-key gate: covers the app until a working key is saved -->
+  <div id="key-gate" class="key-gate" hidden>
+    <div class="key-gate-card">
+      <i class="fa-solid fa-key key-gate-icon"></i>
+      <h2>API Key Required</h2>
+      <p>SWG Tracker Desktop needs your swgtracker.com API key to load resources, schematics, and your stockpile.</p>
+      <p class="key-gate-hint">Find your key in your account at <a role="button" id="gate-site">swgtracker.com</a>.</p>
+      <div class="key-gate-row">
+        <input id="gate-key" type="password" class="form-control filter-input" placeholder="Paste your API key" autocomplete="off">
+        <button id="gate-save" class="btn btn-accent">Save &amp; Verify</button>
+      </div>
+      <div id="gate-status" class="key-gate-status"></div>
+    </div>
+  </div>
+
+  <!-- Classic scripts sharing one top-level scope; app.js boots last. -->
+  <script src="js/shared.js"></script>
+  <script src="js/resources.js"></script>
+  <script src="js/resource.js"></script>
+  <script src="js/schematics.js"></script>
+  <script src="js/stockpile.js"></script>
+  <script src="js/wishlist.js"></script>
+  <script src="js/myschematics.js"></script>
+  <script src="js/inventory.js"></script>
+  <script src="js/sales.js"></script>
+  <script src="js/settings.js"></script>
+  <script src="js/alerts.js"></script>\n  <script src="js/lab.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

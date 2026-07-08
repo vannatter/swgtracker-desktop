@@ -259,9 +259,9 @@ function labSlotVisibleRows(slot) {
     const px = rated.find((x) => x.r.id === slot.pick.id);
     if (px) show.set(px.r.id, px);
   }
-  // stockpiled first — starting out, what you OWN is what you bench
-  const stocked = (x) => stkState.resourceIds.has(String(x.r.id)) ? 1 : 0;
-  return [...show.values()].sort((a, b) => stocked(b) - stocked(a) || b.q - a.q);
+  // best first — stockpiled rows are highlighted in place, not floated
+  // (floating them read as "these are the best", which they usually aren't)
+  return [...show.values()].sort((a, b) => b.q - a.q);
 }
 
 function labSlotTbodyHtml(slot) {
@@ -275,7 +275,7 @@ function labSlotTbodyHtml(slot) {
           Couldn\u2019t load this class pool \u2014 <a role="button" data-poolretry="${labState.slots.indexOf(slot)}">retry</a></td></tr>`;
   }
   return rows.map(({ r, q }) => `
-    <tr class="lab-row ${slot.pick && slot.pick.id === r.id ? 'lab-picked' : ''}" data-rid="${r.id}">
+    <tr class="lab-row ${slot.pick && slot.pick.id === r.id ? 'lab-picked' : ''} ${stkState.resourceIds.has(String(r.id)) ? 'lab-stocked' : ''}" data-rid="${r.id}">
       <td class="pin-cell">${r.status === 1 ? '<span class="lab-live" title="In spawn"></span>' : ''}</td>
       <td class="col-name res-name">${escapeHtml(r.name)}
         ${stkState.resourceIds.has(String(r.id)) ? '<span class="lab-stock" title="In your stockpile">\u2713 stock</span>' : ''}</td>

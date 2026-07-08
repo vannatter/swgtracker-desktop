@@ -301,9 +301,15 @@ function labRenderSlots() {
         ${slot.pick ? '<i class="fa-solid fa-circle-check lab-done" title="Slot filled"></i>' : ''}
         <span class="lab-slot-name">${escapeHtml(slot.className)}</span>
         <span class="mys-type">${escapeHtml(slot.label)} \u00b7 ${slot.units} units</span>
-        <span class="lab-slot-pick">${slot.pick
-          ? `<span class="lab-picked-chip ${qualityClass(labAvgQ(slot.pick) / 10)}">${escapeHtml(slot.pick.name)} \u00b7 ${labAvgQ(slot.pick).toFixed(1)} \u00b7 ${labEcpu(slot.pick)} CPU</span>`
-          : '<span class="stat_off">no pick</span>'}</span>
+        <span class="lab-slot-pick">${(() => {
+          if (!slot.pick) return '<span class="stat_off">no pick</span>';
+          const q = labAvgQ(slot.pick);
+          const short = labState.threshold - q;
+          const drag = short > 0
+            ? `<span class="lab-drag" title="This pick scores below the cap \u2014 it drags the average down by ${short.toFixed(0)} across ${slot.units} units">\u25bc ${short.toFixed(0)}</span>`
+            : '';
+          return `<span class="lab-picked-chip">${escapeHtml(slot.pick.name)} \u00b7 ${q.toFixed(1)} \u00b7 ${labEcpu(slot.pick)} CPU</span> ${drag}`;
+        })()}</span>
       </div>
       <div class="lab-slot-body" ${slot.collapsed ? 'hidden' : ''}>
       <div class="lab-slot-controls">

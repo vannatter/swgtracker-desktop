@@ -427,11 +427,15 @@ body.offline .app-body { height: calc(100vh - 76px); }
   animation: lab-flask-rock .8s ease-in-out infinite; transform-origin: 50% 90%; }
 @keyframes lab-flask-rock { 0%, 100% { transform: rotate(-14deg); } 50% { transform: rotate(14deg); } }
 .lab-calc-bar { position: relative; height: 16px; border-radius: 8px; background: var(--bg-primary); overflow: hidden; }
+/* fill is full-width and slides in via transform — compositor-only, no layout
+   per frame (width/margin animation stuttered in WKWebView) */
 .lab-calc-fill {
-  display: block; position: relative; height: 100%; width: 0;
+  display: block; position: relative; height: 100%; width: 100%;
   background: linear-gradient(90deg, var(--accent-dark), var(--accent), var(--accent-green));
   box-shadow: inset 0 3px 4px rgba(255, 255, 255, .18), inset 0 -3px 4px rgba(0, 0, 0, .3); /* liquid sheen */
+  transform: translateX(-100%);
   animation: lab-calc-run 1.15s cubic-bezier(.25, .1, .3, 1) forwards;
+  will-change: transform;
 }
 .lab-calc-fill::after { /* foam at the pouring edge */
   content: ''; position: absolute; right: -1px; top: 0; bottom: 0; width: 7px;
@@ -439,16 +443,17 @@ body.offline .app-body { height: calc(100vh - 76px); }
 }
 /* pour in glugs: surge, settle, surge */
 @keyframes lab-calc-run {
-  0% { width: 0; } 28% { width: 34%; } 38% { width: 32%; }
-  62% { width: 68%; } 72% { width: 65%; } 100% { width: 100%; }
+  0% { transform: translateX(-100%); } 28% { transform: translateX(-66%); }
+  38% { transform: translateX(-68%); } 62% { transform: translateX(-32%); }
+  72% { transform: translateX(-35%); } 100% { transform: translateX(0); }
 }
 .lab-calc.fast .lab-calc-fill { animation-duration: .5s; }
 /* indeterminate "gathering" state: a slug of liquid sloshing side to side */
 .lab-calc-fill.lab-calc-slosh {
-  width: 36%;
+  width: 36%; transform: none;
   animation: lab-slosh 1.1s ease-in-out infinite alternate;
 }
-@keyframes lab-slosh { from { margin-left: 0; } to { margin-left: 64%; } }
+@keyframes lab-slosh { from { transform: translateX(0); } to { transform: translateX(178%); } }
 /* bubbles rising through the brew */
 .lab-calc-bubbles {
   position: absolute; inset: 0; pointer-events: none; mix-blend-mode: screen;

@@ -343,6 +343,11 @@ class SWGTrackerAPI:
         return self._request('PUT', 'api/my_schematics.php',
                              data={"resource_row_id": row_id, "resource_name": resource_name})
 
+    def accept_my_schematic_resource(self, row_id: int, accepted: bool) -> tuple[bool, dict | str]:
+        """PUT /api/my_schematics.php - mute/unmute upgrade nags for one slot."""
+        return self._request('PUT', 'api/my_schematics.php',
+                             data={"resource_row_id": int(row_id), "accepted": 1 if accepted else 0})
+
     def remove_from_my_schematics(self, user_schematic_id: int) -> tuple[bool, dict | str]:
         """DELETE /api/my_schematics.php - Remove a schematic from the crafting list.
 

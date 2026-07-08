@@ -608,6 +608,14 @@ class WebApi:
         except Exception as e:
             return _err(e)
 
+    def accept_my_schematic_resource(self, params=None):
+        params = params or {}
+        try:
+            return _wrap(*self.api.accept_my_schematic_resource(
+                int(params.get("id")), bool(params.get("accepted"))))
+        except Exception as e:
+            return _err(e)
+
     def update_my_schematic_resource(self, params=None):
         params = params or {}
         try:

@@ -26,6 +26,7 @@ function mysListStatusHtml(s) {
   const an = s._an;
   if (!an) return '<span class="stat_off">comparing…</span>';
   if (an.upgrades > 0) return `<span class="mys-st-up">▲ ${an.upgrades} upgrade${an.upgrades > 1 ? 's' : ''}</span>`;
+  if (an.acceptedCount > 0) return '<span class="mys-st-acc">✓ accepted</span>';
   if (an.comparable > 0) return '<span class="mys-st-ok">✓ optimal</span>';
   return '<span class="stat_off">—</span>';
 }
@@ -180,7 +181,7 @@ async function analyzeMySchematic(s) {
   let weightsList = mysFormulaList(s).map(mysParseWeights).filter(Boolean);
   if (!weightsList.length) weightsList = det?.weights || [];
   const perIng = new Map();
-  let upgrades = 0, comparable = 0;
+  let upgrades = 0, comparable = 0, acceptedCount = 0;
 
   for (const r of (s.resources || [])) {
     const dto = det?.dtoByCode.get(r.resource_type);
@@ -213,13 +214,23 @@ async function analyzeMySchematic(s) {
 
     const entry = {
       best, bestQ, bestActive: mysSpawnActive(best), assignedQ, delta: null, options,
+      accepted: String(r.accepted) === '1',
     };
     if (!r.resource_name) {
       if (best) { entry.delta = bestQ; upgrades++; }
     } else if (assignedQ != null && bestQ != null) {
       comparable++;
       entry.delta = bestQ - assignedQ;
-      if (entry.delta > 1) upgrades++;
+      if (entry.delta > 1) {
+        if (entry.accepted) {
+          // accepted: only a LIVE spawn beating the accepted resource re-raises it
+          const live = options.find((o) => o.active && o.q > assignedQ + 1);
+          if (live) { entry.liveUpgrade = live; upgrades++; }
+          else { entry.acceptedMuted = true; acceptedCount++; }
+        } else {
+          upgrades++;
+        }
+      }
     } else if (bestQ != null) {
       // can't score what they're using — surface the best rather than hide it
       entry.unscored = true;
@@ -227,7 +238,7 @@ async function analyzeMySchematic(s) {
     }
     perIng.set(String(r.id), entry);
   }
-  return { perIng, upgrades, comparable };
+  return { perIng, upgrades, comparable, acceptedCount };
 }
 
 const mysQHtml = (q) => q == null ? '' :
@@ -241,8 +252,15 @@ function mysStatusHtml(r, a) {
     return `<span class="mys-st-up" title="Couldn't score ${escapeHtml(r.resource_name)} — best known is ${a.bestQ.toFixed(1)}">▲ ?</span>`;
   }
   if (a?.assignedQ == null || a?.bestQ == null) return '<span class="stat_off">—</span>';
+  if (a.acceptedMuted) {
+    return `<span class="mys-st-acc" role="button" data-unaccept="${escapeHtml(String(r.id))}"
+      title="Accepted — the best ever seen beats yours by ${a.delta.toFixed(1)}, but nothing in spawn does. Click to resume upgrade suggestions">✓ accepted</span>`;
+  }
   if (a.delta > 1) {
-    return `<span class="mys-st-up" title="The best ever seen beats yours by ${a.delta.toFixed(1)} quality">▲ +${Math.round(a.delta)}</span>`;
+    const src = a.liveUpgrade ? 'in spawn right now' : 'ever seen';
+    return `<span class="mys-st-up" title="The best ${src} beats yours by ${a.delta.toFixed(1)} quality">▲ +${Math.round(a.delta)}</span>
+      <button type="button" class="mys-accept" data-acceptrow="${escapeHtml(String(r.id))}"
+        title="Keep ${escapeHtml(r.resource_name)} — stop suggesting until something better spawns">keep</button>`;
   }
   return '<span class="mys-st-ok" title="Nothing ever seen beats what you have">✓ best</span>';
 }
@@ -252,6 +270,9 @@ function mysBadgeState(el, an) {
   if (an.upgrades > 0) {
     el.textContent = `▲ ${an.upgrades} upgrade${an.upgrades > 1 ? 's' : ''} available`;
     el.className = 'mys-badge up';
+  } else if (an.acceptedCount > 0) {
+    el.textContent = '✓ accepted — not optimal';
+    el.className = 'mys-badge acc';
   } else if (an.comparable > 0) {
     el.textContent = '✓ optimal';
     el.className = 'mys-badge ok';
@@ -423,6 +444,28 @@ function mysdAddBadge(id, name) {
 }
 
 // ---- Assigning a resource to a slot ----
+
+async function mysdSetAccept(ingId, accepted) {
+  const item = mysdState.item;
+  const r = (item?.resources || []).find((x) => String(x.id) === String(ingId));
+  if (!r) return;
+  let res;
+  try { res = await api().accept_my_schematic_resource({ id: r.id, accepted }); }
+  catch (e) { res = { ok: false, error: String(e) }; }
+  if (!res.ok) {
+    toast(`Couldn't save: ${res.error || 'server error'}`, false);
+    checkAuthError(res.error);
+    return;
+  }
+  toast(accepted
+    ? `${r.resource_label || 'Slot'}: accepted — it'll nag again when something better spawns`
+    : `${r.resource_label || 'Slot'}: upgrade suggestions back on`);
+  // same refresh pattern as saving a resource: server truth, then re-render
+  await loadMySchematics();
+  const fresh = mysState.items.find((i) =>
+    String(i.user_schematic_id) === String(item.user_schematic_id));
+  openMySchematicPage(fresh || item);
+}
 
 async function mysdSaveUsing(ingId, name) {
   const item = mysdState.item;
@@ -794,6 +837,10 @@ function initMySchematics() {
   $('#mysd-body').addEventListener('click', (e) => {
     const useBest = e.target.closest('[data-usebest]');
     if (useBest) { mysdSaveUsing(useBest.dataset.usebest, useBest.dataset.bestname); return; }
+    const acc = e.target.closest('[data-acceptrow]');
+    if (acc) { mysdSetAccept(acc.dataset.acceptrow, true); return; }
+    const unacc = e.target.closest('[data-unaccept]');
+    if (unacc) { mysdSetAccept(unacc.dataset.unaccept, false); return; }
     const editCell = e.target.closest('[data-editing-ing]');
     if (editCell) { mysdOpenEditor(editCell.closest('[data-using]'), editCell.dataset.editingIng); return; }
     const addBadge = e.target.closest('[data-add]');

@@ -1004,6 +1004,16 @@ body:not(.dev-mode) .dev-only { display: none !important; }
 .inv-sales-table td { padding: 3px 10px 3px 0; color: var(--text-primary); }
 .inv-sales-table .col-num { text-align: right; }
 
+/* My Schematics: accepted-but-not-optimal (yellow) */
+.mys-st-acc { color: var(--q-good); font-weight: 700; cursor: pointer; }
+.mys-st-acc:hover { text-decoration: underline; }
+.mys-badge.acc { background: rgba(255, 255, 110, .1); color: var(--q-good); }
+.mys-accept {
+  background: none; border: 1px solid var(--border); border-radius: 4px;
+  color: var(--text-muted); font-size: 11px; padding: 1px 7px; margin-left: 6px; cursor: pointer;
+}
+.mys-accept:hover { color: var(--q-good); border-color: var(--q-good); }
+
 /* Customers dialog */
 .cust-card { max-width: 680px; text-align: left; }
 .cust-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 13px; color: var(--text-muted); flex-wrap: wrap; }

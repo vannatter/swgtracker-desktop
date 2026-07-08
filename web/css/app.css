@@ -414,6 +414,13 @@ body.offline .app-body { height: calc(100vh - 76px); }
 .lab-caps { color: var(--accent-green); font-weight: 700; font-size: 12px; }
 .lab-nocap { color: var(--accent); font-size: 12px; white-space: nowrap; }
 .lab-slot { margin-bottom: 14px; }
+/* lab header stays put while the cards/bench scroll under it */
+#page-lab .page-head {
+  position: sticky; top: 0; z-index: 20;
+  background: var(--bg-primary);
+  padding: 4px 0 10px; margin-bottom: 8px;
+  box-shadow: 0 6px 12px -8px rgba(0, 0, 0, .6);
+}
 .lab-slot-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; cursor: pointer;
   background: var(--bg-secondary); border-radius: 6px; padding: 7px 10px; }
 .lab-caret { color: var(--text-muted); font-size: 12px; width: 10px; }
@@ -924,9 +931,9 @@ body:not(.dev-mode) .dev-only { display: none !important; }
 .mon-btn.running::before {
   content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: 200%;
   background: linear-gradient(90deg,
-    rgba(226, 67, 80, 0) 0%, rgba(226, 67, 80, .38) 25%, rgba(226, 67, 80, 0) 50%,
-    rgba(226, 67, 80, .38) 75%, rgba(226, 67, 80, 0) 100%);
-  animation: mon-throb 2.6s linear infinite;
+    rgba(226, 67, 80, 0) 0%, rgba(226, 67, 80, .15) 25%, rgba(226, 67, 80, 0) 50%,
+    rgba(226, 67, 80, .15) 75%, rgba(226, 67, 80, 0) 100%);
+  animation: mon-throb 6.5s linear infinite;
   will-change: transform;
 }
 @keyframes mon-throb {
@@ -961,6 +968,13 @@ body:not(.dev-mode) .dev-only { display: none !important; }
 .mm-kind.mm-err { background: rgba(233, 69, 96, .12); }
 .mm-addinv { white-space: nowrap; }
 .mm-tracked { color: var(--q-fair); font-size: 13px; cursor: help; }
+.mm-del {
+  background: none; border: 0; color: var(--text-muted); cursor: pointer;
+  padding: 4px 6px; font-size: 13px; margin-left: 6px;
+}
+.mm-del:hover, .mm-del.confirm-del { color: var(--accent); }
+.mm-del.confirm-del i { animation: mm-del-flash .5s ease-in-out infinite alternate; }
+@keyframes mm-del-flash { from { opacity: 1; } to { opacity: .35; } }
 
 /* Add-inventory dialog */
 .inv-add-card { max-width: 460px; text-align: left; }

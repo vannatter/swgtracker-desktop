@@ -334,6 +334,10 @@ class LocalDB:
             "UPDATE mail_ledger SET raw = ? WHERE mail_id = ?", (raw, str(mail_id)))
         self._conn.commit()
 
+    def mail_ledger_delete(self, mail_id: str):
+        self._conn.execute("DELETE FROM mail_ledger WHERE mail_id = ?", (str(mail_id),))
+        self._conn.commit()
+
     def mail_ledger_count(self) -> int:
         return self._conn.execute("SELECT COUNT(*) AS n FROM mail_ledger").fetchone()["n"]
 

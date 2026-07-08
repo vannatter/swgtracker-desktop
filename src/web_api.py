@@ -864,6 +864,69 @@ class WebApi:
         except Exception as e:
             return _err(e)
 
+    def delete_mail(self, mail_id):
+        """Remove a mail everywhere: server rows (incoming_mail/sales/purchases,
+        restocking any depleted inventory), the local ledger row, and the .mail
+        file itself (else the next sweep would just re-upload it)."""
+        try:
+            mail_id = str(mail_id).strip()
+            if not mail_id or "/" in mail_id or ".." in mail_id:
+                return _err("bad mail id")
+            ok, data = self.api.delete_mail(mail_id)
+            if not ok:
+                return _err(data)
+            self.local_db.mail_ledger_delete(mail_id)
+            from pathlib import Path
+            for entry in self.config.get("mail_paths", []) or []:
+                raw = entry.get("path") if isinstance(entry, dict) else entry
+                if not raw:
+                    continue
+                f = Path(str(raw)).expanduser() / f"{mail_id}.mail"
+                if f.is_file():
+                    try:
+                        f.unlink()
+                    except OSError:
+                        pass
+            return _ok(data)
+        except Exception as e:
+            return _err(e)
+
+    def dev_make_test_mail(self):
+        """Dev tool: drop a faker vendor-sale .mail into the first configured
+        folder. Ids are test-prefixed and items [TEST]-marked so everything is
+        easy to purge later — locally and in the server tables."""
+        try:
+            import random
+            import time as _time
+            from pathlib import Path
+            paths = self.config.get("mail_paths", []) or []
+            raw = paths[0].get("path") if paths and isinstance(paths[0], dict) else (paths[0] if paths else None)
+            if not raw:
+                return _err("No mail folder configured — add one in Settings")
+            folder = Path(str(raw)).expanduser()
+            if not folder.is_dir():
+                return _err(f"Folder not found: {folder}")
+            mail_id = f"test{int(_time.time() * 1000)}"
+            item = "[TEST] " + random.choice([
+                "DE-10 Pistol 750+120 - 88 - 2.10",
+                "UL Composite Armor Helmet 7000/5000/6000",
+                "CL54 'Shockfire' CDEF Carbine 753+160",
+                "Perfect Clothing and Armor Crafting Tool 15.00",
+                "Bocatt Egg (Incubated)",
+            ])
+            buyer = random.choice(["Thake Darkcloud", "Ariana Morassi", "Nitoetao", "Vyrul Thane", "Remiella Witka"])
+            credits = random.randrange(500, 50001, 25)
+            ts = int(_time.time())
+            content = (f"{mail_id}\n"
+                       "SWG.Restoration.auctioner\n"
+                       "Vendor Sale Complete\n"
+                       f"TIMESTAMP: {ts}\n"
+                       f"Vendor: Test Vendor has sold {item} to {buyer} for {credits} credits.")
+            (folder / f"{mail_id}.mail").write_text(content, encoding="utf-8")
+            return _ok({"file": f"{mail_id}.mail", "item": item, "credits": credits})
+        except Exception as e:
+            return _err(e)
+
     def monitor_state(self):
         """Live mail-monitor status for the header/status polling."""
         if not self.controller or not hasattr(self.controller, "state"):

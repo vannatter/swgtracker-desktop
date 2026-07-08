@@ -406,6 +406,11 @@ class SWGTrackerAPI:
         params = {"since_id": since_id} if since_id else None
         return self._request('GET', 'api/alerts.php', params=params)
 
+    def delete_mail(self, mail_id: str) -> tuple[bool, dict | str]:
+        """DELETE /api/mail.php - purge a mail server-side (incoming_mail, sales, purchases)."""
+        from urllib.parse import quote
+        return self._request('DELETE', f'api/mail.php?mail_id={quote(str(mail_id))}')
+
     def save_alert(self, rule: dict) -> tuple[bool, dict | str]:
         """POST /api/alerts.php - create/update a rule; returns rule + backfill."""
         return self._request('POST', 'api/alerts.php', data={"rule": rule})

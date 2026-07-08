@@ -67,7 +67,8 @@ async function loadMail() {
       <td class="col-text">${MM_KIND[r.kind] || MM_KIND.mail}</td>
       <td class="col-text">${escapeHtml(r.subject || '')}</td>
       <td class="col-name">${escapeHtml(r.detail || '')}</td>
-      <td class="col-actions">${action}</td>
+      <td class="col-actions">${action}<button class="mm-del" data-del="${escapeHtml(r.mail_id)}"
+        title="Delete this mail — app ledger, mail file, and the site's parsed rows (sales/purchases)"><i class="fa-solid fa-trash"></i></button></td>
     </tr>`;
   }).join('');
   const empty = $('#mm-empty');
@@ -102,7 +103,36 @@ function initMail() {
   $('#mm-raw-modal').addEventListener('click', (e) => {
     if (e.target === $('#mm-raw-modal')) $('#mm-raw-modal').hidden = true;
   });
+  $('#mm-mktest')?.addEventListener('click', async () => {
+    try {
+      const res = await api().dev_make_test_mail();
+      if (res.ok) {
+        toast(`Test sale dropped: ${res.data.item} — the monitor picks it up within ~5s`);
+        setTimeout(loadMail, 7000); // give the sweep + upload a beat, then show it
+      } else {
+        toast(res.error || 'Failed to create test mail', false);
+      }
+    } catch (err) { toast(String(err), false); }
+  });
   $('#mm-body').addEventListener('click', async (e) => {
+    const delBtn = e.target.closest('.mm-del');
+    if (delBtn) {
+      if (!confirmArm(delBtn, 'Click again to delete everywhere')) return;
+      delBtn.disabled = true;
+      try {
+        const res = await api().delete_mail(delBtn.dataset.del);
+        if (res.ok) {
+          const d = res.data || {};
+          toast(`Mail deleted — site rows: ${d.sales || 0} sale, ${d.purchases || 0} purchase`
+            + (d.restocked ? `, ${d.restocked} restocked` : ''));
+          loadMail();
+        } else {
+          toast(res.error || 'Delete failed', false);
+          delBtn.disabled = false;
+        }
+      } catch (err) { toast(String(err), false); delBtn.disabled = false; }
+      return;
+    }
     const btn = e.target.closest('.mm-addinv');
     if (!btn) {
       const tr = e.target.closest('tr[data-mailid]');

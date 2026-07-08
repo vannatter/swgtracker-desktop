@@ -65,7 +65,8 @@ function showPage(key) {
   const navKey = { schematic: 'schematics', resource: 'resources', myschematic: 'myschematics' }[key] || key;
   document.querySelectorAll('.nav-item').forEach((n) => n.classList.toggle('active', n.dataset.page === navKey));
   document.querySelectorAll('.page').forEach((p) => p.classList.toggle('active', p.id === `page-${key}`));
-  if (PAGE_LOADERS[key] && !loadedPages.has(key)) {
+  // mail is live state — reload on every visit, not just the first
+  if (PAGE_LOADERS[key] && (!loadedPages.has(key) || key === 'monitor')) {
     loadedPages.add(key);
     PAGE_LOADERS[key]();
   }

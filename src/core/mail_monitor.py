@@ -39,6 +39,7 @@ class MailMonitor:
         self.session_uploaded = 0
         self.session_failed = 0
         self.recent: list[dict] = []      # newest-first event feed for the UI
+        self._need_raw: set[str] = set()  # ledgered mails uploaded before raw was stored
 
     # --- controller interface (web_api expects these) ---
 
@@ -94,6 +95,7 @@ class MailMonitor:
 
     def _loop(self):
         logger.info("Mail monitor started")
+        self._need_raw = self.db.mail_ids_missing_raw()
         while not self._stop.is_set():
             try:
                 self._sweep()
@@ -112,6 +114,13 @@ class MailMonitor:
                     return
                 mail_id = f.stem
                 if self.db.mail_ledger_has(mail_id):
+                    if mail_id in self._need_raw:
+                        # uploaded before we kept raw copies — grab it while the file exists
+                        try:
+                            self.db.mail_set_raw(mail_id, f.read_text(encoding="utf-8", errors="replace"))
+                        except OSError:
+                            pass
+                        self._need_raw.discard(mail_id)
                     if delete_after:
                         self._delete(f)
                     continue
@@ -154,7 +163,7 @@ class MailMonitor:
             except (IndexError, ValueError):
                 if self.notifier:
                     self.notifier("Vendor sale", "New sale uploaded")
-        self.db.mail_ledger_add(mail_id, subject, detail, kind)
+        self.db.mail_ledger_add(mail_id, subject, detail, kind, raw=content)
         self.session_uploaded += 1
         self._event(kind, f.name, detail or subject)
         if delete_after:

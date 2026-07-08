@@ -917,6 +917,17 @@ body:not(.dev-mode) .dev-only { display: none !important; }
 .mm-kind.mm-err, .mm-err { color: var(--accent); }
 .mm-kind.mm-err { background: rgba(233, 69, 96, .12); }
 .mm-addinv { white-space: nowrap; }
+.mm-row-openable { cursor: pointer; }
+.mm-row-openable:hover td { background: var(--bg-secondary); }
+.mm-raw-card { max-width: 640px; }
+.mm-raw-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.mm-raw-head h2 { font-size: 15px; margin: 0; text-align: left; }
+.mm-raw-body {
+  background: var(--bg-input); border-radius: 6px; padding: 12px;
+  font-size: 12px; line-height: 1.5; color: var(--text-primary);
+  white-space: pre-wrap; word-break: break-word;
+  max-height: 60vh; overflow-y: auto; margin: 0; text-align: left;
+}
 .sum-card {
   flex: 1 1 0; background: var(--bg-secondary); border-radius: 8px;
   padding: 12px 10px; text-align: center;

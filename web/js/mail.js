@@ -49,7 +49,8 @@ async function loadMail() {
       ? `<button class="btn btn-sm btn-outline-secondary mm-addinv" data-item="${escapeHtml(item)}"
            title="Add this item to My Inventory as a new type"><i class="fa-solid fa-plus"></i> Inventory</button>`
       : '';
-    return `<tr>
+    return `<tr class="${r.has_raw ? 'mm-row-openable' : ''}" data-mailid="${escapeHtml(r.mail_id)}"
+        data-hasraw="${r.has_raw ? 1 : 0}" title="${r.has_raw ? 'Click to read the original mail' : ''}">
       <td class="col-text">${fmtAgo(r.uploaded_at)}</td>
       <td class="col-text">${MM_KIND[r.kind] || MM_KIND.mail}</td>
       <td class="col-text">${escapeHtml(r.subject || '')}</td>
@@ -61,15 +62,42 @@ async function loadMail() {
   empty.hidden = !!rows.length;
   empty.textContent = 'Nothing uploaded yet — configure a mail folder in Settings and hit Start.';
 
+  // keep polling while the page is on screen — uploads land whether or not
+  // this page (or the monitor) was running when it first rendered
   clearTimeout(mmState.pollTimer);
-  if (running) mmState.pollTimer = setTimeout(loadMail, 10000); // live while monitoring
+  mmState.pollTimer = setTimeout(() => {
+    if ($('#page-monitor').classList.contains('active')) loadMail();
+  }, 10000);
+}
+
+async function mmShowRaw(mailId, subject) {
+  let raw = '';
+  try {
+    const res = await api().mail_raw(mailId);
+    raw = (res.ok && res.data) || '';
+  } catch (_) { /* falls through to the placeholder text */ }
+  $('#mm-raw-title').textContent = subject || `Mail ${mailId}`;
+  $('#mm-raw-body').textContent = raw
+    || 'Raw copy not stored — this mail was uploaded before raw copies were kept '
+     + 'and its file is no longer in the mail folder.';
+  $('#mm-raw-modal').hidden = false;
 }
 
 function initMail() {
   $('[data-refresh="monitor"]').addEventListener('click', () => loadMail());
+  $('#mm-raw-close').addEventListener('click', () => { $('#mm-raw-modal').hidden = true; });
+  $('#mm-raw-modal').addEventListener('click', (e) => {
+    if (e.target === $('#mm-raw-modal')) $('#mm-raw-modal').hidden = true;
+  });
   $('#mm-body').addEventListener('click', async (e) => {
     const btn = e.target.closest('.mm-addinv');
-    if (!btn) return;
+    if (!btn) {
+      const tr = e.target.closest('tr[data-mailid]');
+      if (tr && tr.dataset.hasraw === '1') {
+        mmShowRaw(tr.dataset.mailid, tr.children[2]?.textContent);
+      }
+      return;
+    }
     btn.disabled = true;
     try {
       const res = await api().add_inventory_item({ item_name: btn.dataset.item, stocked: 1 });

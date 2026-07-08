@@ -836,6 +836,13 @@ class WebApi:
         except Exception as e:
             return _err(e)
 
+    def mail_raw(self, mail_id):
+        """Full original mail file content for the raw viewer."""
+        try:
+            return _ok(self.local_db.mail_raw(str(mail_id)))
+        except Exception as e:
+            return _err(e)
+
     def monitor_state(self):
         """Live mail-monitor status for the header/status polling."""
         if not self.controller or not hasattr(self.controller, "state"):

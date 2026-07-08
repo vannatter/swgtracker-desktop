@@ -593,6 +593,17 @@
     <i class="fa-solid fa-wifi"></i> Offline — showing cached data where available
   </div>
 
+  <!-- Raw mail viewer: the original .mail file exactly as uploaded -->
+  <div id="mm-raw-modal" class="key-gate" hidden>
+    <div class="key-gate-card sp-card mm-raw-card">
+      <div class="mm-raw-head">
+        <h2 id="mm-raw-title">Mail</h2>
+        <button id="mm-raw-close" class="btn btn-icon" title="Close"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <pre id="mm-raw-body" class="mm-raw-body"></pre>
+    </div>
+  </div>
+
   <!-- Alert rule editor: what to watch for + optional schematic-rank clause -->
   <div id="al-modal" class="key-gate" hidden>
     <div class="key-gate-card sp-card al-card">

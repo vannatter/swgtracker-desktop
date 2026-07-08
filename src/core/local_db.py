@@ -69,6 +69,7 @@ class LocalDB:
                 subject TEXT DEFAULT '',
                 detail TEXT DEFAULT '',
                 kind TEXT DEFAULT 'mail',
+                raw TEXT DEFAULT '',
                 uploaded_at INTEGER DEFAULT 0
             );
 
@@ -91,7 +92,8 @@ class LocalDB:
         self._init_ds_tables()
 
         # mail_ledger predates its detail/kind columns in some local DBs
-        for col, decl in (("detail", "TEXT DEFAULT ''"), ("kind", "TEXT DEFAULT 'mail'")):
+        for col, decl in (("detail", "TEXT DEFAULT ''"), ("kind", "TEXT DEFAULT 'mail'"),
+                          ("raw", "TEXT DEFAULT ''")):
             try:
                 self._conn.execute(f"ALTER TABLE mail_ledger ADD COLUMN {col} {decl}")
             except sqlite3.OperationalError:
@@ -299,18 +301,38 @@ class LocalDB:
         return self._conn.execute(
             "SELECT 1 FROM mail_ledger WHERE mail_id = ?", (str(mail_id),)).fetchone() is not None
 
-    def mail_ledger_add(self, mail_id: str, subject: str = "", detail: str = "", kind: str = "mail"):
+    def mail_ledger_add(self, mail_id: str, subject: str = "", detail: str = "",
+                        kind: str = "mail", raw: str = ""):
         self._conn.execute(
-            "INSERT OR REPLACE INTO mail_ledger (mail_id, subject, detail, kind, uploaded_at)"
-            " VALUES (?, ?, ?, ?, ?)",
-            (str(mail_id), subject, detail, kind, int(time.time())))
+            "INSERT OR REPLACE INTO mail_ledger (mail_id, subject, detail, kind, raw, uploaded_at)"
+            " VALUES (?, ?, ?, ?, ?, ?)",
+            (str(mail_id), subject, detail, kind, raw, int(time.time())))
         self._conn.commit()
 
     def mail_history(self, limit: int = 200) -> list[dict]:
+        # raw stays out of the list payload (big bridge responses drop in WKWebView);
+        # the viewer fetches one mail at a time via mail_raw()
         rows = self._conn.execute(
-            "SELECT * FROM mail_ledger ORDER BY uploaded_at DESC, mail_id DESC LIMIT ?",
+            "SELECT mail_id, subject, detail, kind, uploaded_at,"
+            " (COALESCE(raw, '') != '') AS has_raw"
+            " FROM mail_ledger ORDER BY uploaded_at DESC, mail_id DESC LIMIT ?",
             (int(limit),)).fetchall()
         return [dict(r) for r in rows]
+
+    def mail_raw(self, mail_id: str) -> str:
+        row = self._conn.execute(
+            "SELECT raw FROM mail_ledger WHERE mail_id = ?", (str(mail_id),)).fetchone()
+        return (row["raw"] or "") if row else ""
+
+    def mail_ids_missing_raw(self) -> set[str]:
+        rows = self._conn.execute(
+            "SELECT mail_id FROM mail_ledger WHERE COALESCE(raw, '') = ''").fetchall()
+        return {r["mail_id"] for r in rows}
+
+    def mail_set_raw(self, mail_id: str, raw: str):
+        self._conn.execute(
+            "UPDATE mail_ledger SET raw = ? WHERE mail_id = ?", (raw, str(mail_id)))
+        self._conn.commit()
 
     def mail_ledger_count(self) -> int:
         return self._conn.execute("SELECT COUNT(*) AS n FROM mail_ledger").fetchone()["n"]

@@ -648,9 +648,7 @@ async function labLoadExperiment(e) {
   labState.currentExpId = expId; // bench edits (incl. notes) belong to this experiment
   labState.wasComplete = true;   // loading a finished experiment shouldn't re-run the ceremony
   labState.celebratedOnce = true;
-  // reflect the loaded schematic in the chooser list
-  document.querySelectorAll('#lab-schem-list .al-schem-row').forEach((r) =>
-    r.classList.toggle('sel', r.dataset.sid === String(e.schematic_id)));
+  labRefreshSchemList(); // re-render the chooser so the highlight comes from state, not class fiddling
   labRenderAll();
 }
 

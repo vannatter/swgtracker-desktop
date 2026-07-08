@@ -61,6 +61,9 @@ html, body {
 .app-title { font-size: 16px; font-weight: 700; color: var(--text-hover); line-height: 1; }
 .app-subtitle { font-size: 11px; color: var(--text-muted); line-height: 1; }
 .build-id { font-size: 10px; color: rgba(255, 255, 255, .55); margin-left: 4px; }
+/* downloaded-UI badge: this interface arrived as a bundle update, not from disk */
+.bundle-id { font-size: 10px; color: rgba(255, 255, 255, .55); margin-left: 6px; cursor: help; }
+.bundle-id i { font-size: 9px; margin-right: 3px; color: var(--q-fair); }
 .build-id.stale { color: var(--accent); } /* an update is available */
 .app-header-controls { display: flex; align-items: center; gap: 8px; }
 .update-chip {

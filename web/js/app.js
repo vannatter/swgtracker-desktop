@@ -105,6 +105,13 @@ async function pollBundleState() {
   let res;
   try { res = await api().bundle_state(); } catch (_) { return; }
   const st = res?.ok && res.data;
+  // downloaded-UI badge next to the shell version
+  if (st?.source === 'bundle' && st.active_version) {
+    const b = $('#bundle-id');
+    b.hidden = false;
+    b.innerHTML = `<i class="fa-solid fa-cloud-arrow-down"></i>ui ${escapeHtml(st.active_version)}`;
+    b.title = `This interface was delivered as a live update from swgtracker.com (bundle ${st.active_version}) — the shell is v${$('#build-id').textContent.replace(/^v/, '')}`;
+  }
   if (st?.pending) {
     const chip = $('#update-chip');
     chip.hidden = false;

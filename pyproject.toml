@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "swg-tracker-desktop"
-version = "0.11.2"
+version = "0.11.3"
 description = "SWG Tracker Desktop - Companion app for swgtracker.com: resource tracking, spawn alerts, schematic management, and mail sync"
 authors = ["Dustin Vannatter"]
 readme = "README.md"

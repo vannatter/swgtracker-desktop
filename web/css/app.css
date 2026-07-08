@@ -427,11 +427,21 @@ body.offline .app-body { height: calc(100vh - 76px); }
 @keyframes lab-flask-rock { 0%, 100% { transform: rotate(-14deg); } 50% { transform: rotate(14deg); } }
 .lab-calc-bar { position: relative; height: 16px; border-radius: 8px; background: var(--bg-primary); overflow: hidden; }
 .lab-calc-fill {
-  display: block; height: 100%; width: 0;
+  display: block; position: relative; height: 100%; width: 0;
   background: linear-gradient(90deg, var(--accent-dark), var(--accent), var(--accent-green));
-  animation: lab-calc-run 1.8s cubic-bezier(.3, .1, .3, 1) forwards;
+  box-shadow: inset 0 3px 4px rgba(255, 255, 255, .18), inset 0 -3px 4px rgba(0, 0, 0, .3); /* liquid sheen */
+  animation: lab-calc-run 1.15s cubic-bezier(.25, .1, .3, 1) forwards;
 }
-@keyframes lab-calc-run { 0% { width: 0; } 35% { width: 38%; } 60% { width: 55%; } 80% { width: 86%; } 100% { width: 100%; } }
+.lab-calc-fill::after { /* foam at the pouring edge */
+  content: ''; position: absolute; right: -1px; top: 0; bottom: 0; width: 7px;
+  background: rgba(255, 255, 255, .7); filter: blur(2px); border-radius: 3px;
+}
+/* pour in glugs: surge, settle, surge */
+@keyframes lab-calc-run {
+  0% { width: 0; } 28% { width: 34%; } 38% { width: 32%; }
+  62% { width: 68%; } 72% { width: 65%; } 100% { width: 100%; }
+}
+.lab-calc.fast .lab-calc-fill { animation-duration: .5s; }
 /* bubbles rising through the brew */
 .lab-calc-bubbles {
   position: absolute; inset: 0; pointer-events: none; mix-blend-mode: screen;
@@ -440,7 +450,8 @@ body.offline .app-body { height: calc(100vh - 76px); }
     radial-gradient(circle 1.8px at 22px 8px, rgba(255,255,255,.4) 60%, transparent 62%),
     radial-gradient(circle 1.2px at 15px 14px, rgba(255,255,255,.5) 60%, transparent 62%);
   background-size: 34px 16px, 27px 16px, 21px 16px;
-  animation: lab-bubble-rise .7s linear infinite;
+  opacity: .6; /* ambient, not busy */
+  animation: lab-bubble-rise 1.2s linear infinite;
 }
 /* bubbles flow along the bar with the fill (left → right), gently bobbing */
 @keyframes lab-bubble-rise {

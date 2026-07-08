@@ -152,21 +152,24 @@ function labRenderBench() {
   const { byFormula, complete, picked, cost } = labBench();
   $('#lab-save').disabled = false;
 
-  // the voila moment: last slot just filled → run the "experiment" before revealing
+  // the voila moment: last slot just filled → pour the experiment before revealing.
+  // First completion gets the full pour; later swaps a quick top-up.
   if (complete && !labState.wasComplete) {
     if (!labState.calculating) {
       labState.calculating = true;
+      const fast = labState.celebratedOnce;
       bench.innerHTML = `
         <div class="lab-bench-head"><span class="lab-bench-title">${escapeHtml(labState.schematic.name)}</span></div>
-        <div class="lab-calc">
+        <div class="lab-calc ${fast ? 'fast' : ''}">
           <div class="lab-calc-label"><i class="fa-solid fa-flask lab-flask"></i> Running experiment…</div>
           <div class="lab-calc-bar"><span class="lab-calc-fill"></span><span class="lab-calc-bubbles"></span></div>
         </div>`;
       setTimeout(() => {
         labState.calculating = false;
         labState.wasComplete = true;
+        labState.celebratedOnce = true;
         labRenderBench();
-      }, 1900);
+      }, fast ? 620 : 1250);
     }
     return;
   }
@@ -486,6 +489,7 @@ async function labLoadSchematic(id, name) {
     collapsed: i !== 0, // wizard flow: work slot by slot, first one open
   }));
   labState.wasComplete = false;
+  labState.celebratedOnce = false; // fresh schematic earns the full pour again
   labState.currentExpId = null;
   labState.draftNotes = '';
 

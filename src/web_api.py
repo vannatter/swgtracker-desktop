@@ -778,15 +778,19 @@ class WebApi:
                     'display notification "{}" with title "{}" sound name "Glass"'.format(
                         message.replace('"', "'"), title.replace('"', "'"))])
             elif sys.platform == "win32":
+                # text rides in via env vars — item names carry quotes, brackets
+                # and em-dashes that inline-formatted PowerShell mangled (toasts
+                # arrived with an empty body)
+                import os
                 ps = ("[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType=WindowsRuntime] > $null;"
                       "$t=[Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02);"
-                      "$t.GetElementsByTagName('text')[0].AppendChild($t.CreateTextNode('{0}')) > $null;"
-                      "$t.GetElementsByTagName('text')[1].AppendChild($t.CreateTextNode('{1}')) > $null;"
+                      "$t.GetElementsByTagName('text')[0].AppendChild($t.CreateTextNode($env:SWGT_TITLE)) > $null;"
+                      "$t.GetElementsByTagName('text')[1].AppendChild($t.CreateTextNode($env:SWGT_MSG)) > $null;"
                       "[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('SWG Tracker Desktop').Show("
-                      "[Windows.UI.Notifications.ToastNotification]::new($t))").format(
-                          title.replace("'", ""), message.replace("'", ""))
+                      "[Windows.UI.Notifications.ToastNotification]::new($t))")
+                env = dict(os.environ, SWGT_TITLE=title, SWGT_MSG=message)
                 subprocess.Popen(["powershell", "-NoProfile", "-Command", ps],
-                                 creationflags=0x08000000)  # CREATE_NO_WINDOW
+                                 env=env, creationflags=0x08000000)  # CREATE_NO_WINDOW
             return _ok(True)
         except Exception as e:
             logger.error("notify failed: %s", e)

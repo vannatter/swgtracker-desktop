@@ -108,6 +108,7 @@ class MailMonitor:
 
     def _sweep(self):
         delete_after = bool(self.config.get("delete_mail_after_upload", False))
+        self._sweep_sales = []  # (item, credits) uploaded this pass — notified in one batch
         for folder in self._paths():
             if not folder.is_dir():
                 continue
@@ -127,6 +128,7 @@ class MailMonitor:
                         self._delete(f)
                     continue
                 self._upload(f, mail_id, delete_after)
+        self._notify_sales()
 
     def _upload(self, f: Path, mail_id: str, delete_after: bool):
         # backoff: a file that just failed doesn't get retried every 5s sweep
@@ -172,11 +174,11 @@ class MailMonitor:
                 buyer = rest.split(" for ", 1)[0]
                 credits = rest.split(" for ", 1)[1].split(" credits", 1)[0]
                 detail = f"{item} → {buyer} — {credits} credits"
-                if self.notifier and not duplicate:
-                    self.notifier("Vendor sale", f"{item} — {credits} credits")
+                if not duplicate:
+                    self._sweep_sales.append((item, credits))
             except (IndexError, ValueError):
-                if self.notifier and not duplicate:
-                    self.notifier("Vendor sale", "New sale uploaded")
+                if not duplicate:
+                    self._sweep_sales.append(("New sale", ""))
         self.db.mail_ledger_add(mail_id, subject, detail, kind, raw=content)
         if duplicate:
             self._event(kind, f.name, f"already on server — {detail or subject}")
@@ -185,6 +187,27 @@ class MailMonitor:
             self._event(kind, f.name, detail or subject)
         if delete_after:
             self._delete(f)
+
+    def _notify_sales(self):
+        """One notification per sweep: a lone sale gets its detail, a backlog
+        (fresh install, first start of the day) gets a single summary instead
+        of one toast per mail."""
+        sales = self._sweep_sales
+        self._sweep_sales = []
+        if not sales or not self.notifier:
+            return
+        if len(sales) == 1:
+            item, credits = sales[0]
+            self.notifier("Vendor sale", f"{item} — {credits} credits" if credits else item)
+            return
+        total = 0
+        for _, c in sales:
+            try:
+                total += int(str(c).replace(",", ""))
+            except ValueError:
+                pass
+        summary = f"{total:,} credits total" if total else "see the Mail page"
+        self.notifier(f"{len(sales)} vendor sales uploaded", summary)
 
     def _delete(self, f: Path):
         try:

@@ -1000,8 +1000,16 @@ body:not(.dev-mode) .dev-only { display: none !important; }
 .inv-sales-card { max-width: 560px; text-align: left; }
 .inv-sales-box { max-height: 55vh; overflow-y: auto; }
 .inv-sales-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-.inv-sales-table th { text-align: left; color: var(--text-muted); font-weight: 600; padding: 2px 10px 6px 0; }
-.inv-sales-table td { padding: 3px 10px 3px 0; color: var(--text-primary); }
+/* header band mirrors the main data grids — the dialogs sit inside a card, so
+   they get the darker input tone for contrast against the card background */
+.inv-sales-table th {
+  text-align: left; background: var(--bg-input); color: var(--text-hover);
+  font-weight: 700; padding: 7px 10px; border-bottom: 1px solid var(--border);
+}
+.inv-sales-table th:first-child { border-radius: 6px 0 0 0; }
+.inv-sales-table th:last-child { border-radius: 0 6px 0 0; }
+.inv-sales-table td { padding: 5px 10px; color: var(--text-primary); }
+.inv-sales-table tbody tr:nth-child(even) td { background: rgba(255, 255, 255, .025); }
 .inv-sales-table .col-num { text-align: right; }
 
 /* My Schematics: accepted-but-not-optimal (yellow) */
@@ -1013,6 +1021,18 @@ body:not(.dev-mode) .dev-only { display: none !important; }
   color: var(--text-muted); font-size: 11px; padding: 1px 7px; margin-left: 6px; cursor: pointer;
 }
 .mys-accept:hover { color: var(--q-good); border-color: var(--q-good); }
+
+/* Sales click-to-filter */
+.sales-cell { cursor: pointer; }
+.sales-cell:hover { text-decoration: underline; color: var(--text-hover); }
+.sales-fnote {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+  font-size: 12px; color: var(--q-good);
+}
+.sales-fnote button {
+  background: none; border: 0; color: var(--text-muted); cursor: pointer; padding: 2px 6px;
+}
+.sales-fnote button:hover { color: var(--accent); }
 
 /* Customers dialog */
 .cust-card { max-width: 680px; text-align: left; }

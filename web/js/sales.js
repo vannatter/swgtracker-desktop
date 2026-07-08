@@ -28,6 +28,15 @@ function buildSalesCards() {
     </div>`).join('');
 }
 
+function updateSalesFilterNote() {
+  const q = $('#sales-search').value.trim();
+  const note = $('#sales-fnote');
+  if (!q) { note.hidden = true; note.innerHTML = ''; return; }
+  note.hidden = false;
+  note.innerHTML = `<i class="fa-solid fa-filter"></i> Totals filtered to “${escapeHtml(q)}”
+    <button type="button" id="sales-fclear" title="Clear filter"><i class="fa-solid fa-xmark"></i></button>`;
+}
+
 function updateSalesCards(summaries) {
   SALES_PERIODS.forEach(([, key]) => {
     const card = $(`[data-period="${key}"]`);
@@ -41,12 +50,16 @@ function updateSalesCards(summaries) {
 function saleRowHtml(sale) {
   const type = String(sale.sale_type ?? '');
   const typeText = type === '1' ? 'Vendor' : type === '2' ? 'Bazaar' : type;
+  // item/buyer/vendor/location click-filter the page (aggregates follow)
+  const f = (v, cls = 'col-text') => v
+    ? `<td class="${cls} sales-cell" data-filter="${escapeHtml(v)}" title="Filter sales to “${escapeHtml(v)}”">${escapeHtml(v)}</td>`
+    : `<td class="${cls}"></td>`;
   return `<tr>
-    <td class="col-name res-name">${escapeHtml(sale.item || '')}</td>
+    ${f(sale.item || '', 'col-name res-name')}
     <td>${escapeHtml(typeText)}</td>
-    <td class="col-text">${escapeHtml(sale.buyer || '')}</td>
-    <td class="col-text">${escapeHtml(sale.vendor || '')}</td>
-    <td class="col-text">${escapeHtml(sale.location || '')}</td>
+    ${f(sale.buyer || '')}
+    ${f(sale.vendor || '')}
+    ${f(sale.location || '')}
     <td class="col-num sale-amount">${fmtNum(sale.sale_amount)}</td>
     <td class="col-text">${fmtDate(sale.sale_timestamp)}</td>
   </tr>`;
@@ -88,6 +101,7 @@ async function loadSales() {
     $('#sales-status').textContent = '';
   } else {
     $('#sales-body').innerHTML = sales.map(saleRowHtml).join('');
+    updateSalesFilterNote();
     $('#sales-status').textContent = `Page ${page} of ${totalPages} — ${fmtNum(total)} total sales`;
   }
 
@@ -146,6 +160,20 @@ async function loadCustomers() {
 function initSales() {
   buildSalesCards();
   buildSalesHeader();
+
+  $('#sales-body').addEventListener('click', (e) => {
+    const cell = e.target.closest('[data-filter]');
+    if (!cell) return;
+    $('#sales-search').value = cell.dataset.filter;
+    salesState.page = 1;
+    loadSales();
+  });
+  $('#sales-fnote').addEventListener('click', (e) => {
+    if (!e.target.closest('#sales-fclear')) return;
+    $('#sales-search').value = '';
+    salesState.page = 1;
+    loadSales();
+  });
 
   $('#sales-customers').addEventListener('click', () => {
     $('#cust-modal').hidden = false;

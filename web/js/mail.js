@@ -59,8 +59,8 @@ async function loadMail() {
     const tracked = item && invNames && invNames.has(item.trim().toLowerCase());
     const action = !item ? '' : tracked
       ? '<span class="mm-tracked" title="Already in My Inventory"><i class="fa-solid fa-check"></i></span>'
-      : `<button class="btn btn-sm btn-outline-secondary mm-addinv" data-item="${escapeHtml(item)}"
-           title="Add this item to My Inventory as a new type"><i class="fa-solid fa-plus"></i> Inventory</button>`;
+      : `<button class="mm-addinv" data-item="${escapeHtml(item)}"
+           title="Add to My Inventory as a new type"><i class="fa-solid fa-square-plus"></i></button>`;
     return `<tr class="${r.has_raw ? 'mm-row-openable' : ''}" data-mailid="${escapeHtml(r.mail_id)}"
         data-hasraw="${r.has_raw ? 1 : 0}" title="${r.has_raw ? 'Click to read the original mail' : ''}">
       <td class="col-text">${fmtAgo(r.uploaded_at)}</td>
@@ -146,7 +146,7 @@ function initMail() {
       const res = await api().add_inventory_item({ item_name: btn.dataset.item, stocked: 1 });
       if (res.ok) {
         toast(`Added "${btn.dataset.item}" to My Inventory`);
-        btn.innerHTML = '<i class="fa-solid fa-check"></i> Added';
+        btn.outerHTML = '<span class="mm-tracked" title="Already in My Inventory"><i class="fa-solid fa-check"></i></span>';
       } else {
         toast(res.error || res.data || 'Add failed', false);
         btn.disabled = false;

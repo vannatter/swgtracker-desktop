@@ -968,7 +968,14 @@ body:not(.dev-mode) .dev-only { display: none !important; }
 .mm-kind.mm-sale { background: rgba(69, 233, 126, .12); color: var(--accent-green); }
 .mm-kind.mm-err, .mm-err { color: var(--accent); }
 .mm-kind.mm-err { background: rgba(233, 69, 96, .12); }
-.mm-addinv { white-space: nowrap; }
+/* row actions: two quiet icons on one line — add-to-inventory and delete */
+.mm-addinv {
+  background: none; border: 0; color: var(--text-muted); cursor: pointer;
+  padding: 4px 6px; font-size: 14px;
+}
+.mm-addinv:hover { color: var(--q-fair); }
+.mm-addinv:disabled { opacity: .5; cursor: default; }
+#mm-body td.col-actions { white-space: nowrap; text-align: right; }
 .mm-tracked { color: var(--q-fair); font-size: 13px; cursor: help; }
 .mm-del {
   background: none; border: 0; color: var(--text-muted); cursor: pointer;

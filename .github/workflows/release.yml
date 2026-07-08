@@ -11,6 +11,13 @@ on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "existing tag to (re)build, e.g. v0.11.13"
+        required: true
+
+env:
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
 
 permissions:
   contents: write
@@ -20,6 +27,7 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+        with: { ref: "${{ inputs.tag || github.ref_name }}" }
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
       - name: Install deps
@@ -35,7 +43,7 @@ jobs:
             run_web.py
       - name: Zip
         run: |
-          VER="${GITHUB_REF_NAME#v}"
+          VER="${RELEASE_TAG#v}"
           ditto -c -k --keepParent "dist/SWG Tracker Desktop.app" "dist/SWG-Tracker-Desktop-${VER}-macos.zip"
       - uses: actions/upload-artifact@v4
         with: { name: macos, path: dist/*.zip }
@@ -44,6 +52,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with: { ref: "${{ inputs.tag || github.ref_name }}" }
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
       - name: Install deps
@@ -61,7 +70,7 @@ jobs:
       - name: Zip
         shell: pwsh
         run: |
-          $ver = $env:GITHUB_REF_NAME -replace '^v',''
+          $ver = $env:RELEASE_TAG -replace '^v',''
           Compress-Archive -Path "dist/SWG Tracker Desktop" -DestinationPath "dist/SWG-Tracker-Desktop-$ver-windows.zip"
       - uses: actions/upload-artifact@v4
         with: { name: windows, path: dist/*.zip }
@@ -71,32 +80,32 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with: { fetch-depth: 0 }
+        with: { fetch-depth: 0, ref: "${{ inputs.tag || github.ref_name }}" }
       - uses: actions/download-artifact@v4
         with: { path: assets, merge-multiple: true }
       - name: Release notes from versioned commits
         id: notes
         run: |
-          PREV=$(git describe --tags --match "v*" --abbrev=0 "${GITHUB_REF_NAME}^" 2>/dev/null || true)
-          RANGE=${PREV:+$PREV..}${GITHUB_REF_NAME}
+          PREV=$(git describe --tags --match "v*" --abbrev=0 "${RELEASE_TAG}^" 2>/dev/null || true)
+          RANGE=${PREV:+$PREV..}${RELEASE_TAG}
           git log --format='%s' $RANGE | sed -nE 's/^v[0-9.]+ — (.+)$/- \1/p' | head -20 > notes.md
-          [ -s notes.md ] || echo "SWG Tracker Desktop ${GITHUB_REF_NAME}" > notes.md
+          [ -s notes.md ] || echo "SWG Tracker Desktop ${RELEASE_TAG}" > notes.md
           cat notes.md
       - name: Create release
         env: { GH_TOKEN: "${{ github.token }}" }
         run: |
-          gh release create "$GITHUB_REF_NAME" assets/*.zip \
-            --title "SWG Tracker Desktop ${GITHUB_REF_NAME#v}" \
+          gh release create "$RELEASE_TAG" assets/*.zip \
+            --title "SWG Tracker Desktop ${RELEASE_TAG#v}" \
             --notes-file notes.md || \
-          gh release upload "$GITHUB_REF_NAME" assets/*.zip --clobber
+          gh release upload "$RELEASE_TAG" assets/*.zip --clobber
       - name: Announce to installed apps (version.json)
         if: ${{ vars.ANNOUNCE != 'off' }}
         env: { DEPLOY_TOKEN: "${{ secrets.DEPLOY_TOKEN }}" }
         run: |
-          VER="${GITHUB_REF_NAME#v}"
+          VER="${RELEASE_TAG#v}"
           curl -sf -X POST "https://swgtracker.com/app/deploy.php?action=shellrelease" \
             -H "X-Deploy-Token: ${DEPLOY_TOKEN}" \
             --data-urlencode "version=${VER}" \
-            --data-urlencode "url=https://github.com/${GITHUB_REPOSITORY}/releases/tag/${GITHUB_REF_NAME}" \
+            --data-urlencode "url=https://github.com/${GITHUB_REPOSITORY}/releases/tag/${RELEASE_TAG}" \
             --data-urlencode "notes=$(head -c 480 notes.md)"
           echo "version.json published — installed apps will offer v${VER}"

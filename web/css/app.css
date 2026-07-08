@@ -443,6 +443,12 @@ body.offline .app-body { height: calc(100vh - 76px); }
   62% { width: 68%; } 72% { width: 65%; } 100% { width: 100%; }
 }
 .lab-calc.fast .lab-calc-fill { animation-duration: .5s; }
+/* indeterminate "gathering" state: a slug of liquid sloshing side to side */
+.lab-calc-fill.lab-calc-slosh {
+  width: 36%;
+  animation: lab-slosh 1.1s ease-in-out infinite alternate;
+}
+@keyframes lab-slosh { from { margin-left: 0; } to { margin-left: 64%; } }
 /* bubbles rising through the brew */
 .lab-calc-bubbles {
   position: absolute; inset: 0; pointer-events: none; mix-blend-mode: screen;

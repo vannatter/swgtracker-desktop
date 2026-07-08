@@ -470,7 +470,13 @@ async function labLoadSchematic(id, name) {
   labState.detail = null;
   labState.slots = [];
   $('#lab-formulas').innerHTML = '';
-  $('#lab-bench').innerHTML = '<div class="grid-loading" style="position:static"><span class="spinner"></span> Loading pools…</div>';
+  $('#lab-bench').hidden = false;
+  $('#lab-bench').innerHTML = `
+    <div class="lab-bench-head"><span class="lab-bench-title">${escapeHtml(name)}</span></div>
+    <div class="lab-calc">
+      <div class="lab-calc-label"><i class="fa-solid fa-flask lab-flask"></i> Gathering reagents…</div>
+      <div class="lab-calc-bar"><span class="lab-calc-fill lab-calc-slosh"></span><span class="lab-calc-bubbles"></span></div>
+    </div>`;
   $('#lab-empty').hidden = true;
 
   let res;

@@ -65,8 +65,10 @@ function showPage(key) {
   const navKey = { schematic: 'schematics', resource: 'resources', myschematic: 'myschematics' }[key] || key;
   document.querySelectorAll('.nav-item').forEach((n) => n.classList.toggle('active', n.dataset.page === navKey));
   document.querySelectorAll('.page').forEach((p) => p.classList.toggle('active', p.id === `page-${key}`));
-  // mail is live state — reload on every visit, not just the first
-  if (PAGE_LOADERS[key] && (!loadedPages.has(key) || key === 'monitor')) {
+  // live-state pages reload on every visit, not just the first — mail uploads
+  // and cron inventory depletion both move underneath a cached render
+  const ALWAYS_RELOAD = new Set(['monitor', 'inventory']);
+  if (PAGE_LOADERS[key] && (!loadedPages.has(key) || ALWAYS_RELOAD.has(key))) {
     loadedPages.add(key);
     PAGE_LOADERS[key]();
   }

@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 """
-Publish a web bundle: zip web/, stamp a version, compute the sha, and emit the
-manifest. Output lands in build/dist_bundle/ — upload both files to
-swgtracker.com/app/ (the zip into app/bundles/).
+Publish a web bundle: zip web/, stamp a version, compute the sha, and deploy it
+to swgtracker.com in one command via app/deploy.php.
 
-    python3 build/publish_bundle.py                 # version = today's date + serial
-    python3 build/publish_bundle.py --notes "..."   # note shown in the update chip
-    python3 build/publish_bundle.py --tag           # also git-tag bundle-<version>
+    python3 build/publish_bundle.py --deploy --notes "..."   # build + push live
+    python3 build/publish_bundle.py --list                   # active + stored versions
+    python3 build/publish_bundle.py --activate 2026.07.08.1  # rollback / re-activate
+    python3 build/publish_bundle.py                          # build only (manual upload)
+    python3 build/publish_bundle.py --tag                    # also git-tag bundle-<version>
 
-Rollback = re-upload the previous manifest (keep the old zips around; they're
-~110KB each).
+Deploy auth: "deploy_token" in config.json (matches bundle_deploy_token in the
+site's config.php). Optional "deploy_url" overrides the endpoint for testing.
 """
 from __future__ import annotations
 
@@ -27,7 +28,41 @@ ROOT = Path(__file__).resolve().parent.parent
 WEB = ROOT / "web"
 OUT = ROOT / "build" / "dist_bundle"
 BASE_URL = "https://swgtracker.com/app/bundles"
+DEPLOY_URL = "https://swgtracker.com/app/deploy.php"
 SKIP = {".DS_Store", "Thumbs.db"}
+
+
+def deploy_conf() -> tuple[str, str]:
+    """(url, token) from config.json — the same gitignored file as the API key."""
+    try:
+        cfg = json.loads((ROOT / "config.json").read_text())
+    except (OSError, ValueError):
+        cfg = {}
+    return cfg.get("deploy_url") or DEPLOY_URL, cfg.get("deploy_token") or ""
+
+
+def deploy_call(action: str, *, data=None, files=None):
+    import requests
+    url, token = deploy_conf()
+    if not token:
+        print("no deploy_token in config.json — add one (and bundle_deploy_token "
+              "in the site's config.php)", file=sys.stderr)
+        return None
+    try:
+        if action == "list":
+            resp = requests.get(url, params={"action": "list"},
+                                headers={"X-Deploy-Token": token}, timeout=30)
+        else:
+            resp = requests.post(url, params={"action": action}, data=data or {},
+                                 files=files, headers={"X-Deploy-Token": token}, timeout=60)
+        body = resp.json()
+        if resp.status_code != 200:
+            print(f"deploy error {resp.status_code}: {body.get('error')}", file=sys.stderr)
+            return None
+        return body
+    except Exception as e:  # noqa: BLE001
+        print(f"deploy failed: {e}", file=sys.stderr)
+        return None
 
 
 def shell_version() -> str:
@@ -50,7 +85,28 @@ def main() -> int:
     ap.add_argument("--notes", default="", help="release note for the update chip")
     ap.add_argument("--min-shell", default="", help="minimum shell version (default: current)")
     ap.add_argument("--tag", action="store_true", help="git tag bundle-<version>")
+    ap.add_argument("--deploy", action="store_true", help="upload + activate on swgtracker.com")
+    ap.add_argument("--list", action="store_true", help="show active + stored versions")
+    ap.add_argument("--activate", metavar="VERSION", help="re-activate a stored version (rollback)")
     args = ap.parse_args()
+
+    if args.list:
+        body = deploy_call("list")
+        if body is None:
+            return 1
+        act = body.get("active") or {}
+        print(f"active: {act.get('bundle_version', '—')}  (published {act.get('published', '?')})")
+        for v in body.get("versions", []):
+            mark = "*" if v["version"] == act.get("bundle_version") else " "
+            print(f"  {mark} {v['version']}  {v['size'] // 1024} KB  {v['uploaded']}")
+        return 0
+
+    if args.activate:
+        body = deploy_call("activate", data={"version": args.activate})
+        if body is None:
+            return 1
+        print(f"activated {body.get('version')} — clients pick it up on their next check")
+        return 0
 
     version = args.version or next_version()
     min_shell = args.min_shell or shell_version()
@@ -80,7 +136,19 @@ def main() -> int:
     print(f"bundle  {zpath}  ({kb} KB)")
     print(f"sha256  {sha}")
     print(f"manifest {mpath}")
-    print("\nupload:")
+    if args.deploy:
+        body = deploy_call("upload", data={
+            "version": version, "sha256": sha,
+            "min_shell": min_shell, "notes": args.notes,
+        }, files={"bundle": (zpath.name, zpath.read_bytes(), "application/zip")})
+        if body is None:
+            return 1
+        print(f"\nDEPLOYED — {body['manifest']['url']}")
+        print("clients pick it up within 4h (or on next launch); "
+              f"rollback: --activate <previous>")
+        return 0
+
+    print("\nmanual upload:")
     print(f"  {zpath.name}  ->  swgtracker.com/app/bundles/{zpath.name}")
     print(f"  bundle-manifest.json  ->  swgtracker.com/app/bundle-manifest.json")
     return 0

@@ -63,6 +63,13 @@ class LocalDB:
                 value TEXT
             );
 
+            -- Uploaded-mail ledger: restarts never re-send a mail the server has
+            CREATE TABLE IF NOT EXISTS mail_ledger (
+                mail_id TEXT PRIMARY KEY,
+                subject TEXT DEFAULT '',
+                uploaded_at INTEGER DEFAULT 0
+            );
+
         """)
 
         # Dataset mirrors are disposable caches: on schema change, drop them and
@@ -276,6 +283,21 @@ class LocalDB:
             "SELECT value FROM sync_meta WHERE key = 'stockpile_last_sync'"
         ).fetchone()
         return int(row['value']) if row else 0
+
+    # --- Mail ledger (uploaded .mail files; see mail_monitor.py) ---
+
+    def mail_ledger_has(self, mail_id: str) -> bool:
+        return self._conn.execute(
+            "SELECT 1 FROM mail_ledger WHERE mail_id = ?", (str(mail_id),)).fetchone() is not None
+
+    def mail_ledger_add(self, mail_id: str, subject: str = ""):
+        self._conn.execute(
+            "INSERT OR REPLACE INTO mail_ledger (mail_id, subject, uploaded_at) VALUES (?, ?, ?)",
+            (str(mail_id), subject, int(time.time())))
+        self._conn.commit()
+
+    def mail_ledger_count(self) -> int:
+        return self._conn.execute("SELECT COUNT(*) AS n FROM mail_ledger").fetchone()["n"]
 
     # --- Offline datasets (exports/* mirrors, written by DatasetSync) ---
 

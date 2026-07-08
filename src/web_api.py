@@ -829,6 +829,24 @@ class WebApi:
         except Exception as e:
             return _err(e)
 
+    def monitor_state(self):
+        """Live mail-monitor status for the header/status polling."""
+        if not self.controller or not hasattr(self.controller, "state"):
+            return _err("Monitoring controller unavailable")
+        try:
+            return _ok(self.controller.state())
+        except Exception as e:
+            return _err(e)
+
+    def pick_folder(self):
+        """Native folder picker (Finder/Explorer) for the Settings mail paths."""
+        try:
+            import webview
+            res = webview.windows[0].create_file_dialog(webview.FOLDER_DIALOG)
+            return _ok(res[0] if res else None)
+        except Exception as e:
+            return _err(e)
+
     def start_monitoring(self):
         if not self.controller:
             return _err("Monitoring controller unavailable")

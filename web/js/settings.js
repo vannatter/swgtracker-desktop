@@ -16,6 +16,7 @@ function mailPathEntryHtml(entry, idx) {
       <input type="text" class="form-control filter-input mail-path flex-grow-1"
              placeholder="C:\\SWG Restoration III\\profiles\\character\\mail_CharacterName"
              value="${escapeHtml(entry.path || '')}">
+      <button class="btn btn-sm btn-outline-secondary mail-browse" data-browse="${idx}" title="Choose folder"><i class="fa-solid fa-folder-open"></i></button>
       ${idx > 0 ? `<button class="btn btn-sm btn-outline-secondary mail-remove" data-remove="${idx}" title="Remove">&times;</button>` : ''}
     </div>
   </div>`;
@@ -149,7 +150,19 @@ function initSettings() {
     renderMailPaths();
   });
 
-  $('#set-mailpaths').addEventListener('click', (e) => {
+  $('#set-mailpaths').addEventListener('click', async (e) => {
+    const browse = e.target.closest('[data-browse]');
+    if (browse) {
+      // native Finder/Explorer picker via the bridge
+      let res;
+      try { res = await api().pick_folder(); } catch (_) { return; }
+      if (res.ok && res.data) {
+        readMailPathInputs();
+        setState.mailPaths[safeInt(browse.dataset.browse)].path = res.data;
+        renderMailPaths();
+      }
+      return;
+    }
     const btn = e.target.closest('[data-remove]');
     if (!btn) return;
     readMailPathInputs();

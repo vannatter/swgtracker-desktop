@@ -19,9 +19,10 @@ from src.core.config_manager import ConfigManager
 from src.core.api_client import SWGTrackerAPI
 from src.core.dataset_sync import DatasetSync
 from src.core.local_db import LocalDB
+from src.core.mail_monitor import MailMonitor
 from src.web_api import WebApi
 
-APP_VERSION = "0.9.24"  # keep in sync with pyproject.toml — bump with every change batch
+APP_VERSION = "0.10.0"  # keep in sync with pyproject.toml — bump with every change batch
 
 logging.basicConfig(
     level=logging.INFO,
@@ -35,17 +36,22 @@ INDEX = ROOT / "web" / "index.html"
 
 def _set_mac_dock_icon():
     """Dev runs launch through the bare interpreter, so the Dock shows Python's
-    rocket. Point NSApplication at our icon instead (the packaged .app doesn't
-    need this — its bundle carries the icon)."""
+    rocket and the app answers to 'Python'. Point NSApplication at our icon and
+    rewrite the bundle name (the packaged .app doesn't need this — its bundle
+    carries both)."""
     if sys.platform != "darwin":
         return
     try:
         from AppKit import NSApplication, NSImage
+        from Foundation import NSBundle
         img = NSImage.alloc().initWithContentsOfFile_(str(ROOT / "src" / "resources" / "icon.png"))
         if img:
             NSApplication.sharedApplication().setApplicationIconImage_(img)
+        info = NSBundle.mainBundle().localizedInfoDictionary() or NSBundle.mainBundle().infoDictionary()
+        if info is not None:
+            info["CFBundleName"] = "SWG Tracker Desktop"
     except Exception:  # noqa: BLE001 — cosmetic only, never block launch
-        logger.debug("couldn't set Dock icon", exc_info=True)
+        logger.debug("couldn't set Dock identity", exc_info=True)
 
 
 def main():
@@ -59,6 +65,12 @@ def main():
 
     bridge = WebApi(config_manager=config, api_client=api_client, local_db=local_db,
                     app_version=APP_VERSION, dataset_sync=dataset_sync)
+
+    monitor = MailMonitor(config, api_client, local_db,
+                          notifier=lambda t, m: bridge.notify(t, m))
+    bridge.controller = monitor
+    if config.get("auto_start_monitoring", False):
+        monitor.start_monitoring()
 
     logger.info("SWG Tracker Desktop (web UI) starting")
     webview.create_window(

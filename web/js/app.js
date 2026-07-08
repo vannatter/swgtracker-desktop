@@ -39,10 +39,15 @@ function initNav() {
   const sidebar = document.querySelector('.app-sidebar');
   const applyCollapsed = (on) => {
     sidebar.classList.toggle('collapsed', on);
-    // tooltips only when icons stand alone — labels don't need repeating on hover
+    // tooltips only when icons stand alone — labels don't need repeating on hover.
+    // Clear data-tip too: the tooltip layer migrates title -> data-tip on hover.
     document.querySelectorAll('.app-sidebar .nav-item').forEach((item) => {
-      if (on) item.title = item.textContent.trim();
-      else item.removeAttribute('title');
+      if (on) {
+        item.title = item.textContent.trim();
+      } else {
+        item.removeAttribute('title');
+        delete item.dataset.tip;
+      }
     });
     $('#side-collapse i').className = `fa-solid ${on ? 'fa-angles-right' : 'fa-angles-left'}`;
     $('#side-collapse').title = on ? 'Expand menu' : 'Collapse menu';
@@ -239,11 +244,26 @@ function initControls() {
   });
 }
 
+let monPollTimer = null;
 function setMonitoring(on, msg) {
   $('#btn-start').disabled = on;
   $('#btn-stop').disabled = !on;
-  $('#monitor-status').textContent = on ? 'Monitoring' : '';
+  $('#monitor-status').textContent = on ? (msg || 'Monitoring') : '';
   $('#monitor-status').style.color = on ? 'var(--accent-green)' : 'var(--text-muted)';
+  clearInterval(monPollTimer);
+  if (on) monPollTimer = setInterval(refreshMonitorState, 10000);
+}
+
+async function refreshMonitorState() {
+  let res;
+  try { res = await api().monitor_state(); } catch (_) { return; }
+  if (!res.ok || !res.data) return;
+  const st = res.data;
+  if (!st.running) { setMonitoring(false); return; }
+  const bits = [`${st.folders.length} folder${st.folders.length > 1 ? 's' : ''}`];
+  if (st.uploaded) bits.push(`${st.uploaded} uploaded`);
+  if (st.failed) bits.push(`${st.failed} failed`);
+  $('#monitor-status').textContent = `Monitoring ${bits.join(' · ')}`;
 }
 
 // ---- API-key gate ----

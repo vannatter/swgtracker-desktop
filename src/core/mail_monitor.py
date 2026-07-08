@@ -138,18 +138,25 @@ class MailMonitor:
             self._event("error", f.name, f"upload failed: {e}")
             return
 
-        self.db.mail_ledger_add(mail_id, subject)
-        self.session_uploaded += 1
-        self._event("sale" if subject == SALE_SUBJECT else "mail", f.name, subject)
-        if subject == SALE_SUBJECT and self.notifier:
+        kind = "sale" if subject == SALE_SUBJECT else "mail"
+        detail = ""
+        if kind == "sale":
             # "Vendor: X has sold ITEM to BUYER for N credits."
             body = content.split("\n", 4)[-1]
             try:
-                item = body.split(" has sold ", 1)[1].rsplit(" to ", 1)[0]
-                credits = body.split(" for ", 1)[1].split(" credits", 1)[0]
-                self.notifier("Vendor sale", f"{item} — {credits} credits")
+                after = body.split(" has sold ", 1)[1]
+                item, rest = after.rsplit(" to ", 1)  # item names can contain " to "
+                buyer = rest.split(" for ", 1)[0]
+                credits = rest.split(" for ", 1)[1].split(" credits", 1)[0]
+                detail = f"{item} → {buyer} — {credits} credits"
+                if self.notifier:
+                    self.notifier("Vendor sale", f"{item} — {credits} credits")
             except (IndexError, ValueError):
-                self.notifier("Vendor sale", "New sale uploaded")
+                if self.notifier:
+                    self.notifier("Vendor sale", "New sale uploaded")
+        self.db.mail_ledger_add(mail_id, subject, detail, kind)
+        self.session_uploaded += 1
+        self._event(kind, f.name, detail or subject)
         if delete_after:
             self._delete(f)
 

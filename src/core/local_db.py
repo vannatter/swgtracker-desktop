@@ -67,6 +67,8 @@ class LocalDB:
             CREATE TABLE IF NOT EXISTS mail_ledger (
                 mail_id TEXT PRIMARY KEY,
                 subject TEXT DEFAULT '',
+                detail TEXT DEFAULT '',
+                kind TEXT DEFAULT 'mail',
                 uploaded_at INTEGER DEFAULT 0
             );
 
@@ -87,6 +89,13 @@ class LocalDB:
                 "INSERT OR REPLACE INTO sync_meta (key, value) VALUES ('ds_schema_ver', ?)",
                 (DS_SCHEMA_VER,))
         self._init_ds_tables()
+
+        # mail_ledger predates its detail/kind columns in some local DBs
+        for col, decl in (("detail", "TEXT DEFAULT ''"), ("kind", "TEXT DEFAULT 'mail'")):
+            try:
+                self._conn.execute(f"ALTER TABLE mail_ledger ADD COLUMN {col} {decl}")
+            except sqlite3.OperationalError:
+                pass  # already there
 
         self._conn.commit()
         logger.info(f"Local database initialized: {self.db_path}")
@@ -290,11 +299,18 @@ class LocalDB:
         return self._conn.execute(
             "SELECT 1 FROM mail_ledger WHERE mail_id = ?", (str(mail_id),)).fetchone() is not None
 
-    def mail_ledger_add(self, mail_id: str, subject: str = ""):
+    def mail_ledger_add(self, mail_id: str, subject: str = "", detail: str = "", kind: str = "mail"):
         self._conn.execute(
-            "INSERT OR REPLACE INTO mail_ledger (mail_id, subject, uploaded_at) VALUES (?, ?, ?)",
-            (str(mail_id), subject, int(time.time())))
+            "INSERT OR REPLACE INTO mail_ledger (mail_id, subject, detail, kind, uploaded_at)"
+            " VALUES (?, ?, ?, ?, ?)",
+            (str(mail_id), subject, detail, kind, int(time.time())))
         self._conn.commit()
+
+    def mail_history(self, limit: int = 200) -> list[dict]:
+        rows = self._conn.execute(
+            "SELECT * FROM mail_ledger ORDER BY uploaded_at DESC, mail_id DESC LIMIT ?",
+            (int(limit),)).fetchall()
+        return [dict(r) for r in rows]
 
     def mail_ledger_count(self) -> int:
         return self._conn.execute("SELECT COUNT(*) AS n FROM mail_ledger").fetchone()["n"]

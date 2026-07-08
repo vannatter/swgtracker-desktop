@@ -13,6 +13,7 @@ const PAGE_LOADERS = {
   inventory: () => loadInventory(),
   alerts: () => loadAlerts(),
   lab: () => loadLab(),
+  monitor: () => loadMail(),
   settings: () => loadSettings(),
 };
 const loadedPages = new Set();
@@ -356,6 +357,7 @@ async function boot() {
   initSettings();
   initAlerts();
   initLab();
+  initMail();
   initKeyGate();
   initPulseChart();
   initTooltips(); // WKWebView shows no native title tooltips

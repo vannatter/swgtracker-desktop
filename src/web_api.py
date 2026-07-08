@@ -829,6 +829,13 @@ class WebApi:
         except Exception as e:
             return _err(e)
 
+    def mail_history(self, limit=200):
+        """Uploaded-mail ledger, newest first — the Mail page's table."""
+        try:
+            return _ok(self.local_db.mail_history(int(limit)))
+        except Exception as e:
+            return _err(e)
+
     def monitor_state(self):
         """Live mail-monitor status for the header/status polling."""
         if not self.controller or not hasattr(self.controller, "state"):

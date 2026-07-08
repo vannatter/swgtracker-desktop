@@ -20,9 +20,10 @@ from src.core.api_client import SWGTrackerAPI
 from src.core.dataset_sync import DatasetSync
 from src.core.local_db import LocalDB
 from src.core.mail_monitor import MailMonitor
+from src.core.alert_poller import AlertPoller
 from src.web_api import WebApi
 
-APP_VERSION = "0.10.2"  # keep in sync with pyproject.toml — bump with every change batch
+APP_VERSION = "0.10.3"  # keep in sync with pyproject.toml — bump with every change batch
 
 logging.basicConfig(
     level=logging.INFO,
@@ -71,6 +72,12 @@ def main():
     bridge.controller = monitor
     if config.get("auto_start_monitoring", False):
         monitor.start_monitoring()
+
+    # server-side cron evaluates alert rules into alert_hits; this polls that
+    # feed on the "check for new spawns every N minutes" setting and notifies
+    alert_poller = AlertPoller(config, api_client,
+                               notifier=lambda t, m: bridge.notify(t, m))
+    alert_poller.start()
 
     logger.info("SWG Tracker Desktop (web UI) starting")
     webview.create_window(

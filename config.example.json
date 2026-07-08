@@ -8,6 +8,5 @@
   "alert_poll_interval": 300,
   "alerts": [],
   "pinned_schematics": [],
-  "pinned_resources": [],
-  "deploy_token": ""
+  "pinned_resources": []
 }

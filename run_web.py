@@ -29,7 +29,7 @@ from src.core.alert_poller import AlertPoller
 from src.core.bundle_manager import BundleManager
 from src.web_api import WebApi
 
-APP_VERSION = "0.11.15"  # keep in sync with pyproject.toml — bump with every change batch
+APP_VERSION = "0.11.16"  # keep in sync with pyproject.toml — bump with every change batch
 
 logging.basicConfig(
     level=logging.INFO,
@@ -108,8 +108,25 @@ def main():
         min_size=(960, 650),
         background_color="#14161d",
     )
-    # hot-apply: bundle_apply() re-resolves and reloads the webview in place
-    bridge.reload_ui = lambda: window.load_url(str(bundles.resolve_index()))
+    # hot-apply: bundle_apply() re-resolves and reloads the webview in place.
+    # Windows relaunches instead — WebView2 silently refuses the in-place
+    # navigation that WKWebView accepts, and a boot picks the bundle anyway.
+    def _reload_ui():
+        try:
+            if sys.platform == "win32":
+                import os
+                import subprocess
+                logger.info("applying UI bundle via relaunch")
+                args = [sys.executable] if getattr(sys, "frozen", False) \
+                    else [sys.executable, str(Path(__file__).resolve())]
+                subprocess.Popen(args, close_fds=True)
+                os._exit(0)
+            idx = bundles.resolve_index()
+            logger.info("applying UI bundle in place: %s", idx)
+            window.load_url(str(idx))
+        except Exception:  # noqa: BLE001 — never die silently in the timer thread
+            logger.error("bundle apply failed", exc_info=True)
+    bridge.reload_ui = _reload_ui
 
     # --debug enables the webview inspector (right-click → Inspect Element)
     webview.start(debug="--debug" in sys.argv)  # blocks until the window closes

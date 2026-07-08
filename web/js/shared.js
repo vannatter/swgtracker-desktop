@@ -44,15 +44,21 @@ function parseFormulaWeights(label) {
 }
 
 // Weighted quality = Σ weight% × (stat / stat_max × 1000), averaged over formulas.
-// Reproduces the site's resourceQuality exactly. rec needs stat + stat_max fields.
+// A stat the resource class can't have (stat_max == 0, e.g. steel has no PE) is
+// dropped and the remaining weights renormalize — matching SWG experimentation,
+// where a missing attribute is excluded rather than counted as a zero. rec needs
+// stat + stat_max fields.
 function weightedQuality(rec, weightsList) {
   if (!rec || !weightsList || !weightsList.length) return null;
   const per = weightsList.map((w) => {
-    let q = 0;
+    let q = 0, wsum = 0;
     for (const [stat, pct] of Object.entries(w)) {
-      q += (safeInt(rec[stat]) / (safeInt(rec[`${stat}_max`]) || 1000)) * 1000 * (pct / 100);
+      const cap = safeInt(rec[`${stat}_max`]);
+      if (!cap) continue; // resource class lacks this attribute — renormalize it away
+      q += (safeInt(rec[stat]) / cap) * 1000 * pct;
+      wsum += pct;
     }
-    return q;
+    return wsum ? q / wsum : 0;
   });
   return per.reduce((a, b) => a + b, 0) / per.length;
 }

@@ -34,17 +34,24 @@ def _parse_formula_weights(formulas):
 
 
 def _weighted_q(row, weights):
-    """Mean over formulas of sum(stat/cap * 1000 * pct/100) — mirrors
-    weightedQuality in web/js/shared.js. None when there are no weights."""
+    """Mean over formulas of the weighted stat quality — mirrors weightedQuality
+    in web/js/shared.js. A stat the resource class can't have (stat_max == 0,
+    e.g. steel has no PE) is dropped and the remaining weights renormalize, so a
+    missing attribute is excluded rather than counted as a zero. None when there
+    are no weights."""
     if not weights:
         return None
     per = []
     for w in weights:
         q = 0.0
+        wsum = 0.0
         for stat, pct in w.items():
-            cap = row.get(f"{stat}_max") or 1000
-            q += ((row.get(stat) or 0) / cap) * 1000 * (pct / 100)
-        per.append(q)
+            cap = row.get(f"{stat}_max") or 0
+            if not cap:
+                continue  # resource class lacks this attribute — renormalize it away
+            q += ((row.get(stat) or 0) / cap) * 1000 * pct
+            wsum += pct
+        per.append(q / wsum if wsum else 0.0)
     return sum(per) / len(per)
 
 

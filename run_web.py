@@ -21,7 +21,7 @@ from src.core.dataset_sync import DatasetSync
 from src.core.local_db import LocalDB
 from src.web_api import WebApi
 
-APP_VERSION = "0.9.23"  # keep in sync with pyproject.toml — bump with every change batch
+APP_VERSION = "0.9.24"  # keep in sync with pyproject.toml — bump with every change batch
 
 logging.basicConfig(
     level=logging.INFO,
@@ -33,7 +33,23 @@ logger = logging.getLogger(__name__)
 INDEX = ROOT / "web" / "index.html"
 
 
+def _set_mac_dock_icon():
+    """Dev runs launch through the bare interpreter, so the Dock shows Python's
+    rocket. Point NSApplication at our icon instead (the packaged .app doesn't
+    need this — its bundle carries the icon)."""
+    if sys.platform != "darwin":
+        return
+    try:
+        from AppKit import NSApplication, NSImage
+        img = NSImage.alloc().initWithContentsOfFile_(str(ROOT / "src" / "resources" / "icon.png"))
+        if img:
+            NSApplication.sharedApplication().setApplicationIconImage_(img)
+    except Exception:  # noqa: BLE001 — cosmetic only, never block launch
+        logger.debug("couldn't set Dock icon", exc_info=True)
+
+
 def main():
+    _set_mac_dock_icon()
     config = ConfigManager()
     api_client = SWGTrackerAPI(config.get("api_key", "") or "")
     local_db = LocalDB()

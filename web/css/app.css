@@ -179,7 +179,7 @@ body.offline .app-body { height: calc(100vh - 76px); }
 }
 
 /* Global tooltip (native title tooltips don't render in WKWebView) */
-.app-tip {
+.app-tip { white-space: pre-line;
   position: fixed; z-index: 400; max-width: 340px;
   background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 4px;
   padding: 4px 9px; font-size: 12px; color: var(--text-hover); line-height: 1.5;

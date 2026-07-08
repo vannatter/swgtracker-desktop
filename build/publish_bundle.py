@@ -65,6 +65,25 @@ def deploy_call(action: str, *, data=None, files=None):
         return None
 
 
+def auto_notes() -> str:
+    """Bullet list of commit subjects since the last bundle-* tag — the
+    default release notes when --notes isn't given."""
+    def run(*cmd):
+        return subprocess.run(cmd, capture_output=True, text=True, cwd=ROOT).stdout.strip()
+    last = run("git", "describe", "--tags", "--match", "bundle-*", "--abbrev=0")
+    log = run("git", "log", "--format=%s", f"{last}..HEAD") if last \
+        else run("git", "log", "-8", "--format=%s")
+    lines = []
+    for subj in log.splitlines():
+        subj = re.sub(r"^v[0-9.]+ — ", "", subj).strip()  # drop version prefixes
+        if subj and not subj.lower().startswith(("merge", "bundle")):
+            lines.append(subj)
+    if not lines:
+        return "Minor fixes and improvements"
+    text = "• " + "\n• ".join(lines[:8])
+    return text[:490]
+
+
 def shell_version() -> str:
     m = re.search(r'APP_VERSION = "([^"]+)"', (ROOT / "run_web.py").read_text())
     return m.group(1) if m else "0"
@@ -110,6 +129,11 @@ def main() -> int:
 
     version = args.version or next_version()
     min_shell = args.min_shell or shell_version()
+    if args.deploy and not args.notes:
+        args.notes = auto_notes()
+        print("notes (from git):")
+        for line in args.notes.splitlines():
+            print(f"  {line}")
     OUT.mkdir(parents=True, exist_ok=True)
 
     zpath = OUT / f"{version}.zip"
@@ -143,6 +167,7 @@ def main() -> int:
         }, files={"bundle": (zpath.name, zpath.read_bytes(), "application/zip")})
         if body is None:
             return 1
+        subprocess.run(["git", "tag", "-f", f"bundle-{version}"], cwd=ROOT, check=False)
         print(f"\nDEPLOYED — {body['manifest']['url']}")
         print("clients pick it up within 4h (or on next launch); "
               f"rollback: --activate <previous>")

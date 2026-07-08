@@ -376,12 +376,15 @@ function labAutoPick(mode) {
   labState.wasComplete = false; // auto-fills re-run the ceremony too
 
   if (mode === 'best') {
+    let empty = 0;
     for (const slot of labState.slots) {
       const live = slot.pool.filter((r) => r.status === 1);
-      const pool = live.length ? live : slot.pool;
-      slot.pick = pool.reduce((best, r) => (!best || labAvgQ(r) > labAvgQ(best) ? r : best), null);
-      slot.collapsed = !!slot.pick;
+      // nothing of this class in spawn = nothing to buy at the vendor — leave it open
+      if (!live.length) { empty++; slot.pick = null; slot.collapsed = false; continue; }
+      slot.pick = live.reduce((best, r) => (!best || labAvgQ(r) > labAvgQ(best) ? r : best), null);
+      slot.collapsed = true;
     }
+    if (empty) toast(`${empty} slot${empty > 1 ? 's have' : ' has'} nothing in spawn right now`, false);
     labRenderAll();
     return;
   }
@@ -638,6 +641,10 @@ async function labLoadExperiment(e) {
   }
   labState.currentExpId = expId; // bench edits (incl. notes) belong to this experiment
   labState.wasComplete = true;   // loading a finished experiment shouldn't re-run the ceremony
+  labState.celebratedOnce = true;
+  // reflect the loaded schematic in the chooser list
+  document.querySelectorAll('#lab-schem-list .al-schem-row').forEach((r) =>
+    r.classList.toggle('sel', r.dataset.sid === String(e.schematic_id)));
   labRenderAll();
 }
 

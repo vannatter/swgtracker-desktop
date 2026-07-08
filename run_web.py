@@ -24,7 +24,7 @@ from src.core.alert_poller import AlertPoller
 from src.core.bundle_manager import BundleManager
 from src.web_api import WebApi
 
-APP_VERSION = "0.11.3"  # keep in sync with pyproject.toml — bump with every change batch
+APP_VERSION = "0.11.4"  # keep in sync with pyproject.toml — bump with every change batch
 
 logging.basicConfig(
     level=logging.INFO,

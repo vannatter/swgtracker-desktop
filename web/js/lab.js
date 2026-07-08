@@ -270,8 +270,8 @@ function labSlotTbodyHtml(slot) {
   const rows = labSlotVisibleRows(slot);
   if (!rows.length) {
     return (slot.query || '').trim()
-      ? '<tr><td colspan="14" class="stat_off lab-pool-empty">No matches in this class.</td></tr>'
-      : `<tr><td colspan="14" class="stat_off lab-pool-empty">
+      ? '<tr><td colspan="13" class="stat_off lab-pool-empty">No matches in this class.</td></tr>'
+      : `<tr><td colspan="13" class="stat_off lab-pool-empty">
           Couldn\u2019t load this class pool \u2014 <a role="button" data-poolretry="${labState.slots.indexOf(slot)}">retry</a></td></tr>`;
   }
   return rows.map(({ r, q }) => `
@@ -285,7 +285,6 @@ function labSlotTbodyHtml(slot) {
         ? 'your stockpile cost per unit'
         : ecpuClamp(r.cpu, r.status === 1, safeInt(r.planet_mustafar) === 1) ? 'estimated credits per unit' : 'no eCPU votes yet \u2014 cost math assumes 1'}">${
         labMyCpu(r) !== null ? labMyCpu(r) : (ecpuClamp(r.cpu, r.status === 1, safeInt(r.planet_mustafar) === 1) || '~1')}</td>
-      <td class="lab-pickcell">${slot.pick && slot.pick.id === r.id ? '\u2713' : 'pick'}</td>
     </tr>`).join('');
 }
 
@@ -308,7 +307,7 @@ function labRenderSlots() {
           const drag = short > 0
             ? `<span class="lab-drag" title="This pick scores below the cap \u2014 it drags the average down by ${short.toFixed(0)} across ${slot.units} units">\u25bc ${short.toFixed(0)}</span>`
             : '';
-          return `<span class="lab-picked-chip">${escapeHtml(slot.pick.name)} \u00b7 ${q.toFixed(1)} \u00b7 ${labEcpu(slot.pick)} CPU</span> ${drag}`;
+          return `<span class="lab-picked-chip">${escapeHtml(slot.pick.name)} \u00b7 ${q.toFixed(1)}</span> ${drag}`;
         })()}</span>
       </div>
       <div class="lab-slot-body" ${slot.collapsed ? 'hidden' : ''}>
@@ -330,7 +329,7 @@ function labRenderSlots() {
         <th class="pin-cell"></th><th class="col-name">Resource</th>
         <th>Rate</th>
         ${stats.map((st) => `<th class="${rel.has(st) ? 'lab-rel-h' : 'lab-dim'}">${st.toUpperCase()}</th>`).join('')}
-        <th>eCPU</th><th></th>
+        <th>eCPU</th>
       </tr></thead><tbody>${labSlotTbodyHtml(slot)}</tbody></table>
       </div>
     </div>`).join('');

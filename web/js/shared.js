@@ -108,6 +108,14 @@ function fmtDate(ts) {
   });
 }
 
+// Relative time ("2h ago") with the exact timestamp in the hover tip.
+// Use anywhere a human-readable age is shown.
+function fmtAgoTip(dt) {
+  if (!dt) return '\u2014';
+  const exact = /^\d+$/.test(String(dt)) ? fmtDate(dt) : String(dt);
+  return `<span title="${escapeHtml(exact)}">${fmtAgo(dt)}</span>`;
+}
+
 // Transient toast, bottom-center (id #toast; class avoids Bootstrap's .toast)
 let _toastTimer = null;
 function toast(msg, ok = true) {

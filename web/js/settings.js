@@ -84,7 +84,7 @@ async function refreshDatasetStatus() {
     const ds = d.datasets[k] || {};
     return `<div class="set-ds-line"><span class="set-ds-label">${label}</span>
       <span>${ds.count ? ds.count.toLocaleString() : 'none'}</span>
-      <span class="set-ds-when">${ds.synced_at ? `synced ${fmtAgo(ds.synced_at)}` : 'never synced'}</span></div>`;
+      <span class="set-ds-when">${ds.synced_at ? `synced ${fmtAgoTip(ds.synced_at)}` : 'never synced'}</span></div>`;
   });
   el.innerHTML = (d.in_progress ? '<div class="set-ds-line">Syncing…</div>' : '') + rows.join('') +
     (d.last_error ? `<div class="set-ds-line set-ds-err">Last error: ${escapeHtml(d.last_error)}</div>` : '');

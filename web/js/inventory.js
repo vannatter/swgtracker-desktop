@@ -27,7 +27,7 @@ function invRowHtml(item, idx) {
     <td class="stat inv-edit" data-edit="threshold" data-idx="${idx}" title="Click to edit">${fmtNum(threshold)}</td>
     <td class="col-text">${escapeHtml(item.vendor || '') || '<span class="stat_off">—</span>'}</td>
     <td class="col-num">${item.match_price != null && item.match_price !== '' ? fmtNum(item.match_price) : '<span class="stat_off">—</span>'}</td>
-    <td class="col-text res-type" title="${escapeHtml(item.last_updated || '')}">${fmtAgo(item.last_updated)}</td>
+    <td class="col-text res-type">${fmtAgoTip(item.last_updated)}</td>
     <td class="pin-cell" data-iremove="${idx}" title="Remove item"><i class="fa-solid fa-trash-can"></i></td>
   </tr>`;
 }

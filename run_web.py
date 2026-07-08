@@ -23,7 +23,7 @@ from src.core.mail_monitor import MailMonitor
 from src.core.alert_poller import AlertPoller
 from src.web_api import WebApi
 
-APP_VERSION = "0.10.17"  # keep in sync with pyproject.toml — bump with every change batch
+APP_VERSION = "0.10.18"  # keep in sync with pyproject.toml — bump with every change batch
 
 logging.basicConfig(
     level=logging.INFO,

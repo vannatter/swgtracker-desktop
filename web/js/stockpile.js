@@ -11,7 +11,6 @@ const STK_COLUMNS = [
   ['SR', 'sr', 'stat'], ['UT', 'ut', 'stat'], ['FL', 'fl', 'stat'],
   ['PE', 'pe', 'stat'],
   ['Amount', 'stock', 'stat', 'Click a value to edit — supports shorthand like 300k / 4.5m'],
-  ['Added', 'date_added', 'col-text', 'When you stockpiled it — click to see your newest first'],
   ['My CPU', 'my_cpu', 'stat', 'Your cost per unit — what you paid (0 = mined it yourself). Click to edit; the Lab uses this for cost math.'],
 ];
 const STK_NUMERIC = new Set([...STAT_FIELDS, 'stock', 'score', 'my_cpu']);
@@ -29,7 +28,6 @@ function stkRowHtml(item, idx) {
     if (field === 'name') return `<td class="col-name res-name">${escapeHtml(item.name || '')}</td>`;
     if (field === 'type_name') return `<td class="col-text res-type">${escapeHtml(item.type_name || '')}</td>`;
     if (field === 'stock') return `<td class="stat stk-stock" data-stock="${idx}">${fmtNum(item.stock)}</td>`;
-    if (field === 'date_added') return `<td class="col-text">${item.date_added ? fmtAgo(item.date_added) : '—'}</td>`;
     if (field === 'my_cpu') {
       const has = item.my_cpu !== null && item.my_cpu !== undefined && item.my_cpu !== '';
       return `<td class="stat stk-stock" data-mycpu="${idx}" title="Your cost per unit — what you paid (0 = mined it yourself)">${has ? Number(item.my_cpu) : '—'}</td>`;
@@ -58,9 +56,6 @@ function stkVisibleItems() {
   const { sortField, sortOrder } = stkState;
   const dir = sortOrder === 'DESC' ? -1 : 1;
   return [...items].sort((a, b) => {
-    // added-order lives in the auto-increment id, which also covers rows
-    // stockpiled before date_added existed (their date is NULL)
-    if (sortField === 'date_added') return dir * (safeInt(a.stockpile_id) - safeInt(b.stockpile_id));
     if (STK_NUMERIC.has(sortField)) return dir * (safeInt(a[sortField]) - safeInt(b[sortField]));
     return dir * String(a[sortField] ?? '').toLowerCase().localeCompare(String(b[sortField] ?? '').toLowerCase());
   });
@@ -237,7 +232,7 @@ function initStockpile() {
       stkState.sortOrder = stkState.sortOrder === 'DESC' ? 'ASC' : 'DESC';
     } else {
       stkState.sortField = field;
-      stkState.sortOrder = (STK_NUMERIC.has(field) || field === 'date_added') ? 'DESC' : 'ASC'; // first click on Added = newest first
+      stkState.sortOrder = STK_NUMERIC.has(field) ? 'DESC' : 'ASC';
     }
     renderStockpile();
   });

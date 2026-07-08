@@ -63,7 +63,7 @@ async function loadMail() {
            title="Add to My Inventory as a new type"><i class="fa-solid fa-square-plus"></i></button>`;
     return `<tr class="${r.has_raw ? 'mm-row-openable' : ''}" data-mailid="${escapeHtml(r.mail_id)}"
         data-hasraw="${r.has_raw ? 1 : 0}" title="${r.has_raw ? 'Click to read the original mail' : ''}">
-      <td class="col-text">${fmtAgo(r.uploaded_at)}</td>
+      <td class="col-text">${fmtAgoTip(r.uploaded_at)}</td>
       <td class="col-text">${MM_KIND[r.kind] || MM_KIND.mail}</td>
       <td class="col-text">${escapeHtml(r.subject || '')}</td>
       <td class="col-name">${escapeHtml(r.detail || '')}</td>

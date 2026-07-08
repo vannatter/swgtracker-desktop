@@ -596,7 +596,7 @@ function labRenderHome() {
           <button class="btn btn-sm btn-outline-secondary" data-load="${e.id}"><i class="fa-solid fa-flask"></i> Open on bench</button>
           <button class="btn btn-icon al-rule-btn" data-delexp="${e.id}" title="Delete"><i class="fa-solid fa-trash-can"></i></button>
         </span>
-        <span class="lab-exp-when">${fmtNum(e.cost)} cr · ${fmtAgo(e.created)} · ${escapeHtml(e.schematic_name)}</span>
+        <span class="lab-exp-when">${fmtNum(e.cost)} cr · ${fmtAgoTip(e.created)} · ${escapeHtml(e.schematic_name)}</span>
       </div>
     </div>`).join('');
 }

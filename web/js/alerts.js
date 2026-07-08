@@ -93,7 +93,7 @@ function renderAlertRules() {
 function renderAlertFeed() {
   const rows = alState.hits.map((h) => `
     <tr class="${String(h.seen) === '1' ? '' : 'al-unseen'}">
-      <td class="col-text">${fmtAgo(h.created)}${String(h.is_backfill) === '1' ? ' <span class="scd-age">(backfill)</span>' : ''}</td>
+      <td class="col-text">${fmtAgoTip(h.created)}${String(h.is_backfill) === '1' ? ' <span class="scd-age">(backfill)</span>' : ''}</td>
       <td class="col-name res-name" data-res="${escapeHtml(h.resource_name)}">${escapeHtml(h.resource_name)}</td>
       <td class="col-text">${escapeHtml(h.detail || '')}</td>
       <td class="col-text res-type">${escapeHtml(h.rule_name || '')}</td>

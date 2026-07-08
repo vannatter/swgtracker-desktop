@@ -205,8 +205,12 @@ function initSales() {
     if (e.target === $('#cust-modal')) $('#cust-modal').hidden = true;
   });
   $('#cust-copy').addEventListener('click', async () => {
-    // "; " is the in-game mail To-field separator
-    const list = custState.visible.join('; ');
+    // in-game mail addresses by FIRST name only (unique per server) — and
+    // "; " is the To-field separator
+    const firsts = [...new Set(custState.visible
+      .map((n) => String(n).trim().split(/\s+/)[0])
+      .filter(Boolean))];
+    const list = firsts.join('; ');
     if (!list) { toast('No customers to copy', false); return; }
     try {
       await navigator.clipboard.writeText(list);
@@ -215,7 +219,7 @@ function initSales() {
       ta.value = list; document.body.appendChild(ta);
       ta.select(); document.execCommand('copy'); ta.remove();
     }
-    toast(`Copied ${custState.visible.length} names for in-game mail`);
+    toast(`Copied ${firsts.length} first names for in-game mail`);
   });
 
   // typeahead (server-side search → debounced) + Enter for instant

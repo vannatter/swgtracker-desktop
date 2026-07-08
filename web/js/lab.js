@@ -302,7 +302,7 @@ function labRenderSlots() {
         <span class="lab-slot-name">${escapeHtml(slot.className)}</span>
         <span class="mys-type">${escapeHtml(slot.label)} \u00b7 ${slot.units} units</span>
         <span class="lab-slot-pick">${slot.pick
-          ? `<span class="lab-picked-chip ${qualityClass(labAvgQ(slot.pick) / 10)}">${escapeHtml(slot.pick.name)} \u00b7 ${labAvgQ(slot.pick).toFixed(1)} \u00b7 ${labEcpu(slot.pick)} cr/u</span>`
+          ? `<span class="lab-picked-chip ${qualityClass(labAvgQ(slot.pick) / 10)}">${escapeHtml(slot.pick.name)} \u00b7 ${labAvgQ(slot.pick).toFixed(1)} \u00b7 ${labEcpu(slot.pick)} CPU</span>`
           : '<span class="stat_off">no pick</span>'}</span>
       </div>
       <div class="lab-slot-body" ${slot.collapsed ? 'hidden' : ''}>

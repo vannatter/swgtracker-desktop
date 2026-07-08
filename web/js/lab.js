@@ -150,6 +150,7 @@ function labRelevantStats() {
 
 function labRenderBench() {
   const bench = $('#lab-bench');
+  bench.hidden = !labState.schematic; // no empty shell before a schematic is picked
   if (!labState.schematic) { bench.innerHTML = ''; $('#lab-save').disabled = true; return; }
   const { byFormula, complete, picked, cost } = labBench();
   $('#lab-save').disabled = false;

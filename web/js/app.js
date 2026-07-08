@@ -166,7 +166,7 @@ async function pollBundleState() {
     const b = $('#bundle-id');
     b.hidden = false;
     b.innerHTML = `<i class="fa-solid fa-cloud-arrow-down"></i>ui ${escapeHtml(st.active_version)}`;
-    b.title = `The screens you're looking at arrived as live update ${st.active_version} from swgtracker.com — no reinstall needed. The installed app itself is ${$('#build-id').textContent}. Click to check for updates.`;
+    b.title = `Interface delivered as update ${st.active_version} — click to check for updates`;
   }
   if (st?.pending) {
     renderBundleChip(st.pending);

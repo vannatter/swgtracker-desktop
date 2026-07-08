@@ -23,6 +23,8 @@ class ConfigManager:
         "show_notifications": True,
         "auto_start_monitoring": False,
         "alert_poll_interval": 300,
+        "bundles_enabled": "auto",   # auto = on when packaged, off from source
+        "bundle_manifest_url": "",   # blank = swgtracker.com default
         "alerts": [],
         "pinned_schematics": [],
         "pinned_resources": [],

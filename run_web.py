@@ -21,9 +21,10 @@ from src.core.dataset_sync import DatasetSync
 from src.core.local_db import LocalDB
 from src.core.mail_monitor import MailMonitor
 from src.core.alert_poller import AlertPoller
+from src.core.bundle_manager import BundleManager
 from src.web_api import WebApi
 
-APP_VERSION = "0.10.26"  # keep in sync with pyproject.toml — bump with every change batch
+APP_VERSION = "0.11.0"  # keep in sync with pyproject.toml — bump with every change batch
 
 logging.basicConfig(
     level=logging.INFO,
@@ -32,7 +33,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-INDEX = ROOT / "web" / "index.html"
 
 
 def _set_mac_dock_icon():
@@ -65,11 +65,19 @@ def main():
     api_client = SWGTrackerAPI(config.get("api_key", "") or "")
     local_db = LocalDB()
 
+    # thin client: the web UI can ship as a server-hosted bundle; the packaged
+    # web/ dir is the always-works fallback (and the whole story when running
+    # from source, unless bundles_enabled is forced on in config)
+    bundles = BundleManager(config, APP_VERSION, ROOT / "web")
+    index = bundles.resolve_index()
+    bundles.start_background()
+
     dataset_sync = DatasetSync(local_db)
     dataset_sync.start_background()  # offline mirror of exports/* (resources, schematics)
 
     bridge = WebApi(config_manager=config, api_client=api_client, local_db=local_db,
                     app_version=APP_VERSION, dataset_sync=dataset_sync)
+    bridge.bundles = bundles
 
     monitor = MailMonitor(config, api_client, local_db,
                           notifier=lambda t, m: bridge.notify(t, m))
@@ -83,18 +91,23 @@ def main():
                                notifier=lambda t, m: bridge.notify(t, m))
     alert_poller.start()
 
-    logger.info("SWG Tracker Desktop (web UI) starting")
-    webview.create_window(
+    logger.info("SWG Tracker Desktop (web UI) starting — ui: %s (%s)",
+                bundles.active_version or "builtin", bundles.active_source)
+    window = webview.create_window(
         "SWG Tracker Desktop",
-        url=str(INDEX),
+        url=str(index),
         js_api=bridge,
         width=1200,
         height=800,
         min_size=(960, 650),
         background_color="#14161d",
     )
+    # hot-apply: bundle_apply() re-resolves and reloads the webview in place
+    bridge.reload_ui = lambda: window.load_url(str(bundles.resolve_index()))
+
     # --debug enables the webview inspector (right-click → Inspect Element)
     webview.start(debug="--debug" in sys.argv)  # blocks until the window closes
+    bundles.stop()
 
 
 if __name__ == "__main__":

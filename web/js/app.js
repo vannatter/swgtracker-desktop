@@ -98,6 +98,28 @@ async function checkForUpdate() {
   $('#build-id').classList.add('stale');
 }
 
+// ---- Web bundle updates (thin client) ----
+// The shell downloads+installs new UI bundles in the background; when one is
+// pending we surface the same header chip and apply without a restart.
+async function pollBundleState() {
+  let res;
+  try { res = await api().bundle_state(); } catch (_) { return; }
+  const st = res?.ok && res.data;
+  if (st?.pending) {
+    const chip = $('#update-chip');
+    chip.hidden = false;
+    chip.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles"></i> UI update ${escapeHtml(st.pending.version)}`;
+    chip.title = st.pending.notes || 'A web UI update is ready — click to apply (no restart)';
+    chip.onclick = async () => {
+      chip.disabled = true;
+      try { await api().bundle_apply(); } catch (_) { chip.disabled = false; }
+      // on success the shell reloads this page out from under us
+    };
+    return; // stop polling — the chip is up
+  }
+  if (st?.enabled) setTimeout(pollBundleState, 15 * 60 * 1000);
+}
+
 // ---- Server pulse ----
 
 // Sparkline of player count (last few hours), site-red. history comes from
@@ -400,6 +422,10 @@ async function boot() {
   initKeyGate();
   initPulseChart();
   initTooltips(); // WKWebView shows no native title tooltips
+  // thin client: confirm this UI booted (crash-rollback guard), then watch
+  // for freshly installed bundles and offer a hot apply
+  try { api().bundle_mark_ok(); } catch (_) { /* builtin UI — no-op */ }
+  pollBundleState();
 
   // Seed pinned sets before the first grid renders (local config, no auth).
   try {

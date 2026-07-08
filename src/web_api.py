@@ -855,6 +855,52 @@ class WebApi:
         except Exception as e:
             return _err(e)
 
+    def bundle_state(self):
+        """Thin-client state: active UI source/version + any pending update."""
+        try:
+            b = getattr(self, "bundles", None)
+            return _ok(b.state() if b else {"enabled": False})
+        except Exception as e:
+            return _err(e)
+
+    def bundle_check_now(self):
+        """Manual check+install; returns the new pending version if any."""
+        try:
+            b = getattr(self, "bundles", None)
+            if not b or not b.enabled():
+                return _ok(None)
+            info = b.check()
+            if info and b.install(info):
+                return _ok(b.state())
+            return _ok(b.state())
+        except Exception as e:
+            return _err(e)
+
+    def bundle_apply(self):
+        """Hot-swap the UI to the freshly installed bundle."""
+        try:
+            b = getattr(self, "bundles", None)
+            reload_ui = getattr(self, "reload_ui", None)
+            if not b or not b.pending or not callable(reload_ui):
+                return _err("nothing to apply")
+            b.pending = None
+            import threading
+            # let this bridge call return before the page unloads beneath it
+            threading.Timer(0.2, reload_ui).start()
+            return _ok(True)
+        except Exception as e:
+            return _err(e)
+
+    def bundle_mark_ok(self):
+        """UI boot completed — confirm the active bundle as known-good."""
+        try:
+            b = getattr(self, "bundles", None)
+            if b:
+                b.mark_boot_ok()
+            return _ok(True)
+        except Exception as e:
+            return _err(e)
+
     def mail_history(self, limit=200):
         """Uploaded-mail ledger, newest first — the Mail page's table."""
         try:

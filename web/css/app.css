@@ -464,7 +464,13 @@ body.offline .app-body { height: calc(100vh - 76px); }
 /* Lab home: experiment cards, notes always visible */
 .lab-head-actions { margin-left: auto; display: flex; gap: 8px; }
 .lab-exps { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; }
-.lab-exp-card { background: var(--bg-secondary); border-radius: 8px; padding: 12px 14px; display: flex; flex-direction: column; gap: 7px; }
+/* three zones: tinted header (verdict at a glance), growing body (notes scroll),
+   footer pinned to the bottom — grid stretch keeps cards in a row equal height */
+.lab-exp-card { background: var(--bg-secondary); border-radius: 8px; padding: 0; display: flex; flex-direction: column; overflow: hidden; }
+.lab-exp-hd { background: var(--bg-input); padding: 12px 14px 10px; display: flex; flex-direction: column; gap: 8px; }
+.lab-exp-body { padding: 10px 14px; display: flex; flex-direction: column; gap: 8px; flex: 1 1 auto; min-height: 0; }
+.lab-card-notes { flex: 1 1 auto; min-height: 48px; max-height: 170px; overflow-y: auto; }
+.lab-exp-foot { padding: 10px 14px; border-top: 1px solid var(--border); margin-top: auto; }
 .lab-exp-top { display: flex; align-items: center; gap: 8px; }
 .lab-exp-name { font-size: 14px; font-weight: 700; color: var(--text-hover); flex: 1 1 auto;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

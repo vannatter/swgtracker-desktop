@@ -543,22 +543,26 @@ function labRenderHome() {
   $('#lab-home-empty').hidden = !!labState.experiments.length;
   wrap.innerHTML = [...labState.experiments].reverse().map((e) => `
     <div class="lab-exp-card" data-eid="${e.id}">
-      <div class="lab-exp-top">
-        <span class="lab-exp-name" data-rename="${e.id}" title="Click to rename">${escapeHtml(e.name)}
-          <i class="fa-solid fa-pen lab-rename-pen"></i></span>
-        ${labExpBadge(e)}
+      <div class="lab-exp-hd">
+        <div class="lab-exp-top">
+          <span class="lab-exp-name" data-rename="${e.id}" title="Click to rename">${escapeHtml(e.name)}
+            <i class="fa-solid fa-pen lab-rename-pen"></i></span>
+          ${labExpBadge(e)}
+        </div>
+        <div class="lab-exp-meters">${labExpMeters(e)}</div>
       </div>
-      <div class="lab-exp-meters">${labExpMeters(e)}</div>
-      <div class="lab-exp-picks">${(e.picks || []).slice(0, 6).map((p) =>
-        `<span class="mys-loadout" title="${escapeHtml(p.slot)}">${escapeHtml(p.name)}</span>`).join(' ')}</div>
-      <div class="lab-notes-view lab-card-notes">${labNotesHtml(e.notes)
-        || '<span class="stat_off">No notes yet — open on bench to add some.</span>'}</div>
+      <div class="lab-exp-body">
+        <div class="lab-exp-picks">${(e.picks || []).slice(0, 6).map((p) =>
+          `<span class="mys-loadout" title="${escapeHtml(p.slot)}">${escapeHtml(p.name)}</span>`).join(' ')}</div>
+        <div class="lab-notes-view lab-card-notes">${labNotesHtml(e.notes)
+          || '<span class="stat_off">No notes yet — open on bench to add some.</span>'}</div>
+      </div>
       <div class="lab-exp-foot">
         <span>
           <button class="btn btn-sm btn-outline-secondary" data-load="${e.id}"><i class="fa-solid fa-flask"></i> Open on bench</button>
           <button class="btn btn-icon al-rule-btn" data-delexp="${e.id}" title="Delete"><i class="fa-solid fa-trash-can"></i></button>
         </span>
-        <span class="lab-exp-when">${escapeHtml(e.schematic_name)} · ${fmtNum(e.cost)} cr · ${fmtAgo(e.created)}</span>
+        <span class="lab-exp-when">${fmtNum(e.cost)} cr · ${fmtAgo(e.created)} · ${escapeHtml(e.schematic_name)}</span>
       </div>
     </div>`).join('');
 }

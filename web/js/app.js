@@ -98,6 +98,33 @@ async function checkForUpdate() {
   $('#build-id').classList.add('stale');
 }
 
+// Manual update check — clicking the version/badge asks the shell to fetch
+// the manifest right now instead of waiting for the hourly background tick.
+async function checkUpdatesNow() {
+  toast('Checking for updates…');
+  let st = null;
+  try { const r = await api().bundle_check_now(); st = r?.ok && r.data; } catch (_) { /* offline */ }
+  try { checkForUpdate(); } catch (_) { /* shell check is best-effort */ }
+  if (st?.pending) {
+    renderBundleChip(st.pending);
+    toast(`UI update ${st.pending.version} is ready — click the chip to apply`);
+  } else {
+    toast('You\u2019re up to date');
+  }
+}
+
+function renderBundleChip(pending) {
+  const chip = $('#update-chip');
+  chip.hidden = false;
+  chip.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles"></i> UI update ${escapeHtml(pending.version)}`;
+  chip.title = pending.notes || 'A web UI update is ready — click to apply (no restart)';
+  chip.onclick = async () => {
+    chip.disabled = true;
+    try { await api().bundle_apply(); } catch (_) { chip.disabled = false; }
+    // on success the shell reloads this page out from under us
+  };
+}
+
 // ---- Web bundle updates (thin client) ----
 // The shell downloads+installs new UI bundles in the background; when one is
 // pending we surface the same header chip and apply without a restart.
@@ -113,15 +140,7 @@ async function pollBundleState() {
     b.title = `This interface was delivered as a live update from swgtracker.com (bundle ${st.active_version}) — the shell is v${$('#build-id').textContent.replace(/^v/, '')}`;
   }
   if (st?.pending) {
-    const chip = $('#update-chip');
-    chip.hidden = false;
-    chip.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles"></i> UI update ${escapeHtml(st.pending.version)}`;
-    chip.title = st.pending.notes || 'A web UI update is ready — click to apply (no restart)';
-    chip.onclick = async () => {
-      chip.disabled = true;
-      try { await api().bundle_apply(); } catch (_) { chip.disabled = false; }
-      // on success the shell reloads this page out from under us
-    };
+    renderBundleChip(st.pending);
     return; // stop polling — the chip is up
   }
   if (st?.enabled) setTimeout(pollBundleState, 15 * 60 * 1000);
@@ -433,6 +452,8 @@ async function boot() {
   // for freshly installed bundles and offer a hot apply
   try { api().bundle_mark_ok(); } catch (_) { /* builtin UI — no-op */ }
   pollBundleState();
+  $('#build-id').addEventListener('click', checkUpdatesNow);
+  $('#bundle-id').addEventListener('click', checkUpdatesNow);
 
   // Seed pinned sets before the first grid renders (local config, no auth).
   try {

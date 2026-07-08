@@ -33,7 +33,7 @@ import requests
 logger = logging.getLogger(__name__)
 
 DEFAULT_MANIFEST_URL = "https://swgtracker.com/app/bundle-manifest.json"
-CHECK_INTERVAL = 4 * 3600  # background re-check cadence, seconds
+CHECK_INTERVAL = 3600  # background re-check cadence, seconds (manifest is tiny)
 
 
 def _vtuple(v) -> tuple:

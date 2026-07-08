@@ -60,7 +60,8 @@ html, body {
 .app-titles { display: flex; align-items: baseline; gap: 10px; }
 .app-title { font-size: 16px; font-weight: 700; color: var(--text-hover); line-height: 1; }
 .app-subtitle { font-size: 11px; color: var(--text-muted); line-height: 1; }
-.build-id { font-size: 10px; color: rgba(255, 255, 255, .55); margin-left: 4px; }
+.build-id { font-size: 10px; color: rgba(255, 255, 255, .55); margin-left: 4px; cursor: pointer; }
+.build-id:hover, .bundle-id:hover { color: rgba(255, 255, 255, .85); }
 /* downloaded-UI badge: this interface arrived as a bundle update, not from disk */
 .bundle-id { font-size: 10px; color: rgba(255, 255, 255, .55); margin-left: 6px; cursor: help; }
 .bundle-id i { font-size: 9px; margin-right: 3px; color: var(--q-fair); }

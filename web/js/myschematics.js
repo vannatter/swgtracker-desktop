@@ -284,7 +284,7 @@ function mysBadgeState(el, an) {
 // ---- List page ----
 
 async function loadMySchematics() {
-  $('#mys-loading').hidden = false;
+  showGridLoading('#mys-loading');
   $('#mys-empty').hidden = true;
 
   let res;
@@ -374,7 +374,7 @@ async function openMySchematicPage(item) {
     ? fl.map((l) => `<span class="mys-chip">${escapeHtml(l)}</span>`).join('')
     : '<span class="mys-chip all" title="No formulas chosen — comparing against all of them">All formulas</span>';
   $('#mysd-body').innerHTML = (item.resources || []).map(mysdRowHtml).join('');
-  $('#mysd-loading').hidden = false;
+  showGridLoading('#mysd-loading');
 
   const an = await analyzeMySchematic(item);
   $('#mysd-loading').hidden = true;

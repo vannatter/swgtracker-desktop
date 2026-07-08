@@ -167,7 +167,7 @@ function resRowHtml(res) {
 }
 
 async function loadResources() {
-  $('#res-loading').hidden = false;
+  showGridLoading('#res-loading');
   $('#res-empty').hidden = true;
 
   const search = $('#res-search').value.trim();

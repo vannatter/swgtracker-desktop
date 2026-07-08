@@ -35,7 +35,7 @@ function invRowHtml(item, idx) {
 }
 
 async function loadInventory() {
-  $('#inv-loading').hidden = false;
+  showGridLoading('#inv-loading');
   $('#inv-empty').hidden = true;
 
   const filter = $('#inv-filter').value;

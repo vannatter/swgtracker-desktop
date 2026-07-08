@@ -108,6 +108,16 @@ function fmtDate(ts) {
   });
 }
 
+// Show a grid's loading overlay. The overlay is absolutely positioned inside
+// .table-wrap (which is also the scroller), so it only covers the first
+// viewport of content — scroll to the top so it covers what's on screen,
+// which is where fresh results land anyway.
+function showGridLoading(sel) {
+  const el = $(sel);
+  el.hidden = false;
+  el.closest('.table-wrap')?.scrollTo(0, 0);
+}
+
 // Relative time ("2h ago") with the exact timestamp in the hover tip.
 // Use anywhere a human-readable age is shown.
 function fmtAgoTip(dt) {

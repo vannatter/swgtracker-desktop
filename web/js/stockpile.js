@@ -87,7 +87,7 @@ function renderStockpile(statusMsg) {
 }
 
 async function syncStockpile() {
-  $('#stk-loading').hidden = false;
+  showGridLoading('#stk-loading');
   $('#stk-empty').hidden = true;
 
   // Pull every page (perpage 500, same as the Tk app's sync)

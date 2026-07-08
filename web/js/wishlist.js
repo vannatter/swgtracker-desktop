@@ -89,7 +89,7 @@ function renderWishlist(statusMsg) {
 }
 
 async function syncWishlist() {
-  $('#wish-loading').hidden = false;
+  showGridLoading('#wish-loading');
   $('#wish-empty').hidden = true;
 
   const all = [];

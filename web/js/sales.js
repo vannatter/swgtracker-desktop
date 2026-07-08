@@ -67,7 +67,7 @@ function saleRowHtml(sale) {
 }
 
 async function loadSales() {
-  $('#sales-loading').hidden = false;
+  showGridLoading('#sales-loading');
   $('#sales-empty').hidden = true;
 
   let res;

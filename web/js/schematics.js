@@ -60,7 +60,7 @@ async function loadSchCategories() {
 }
 
 async function loadSchematics() {
-  $('#sch-loading').hidden = false;
+  showGridLoading('#sch-loading');
   $('#sch-empty').hidden = true;
 
   loadSchCategories(); // fire-and-forget; fills the dropdown on first load
@@ -266,7 +266,7 @@ async function openSchematicPage(id, name) {
   $('#scd-formulas').innerHTML = '';
   $('#scd-body').innerHTML = '';
   $('#scd-head').innerHTML = '';
-  $('#scd-loading').hidden = false;
+  showGridLoading('#scd-loading');
 
   let res;
   try { res = await api().get_schematic(id); }

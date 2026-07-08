@@ -284,7 +284,7 @@ async function openResourcePage(name) {
   $('#rd-head').innerHTML = '';
   $('#rd-body').innerHTML = '';
   $('#rd-empty').hidden = true;
-  $('#rd-loading').hidden = false;
+  showGridLoading('#rd-loading');
 
   let res;
   try { res = await api().get_resource(name); }

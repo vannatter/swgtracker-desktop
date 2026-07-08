@@ -15,11 +15,10 @@
       <img src="icon.png" alt="" class="app-logo" onerror="this.style.display='none'">
       <span class="app-titles">
         <span class="app-title">SWG Tracker Desktop</span>
-        <span class="app-subtitle">swgtracker.com companion</span>
+        <span class="app-subtitle">swgtracker.com companion <span id="build-id" class="build-id" title="App version"></span></span>
       </span>
     </div>
     <div class="app-header-controls">
-      <span id="build-id" class="build-id" title="App version"></span>
       <button id="update-chip" class="update-chip" hidden></button>
       <button id="btn-monitor" class="btn btn-sm btn-outline-secondary mon-btn">
         <span class="mon-btn-label"><i class="fa-solid fa-circle-pause"></i> Start Mail Monitor</span>
@@ -391,15 +390,8 @@
           </select>
           <input id="inv-low" type="number" class="form-control filter-input inv-num" value="5" min="0" title="Low-stock cutoff" hidden>
           <input id="inv-search" type="text" class="form-control filter-input head-search" placeholder="Search item or vendor...">
+          <button id="inv-add-open" class="btn btn-sm btn-accent"><i class="fa-solid fa-plus"></i> Add Item</button>
           <button class="btn btn-icon" data-refresh="inventory" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
-        </div>
-
-        <div class="filter-bar add-bar">
-          <span class="add-bar-label">Add item:</span>
-          <input id="inv-new-name" type="text" class="form-control filter-input" placeholder="Item name...">
-          <input id="inv-new-stocked" type="number" class="form-control filter-input inv-num" placeholder="Stocked" value="10">
-          <input id="inv-new-threshold" type="number" class="form-control filter-input inv-num" placeholder="Threshold" value="1">
-          <button id="inv-add" class="btn btn-outline-secondary btn-sm">+ Add</button>
         </div>
 
         <div class="table-wrap">
@@ -590,6 +582,32 @@
   <!-- Offline banner — driven by setOffline() (pulse poll + cached search responses) -->
   <div id="offline-bar" hidden>
     <i class="fa-solid fa-wifi"></i> Offline — showing cached data where available
+  </div>
+
+  <!-- Add-inventory dialog: name + stocked + threshold, nothing else -->
+  <div id="inv-add-modal" class="key-gate" hidden>
+    <div class="key-gate-card sp-card inv-add-card">
+      <h2>Add Inventory Item</h2>
+      <label class="sp-field-label">Item name</label>
+      <input id="inv-new-name" type="text" class="form-control filter-input settings-input-wide"
+             placeholder="e.g. UL Composite Armor Helmet 7000/5000/6000 [SENA]" autocomplete="off">
+      <div class="settings-hint">Use the exact in-game name — sales parsed from your mail
+        automatically deplete the matching item's stock.</div>
+      <div class="inv-add-row">
+        <div class="inv-add-field">
+          <label class="sp-field-label">Stocked</label>
+          <input id="inv-new-stocked" type="number" class="form-control filter-input" value="10" min="0">
+        </div>
+        <div class="inv-add-field">
+          <label class="sp-field-label">Low-stock threshold</label>
+          <input id="inv-new-threshold" type="number" class="form-control filter-input" value="1" min="0">
+        </div>
+      </div>
+      <div class="inv-add-actions">
+        <button id="inv-add-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
+        <button id="inv-add" class="btn btn-sm btn-accent"><i class="fa-solid fa-plus"></i> Add Item</button>
+      </div>
+    </div>
   </div>
 
   <!-- Raw mail viewer: the original .mail file exactly as uploaded -->

@@ -60,6 +60,8 @@ html, body {
 .app-titles { display: flex; align-items: baseline; gap: 10px; }
 .app-title { font-size: 16px; font-weight: 700; color: var(--text-hover); line-height: 1; }
 .app-subtitle { font-size: 11px; color: var(--text-muted); line-height: 1; }
+.build-id { font-size: 10px; color: rgba(255, 255, 255, .55); margin-left: 4px; }
+.build-id.stale { color: var(--accent); } /* an update is available */
 .app-header-controls { display: flex; align-items: center; gap: 8px; }
 .update-chip {
   font-size: 12px; font-weight: 600; padding: 3px 12px; border-radius: 12px;
@@ -339,8 +341,6 @@ body.offline .app-body { height: calc(100vh - 76px); }
 
 /* Inventory */
 .inv-num { max-width: 100px; }
-.add-bar { padding: 8px 15px; }
-.add-bar-label { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
 .inv-edit { cursor: pointer; color: var(--text-hover); text-decoration: underline dotted var(--text-muted); }
 .inv-edit:hover { color: var(--q-good); }
 .inv-neg { color: var(--accent) !important; font-weight: 700; }
@@ -961,6 +961,14 @@ body:not(.dev-mode) .dev-only { display: none !important; }
 .mm-kind.mm-err { background: rgba(233, 69, 96, .12); }
 .mm-addinv { white-space: nowrap; }
 .mm-tracked { color: var(--q-fair); font-size: 13px; cursor: help; }
+
+/* Add-inventory dialog */
+.inv-add-card { max-width: 460px; text-align: left; }
+.inv-add-card h2 { font-size: 16px; text-align: left; margin: 0 0 12px; }
+.inv-add-row { display: flex; gap: 12px; margin-top: 12px; }
+.inv-add-field { flex: 1 1 0; }
+.inv-add-field input { width: 100%; max-width: none; }
+.inv-add-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 .mm-row-openable { cursor: pointer; }
 .mm-row-openable:hover td { background: var(--bg-secondary); }
 .mm-raw-card { max-width: 640px; }

@@ -157,7 +157,7 @@ async function addInvItem() {
   btn.disabled = false;
   if (res.ok) {
     toast(`${name} added to inventory`);
-    $('#inv-new-name').value = '';
+    $('#inv-add-modal').hidden = true;
     loadInventory();
   } else {
     toast(`Couldn't add ${name}: ${res.error || 'server error'}`, false); // 409 = duplicate
@@ -186,8 +186,20 @@ function initInventory() {
   $('[data-refresh="inventory"]').addEventListener('click', () => loadInventory());
   $('#inv-prev').addEventListener('click', () => { if (invState.page > 1) { invState.page--; loadInventory(); } });
   $('#inv-next').addEventListener('click', () => { if (invState.hasNext) { invState.page++; loadInventory(); } });
+  $('#inv-add-open').addEventListener('click', () => {
+    $('#inv-new-name').value = '';
+    $('#inv-new-stocked').value = '10';
+    $('#inv-new-threshold').value = '1';
+    $('#inv-add-modal').hidden = false;
+    $('#inv-new-name').focus();
+  });
+  $('#inv-add-cancel').addEventListener('click', () => { $('#inv-add-modal').hidden = true; });
+  $('#inv-add-modal').addEventListener('click', (e) => {
+    if (e.target === $('#inv-add-modal')) $('#inv-add-modal').hidden = true;
+  });
   $('#inv-add').addEventListener('click', addInvItem);
-  $('#inv-new-name').addEventListener('keydown', (e) => { if (e.key === 'Enter') addInvItem(); });
+  // Enter anywhere in the dialog submits
+  $('#inv-add-modal').addEventListener('keydown', (e) => { if (e.key === 'Enter') addInvItem(); });
 
   // Server-side sort
   $('#inv-head').addEventListener('click', (e) => {

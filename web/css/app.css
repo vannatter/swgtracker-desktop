@@ -954,8 +954,7 @@ body:not(.dev-mode) .dev-only { display: none !important; }
 .set-ds-err { color: var(--accent); }
 
 .settings-actions {
-  display: flex; align-items: center; justify-content: flex-end; gap: 12px;
-  max-width: 1100px; margin-top: 2px; /* right edge lines up with the card grid */
+  display: flex; align-items: center; gap: 12px; margin-top: 2px;
 }
 .settings-keyrow { display: flex; align-items: center; gap: 8px; }
 .settings-keyrow .filter-input { flex: 1 1 auto; max-width: none; }
@@ -968,7 +967,7 @@ body:not(.dev-mode) .dev-only { display: none !important; }
 .settings-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-muted); }
 .settings-select-narrow { width: 70px; }
 .settings-save { min-width: 160px; }
-.settings-status { font-size: 13px; margin-left: 12px; }
+.settings-status { font-size: 13px; }
 .settings-status.ok { color: var(--q-fair); }
 .settings-status.err { color: var(--accent); }
 

@@ -91,6 +91,32 @@ class BundleManager:
     def _bundle_index(self, version: str) -> Path:
         return self.store / version / "web" / "index.html"
 
+    def _sync_active(self, version: str) -> Path:
+        """Mirror store/<version>/web into store/active/. The webview only ever
+        loads from active/, so applying an update swaps directory CONTENTS while
+        the served URL stays identical — pywebview's internal HTTP server roots
+        itself at the first page's directory and 404s anything outside it."""
+        active = self.store / "active"
+        marker = active / ".version"
+        try:
+            if (marker.read_text(encoding="utf-8").strip() == version
+                    and (active / "web" / "index.html").is_file()):
+                return active / "web" / "index.html"
+        except OSError:
+            pass
+        staged = self.store / ".active-staged"
+        old = self.store / ".active-old"
+        shutil.rmtree(staged, ignore_errors=True)
+        shutil.rmtree(old, ignore_errors=True)
+        staged.mkdir(parents=True)
+        shutil.copytree(self.store / version / "web", staged / "web")
+        (staged / ".version").write_text(version, encoding="utf-8")
+        if active.exists():
+            active.rename(old)
+        staged.rename(active)
+        shutil.rmtree(old, ignore_errors=True)
+        return active / "web" / "index.html"
+
     # ---- boot resolution ----
 
     def resolve_index(self) -> Path:
@@ -116,7 +142,12 @@ class BundleManager:
                 pass
             self.active_version = cur
             self.active_source = "bundle"
-            return self._bundle_index(cur)
+            try:
+                return self._sync_active(cur)
+            except OSError:
+                logger.error("couldn't stage bundle %s — using builtin", cur, exc_info=True)
+                self.active_source = "builtin"
+                return self.builtin_web / "index.html"
 
         self.active_source = "builtin"
         return self.builtin_web / "index.html"
@@ -218,9 +249,10 @@ class BundleManager:
             return True
 
     def _prune(self, keep: set):
+        keep = set(keep) | {"active"}
         try:
             for d in self.store.iterdir():
-                if d.is_dir() and d.name not in keep:
+                if d.is_dir() and not d.name.startswith(".") and d.name not in keep:
                     shutil.rmtree(d, ignore_errors=True)
         except OSError:
             pass

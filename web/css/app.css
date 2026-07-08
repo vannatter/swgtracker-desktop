@@ -811,6 +811,11 @@ body.offline .app-body { height: calc(100vh - 76px); }
 .planet.mustafar  { background-color: #67120d; }
 
 /* ---- Loading / empty ---- */
+/* while loading, freeze the grid: the overlay is inside the scrolled content,
+   so any scrolling would carry it away — and there's nothing sane to scroll
+   toward mid-reload anyway */
+.table-wrap:has(.grid-loading:not([hidden])) { overflow: hidden; }
+
 .grid-loading, .grid-empty {
   position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
   gap: 10px; color: var(--text-hover); font-weight: 600; background: rgba(20,22,29,.6);

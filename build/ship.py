@@ -3,12 +3,15 @@
 ship.py — one command from "code changed" to "deployed".
 
     python3 build/ship.py "what changed"          # do everything appropriate
-    python3 build/ship.py "msg" --no-app          # skip the .app rebuild
+    python3 build/ship.py "msg" --no-app          # skip the local .app rebuild
+    python3 build/ship.py "msg" --no-tag          # skip the v* release tag (no installer build)
     python3 build/ship.py "msg" --dry-run         # show the plan, do nothing
 
 Looks at what's actually modified and:
   web/ changed         -> deploy a UI bundle (auto release notes from commits)
-  src/ or run_web.py   -> bump the shell patch version (+pyproject), rebuild .app
+  src/ or run_web.py   -> bump the shell patch version (+pyproject), rebuild .app,
+                          and push a v* tag so release.yml builds the mac/win
+                          installers and announces version.json to installed apps
   anything             -> commit + push
 
 Shell version moves ONLY when shell code moves — UI-only changes ride the
@@ -69,7 +72,9 @@ def set_version(new: str):
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("message", help="commit message (first line = summary)")
-    ap.add_argument("--no-app", action="store_true", help="skip the .app rebuild")
+    ap.add_argument("--no-app", action="store_true", help="skip the local .app rebuild")
+    ap.add_argument("--no-tag", action="store_true",
+                    help="skip pushing the v* release tag (no shell installer build)")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
@@ -84,6 +89,7 @@ def main() -> int:
     print(f"changes: {len(files)} files  (ui={ui} shell={shell})")
     print(f"shell:   v{version}" + (f" -> v{new_version}" if shell else "  (unchanged)"))
     print(f"plan:    commit, push" + (", deploy UI bundle" if ui else "")
+          + (", tag + trigger installer build" if shell and not args.no_tag else "")
           + (", rebuild .app" if shell and not args.no_app else ""))
     if args.dry_run:
         return 0
@@ -96,6 +102,17 @@ def main() -> int:
     run("git", "commit", "-m", msg + CO_AUTHOR)
     run("git", "push", "origin", "main")
     print(f"committed + pushed: {msg.splitlines()[0]}")
+
+    if shell and not args.no_tag:
+        tag = f"v{new_version}"
+        existing = run("git", "tag", "--list", tag).stdout.strip()
+        if existing:
+            print(f"tag {tag} already exists — skipping (push it manually to rebuild)")
+        else:
+            run("git", "tag", tag)
+            run("git", "push", "origin", tag)
+            print(f"tagged + pushed {tag} — release.yml is building the mac .app + "
+                  f"Windows installer and will announce version.json to installed apps")
 
     if ui:
         r = run(sys.executable, "build/publish_bundle.py", "--deploy", check=False)

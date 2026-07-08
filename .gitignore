@@ -12,6 +12,9 @@ __pycache__/
 
 # build artifacts (build/ scripts stay tracked)
 build/dist_bundle/
+build/SWG Tracker Desktop/
+build/icon.iconset/
+*.spec
 SWG Tracker Desktop.app/
 dist/
 

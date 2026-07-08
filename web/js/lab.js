@@ -279,8 +279,8 @@ function labSlotTbodyHtml(slot) {
       <td class="pin-cell">${r.status === 1 ? '<span class="lab-live" title="In spawn"></span>' : ''}</td>
       <td class="col-name res-name">${escapeHtml(r.name)}
         ${stkState.resourceIds.has(String(r.id)) ? '<span class="lab-stock" title="In your stockpile">\u2713 stock</span>' : ''}</td>
-      ${stats.map((st) => labStatCellHtml(r, st, rel.has(st))).join('')}
       <td class="stat ${qualityClass(q / 10)}">${q.toFixed(1)}</td>
+      ${stats.map((st) => labStatCellHtml(r, st, rel.has(st))).join('')}
       <td class="stat ${labMyCpu(r) !== null ? 'lab-mycpu' : ''}" title="${labMyCpu(r) !== null
         ? 'your stockpile cost per unit'
         : ecpuClamp(r.cpu, r.status === 1, safeInt(r.planet_mustafar) === 1) ? 'estimated credits per unit' : 'no eCPU votes yet \u2014 cost math assumes 1'}">${
@@ -328,8 +328,9 @@ function labRenderSlots() {
       </div>
       <table class="data-grid lab-grid"><thead><tr>
         <th class="pin-cell"></th><th class="col-name">Resource</th>
+        <th>Rate</th>
         ${stats.map((st) => `<th class="${rel.has(st) ? 'lab-rel-h' : ''}">${st.toUpperCase()}</th>`).join('')}
-        <th>Rate</th><th>eCPU</th><th></th>
+        <th>eCPU</th><th></th>
       </tr></thead><tbody>${labSlotTbodyHtml(slot)}</tbody></table>
       </div>
     </div>`).join('');

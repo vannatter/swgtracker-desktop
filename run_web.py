@@ -21,7 +21,7 @@ from src.core.dataset_sync import DatasetSync
 from src.core.local_db import LocalDB
 from src.web_api import WebApi
 
-APP_VERSION = "0.9.19"  # keep in sync with pyproject.toml — bump with every change batch
+APP_VERSION = "0.9.20"  # keep in sync with pyproject.toml — bump with every change batch
 
 logging.basicConfig(
     level=logging.INFO,

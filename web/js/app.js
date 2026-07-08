@@ -137,7 +137,7 @@ async function pollBundleState() {
     const b = $('#bundle-id');
     b.hidden = false;
     b.innerHTML = `<i class="fa-solid fa-cloud-arrow-down"></i>ui ${escapeHtml(st.active_version)}`;
-    b.title = `This interface was delivered as a live update from swgtracker.com (bundle ${st.active_version}) — the shell is v${$('#build-id').textContent.replace(/^v/, '')}`;
+    b.title = `The screens you're looking at arrived as live update ${st.active_version} from swgtracker.com — no reinstall needed. The installed app itself is ${$('#build-id').textContent}. Click to check for updates.`;
   }
   if (st?.pending) {
     renderBundleChip(st.pending);

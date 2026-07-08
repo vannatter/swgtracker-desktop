@@ -406,6 +406,11 @@ class SWGTrackerAPI:
         params = {"since_id": since_id} if since_id else None
         return self._request('GET', 'api/alerts.php', params=params)
 
+    def get_sale_buyers(self, days: int = 0) -> tuple[bool, dict | str]:
+        """GET /api/sales.php?action=buyers - distinct customers (optionally windowed)."""
+        extra = f'&days={int(days)}' if days else ''
+        return self._request('GET', f'api/sales.php?action=buyers{extra}')
+
     def get_inventory_sales(self, inventory_id: int) -> tuple[bool, dict | str]:
         """GET /api/inventory.php?action=sales - sales that depleted one item."""
         return self._request('GET', f'api/inventory.php?action=sales&id={int(inventory_id)}')

@@ -353,6 +353,7 @@
             <option value="2">Bazaar</option>
           </select>
           <input id="sales-search" type="text" class="form-control filter-input head-search" placeholder="Search item, buyer, vendor...">
+          <button id="sales-customers" class="btn btn-sm btn-outline-secondary" title="Everyone who has bought from you — copy the list for an in-game mailing"><i class="fa-solid fa-users"></i> Customers</button>
           <button class="btn btn-icon" data-refresh="sales" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
         </div>
 
@@ -607,6 +608,40 @@
         <button id="inv-add-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
         <button id="inv-add" class="btn btn-sm btn-accent"><i class="fa-solid fa-plus"></i> Add Item</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Customers: distinct buyers, windowed, copyable for in-game mail -->
+  <div id="cust-modal" class="key-gate" hidden>
+    <div class="key-gate-card sp-card cust-card">
+      <div class="mm-raw-head">
+        <h2>Customers</h2>
+        <button id="cust-close" class="btn btn-icon" title="Close"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="cust-bar">
+        <span>Bought within</span>
+        <select id="cust-days" class="form-select filter-select settings-select-narrow">
+          <option value="7">7 days</option>
+          <option value="30" selected>30 days</option>
+          <option value="90">90 days</option>
+          <option value="180">180 days</option>
+          <option value="0">All time</option>
+        </select>
+        <span id="cust-count" class="settings-sub"></span>
+        <button id="cust-copy" class="btn btn-sm btn-accent cust-copy"><i class="fa-solid fa-copy"></i> Copy names</button>
+      </div>
+      <div id="cust-body" class="inv-sales-box">Loading…</div>
+    </div>
+  </div>
+
+  <!-- Inventory sales history: what the mail parser matched to one item -->
+  <div id="inv-sales-modal" class="key-gate" hidden>
+    <div class="key-gate-card sp-card inv-sales-card">
+      <div class="mm-raw-head">
+        <h2 id="inv-sales-title">Sales</h2>
+        <button id="inv-sales-close" class="btn btn-icon" title="Close"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div id="inv-sales-body" class="inv-sales-box">Loading…</div>
     </div>
   </div>
 

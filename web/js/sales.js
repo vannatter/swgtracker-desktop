@@ -102,9 +102,56 @@ function showSalesEmpty(msg) {
   el.hidden = false;
 }
 
+let custBuyers = [];
+async function loadCustomers() {
+  const days = safeInt($('#cust-days').value);
+  $('#cust-body').innerHTML = 'Loading…';
+  let rows = [];
+  try {
+    const res = await api().sale_buyers(days);
+    rows = (res.ok && res.data && res.data.results) || [];
+  } catch (_) { /* renders empty below */ }
+  custBuyers = rows.map((r) => r.buyer);
+  $('#cust-count').textContent = rows.length
+    ? `${rows.length} customer${rows.length > 1 ? 's' : ''}` : '';
+  $('#cust-body').innerHTML = rows.length
+    ? `<table class="inv-sales-table"><thead><tr>
+         <th>Customer</th><th class="col-num">Purchases</th><th class="col-num">Total</th><th>Last</th>
+       </tr></thead><tbody>${rows.map((r) => `<tr>
+         <td>${escapeHtml(r.buyer)}</td>
+         <td class="col-num">${fmtNum(r.purchases)}</td>
+         <td class="col-num sale-amount">${fmtNum(r.total)} cr</td>
+         <td>${fmtAgoTip(r.last_purchase)}</td>
+       </tr>`).join('')}</tbody></table>`
+    : '<span class="stat_off">No customers in this window.</span>';
+}
+
 function initSales() {
   buildSalesCards();
   buildSalesHeader();
+
+  $('#sales-customers').addEventListener('click', () => {
+    $('#cust-modal').hidden = false;
+    loadCustomers();
+  });
+  $('#cust-days').addEventListener('change', loadCustomers);
+  $('#cust-close').addEventListener('click', () => { $('#cust-modal').hidden = true; });
+  $('#cust-modal').addEventListener('click', (e) => {
+    if (e.target === $('#cust-modal')) $('#cust-modal').hidden = true;
+  });
+  $('#cust-copy').addEventListener('click', async () => {
+    // "; " is the in-game mail To-field separator
+    const list = custBuyers.join('; ');
+    if (!list) { toast('No customers to copy', false); return; }
+    try {
+      await navigator.clipboard.writeText(list);
+    } catch (_) { // WKWebView can refuse the async API — legacy path
+      const ta = document.createElement('textarea');
+      ta.value = list; document.body.appendChild(ta);
+      ta.select(); document.execCommand('copy'); ta.remove();
+    }
+    toast(`Copied ${custBuyers.length} names for in-game mail`);
+  });
 
   // typeahead (server-side search → debounced) + Enter for instant
   let salesSearchTimer = null;

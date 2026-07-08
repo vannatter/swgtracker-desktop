@@ -664,6 +664,13 @@ class WebApi:
         except Exception as e:
             return _err(e)
 
+    def sale_buyers(self, days=0):
+        """Distinct customers from your sales — for in-game mailings."""
+        try:
+            return _wrap(*self.api.get_sale_buyers(int(days or 0)))
+        except Exception as e:
+            return _err(e)
+
     def inventory_sales(self, inventory_id):
         """Sales linked to one inventory item (what auto-depleted it)."""
         try:
@@ -897,15 +904,30 @@ class WebApi:
             if not folder.is_dir():
                 return _err(f"Folder not found: {folder}")
             mail_id = f"test{int(_time.time() * 1000)}"
-            item = "[TEST] " + random.choice([
-                "DE-10 Pistol 750+120 - 88 - 2.10",
-                "UL Composite Armor Helmet 7000/5000/6000",
-                "CL54 'Shockfire' CDEF Carbine 753+160",
-                "Perfect Clothing and Armor Crafting Tool 15.00",
-                "Bocatt Egg (Incubated)",
-            ])
+            # prefer a real My Inventory item so the sale exercises the whole
+            # pipeline: upload → cron parse → sales row → inventory depletion
+            item = None
+            credits = None
+            try:
+                ok, data = self.api.get_inventory(perpage=500)
+                rows = (data or {}).get("results") if ok and isinstance(data, dict) else None
+                if rows:
+                    pick = random.choice(rows)
+                    item = str(pick.get("item_name") or "").strip() or None
+                    mp = str(pick.get("match_price") or "").strip()
+                    if mp.isdigit():
+                        credits = int(mp)  # price-tier matching needs the exact amount
+            except Exception:
+                logger.debug("test mail: inventory lookup failed", exc_info=True)
+            if not item:
+                item = "[TEST] " + random.choice([
+                    "DE-10 Pistol 750+120 - 88 - 2.10",
+                    "UL Composite Armor Helmet 7000/5000/6000",
+                    "CL54 'Shockfire' CDEF Carbine 753+160",
+                ])
             buyer = random.choice(["Thake Darkcloud", "Ariana Morassi", "Nitoetao", "Vyrul Thane", "Remiella Witka"])
-            credits = random.randrange(500, 50001, 25)
+            if credits is None:
+                credits = random.randrange(500, 50001, 25)
             ts = int(_time.time())
             content = (f"{mail_id}\n"
                        "SWG.Restoration.auctioner\n"

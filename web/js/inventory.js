@@ -200,24 +200,24 @@ function initInventory() {
     if (e.target === $('#inv-add-modal')) $('#inv-add-modal').hidden = true;
   });
   // Sales expander: one open at a time, click the count again to close
+  $('#inv-sales-close').addEventListener('click', () => { $('#inv-sales-modal').hidden = true; });
+  $('#inv-sales-modal').addEventListener('click', (e) => {
+    if (e.target === $('#inv-sales-modal')) $('#inv-sales-modal').hidden = true;
+  });
   $('#inv-body').addEventListener('click', async (e) => {
     const cell = e.target.closest('[data-sales]');
     if (!cell) return;
-    const tr = cell.closest('tr');
     const item = invState.items[Number(cell.dataset.sales)];
-    const open = tr.nextElementSibling?.classList.contains('inv-sales-detail');
-    document.querySelectorAll('.inv-sales-detail').forEach((r) => r.remove());
-    if (open || !item) return;
-    const detail = document.createElement('tr');
-    detail.className = 'inv-sales-detail';
-    detail.innerHTML = `<td colspan="${INV_COLUMNS.length + 1}"><div class="inv-sales-box">Loading…</div></td>`;
-    tr.after(detail);
+    if (!item) return;
+    $('#inv-sales-title').textContent = `Sales — ${item.item_name}`;
+    $('#inv-sales-body').innerHTML = 'Loading…';
+    $('#inv-sales-modal').hidden = false;
     let rows = [];
     try {
       const res = await api().inventory_sales(item.id);
       rows = (res.ok && res.data && res.data.results) || [];
     } catch (_) { /* renders the empty message */ }
-    detail.querySelector('.inv-sales-box').innerHTML = rows.length
+    $('#inv-sales-body').innerHTML = rows.length
       ? `<table class="inv-sales-table"><thead><tr>
            <th>When</th><th>Buyer</th><th>Vendor</th><th class="col-num">Amount</th>
          </tr></thead><tbody>${rows.map((s) => `<tr>

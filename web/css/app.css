@@ -997,12 +997,17 @@ body:not(.dev-mode) .dev-only { display: none !important; }
 /* Inventory sales expander */
 .inv-sales { cursor: pointer; color: var(--q-fair); font-weight: 700; }
 .inv-sales:hover { text-decoration: underline; }
-.inv-sales-detail > td { background: var(--bg-secondary); padding: 10px 14px; }
-.inv-sales-box { max-width: 640px; }
+.inv-sales-card { max-width: 560px; text-align: left; }
+.inv-sales-box { max-height: 55vh; overflow-y: auto; }
 .inv-sales-table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .inv-sales-table th { text-align: left; color: var(--text-muted); font-weight: 600; padding: 2px 10px 6px 0; }
 .inv-sales-table td { padding: 3px 10px 3px 0; color: var(--text-primary); }
 .inv-sales-table .col-num { text-align: right; }
+
+/* Customers dialog */
+.cust-card { max-width: 620px; text-align: left; }
+.cust-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 13px; color: var(--text-muted); }
+.cust-copy { margin-left: auto; }
 
 /* Add-inventory dialog */
 .inv-add-card { max-width: 460px; text-align: left; }

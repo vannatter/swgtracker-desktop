@@ -398,7 +398,8 @@ body.offline .app-body { height: calc(100vh - 76px); }
 .lab-boost-val input { width: 58px; max-width: 58px; height: 26px; padding: 1px 6px; text-align: center; }
 .lab-threshold { margin-top: 8px; }
 .lab-bench { background: var(--bg-secondary); border-radius: 8px; padding: 12px 14px; margin-bottom: 12px; }
-.lab-bench-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.lab-bench-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
+.lab-slot-body { overflow-x: auto; } /* wide stat tables scroll here, never the page */
 .lab-bench-title { font-size: 15px; font-weight: 700; color: var(--text-hover); }
 .lab-cost { font-size: 12px; color: var(--text-muted); }
 .lab-cost b { color: var(--q-fair); }

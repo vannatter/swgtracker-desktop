@@ -29,6 +29,9 @@ UninstallDisplayIcon={app}\{#MyAppName}.exe
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+VersionInfoVersion={#AppVersion}
+VersionInfoProductName={#MyAppName}
+VersionInfoCompany=swgtracker.com
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a &desktop icon"; Flags: unchecked

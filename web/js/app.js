@@ -97,6 +97,19 @@ async function checkForUpdate() {
   chip.onclick = () => api().open_external(info.url);
   // dim the build id once we know it's stale
   $('#build-id').classList.add('stale');
+
+  // shell updates need a real download — give them offline-bar prominence
+  if (!sessionStorage.getItem('updateBarDismissed')) {
+    $('#update-bar-text').textContent = `App version ${info.latest} is available — this update needs a quick download`;
+    $('#update-bar').hidden = false;
+    document.body.classList.add('update-avail');
+    $('#update-bar-go').onclick = () => api().open_external(info.url);
+    $('#update-bar-x').onclick = () => {
+      $('#update-bar').hidden = true;
+      document.body.classList.remove('update-avail');
+      sessionStorage.setItem('updateBarDismissed', '1'); // back next launch
+    };
+  }
 }
 
 // Manual update check — clicking the version/badge asks the shell to fetch

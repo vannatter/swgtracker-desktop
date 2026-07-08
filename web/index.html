@@ -643,6 +643,15 @@
     <i class="fa-solid fa-wifi"></i> Offline — showing cached data where available
   </div>
 
+  <!-- Shell update bar — a new app version can't be pushed like a UI bundle;
+       it needs a download, so it gets offline-bar prominence -->
+  <div id="update-bar" hidden>
+    <i class="fa-solid fa-circle-up"></i>
+    <span id="update-bar-text">A new app version is available</span>
+    <button id="update-bar-go" type="button">Update now</button>
+    <button id="update-bar-x" type="button" title="Not now">&times;</button>
+  </div>
+
   <!-- Add-inventory dialog: name + stocked + threshold, nothing else -->
   <div id="inv-add-modal" class="key-gate" hidden>
     <div class="key-gate-card sp-card inv-add-card">

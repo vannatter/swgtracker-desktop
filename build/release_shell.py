@@ -90,8 +90,8 @@ def main() -> int:
     else:
         run("gh", "release", "create", tag, str(zpath),
             "--title", f"SWG Tracker Desktop {version}", "--notes", notes)
-    url = f"https://github.com/vannatter/swgtracker-desktop/releases/tag/{tag}"
-    print(f"github release: {url}")
+    print(f"github release: https://github.com/vannatter/swgtracker-desktop/releases/tag/{tag}")
+    url = "https://swgtracker.com/download.php"  # the chip/bar land users here
 
     # 3. announce to installed apps via version.json
     import requests

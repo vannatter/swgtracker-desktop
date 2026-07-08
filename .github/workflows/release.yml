@@ -59,11 +59,30 @@ jobs:
         run: pip install requests pywebview pyinstaller pillow
       - name: Make .ico
         run: python -c "from PIL import Image; Image.open('src/resources/icon.png').save('build/icon.ico', sizes=[(16,16),(32,32),(48,48),(64,64),(128,128),(256,256)])"
+      - name: Version resource for the exe (file properties otherwise say 0.0.0.0)
+        shell: pwsh
+        run: |
+          $ver = $env:RELEASE_TAG -replace '^v',''
+          $parts = ($ver -split '\.') + @('0','0','0')
+          $tuple = ($parts[0..3] -join ', ')
+          @"
+          VSVersionInfo(
+            ffi=FixedFileInfo(filevers=($tuple), prodvers=($tuple)),
+            kids=[StringFileInfo([StringTable('040904B0', [
+              StringStruct('CompanyName', 'swgtracker.com'),
+              StringStruct('FileDescription', 'SWG Tracker Desktop'),
+              StringStruct('FileVersion', '$ver'),
+              StringStruct('ProductName', 'SWG Tracker Desktop'),
+              StringStruct('ProductVersion', '$ver')])]),
+              VarFileInfo([VarStruct('Translation', [1033, 1200])])]
+          )
+          "@ | Set-Content build/win_version_info.txt
       - name: Build .exe
         run: >
           pyinstaller --noconfirm --clean --windowed
           --name "SWG Tracker Desktop"
           --icon build/icon.ico
+          --version-file build/win_version_info.txt
           --add-data "web;web"
           --add-data "src/resources;src/resources"
           run_web.py
@@ -112,6 +131,6 @@ jobs:
           curl -sf -X POST "https://swgtracker.com/app/deploy.php?action=shellrelease" \
             -H "X-Deploy-Token: ${DEPLOY_TOKEN}" \
             --data-urlencode "version=${VER}" \
-            --data-urlencode "url=https://github.com/${GITHUB_REPOSITORY}/releases/tag/${RELEASE_TAG}" \
+            --data-urlencode "url=https://swgtracker.com/download.php" \
             --data-urlencode "notes=$(head -c 480 notes.md)"
           echo "version.json published — installed apps will offer v${VER}"

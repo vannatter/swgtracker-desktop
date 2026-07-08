@@ -90,6 +90,25 @@ html, body {
 }
 body.offline .app-body { height: calc(100vh - 76px); }
 
+/* shell update bar — same shape as the offline bar, calmer color */
+#update-bar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 249;
+  height: 30px; display: flex; align-items: center; justify-content: center; gap: 10px;
+  background: #274060; color: #fff;
+  font-size: 12px; font-weight: 600; letter-spacing: .3px;
+}
+#update-bar-go {
+  background: #fff; color: #17263b; border: 0; border-radius: 4px;
+  font-size: 11px; font-weight: 700; padding: 2px 10px; cursor: pointer;
+}
+#update-bar-go:hover { background: #e8eefb; }
+#update-bar-x {
+  background: none; border: 0; color: rgba(255, 255, 255, .7);
+  font-size: 15px; cursor: pointer; padding: 0 6px;
+}
+#update-bar-x:hover { color: #fff; }
+body.update-avail .app-body { height: calc(100vh - 80px); }
+
 .app-sidebar {
   width: 220px;
   flex: 0 0 220px;

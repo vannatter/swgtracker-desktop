@@ -67,13 +67,13 @@ jobs:
           --add-data "web;web"
           --add-data "src/resources;src/resources"
           run_web.py
-      - name: Zip
+      - name: Build installer (zip-extracted DLLs hit Mark-of-the-Web; installed files don't)
         shell: pwsh
         run: |
           $ver = $env:RELEASE_TAG -replace '^v',''
-          Compress-Archive -Path "dist/SWG Tracker Desktop" -DestinationPath "dist/SWG-Tracker-Desktop-$ver-windows.zip"
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /DAppVersion=$ver build\installer.iss
       - uses: actions/upload-artifact@v4
-        with: { name: windows, path: dist/*.zip }
+        with: { name: windows, path: dist/*-windows-setup.exe }
 
   publish:
     needs: [build-macos, build-windows]
@@ -94,16 +94,16 @@ jobs:
       - name: Stable-name aliases (evergreen /releases/latest/download URLs)
         run: |
           cd assets
-          for f in *-macos.zip;   do cp "$f" SWG-Tracker-Desktop-macos.zip; done
-          for f in *-windows.zip; do cp "$f" SWG-Tracker-Desktop-windows.zip; done
+          for f in *-macos.zip;         do cp "$f" SWG-Tracker-Desktop-macos.zip; done
+          for f in *-windows-setup.exe; do cp "$f" SWG-Tracker-Desktop-windows-setup.exe; done
           ls -la
       - name: Create release
         env: { GH_TOKEN: "${{ github.token }}" }
         run: |
-          gh release create "$RELEASE_TAG" assets/*.zip \
+          gh release create "$RELEASE_TAG" assets/* \
             --title "SWG Tracker Desktop ${RELEASE_TAG#v}" \
             --notes-file notes.md || \
-          gh release upload "$RELEASE_TAG" assets/*.zip --clobber
+          gh release upload "$RELEASE_TAG" assets/* --clobber
       - name: Announce to installed apps (version.json)
         if: ${{ vars.ANNOUNCE != 'off' }}
         env: { DEPLOY_TOKEN: "${{ secrets.DEPLOY_TOKEN }}" }

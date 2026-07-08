@@ -329,7 +329,7 @@ function labRenderSlots() {
       <table class="data-grid lab-grid"><thead><tr>
         <th class="pin-cell"></th><th class="col-name">Resource</th>
         <th>Rate</th>
-        ${stats.map((st) => `<th class="${rel.has(st) ? 'lab-rel-h' : ''}">${st.toUpperCase()}</th>`).join('')}
+        ${stats.map((st) => `<th class="${rel.has(st) ? 'lab-rel-h' : 'lab-dim'}">${st.toUpperCase()}</th>`).join('')}
         <th>eCPU</th><th></th>
       </tr></thead><tbody>${labSlotTbodyHtml(slot)}</tbody></table>
       </div>

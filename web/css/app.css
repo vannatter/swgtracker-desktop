@@ -414,12 +414,12 @@ body.offline .app-body { height: calc(100vh - 76px); }
 .lab-caps { color: var(--accent-green); font-weight: 700; font-size: 12px; }
 .lab-nocap { color: var(--accent); font-size: 12px; white-space: nowrap; }
 .lab-slot { margin-bottom: 14px; }
-/* lab header stays put while the cards/bench scroll under it */
-#page-lab .page-head {
-  position: sticky; top: 0; z-index: 20;
-  background: var(--bg-primary);
-  padding: 4px 0 10px; margin-bottom: 8px;
-  box-shadow: 0 6px 12px -8px rgba(0, 0, 0, .6);
+/* lab: the header never scrolls — home/bench are their own scroll containers,
+   so the page scrollbar starts below the header instead of running over it */
+#page-lab.active { overflow: hidden; }
+#page-lab #lab-home, #page-lab #lab-work {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto;
+  margin: 0 -6px; padding: 2px 6px; /* keep card shadows/focus rings unclipped */
 }
 .lab-slot-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; cursor: pointer;
   background: var(--bg-secondary); border-radius: 6px; padding: 7px 10px; }

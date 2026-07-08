@@ -59,8 +59,9 @@ async function loadSettings() {
   renderMailPaths();
 
   $('#set-poll').value = String(Math.max(1, Math.round((cfg.alert_poll_interval || 300) / 60)));
-  // Developer section: dev-wall AND a configured deploy token (maintainers only)
-  $('#set-dev-section').hidden = !cfg.has_deploy_token;
+  // deploy row: dev-wall AND a configured deploy token (maintainers only);
+  // the rest of the Developer box needs only dev mode
+  $('#set-deploy-row').hidden = !cfg.has_deploy_token;
   $('#set-tray').checked = cfg.minimize_to_tray !== false;
   $('#set-notify').checked = cfg.show_notifications !== false;
   $('#set-autostart').checked = !!cfg.auto_start_monitoring;

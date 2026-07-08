@@ -203,6 +203,11 @@ class BundleManager:
                 shutil.rmtree(target, ignore_errors=True)
                 return False
 
+            try:  # keep the manifest beside the bundle — About shows its notes
+                (target / "manifest.json").write_text(
+                    json.dumps(info, indent=2), encoding="utf-8")
+            except OSError:
+                pass
             cur = self._read_ptr("current")
             if cur and cur != version:
                 self._write_ptr("previous", cur)
@@ -243,10 +248,21 @@ class BundleManager:
 
     # ---- bridge-facing state ----
 
+    def active_notes(self) -> str:
+        if self.active_source != "bundle" or not self.active_version:
+            return ""
+        try:
+            m = json.loads((self.store / self.active_version / "manifest.json")
+                           .read_text(encoding="utf-8"))
+            return str(m.get("notes") or "")
+        except (OSError, ValueError):
+            return ""
+
     def state(self) -> dict:
         return {
             "enabled": self.enabled(),
             "source": self.active_source,
             "active_version": self.active_version,
+            "active_notes": self.active_notes(),
             "pending": self.pending,
         }

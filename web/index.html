@@ -41,6 +41,7 @@
         <li class="nav-item" data-page="monitor"><i class="fa-solid fa-envelope"></i> Mail</li>
         <li class="nav-item" data-page="lab"><i class="fa-solid fa-flask"></i> Laboratory</li>
         <li class="nav-item" data-page="settings"><i class="fa-solid fa-gear"></i> Settings</li>
+        <li class="nav-item" data-page="about"><i class="fa-solid fa-circle-info"></i> About</li>
       </ul>
 
       <div class="sidebar-spacer"></div>
@@ -509,6 +510,43 @@
       </section>
 
       <!-- Settings page -->
+      <!-- About: versions, what's new, thanks -->
+      <section id="page-about" class="page">
+        <div class="page-head"><h1>About</h1></div>
+        <div class="about-wrap">
+          <div class="settings-section about-card">
+            <div class="about-brand">
+              <img src="icon.png" alt="" class="about-logo" onerror="this.style.display='none'">
+              <div>
+                <div class="about-name">SWG Tracker Desktop</div>
+                <div class="settings-sub">The swgtracker.com companion app</div>
+              </div>
+            </div>
+            <div class="about-vers">
+              <div class="set-ds-line"><span class="set-ds-label">App</span><span id="about-shell">—</span></div>
+              <div class="set-ds-line"><span class="set-ds-label">Interface</span><span id="about-ui">—</span></div>
+            </div>
+            <button id="about-check" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-rotate"></i> Check for updates</button>
+          </div>
+
+          <div class="settings-section about-card">
+            <h2>What's new</h2>
+            <div id="about-notes" class="about-notes settings-hint">—</div>
+          </div>
+
+          <div class="settings-section about-card">
+            <h2>Acknowledgements</h2>
+            <div class="about-ack">
+              <p><a role="button" data-ext="https://swgtracker.com">swgtracker.com</a> — the data, the API, and everything this app leans on.</p>
+              <p>Lee W — the original swg-mail-tracker, which grew into the mail monitor.</p>
+              <p>The SWG Restoration community — players, crafters, and resource reporters who keep the galaxy's data alive.</p>
+              <p>Built with <a role="button" data-ext="https://pywebview.flowrl.com">pywebview</a> and
+                 <a role="button" data-ext="https://fontawesome.com">Font Awesome</a>.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section id="page-settings" class="page">
         <div class="page-head"><h1>Settings</h1></div>
 
@@ -564,23 +602,26 @@
           </div>
         </div>
 
-        <div class="settings-section dev-only" id="set-dev-section" hidden>
-          <h2>Developer <span class="settings-sub">Ship the current web/ as a live UI bundle — all clients pick it up</span></h2>
-          <div class="settings-row">
-            <input id="set-deploy-notes" type="text" class="form-control filter-input settings-input-wide"
-                   placeholder="Release note (shown in the update chip)" autocomplete="off">
-            <button id="set-deploy-btn" class="btn btn-sm btn-accent"><i class="fa-solid fa-rocket"></i> Deploy UI</button>
-          </div>
-          <div id="set-deploy-status" class="settings-hint"></div>
-        </div>
-
         <div class="settings-section">
           <h2>Offline Data <span class="settings-sub">Resources &amp; schematics keep working without a connection</span></h2>
           <div id="set-ds-status" class="settings-hint">Checking…</div>
           <button id="set-ds-sync" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-rotate"></i> Sync now</button>
-          <div class="form-check form-switch dev-only" style="margin-top:10px">
+        </div>
+
+        <div class="settings-section dev-only" id="set-dev-section">
+          <h2>Developer</h2>
+          <div class="form-check form-switch">
             <input class="form-check-input" type="checkbox" id="set-ds-simulate">
             <label class="form-check-label" for="set-ds-simulate">Simulate offline <span class="settings-sub">(testing — fails all live API calls until unchecked or restart)</span></label>
+          </div>
+          <div id="set-deploy-row" hidden>
+            <div class="settings-hint" style="margin: 10px 0 6px">Ship the current web/ as a live UI bundle — all clients pick it up</div>
+            <div class="settings-row">
+              <input id="set-deploy-notes" type="text" class="form-control filter-input settings-input-wide"
+                     placeholder="Release note (blank = summary from git commits)" autocomplete="off">
+              <button id="set-deploy-btn" class="btn btn-sm btn-accent"><i class="fa-solid fa-rocket"></i> Deploy UI</button>
+            </div>
+            <div id="set-deploy-status" class="settings-hint"></div>
           </div>
         </div>
 

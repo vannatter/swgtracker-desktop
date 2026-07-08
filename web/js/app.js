@@ -15,6 +15,7 @@ const PAGE_LOADERS = {
   lab: () => loadLab(),
   monitor: () => loadMail(),
   settings: () => loadSettings(),
+  about: () => loadAbout(),
 };
 const loadedPages = new Set();
 
@@ -123,6 +124,34 @@ function renderBundleChip(pending) {
     try { await api().bundle_apply(); } catch (_) { chip.disabled = false; }
     // on success the shell reloads this page out from under us
   };
+}
+
+// ---- About page ----
+async function loadAbout() {
+  try {
+    const r = await api().app_info();
+    if (r.ok && r.data?.version) $('#about-shell').textContent = `v${r.data.version}`;
+  } catch (_) { /* leave the dash */ }
+  try {
+    const r = await api().bundle_state();
+    const st = r?.ok && r.data;
+    if (st?.source === 'bundle' && st.active_version) {
+      $('#about-ui').textContent = `${st.active_version} — delivered as a live update`;
+      $('#about-notes').textContent = st.active_notes
+        || 'Release notes weren\u2019t recorded for this update.';
+    } else {
+      $('#about-ui').textContent = 'built-in (shipped with the app)';
+      $('#about-notes').textContent = 'Running the interface that shipped with the app \u2014 updates appear here once one is installed.';
+    }
+  } catch (_) { /* leave the dashes */ }
+}
+
+function initAbout() {
+  $('#about-check').addEventListener('click', checkUpdatesNow);
+  $('#page-about').addEventListener('click', async (e) => {
+    const ext = e.target.closest('[data-ext]');
+    if (ext) { try { await api().open_external(ext.dataset.ext); } catch (_) { /* ignore */ } }
+  });
 }
 
 // ---- Web bundle updates (thin client) ----
@@ -444,6 +473,7 @@ async function boot() {
   initLab();
   initMail();
   initDevMode();
+  initAbout();
   refreshMonitorState(); // header button reflects auto-started monitoring
   initKeyGate();
   initPulseChart();

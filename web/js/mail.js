@@ -67,7 +67,7 @@ async function loadMail() {
       <td class="col-text">${MM_KIND[r.kind] || MM_KIND.mail}</td>
       <td class="col-text">${escapeHtml(r.subject || '')}</td>
       <td class="col-name">${escapeHtml(r.detail || '')}</td>
-      <td class="col-actions">${action}<button class="mm-del" data-del="${escapeHtml(r.mail_id)}"
+      <td class="col-actions"><span class="mm-slot">${action}</span><button class="mm-del" data-del="${escapeHtml(r.mail_id)}"
         title="Delete this mail — app ledger, mail file, and the site's parsed rows (sales/purchases)"><i class="fa-solid fa-trash"></i></button></td>
     </tr>`;
   }).join('');

@@ -32,7 +32,7 @@ DEPLOY_URL = "https://swgtracker.com/app/deploy.php"
 # Oldest shell able to run current bundles. Raise ONLY when the UI starts
 # depending on new bridge APIs — NOT on every shell bump, or every bundle
 # demands a shell newer than anyone runs.
-MIN_SHELL = "0.11.9"
+MIN_SHELL = "0.11.15"
 SKIP = {".DS_Store", "Thumbs.db"}
 
 

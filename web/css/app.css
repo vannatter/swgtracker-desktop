@@ -264,6 +264,10 @@ body.update-avail .app-body { height: calc(100vh - 80px); }
    HOUSE STYLE: solid fills only — no outline/border button variants.
    Small controls (buttons + badges) share ONE box so rows never look ragged. */
 .btn { border: 0 !important; }
+/* WebView2 focuses controls on mouse click (WKWebView doesn't), lighting up
+   Bootstrap's focus glow on every press. Mouse focus stays quiet; keyboard
+   navigation (:focus-visible) keeps its ring. */
+*:focus:not(:focus-visible) { outline: none !important; box-shadow: none !important; }
 .btn-sm, .mys-badge {
   font-size: 12px; padding: 6px 14px; border-radius: 6px; line-height: 1.34;
 }

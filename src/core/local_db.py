@@ -309,15 +309,19 @@ class LocalDB:
             (str(mail_id), subject, detail, kind, raw, int(time.time())))
         self._conn.commit()
 
-    def mail_history(self, limit: int = 200) -> list[dict]:
+    def mail_history(self, limit: int = 200, offset: int = 0) -> list[dict]:
         # raw stays out of the list payload (big bridge responses drop in WKWebView);
         # the viewer fetches one mail at a time via mail_raw()
         rows = self._conn.execute(
             "SELECT mail_id, subject, detail, kind, uploaded_at,"
             " (COALESCE(raw, '') != '') AS has_raw"
-            " FROM mail_ledger ORDER BY uploaded_at DESC, mail_id DESC LIMIT ?",
-            (int(limit),)).fetchall()
+            " FROM mail_ledger ORDER BY uploaded_at DESC, mail_id DESC LIMIT ? OFFSET ?",
+            (int(limit), int(offset))).fetchall()
         return [dict(r) for r in rows]
+
+    def mail_sales_count(self) -> int:
+        return self._conn.execute(
+            "SELECT COUNT(*) AS n FROM mail_ledger WHERE kind = 'sale'").fetchone()["n"]
 
     def mail_raw(self, mail_id: str) -> str:
         row = self._conn.execute(

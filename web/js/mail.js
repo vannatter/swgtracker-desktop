@@ -2,7 +2,7 @@
    Upload + server-side parsing happen in src/core/mail_monitor.py; this page
    just shows the receipts. */
 
-const mmState = { pollTimer: null };
+const mmState = { pollTimer: null, page: 1, perPage: 50 };
 
 const MM_KIND = {
   sale: '<span class="mm-kind mm-sale"><i class="fa-solid fa-tags"></i> sale</span>',
@@ -23,9 +23,12 @@ async function loadMail() {
     : '';
 
   let rows = [];
+  let total = 0;
+  let salesTotal = 0;
   try {
-    const res = await api().mail_history(300);
-    rows = (res.ok && res.data) || [];
+    const res = await api().mail_history(mmState.perPage, (mmState.page - 1) * mmState.perPage);
+    const d = res.ok && res.data;
+    if (d) { rows = d.rows || []; total = safeInt(d.total); salesTotal = safeInt(d.sales); }
   } catch (_) { /* table empty-state below */ }
 
   // known inventory types — sale items already tracked show a check, not a button
@@ -39,15 +42,14 @@ async function loadMail() {
     }
   } catch (_) { /* keep the buttons */ }
 
-  const sales = rows.filter((r) => r.kind === 'sale').length;
   const card = (cls, icon, val, label) => `
     <div class="mm-card ${cls}">
       <div class="mm-card-ico"><i class="fa-solid ${icon}"></i></div>
       <div><div class="mm-card-val">${val}</div><div class="mm-card-label">${label}</div></div>
     </div>`;
   $('#mm-cards').innerHTML =
-    card('', 'fa-envelope', fmtNum(rows.length), 'Mails uploaded')
-    + card('sale', 'fa-tags', fmtNum(sales), 'Vendor sales')
+    card('', 'fa-envelope', fmtNum(total), 'Mails uploaded')
+    + card('sale', 'fa-tags', fmtNum(salesTotal), 'Vendor sales')
     + card('session', 'fa-bolt', state ? fmtNum(state.uploaded) : '—', 'This session')
     + card(`fail ${state?.failed ? 'bad' : ''}`, 'fa-triangle-exclamation',
            state ? fmtNum(state.failed) : '—', 'Failed');
@@ -75,6 +77,12 @@ async function loadMail() {
   empty.hidden = !!rows.length;
   empty.textContent = 'Nothing uploaded yet — configure a mail folder in Settings, then hit Start Mail Monitor up top.';
 
+  const pages = Math.max(1, Math.ceil(total / mmState.perPage));
+  if (mmState.page > pages) mmState.page = pages; // deletions can shrink the tail
+  $('#mm-status').textContent = total ? `Page ${mmState.page} of ${pages} — ${fmtNum(total)} mails` : '';
+  $('#mm-prev').disabled = mmState.page <= 1;
+  $('#mm-next').disabled = mmState.page >= pages;
+
   // keep polling while the page is on screen — uploads land whether or not
   // this page (or the monitor) was running when it first rendered
   clearTimeout(mmState.pollTimer);
@@ -98,6 +106,8 @@ async function mmShowRaw(mailId, subject) {
 
 function initMail() {
   $('[data-refresh="monitor"]').addEventListener('click', () => loadMail());
+  $('#mm-prev').addEventListener('click', () => { if (mmState.page > 1) { mmState.page--; loadMail(); } });
+  $('#mm-next').addEventListener('click', () => { mmState.page++; loadMail(); });
   // start/stop lives in the header (Start Mail Monitor) — no duplicate here
   $('#mm-raw-close').addEventListener('click', () => { $('#mm-raw-modal').hidden = true; });
   $('#mm-raw-modal').addEventListener('click', (e) => {

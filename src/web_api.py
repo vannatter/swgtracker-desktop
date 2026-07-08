@@ -941,10 +941,14 @@ class WebApi:
         except Exception as e:
             return _err(e)
 
-    def mail_history(self, limit=200):
-        """Uploaded-mail ledger, newest first — the Mail page's table."""
+    def mail_history(self, limit=200, offset=0):
+        """Uploaded-mail ledger, newest first, paged — the Mail page's table."""
         try:
-            return _ok(self.local_db.mail_history(int(limit)))
+            return _ok({
+                "rows": self.local_db.mail_history(int(limit), int(offset)),
+                "total": self.local_db.mail_ledger_count(),
+                "sales": self.local_db.mail_sales_count(),
+            })
         except Exception as e:
             return _err(e)
 

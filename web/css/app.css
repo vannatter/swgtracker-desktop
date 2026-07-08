@@ -61,7 +61,6 @@ html, body {
 .app-title { font-size: 16px; font-weight: 700; color: var(--text-hover); line-height: 1; }
 .app-subtitle { font-size: 11px; color: var(--text-muted); line-height: 1; }
 .app-header-controls { display: flex; align-items: center; gap: 8px; }
-.monitor-status { font-size: 12px; color: var(--text-muted); }
 .update-chip {
   font-size: 12px; font-weight: 600; padding: 3px 12px; border-radius: 12px;
   background: var(--accent-green); border: 0; color: #fff; cursor: pointer;
@@ -908,6 +907,39 @@ body.offline .app-body { height: calc(100vh - 76px); }
 
 /* dev wall — testing tools stay invisible until 10 logo clicks (see initDevMode) */
 body:not(.dev-mode) .dev-only { display: none !important; }
+
+/* Header monitor toggle: accent when idle; while running it calms down to an
+   outlined chip with a spinner and a slow breathing glow */
+.mon-btn { transition: background .25s, color .25s, border-color .25s; }
+.mon-btn.running {
+  background: var(--bg-secondary); color: var(--text-primary);
+  border: 1px solid var(--accent);
+  animation: mon-breathe 2.6s ease-in-out infinite;
+}
+.mon-btn.running:hover { background: var(--bg-input); }
+.mon-btn.running i { color: var(--accent); }
+@keyframes mon-breathe {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(226, 67, 80, 0); }
+  50% { box-shadow: 0 0 10px 1px rgba(226, 67, 80, .3); }
+}
+
+/* Mail page — stat cards, kind badges, row action */
+.mm-cards { display: flex; gap: 10px; margin-bottom: 14px; }
+.mm-card {
+  flex: 1 1 0; display: flex; align-items: center; gap: 12px;
+  background: var(--bg-secondary); border-radius: 8px; padding: 12px 14px;
+}
+.mm-card-ico {
+  flex: 0 0 auto; width: 38px; height: 38px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center; font-size: 15px;
+  background: rgba(255, 255, 255, .05); color: var(--text-muted);
+}
+.mm-card.sale .mm-card-ico { background: rgba(69, 233, 126, .1); color: var(--accent-green); }
+.mm-card.session .mm-card-ico { background: rgba(226, 67, 80, .12); color: var(--accent); }
+.mm-card.fail.bad .mm-card-ico { background: rgba(226, 67, 80, .15); color: var(--accent); }
+.mm-card-val { font-size: 22px; font-weight: 700; color: var(--text-hover); line-height: 1.1; }
+.mm-card.fail.bad .mm-card-val { color: var(--accent); }
+.mm-card-label { font-size: 11px; color: var(--text-muted); letter-spacing: .03em; }
 
 /* Mail page — kind badges + row action */
 .mm-kind { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px;

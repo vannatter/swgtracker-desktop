@@ -23,7 +23,7 @@ from src.core.mail_monitor import MailMonitor
 from src.core.alert_poller import AlertPoller
 from src.web_api import WebApi
 
-APP_VERSION = "0.10.6"  # keep in sync with pyproject.toml — bump with every change batch
+APP_VERSION = "0.10.7"  # keep in sync with pyproject.toml — bump with every change batch
 
 logging.basicConfig(
     level=logging.INFO,
@@ -51,6 +51,10 @@ def _set_mac_dock_icon():
         info = NSBundle.mainBundle().localizedInfoDictionary() or NSBundle.mainBundle().infoDictionary()
         if info is not None:
             info["CFBundleName"] = "SWG Tracker Desktop"
+            # the About panel reads these too — otherwise it shows Python 3.12.x/PSF
+            info["CFBundleShortVersionString"] = APP_VERSION
+            info["CFBundleVersion"] = APP_VERSION
+            info["NSHumanReadableCopyright"] = "swgtracker.com companion"
     except Exception:  # noqa: BLE001 — cosmetic only, never block launch
         logger.debug("couldn't set Dock identity", exc_info=True)
 

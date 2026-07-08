@@ -259,25 +259,33 @@ function initControls() {
     setTimeout(fetchPulse, 1500);
   });
 
-  $('#btn-start').addEventListener('click', async () => {
-    const res = await api().start_monitoring();
-    if (res.ok) setMonitoring(true, res.data);
-    else $('#monitor-status').textContent = res.error || 'Failed to start';
-  });
-  $('#btn-stop').addEventListener('click', async () => {
-    const res = await api().stop_monitoring();
-    if (res.ok) setMonitoring(false, res.data);
+  $('#btn-monitor').addEventListener('click', async () => {
+    const running = $('#btn-monitor').classList.contains('running');
+    const res = running ? await api().stop_monitoring() : await api().start_monitoring();
+    if (res.ok) setMonitoring(!running, res.data);
+    else toast(res.error || res.data || 'Monitor action failed', false);
   });
 }
 
 let monPollTimer = null;
 function setMonitoring(on, msg) {
-  $('#btn-start').disabled = on;
-  $('#btn-stop').disabled = !on;
-  $('#monitor-status').textContent = on ? (msg || 'Monitoring') : '';
-  $('#monitor-status').style.color = on ? 'var(--accent-green)' : 'var(--text-muted)';
+  const btn = $('#btn-monitor');
+  btn.classList.toggle('running', on);
+  btn.innerHTML = on
+    ? '<i class="fa-solid fa-circle-notch fa-spin"></i> Monitoring Mail'
+    : '<i class="fa-solid fa-circle-pause"></i> Start Mail Monitor';
+  setMonitorTip(on ? (msg || 'Monitoring') : 'Watch your SWG mail folders and upload new mail');
   clearInterval(monPollTimer);
   if (on) monPollTimer = setInterval(refreshMonitorState, 10000);
+  // the Mail page mirrors this state — snap it in step when it's on screen
+  if ($('#page-monitor').classList.contains('active')) loadMail();
+}
+
+// details (folders · uploaded · failed) live in the hover tip, not the bar
+function setMonitorTip(text) {
+  const btn = $('#btn-monitor');
+  btn.setAttribute('title', text);
+  delete btn.dataset.tip; // stale migrated tip would shadow the fresh title
 }
 
 async function refreshMonitorState() {
@@ -286,10 +294,12 @@ async function refreshMonitorState() {
   if (!res.ok || !res.data) return;
   const st = res.data;
   if (!st.running) { setMonitoring(false); return; }
+  // auto-start (or anything else) flipped it on outside the button — catch up
+  if (!$('#btn-monitor').classList.contains('running')) { setMonitoring(true); }
   const bits = [`${st.folders.length} folder${st.folders.length > 1 ? 's' : ''}`];
   if (st.uploaded) bits.push(`${st.uploaded} uploaded`);
   if (st.failed) bits.push(`${st.failed} failed`);
-  $('#monitor-status').textContent = `Monitoring ${bits.join(' · ')}`;
+  setMonitorTip(`Monitoring ${bits.join(' · ')}`);
 }
 
 // ---- API-key gate ----
@@ -384,6 +394,7 @@ async function boot() {
   initLab();
   initMail();
   initDevMode();
+  refreshMonitorState(); // header button reflects auto-started monitoring
   initKeyGate();
   initPulseChart();
   initTooltips(); // WKWebView shows no native title tooltips

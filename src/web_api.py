@@ -748,6 +748,27 @@ class WebApi:
             import subprocess, sys
             title, message = str(title)[:80], str(message)[:200]
             if sys.platform == "darwin":
+                # NSUserNotification can carry our logo (osascript is stuck with
+                # the Script Editor icon); fall back if pyobjc isn't around
+                try:
+                    from Foundation import NSUserNotification, NSUserNotificationCenter
+                    from AppKit import NSImage
+                    from pathlib import Path
+                    center = NSUserNotificationCenter.defaultUserNotificationCenter()
+                    if center is None:
+                        raise RuntimeError("no notification center (unbundled process)")
+                    note = NSUserNotification.alloc().init()
+                    note.setTitle_(title)
+                    note.setInformativeText_(message)
+                    note.setSoundName_("Glass")
+                    icon = Path(__file__).parent / "resources" / "icon.png"
+                    img = NSImage.alloc().initWithContentsOfFile_(str(icon))
+                    if img:
+                        note.setContentImage_(img)
+                    center.deliverNotification_(note)
+                    return _ok(True)
+                except Exception:
+                    logger.debug("NSUserNotification failed, falling back", exc_info=True)
                 subprocess.Popen(["osascript", "-e",
                     'display notification "{}" with title "{}" sound name "Glass"'.format(
                         message.replace('"', "'"), title.replace('"', "'"))])

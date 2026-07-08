@@ -814,7 +814,23 @@ function initLab() {
   });
 
   $('#lab-save').addEventListener('click', labSaveExperiment);
-  $('#lab-new').addEventListener('click', () => labShowView('work'));
+  $('#lab-new').addEventListener('click', () => {
+    // blank slate — a new experiment must pick its own schematic
+    labState.schematic = null;
+    labState.detail = null;
+    labState.slots = [];
+    labState.formulas = [];
+    labState.checked = new Set();
+    labState.currentExpId = null;
+    labState.draftNotes = '';
+    labState.wasComplete = false;
+    labState.celebratedOnce = false;
+    $('#lab-formulas').innerHTML = '';
+    $('#lab-schem-search').value = '';
+    document.querySelectorAll('#lab-schem-list .al-schem-row').forEach((r) => r.classList.remove('sel'));
+    labShowView('work');
+    labRenderAll();
+  });
   $('#lab-back').addEventListener('click', () => labShowView('home'));
 
   // bench notes: WYSIWYG contenteditable + mini toolbar; saves on blur

@@ -906,6 +906,9 @@ body.offline .app-body { height: calc(100vh - 76px); }
 /* ---- Sales summary cards ---- */
 .summary-cards { display: flex; gap: 10px; margin-bottom: 14px; }
 
+/* dev wall — testing tools stay invisible until 10 logo clicks (see initDevMode) */
+body:not(.dev-mode) .dev-only { display: none !important; }
+
 /* Mail page — kind badges + row action */
 .mm-kind { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px;
   border-radius: 10px; font-size: 11px; font-weight: 700;

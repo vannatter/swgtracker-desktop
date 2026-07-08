@@ -220,6 +220,30 @@ async function fetchPulse() {
   }
 }
 
+// ---- Dev mode ----
+// 10 quick clicks on the logo toggles the dev wall (Test Connection,
+// Simulate offline); 10 more hides it again. Persists across restarts.
+function initDevMode() {
+  if (localStorage.getItem('devMode') === '1') document.body.classList.add('dev-mode');
+  let clicks = 0;
+  let timer = null;
+  $('.app-header-brand').addEventListener('click', () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => { clicks = 0; }, 1200); // stall too long and the count resets
+    clicks += 1;
+    const on = document.body.classList.contains('dev-mode');
+    if (clicks >= 10) {
+      clicks = 0;
+      document.body.classList.toggle('dev-mode', !on);
+      localStorage.setItem('devMode', on ? '0' : '1');
+      toast(on ? 'Dev mode hidden' : 'Dev mode unlocked');
+      if (on) $('#set-ds-simulate')?.checked && $('#set-ds-simulate').click(); // leaving dev mode ends the simulation too
+    } else if (clicks >= 7) {
+      toast(`${10 - clicks} more to ${on ? 'hide' : 'unlock'} dev mode`);
+    }
+  });
+}
+
 // ---- Header controls ----
 function initControls() {
   $('#btn-test').addEventListener('click', async () => {
@@ -358,6 +382,7 @@ async function boot() {
   initAlerts();
   initLab();
   initMail();
+  initDevMode();
   initKeyGate();
   initPulseChart();
   initTooltips(); // WKWebView shows no native title tooltips

@@ -29,6 +29,10 @@ WEB = ROOT / "web"
 OUT = ROOT / "build" / "dist_bundle"
 BASE_URL = "https://swgtracker.com/app/bundles"
 DEPLOY_URL = "https://swgtracker.com/app/deploy.php"
+# Oldest shell able to run current bundles. Raise ONLY when the UI starts
+# depending on new bridge APIs — NOT on every shell bump, or every bundle
+# demands a shell newer than anyone runs.
+MIN_SHELL = "0.11.9"
 SKIP = {".DS_Store", "Thumbs.db"}
 
 
@@ -128,7 +132,7 @@ def main() -> int:
         return 0
 
     version = args.version or next_version()
-    min_shell = args.min_shell or shell_version()
+    min_shell = args.min_shell or MIN_SHELL
     if args.deploy and not args.notes:
         args.notes = auto_notes()
         print("notes (from git):")

@@ -411,6 +411,10 @@ class SWGTrackerAPI:
         params = {"since_id": since_id} if since_id else None
         return self._request('GET', 'api/alerts.php', params=params)
 
+    def get_bundle_history(self) -> tuple[bool, dict | str]:
+        """GET /app/bundle-history.json - public UI release history."""
+        return self._request('GET', 'app/bundle-history.json')
+
     def get_sale_buyers(self, days: int = 0) -> tuple[bool, dict | str]:
         """GET /api/sales.php?action=buyers - distinct customers (optionally windowed)."""
         extra = f'&days={int(days)}' if days else ''

@@ -55,6 +55,7 @@ class BundleManager:
         self.active_version: str | None = None    # set by resolve_index()
         self.active_source = "builtin"
         self.pending: dict | None = None           # installed-this-session, awaiting apply
+        self.gated: dict | None = None             # newer bundle exists but needs a newer shell
         self._stop = threading.Event()
         self._lock = threading.Lock()
 
@@ -180,8 +181,9 @@ class BundleManager:
             return None
         min_shell = str(m.get("min_shell") or "")
         if min_shell and _vtuple(min_shell) > _vtuple(self.shell_version):
-            logger.info("bundle %s needs shell %s (running %s) — skipping",
+            logger.info("bundle %s needs shell %s (running %s) — gated",
                         version, min_shell, self.shell_version)
+            self.gated = {"version": version, "min_shell": min_shell}
             return None
         active = self.active_version if self.active_source == "bundle" else ""
         if _vtuple(version) <= _vtuple(active):
@@ -297,4 +299,5 @@ class BundleManager:
             "active_version": self.active_version,
             "active_notes": self.active_notes(),
             "pending": self.pending,
+            "gated": self.gated,
         }

@@ -884,6 +884,13 @@ class WebApi:
         except Exception as e:
             return _err(e)
 
+    def bundle_history(self):
+        """Public UI release history (version · published · notes)."""
+        try:
+            return _wrap(*self.api.get_bundle_history())
+        except Exception as e:
+            return _err(e)
+
     def bundle_state(self):
         """Thin-client state: active UI source/version + any pending update."""
         try:

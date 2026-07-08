@@ -109,6 +109,8 @@ async function checkUpdatesNow() {
   if (st?.pending) {
     renderBundleChip(st.pending);
     toast(`UI update ${st.pending.version} is ready — click the chip to apply`);
+  } else if (st?.gated) {
+    toast(`Update ${st.gated.version} needs app version ${st.gated.min_shell} — update the app itself first`, false);
   } else {
     toast('You\u2019re up to date');
   }
@@ -137,11 +139,25 @@ async function loadAbout() {
     const st = r?.ok && r.data;
     if (st?.source === 'bundle' && st.active_version) {
       $('#about-ui').textContent = `${st.active_version} — delivered as a live update`;
-      $('#about-notes').textContent = st.active_notes
-        || 'Release notes weren\u2019t recorded for this update.';
     } else {
       $('#about-ui').textContent = 'built-in (shipped with the app)';
-      $('#about-notes').textContent = 'Running the interface that shipped with the app \u2014 updates appear here once one is installed.';
+    }
+    let hist = [];
+    try {
+      const h = await api().bundle_history();
+      hist = (h?.ok && Array.isArray(h.data)) ? h.data : [];
+    } catch (_) { /* offline — fall through */ }
+    if (hist.length) {
+      $('#about-notes').innerHTML = `<table class="inv-sales-table"><thead><tr>
+          <th>Version</th><th>Published</th><th>Changes</th>
+        </tr></thead><tbody>${hist.map((r) => `<tr>
+          <td>${escapeHtml(r.version)}${st?.active_version === r.version ? ' <span class="mm-tracked" title="You are here"><i class="fa-solid fa-check"></i></span>' : ''}</td>
+          <td>${fmtAgoTip(r.published)}</td>
+          <td class="about-note-cell">${escapeHtml(r.notes || '\u2014')}</td>
+        </tr>`).join('')}</tbody></table>`;
+    } else {
+      $('#about-notes').textContent = st?.active_notes
+        || 'Release history isn\u2019t available right now.';
     }
   } catch (_) { /* leave the dashes */ }
 }

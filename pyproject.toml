@@ -1,17 +1,13 @@
 [tool.poetry]
 name = "swg-tracker-desktop"
-version = "0.10.1"
+version = "0.10.2"
 description = "SWG Tracker Desktop - Companion app for swgtracker.com: resource tracking, spawn alerts, schematic management, and mail sync"
 authors = ["Dustin VanNatter"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
 python = ">=3.10,<3.13"
-customtkinter = "^5.2.0"
-watchdog = "^3.0.0"
 requests = "^2.31.0"
-pystray = "^0.19.5"
-pillow = "^10.0.0"
 # Web UI (run_web.py). On Windows, pywebview uses Edge WebView2 (preinstalled on Win 10/11).
 pywebview = "^6.2"
 

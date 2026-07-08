@@ -18,5 +18,3 @@ dist/
 .idea/
 .DS_Store
 
-# legacy standalone project with its own git history
-swg-mail-tracker/

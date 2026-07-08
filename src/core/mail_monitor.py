@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 IMPORT_URL = "https://swgtracker.com/import_mailcontent.php"
 SCAN_INTERVAL = 5  # seconds between folder sweeps
+FAIL_RETRY_SECS = 300  # don't re-attempt a failing file every sweep
 SALE_SUBJECT = "Vendor Sale Complete"
 
 
@@ -40,6 +41,7 @@ class MailMonitor:
         self.session_failed = 0
         self.recent: list[dict] = []      # newest-first event feed for the UI
         self._need_raw: set[str] = set()  # ledgered mails uploaded before raw was stored
+        self._fail_at: dict[str, float] = {}  # mail_id -> last failed attempt (backoff)
 
     # --- controller interface (web_api expects these) ---
 
@@ -127,12 +129,17 @@ class MailMonitor:
                 self._upload(f, mail_id, delete_after)
 
     def _upload(self, f: Path, mail_id: str, delete_after: bool):
+        # backoff: a file that just failed doesn't get retried every 5s sweep
+        last_fail = self._fail_at.get(mail_id, 0)
+        if last_fail and time.time() - last_fail < FAIL_RETRY_SECS:
+            return
         try:
             content = f.read_text(encoding="utf-8", errors="replace")
         except OSError:
             logger.warning("unreadable mail file: %s", f)
             return
         subject = content.split("\n")[2].strip() if content.count("\n") >= 2 else ""
+        duplicate = False
         try:
             resp = requests.post(
                 IMPORT_URL,
@@ -141,11 +148,18 @@ class MailMonitor:
                 headers={"Content-type": "application/json", "Accept": "text/plain"},
                 timeout=15,
             )
-            resp.raise_for_status()
+            if resp.status_code == 409:
+                # server already has it (fresh install over an old mail folder) —
+                # that's sync success, not failure: ledger it and never resend
+                duplicate = True
+            else:
+                resp.raise_for_status()
         except requests.RequestException as e:
             self.session_failed += 1
+            self._fail_at[mail_id] = time.time()
             self._event("error", f.name, f"upload failed: {e}")
             return
+        self._fail_at.pop(mail_id, None)
 
         kind = "sale" if subject == SALE_SUBJECT else "mail"
         detail = ""
@@ -158,14 +172,17 @@ class MailMonitor:
                 buyer = rest.split(" for ", 1)[0]
                 credits = rest.split(" for ", 1)[1].split(" credits", 1)[0]
                 detail = f"{item} → {buyer} — {credits} credits"
-                if self.notifier:
+                if self.notifier and not duplicate:
                     self.notifier("Vendor sale", f"{item} — {credits} credits")
             except (IndexError, ValueError):
-                if self.notifier:
+                if self.notifier and not duplicate:
                     self.notifier("Vendor sale", "New sale uploaded")
         self.db.mail_ledger_add(mail_id, subject, detail, kind, raw=content)
-        self.session_uploaded += 1
-        self._event(kind, f.name, detail or subject)
+        if duplicate:
+            self._event(kind, f.name, f"already on server — {detail or subject}")
+        else:
+            self.session_uploaded += 1
+            self._event(kind, f.name, detail or subject)
         if delete_after:
             self._delete(f)
 

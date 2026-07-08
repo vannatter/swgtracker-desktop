@@ -305,8 +305,20 @@ function labRenderSlots() {
           : '<span class="stat_off">no pick</span>'}</span>
       </div>
       <div class="lab-slot-body" ${slot.collapsed ? 'hidden' : ''}>
-      <input type="text" class="form-control filter-input lab-slot-search" data-slotsearch="${si}"
-        placeholder="Search any ${escapeHtml(slot.className)}\u2026 (stockpiled shown first)" value="${escapeHtml(slot.query || '')}" autocomplete="off">
+      <div class="lab-slot-controls">
+        <select class="form-select filter-select lab-slot-stockpick" data-slotstock="${si}" title="Pick straight from your stockpile">
+          ${(() => {
+            const stocked = slot.pool
+              .filter((r) => stkState.resourceIds.has(String(r.id)))
+              .map((r) => ({ r, q: labAvgQ(r) }))
+              .sort((a, b) => b.q - a.q);
+            return `<option value="">My stockpile (${stocked.length})\u2026</option>` + stocked.map((x) =>
+              `<option value="${x.r.id}" ${slot.pick && String(slot.pick.id) === String(x.r.id) ? 'selected' : ''}>${escapeHtml(x.r.name)} \u2014 ${x.q.toFixed(1)}</option>`).join('');
+          })()}
+        </select>
+        <input type="text" class="form-control filter-input lab-slot-search" data-slotsearch="${si}"
+          placeholder="Search any ${escapeHtml(slot.className)}\u2026" value="${escapeHtml(slot.query || '')}" autocomplete="off">
+      </div>
       <table class="data-grid lab-grid"><thead><tr>
         <th class="pin-cell"></th><th class="col-name">Resource</th>
         ${stats.map((st) => `<th class="${rel.has(st) ? 'lab-rel-h' : ''}">${st.toUpperCase()}</th>`).join('')}
@@ -732,6 +744,22 @@ function initLab() {
     if (!box) return;
     if (box.checked) labState.checked.add(box.dataset.labfid);
     else labState.checked.delete(box.dataset.labfid);
+    labRenderAll();
+  });
+
+  // stockpile dropdown per slot: instant pick from what you own
+  $('#lab-slots').addEventListener('change', (e) => {
+    const sel = e.target.closest('[data-slotstock]');
+    if (!sel || !sel.value) return;
+    const slot = labState.slots[safeInt(sel.dataset.slotstock)];
+    if (!slot) return;
+    const r = slot.pool.find((x) => String(x.id) === sel.value);
+    if (!r) return;
+    slot.pick = r;
+    slot.collapsed = true;
+    labState.wasComplete = false;
+    const next = labState.slots.find((s) => !s.pick);
+    if (next) next.collapsed = false;
     labRenderAll();
   });
 

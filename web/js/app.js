@@ -272,8 +272,8 @@ function setMonitoring(on, msg) {
   const btn = $('#btn-monitor');
   btn.classList.toggle('running', on);
   btn.innerHTML = on
-    ? '<i class="fa-solid fa-circle-notch fa-spin"></i> Monitoring Mail'
-    : '<i class="fa-solid fa-circle-pause"></i> Start Mail Monitor';
+    ? '<span class="mon-btn-label"><i class="fa-solid fa-circle-notch fa-spin"></i> Monitoring Mail</span>'
+    : '<span class="mon-btn-label"><i class="fa-solid fa-circle-pause"></i> Start Mail Monitor</span>';
   setMonitorTip(on ? (msg || 'Monitoring') : 'Watch your SWG mail folders and upload new mail');
   clearInterval(monPollTimer);
   if (on) monPollTimer = setInterval(refreshMonitorState, 10000);

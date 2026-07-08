@@ -224,6 +224,7 @@ body.offline .app-body { height: calc(100vh - 76px); }
 .page-head .head-filter { margin-left: auto; width: auto; }
 .page-head .head-filter ~ .head-search { margin-left: 0; }
 .page-head .head-filter ~ .btn-icon { margin-left: 0; }
+.page-head .btn-icon.head-filter { width: 34px; flex: 0 0 auto; } /* keep the square when right-aligned alone */
 .page-head .inv-num { max-width: 70px; }
 .info-tip { color: var(--text-muted); font-size: 14px; cursor: help; }
 .info-tip:hover { color: var(--text-hover); }
@@ -908,19 +909,29 @@ body.offline .app-body { height: calc(100vh - 76px); }
 /* dev wall — testing tools stay invisible until 10 logo clicks (see initDevMode) */
 body:not(.dev-mode) .dev-only { display: none !important; }
 
-/* Header monitor toggle: accent when idle; while running it calms down to an
-   outlined chip with a spinner and a slow breathing glow */
-.mon-btn { transition: background .25s, color .25s, border-color .25s; }
-.mon-btn.running {
-  background: var(--bg-secondary); color: var(--text-primary);
-  border: 1px solid var(--accent);
-  animation: mon-breathe 2.6s ease-in-out infinite;
+/* Header monitor toggle: dark gray chip, fixed width so the label swap never
+   moves the header; while running a red wave throbs sideways through it */
+.mon-btn {
+  position: relative; overflow: hidden;
+  min-width: 186px; justify-content: center;
+  display: inline-flex; align-items: center;
+  transition: background .25s, color .25s;
 }
-.mon-btn.running:hover { background: var(--bg-input); }
+.mon-btn-label { position: relative; z-index: 1; display: inline-flex; align-items: center; gap: 6px; }
 .mon-btn.running i { color: var(--accent); }
-@keyframes mon-breathe {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(226, 67, 80, 0); }
-  50% { box-shadow: 0 0 10px 1px rgba(226, 67, 80, .3); }
+/* the sweep: a double red pulse on a strip twice the button's width, slid by
+   transform (compositor-only) and looped seamlessly at the halfway point */
+.mon-btn.running::before {
+  content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: 200%;
+  background: linear-gradient(90deg,
+    rgba(226, 67, 80, 0) 0%, rgba(226, 67, 80, .38) 25%, rgba(226, 67, 80, 0) 50%,
+    rgba(226, 67, 80, .38) 75%, rgba(226, 67, 80, 0) 100%);
+  animation: mon-throb 2.6s linear infinite;
+  will-change: transform;
+}
+@keyframes mon-throb {
+  from { transform: translate3d(-50%, 0, 0); }
+  to { transform: translate3d(0, 0, 0); }
 }
 
 /* Mail page — stat cards, kind badges, row action */
@@ -949,6 +960,7 @@ body:not(.dev-mode) .dev-only { display: none !important; }
 .mm-kind.mm-err, .mm-err { color: var(--accent); }
 .mm-kind.mm-err { background: rgba(233, 69, 96, .12); }
 .mm-addinv { white-space: nowrap; }
+.mm-tracked { color: var(--q-fair); font-size: 13px; cursor: help; }
 .mm-row-openable { cursor: pointer; }
 .mm-row-openable:hover td { background: var(--bg-secondary); }
 .mm-raw-card { max-width: 640px; }

@@ -28,6 +28,17 @@ async function loadMail() {
     rows = (res.ok && res.data) || [];
   } catch (_) { /* table empty-state below */ }
 
+  // known inventory types — sale items already tracked show a check, not a button
+  // (null = lookup failed: keep the buttons, the server dedupes adds anyway)
+  let invNames = null;
+  try {
+    const res = await api().get_inventory({ perpage: 500 });
+    const items = res.ok && res.data && res.data.results;
+    if (Array.isArray(items)) {
+      invNames = new Set(items.map((i) => String(i.item_name || '').trim().toLowerCase()));
+    }
+  } catch (_) { /* keep the buttons */ }
+
   const sales = rows.filter((r) => r.kind === 'sale').length;
   const card = (cls, icon, val, label) => `
     <div class="mm-card ${cls}">
@@ -45,10 +56,11 @@ async function loadMail() {
     // sale detail is "ITEM → BUYER — N credits"; the item is what you may
     // want tracked in My Inventory when it's a type you haven't added yet
     const item = r.kind === 'sale' && r.detail ? r.detail.split(' → ')[0] : '';
-    const action = item
-      ? `<button class="btn btn-sm btn-outline-secondary mm-addinv" data-item="${escapeHtml(item)}"
-           title="Add this item to My Inventory as a new type"><i class="fa-solid fa-plus"></i> Inventory</button>`
-      : '';
+    const tracked = item && invNames && invNames.has(item.trim().toLowerCase());
+    const action = !item ? '' : tracked
+      ? '<span class="mm-tracked" title="Already in My Inventory"><i class="fa-solid fa-check"></i></span>'
+      : `<button class="btn btn-sm btn-outline-secondary mm-addinv" data-item="${escapeHtml(item)}"
+           title="Add this item to My Inventory as a new type"><i class="fa-solid fa-plus"></i> Inventory</button>`;
     return `<tr class="${r.has_raw ? 'mm-row-openable' : ''}" data-mailid="${escapeHtml(r.mail_id)}"
         data-hasraw="${r.has_raw ? 1 : 0}" title="${r.has_raw ? 'Click to read the original mail' : ''}">
       <td class="col-text">${fmtAgo(r.uploaded_at)}</td>

@@ -59,6 +59,8 @@ async function loadSettings() {
   renderMailPaths();
 
   $('#set-poll').value = String(Math.max(1, Math.round((cfg.alert_poll_interval || 300) / 60)));
+  // Developer section: dev-wall AND a configured deploy token (maintainers only)
+  $('#set-dev-section').hidden = !cfg.has_deploy_token;
   $('#set-tray').checked = cfg.minimize_to_tray !== false;
   $('#set-notify').checked = cfg.show_notifications !== false;
   $('#set-autostart').checked = !!cfg.auto_start_monitoring;
@@ -184,6 +186,27 @@ function initSettings() {
     $('#set-ds-sync').disabled = true;
     try { await api().dataset_sync_now(); } catch (_) { /* status poll reports it */ }
     setTimeout(refreshDatasetStatus, 500);
+  });
+
+  $('#set-deploy-btn').addEventListener('click', async () => {
+    const btn = $('#set-deploy-btn');
+    const status = $('#set-deploy-status');
+    if (!confirmArmLabeled(btn, 'Deploy to everyone?')) return;
+    btn.disabled = true;
+    status.textContent = 'Building and deploying…';
+    let res;
+    try { res = await api().dev_deploy_bundle($('#set-deploy-notes').value.trim()); }
+    catch (e) { res = { ok: false, error: String(e) }; }
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-rocket"></i> Deploy UI';
+    if (res.ok) {
+      status.textContent = `Deployed ${res.data.version} — clients pick it up within 4h or on next launch.`;
+      toast(`UI bundle ${res.data.version} is live`);
+      $('#set-deploy-notes').value = '';
+    } else {
+      status.textContent = `Deploy failed: ${res.error || 'unknown error'}`;
+      toast('Deploy failed', false);
+    }
   });
 
   // Session-only testing switch — flips the whole app into "network down"

@@ -564,6 +564,16 @@
           </div>
         </div>
 
+        <div class="settings-section dev-only" id="set-dev-section" hidden>
+          <h2>Developer <span class="settings-sub">Ship the current web/ as a live UI bundle — all clients pick it up</span></h2>
+          <div class="settings-row">
+            <input id="set-deploy-notes" type="text" class="form-control filter-input settings-input-wide"
+                   placeholder="Release note (shown in the update chip)" autocomplete="off">
+            <button id="set-deploy-btn" class="btn btn-sm btn-accent"><i class="fa-solid fa-rocket"></i> Deploy UI</button>
+          </div>
+          <div id="set-deploy-status" class="settings-hint"></div>
+        </div>
+
         <div class="settings-section">
           <h2>Offline Data <span class="settings-sub">Resources &amp; schematics keep working without a connection</span></h2>
           <div id="set-ds-status" class="settings-hint">Checking…</div>

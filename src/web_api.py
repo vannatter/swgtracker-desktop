@@ -821,6 +821,7 @@ class WebApi:
                 # honored by the mail monitor once it lands: uploaded .mail files
                 # are deleted from the SWG profile folder to keep it small
                 "delete_mail_after_upload": cfg.get("delete_mail_after_upload", False),
+                "has_deploy_token": bool(cfg.get("deploy_token")),  # boolean only — the token stays out of JS
                 "alert_poll_interval": cfg.get("alert_poll_interval", 300),
                 "mail_paths": cfg.get("mail_paths", []),
                 "alerts": cfg.get("alerts", []),
@@ -852,6 +853,34 @@ class WebApi:
             else:
                 success, message = self.api.test_connection()
             return {"ok": bool(success), "data": message, "error": None if success else message}
+        except Exception as e:
+            return _err(e)
+
+    def dev_deploy_bundle(self, notes=""):
+        """Dev tool: build + deploy the current web/ as a live bundle by
+        running build/publish_bundle.py --deploy (the tested pipeline).
+        Only useful on a source checkout with deploy_token configured."""
+        try:
+            if not self.config.get("deploy_token"):
+                return _err("No deploy_token configured")
+            import subprocess
+            import sys
+            from pathlib import Path
+            root = Path(__file__).resolve().parent.parent
+            script = root / "build" / "publish_bundle.py"
+            if not script.is_file():
+                return _err("publish_bundle.py not found (packaged build?)")
+            proc = subprocess.run(
+                [sys.executable, str(script), "--deploy", "--notes", str(notes or "")],
+                capture_output=True, text=True, timeout=120, cwd=str(root))
+            out = (proc.stdout + proc.stderr).strip()
+            if proc.returncode != 0:
+                return _err(out.splitlines()[-1] if out else "deploy failed")
+            import re
+            m = re.search(r"DEPLOYED — (\S+)", out)
+            ver = re.search(r"bundles/([0-9.]+)\.zip", m.group(1)) if m else None
+            return _ok({"version": ver.group(1) if ver else "?",
+                        "url": m.group(1) if m else ""})
         except Exception as e:
             return _err(e)
 

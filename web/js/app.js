@@ -55,8 +55,10 @@ function initNav() {
     $('#side-collapse').title = on ? 'Expand menu' : 'Collapse menu';
     localStorage.setItem('sidebar-collapsed', on ? '1' : '');
   };
-  $('#side-collapse').addEventListener('click', () =>
-    applyCollapsed(!sidebar.classList.contains('collapsed')));
+  $('#side-collapse').addEventListener('click', (e) => {
+    applyCollapsed(!sidebar.classList.contains('collapsed'));
+    e.currentTarget.blur(); // WebView2 keeps click focus (WKWebView doesn't) — sticky pressed look
+  });
   if (localStorage.getItem('sidebar-collapsed') === '1') applyCollapsed(true);
 }
 

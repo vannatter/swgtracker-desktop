@@ -132,6 +132,7 @@ body.update-avail .app-body { height: calc(100vh - 80px); }
    (compound selector — the plain .btn-icon background rule sits later in the file) */
 .btn-icon.side-collapse { margin: 0 10px 8px auto; flex: 0 0 auto; background: transparent; color: var(--text-muted); }
 .btn-icon.side-collapse:hover { background: transparent; color: var(--text-hover); }
+.btn-icon.side-collapse:focus { background: transparent; box-shadow: none; outline: none; }
 .app-sidebar.collapsed .side-collapse { margin: 0 auto 8px; }
 
 /* collapsed-mode pulse: pulsing dot, tooltip carries the numbers */

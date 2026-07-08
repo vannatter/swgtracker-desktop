@@ -30,6 +30,7 @@ function buildSalesCards() {
 
 function updateSalesFilterNote() {
   const q = $('#sales-search').value.trim();
+  $('#sales-search-clear').hidden = !q;
   const note = $('#sales-fnote');
   if (!q) { note.hidden = true; note.innerHTML = ''; return; }
   note.hidden = false;
@@ -81,6 +82,7 @@ async function loadSales() {
   } catch (e) { res = { ok: false, error: String(e) }; }
 
   $('#sales-loading').hidden = true;
+  updateSalesFilterNote(); // every path — a zero-result filter still needs its × out
 
   if (!res.ok || !res.data) {
     showSalesEmpty(`Error: ${res.error || 'failed to load'}`);
@@ -97,11 +99,11 @@ async function loadSales() {
   const totalPages = data.total_pages ?? 1;
 
   if (!sales.length) {
-    showSalesEmpty('No sales found.');
+    showSalesEmpty($('#sales-search').value.trim()
+      ? 'No sales match this filter.' : 'No sales found.');
     $('#sales-status').textContent = '';
   } else {
     $('#sales-body').innerHTML = sales.map(saleRowHtml).join('');
-    updateSalesFilterNote();
     $('#sales-status').textContent = `Page ${page} of ${totalPages} — ${fmtNum(total)} total sales`;
   }
 
@@ -170,6 +172,11 @@ function initSales() {
   });
   $('#sales-fnote').addEventListener('click', (e) => {
     if (!e.target.closest('#sales-fclear')) return;
+    $('#sales-search').value = '';
+    salesState.page = 1;
+    loadSales();
+  });
+  $('#sales-search-clear').addEventListener('click', () => {
     $('#sales-search').value = '';
     salesState.page = 1;
     loadSales();

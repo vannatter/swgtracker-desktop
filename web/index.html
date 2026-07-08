@@ -352,7 +352,10 @@
             <option value="1">Vendor</option>
             <option value="2">Bazaar</option>
           </select>
-          <input id="sales-search" type="text" class="form-control filter-input head-search" placeholder="Search item, buyer, vendor...">
+          <span class="head-search sales-search-wrap">
+            <input id="sales-search" type="text" class="form-control filter-input" placeholder="Search item, buyer, vendor...">
+            <button id="sales-search-clear" type="button" title="Clear filter" hidden><i class="fa-solid fa-xmark"></i></button>
+          </span>
           <button id="sales-customers" class="btn btn-sm btn-outline-secondary" title="Everyone who has bought from you — copy the list for an in-game mailing"><i class="fa-solid fa-users"></i> Customers</button>
           <button class="btn btn-icon" data-refresh="sales" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
         </div>

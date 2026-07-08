@@ -1022,6 +1022,16 @@ body:not(.dev-mode) .dev-only { display: none !important; }
 }
 .mys-accept:hover { color: var(--q-good); border-color: var(--q-good); }
 
+/* Sales search: × appears inside the box whenever a filter is active */
+.sales-search-wrap { position: relative; display: flex; }
+.sales-search-wrap .filter-input { width: 100%; max-width: none; padding-right: 28px; }
+#sales-search-clear {
+  position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+  background: none; border: 0; color: var(--text-muted); cursor: pointer;
+  padding: 4px 6px; font-size: 13px;
+}
+#sales-search-clear:hover { color: var(--accent); }
+
 /* Sales click-to-filter */
 .sales-cell { cursor: pointer; }
 .sales-cell:hover { text-decoration: underline; color: var(--text-hover); }

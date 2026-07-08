@@ -496,8 +496,8 @@ body.offline .app-body { height: calc(100vh - 76px); }
 }
 /* verdict badges + per-line mini meters — the scannable core of a card */
 .lab-badge {
-  display: inline-flex; align-items: center; gap: 5px; white-space: nowrap;
-  font-size: 11px; font-weight: 700; border-radius: 10px; padding: 2px 9px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 14px; width: 24px; height: 24px; border-radius: 50%; cursor: help;
 }
 .lab-badge.ok { background: rgba(69, 233, 126, .14); color: #45e97e; }
 .lab-badge.miss { background: rgba(254, 97, 79, .14); color: var(--accent); }

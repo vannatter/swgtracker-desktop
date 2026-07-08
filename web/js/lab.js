@@ -76,7 +76,9 @@ function labSanitizeHtml(html) {
 function labNotesHtml(notes) {
   const v = String(notes || '');
   if (!v.trim()) return '';
-  return v.trimStart().startsWith('<') ? labSanitizeHtml(v) : labMdToHtml(v);
+  // WYSIWYG output can start with a bare text node — anything containing a tag
+  // is HTML; only tag-free legacy notes go through the markdown converter
+  return /<[a-z][^>]*>/i.test(v) ? labSanitizeHtml(v) : labMdToHtml(v);
 }
 
 // per-unit cost for the bench: YOUR stockpile cost wins when set (0 = self-mined,
@@ -519,11 +521,11 @@ function labShowView(view) {
 }
 
 function labExpBadge(e) {
-  if (e.capped) return '<span class="lab-badge ok"><i class="fa-solid fa-circle-check"></i> CAPS</span>';
+  if (e.capped) return '<span class="lab-badge ok" title="Caps"><i class="fa-solid fa-circle-check"></i></span>';
   const worst = (e.results || []).reduce((m, r) =>
     (r.q != null && (m === null || r.q < m) ? r.q : m), null);
-  if (worst === null) return '<span class="lab-badge off"><i class="fa-solid fa-circle-question"></i> incomplete</span>';
-  return `<span class="lab-badge miss"><i class="fa-solid fa-circle-xmark"></i> ${((e.threshold || 960) - worst).toFixed(0)} short</span>`;
+  if (worst === null) return '<span class="lab-badge off" title="Incomplete — not all slots were filled"><i class="fa-solid fa-circle-question"></i></span>';
+  return `<span class="lab-badge miss" title="${((e.threshold || 960) - worst).toFixed(0)} short of cap"><i class="fa-solid fa-ban"></i></span>`;
 }
 
 function labExpMeters(e) {

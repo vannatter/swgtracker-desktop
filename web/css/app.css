@@ -848,6 +848,7 @@ body.offline .app-body { height: calc(100vh - 76px); }
 /* crumbs yield space (ellipsize) when the actions widen, e.g. the armed "Confirm remove?" button */
 .rd-head .crumbs { margin-bottom: 0; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rd-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+#scd-mustafar.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 
 .rd-cards { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
 .rd-card {

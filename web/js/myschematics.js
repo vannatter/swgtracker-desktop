@@ -141,12 +141,14 @@ function mysWeightedQuality(rec, weightsList) {
   return per.reduce((a, b) => a + b, 0) / per.length;
 }
 
-async function mysGetDetail(schematicId) {
-  const key = String(schematicId);
+// formulas: the entry's CSV of formula ids, so the server ranks Best Known by the
+// selected experimentation lines (empty = all). Cached per (schematic, formulas).
+async function mysGetDetail(schematicId, formulas = '') {
+  const key = `${schematicId}|${formulas}`;
   if (mysDetailCache.has(key)) return mysDetailCache.get(key);
   let det = null;
   try {
-    const res = await api().get_schematic(key);
+    const res = await api().get_schematic(String(schematicId), String(formulas || ''));
     const s = res.ok && res.data ? (res.data.schematic || res.data) : null;
     if (s && s.resourceDtoList) {
       det = {
@@ -182,7 +184,7 @@ const mysSpawnActive = (sp) =>
 // Returns {perIng: Map(ing.id -> {best, bestQ, bestActive, assignedQ, delta,
 // candidates}), upgrades, comparable}
 async function analyzeMySchematic(s) {
-  const det = await mysGetDetail(s.schematic_id);
+  const det = await mysGetDetail(s.schematic_id, s.formulas || '');
   let weightsList = mysFormulaList(s).map(mysParseWeights).filter(Boolean);
   if (!weightsList.length) weightsList = det?.weights || [];
   const perIng = new Map();
@@ -390,7 +392,7 @@ async function openMySchematicPage(item) {
   // POST doesn't create user_schematic_resources). Show the schematic's real
   // slots read-only with Best Known data so the page is still useful.
   if (!(item.resources || []).length) {
-    const det = await mysGetDetail(item.schematic_id);
+    const det = await mysGetDetail(item.schematic_id, item.formulas || '');
     const cols = 4;
     const banner = `<tr><td colspan="${cols}" class="mysd-noslots">
       This entry has no ingredient slots yet — adding via the app can't create them

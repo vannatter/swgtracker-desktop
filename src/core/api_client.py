@@ -151,9 +151,20 @@ class SWGTrackerAPI:
 
     # --- Schematics (auth optional) ---
 
-    def get_schematic(self, schematic_id: str) -> tuple[bool, dict | str]:
-        """GET /api/schematics.php?id= - Single schematic detail."""
-        return self._request('GET', 'api/schematics.php', params={"id": schematic_id})
+    def get_schematic(self, schematic_id: str, formulas: str = "",
+                      mustafar: bool = True) -> tuple[bool, dict | str]:
+        """GET /api/schematics.php?id= - Single schematic detail.
+
+        formulas: comma-separated formula IDs to re-rank the best-resource lists
+        by (empty = all formulas, the server default). mustafar=False hides
+        Mustafar resources server-side — both mirror the website's schematic page.
+        """
+        params = {"id": schematic_id}
+        if formulas:
+            params["formulas"] = formulas
+        if not mustafar:
+            params["mustafar"] = "0"
+        return self._request('GET', 'api/schematics.php', params=params)
 
     def search_schematics(self, search: str = "", category: str = "",
                           page: int = 1) -> tuple[bool, dict | str]:

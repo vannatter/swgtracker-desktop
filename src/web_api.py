@@ -405,22 +405,27 @@ class WebApi:
             logger.error("offline schematics fallback failed: %s", e, exc_info=True)
             return _err(original_error)
 
-    def get_schematic(self, schematic_id):
+    def get_schematic(self, schematic_id, formulas="", mustafar=True):
+        # formulas: comma-separated formula IDs to re-rank best resources by
+        # (empty = all). mustafar=False hides Mustafar spawns. Both mirror the site.
+        formulas = str(formulas or "")
         try:
-            success, data = self.api.get_schematic(str(schematic_id))
+            success, data = self.api.get_schematic(str(schematic_id), formulas, bool(mustafar))
             if not success and self._offline_ok(data):
-                return self._get_schematic_offline(schematic_id, data)
+                return self._get_schematic_offline(schematic_id, data, formulas, bool(mustafar))
             return _wrap(success, data)
         except Exception as e:
             if self._offline_ok(e):
-                return self._get_schematic_offline(schematic_id, e)
+                return self._get_schematic_offline(schematic_id, e, formulas, bool(mustafar))
             return _err(e)
 
-    def _get_schematic_offline(self, schematic_id, original_error):
+    def _get_schematic_offline(self, schematic_id, original_error, formulas="", mustafar=True):
         """Full detail from the mirror when the schematic_details export is synced:
         ingredients/components/formulas from the slim payload, current/best resource
         lists recomputed from ds_resources with the same weighted-quality math the
-        frontend uses. Falls back to catalog-only when details aren't synced yet."""
+        frontend uses. `formulas` (comma-separated ids) restricts the ranking to the
+        selected experimentation lines; mustafar=False drops Mustafar spawns. Falls
+        back to catalog-only when details aren't synced yet."""
         try:
             row = self.local_db.get_ds_schematic(schematic_id)
             detail = self.local_db.get_ds_schematic_detail(schematic_id)
@@ -440,7 +445,16 @@ class WebApi:
                 schematic["crateSize"] = row.get("crate_size") or schematic.get("crateSize") or 100
                 schematic.setdefault("schematicCategoryParent", row.get("parent", ""))
 
-            weights = _parse_formula_weights(schematic.get("formula") or [])
+            # Rank by only the selected experimentation lines (by id) when given;
+            # empty = all active formulas (the default).
+            all_formulas = schematic.get("formula") or []
+            if formulas:
+                want = {f.strip() for f in str(formulas).split(",") if f.strip()}
+                chosen = [{**f, "active": True} for f in all_formulas
+                          if str(f.get("formulaId")) in want]
+                weights = _parse_formula_weights(chosen or all_formulas)
+            else:
+                weights = _parse_formula_weights(all_formulas)
             for block in schematic.get("resourceDtoList") or []:
                 code = block.get("resourceTypeCode") or ""
                 if not code:
@@ -448,6 +462,8 @@ class WebApi:
                 leafs = self.dataset_sync.expand_category(code) or [code]
                 pool = self.local_db.search_ds_resources(
                     type_codes=leafs, status="", perpage=3000)["results"]
+                if not mustafar:
+                    pool = [r for r in pool if str(r.get("planet_mustafar") or 0) != "1"]
                 spawns = sorted(
                     (_spawn_entry(r, weights) for r in pool),
                     key=lambda s: s["resourceQuality"], reverse=True)

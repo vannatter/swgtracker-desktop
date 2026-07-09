@@ -120,18 +120,18 @@ function showSchEmpty(msg) {
 // componentTypes, formula, resourceDtoList (current + server best spawns), ...}}
 
 const SCD_STATS = ['oq', 'cr', 'cd', 'dr', 'hr', 'ma', 'sr', 'ut', 'fl', 'pe'];
-// activeFormulas: Set of formula index strings currently checked (drives the
-// live Quality recompute). formulaDefs: [{weights}] parallel to s.formula.
-const scdState = { schematic: null, tab: 'best', id: null, activeFormulas: new Set(), formulaDefs: [] };
+// activeFormulas: Set of formula index strings currently checked. formulaIds:
+// the formulaId parallel to s.formula, so a toggle re-fetches the server-ranked
+// best lists for exactly the selected lines. hideMustafar: server-side filter.
+const scdState = {
+  schematic: null, tab: 'best', id: null,
+  activeFormulas: new Set(), formulaIds: [], hideMustafar: false,
+};
 
-// Quality for a spawn under the currently-checked formulas; falls back to the
-// server's all-formula resourceQuality when none are toggled on.
+// The server ranks the best-resource lists by the active formulas (re-fetched on
+// toggle) and by the Mustafar filter, so we just read its resourceQuality.
 function scdSpawnQuality(spawn) {
-  const weights = [...scdState.activeFormulas]
-    .map((i) => scdState.formulaDefs[i]).filter(Boolean);
-  if (!weights.length) return Number(spawn.resourceQuality) || 0;
-  const q = weightedQuality(spawn, weights);
-  return q == null ? (Number(spawn.resourceQuality) || 0) : q;
+  return Number(spawn.resourceQuality) || 0;
 }
 
 function scdSpawnAge(ts) {
@@ -154,7 +154,7 @@ function scdSpawnRowHtml(spawn, group, highlight) {
     ${addCellHtml(safeInt(spawn.resourceId), spawn.resourceName)}
     ${wishCellHtml(safeInt(spawn.resourceId), spawn.resourceName)}
     <td class="col-text"><span class="scd-reslink" data-res="${escapeHtml(spawn.resourceName || '')}"
-      title="Open resource page">${escapeHtml(spawn.resourceName || '')}</span></td>
+      title="${escapeHtml(spawn.resourceTypeName || 'Open resource page')}">${escapeHtml(spawn.resourceName || '')}</span></td>
     <td class="stat ${qualityClass(q / 10)}">${q.toFixed(2)}</td>
     ${SCD_STATS.map((f) => scdStatCell(spawn, f)).join('')}
   </tr>`;
@@ -237,9 +237,9 @@ function renderSchematicPage(s) {
     return `<div class="scd-line">${verb} ${Math.max(1, safeInt(c.number))} ${name}${looted}</div>`;
   }).join('') : '<div class="scd-line">None</div>';
 
-  // Formula switches (display-only for now; the site recalculates weights live)
-  // Formula toggles drive the live Quality recompute; active-by-default ones on.
-  scdState.formulaDefs = (s.formula || []).map((f) => parseFormulaWeights(f.formulaDescription));
+  // Formula switches — toggling re-fetches the server-ranked best lists for the
+  // checked lines (like the site). Track the formulaId parallel to s.formula.
+  scdState.formulaIds = (s.formula || []).map((f) => f.formulaId);
   scdState.activeFormulas = new Set(
     (s.formula || []).map((f, i) => [f, i]).filter(([f]) => f.active !== false).map(([, i]) => String(i)));
   $('#scd-formulas').innerHTML = (s.formula || []).map((f, i) => `
@@ -250,10 +250,21 @@ function renderSchematicPage(s) {
 
   renderScdTable();
   updateScdMysButton();
+  updateScdMustafarBtn();
+}
+
+function updateScdMustafarBtn() {
+  const btn = $('#scd-mustafar');
+  if (!btn) return;
+  btn.classList.toggle('active', scdState.hideMustafar);
+  btn.innerHTML = scdState.hideMustafar
+    ? '<i class="fa-solid fa-fire-flame-curved"></i> Show Mustafar'
+    : '<i class="fa-solid fa-fire"></i> Hide Mustafar';
 }
 
 async function openSchematicPage(id, name) {
   scdState.id = String(id);
+  scdState.hideMustafar = false;
   showPage('schematic');
   $('#scd-mys').hidden = true;
   $('#scd-crumbs').innerHTML = '<a href="#" data-nav="schematics">Schematics</a>';
@@ -283,6 +294,27 @@ async function openSchematicPage(id, name) {
   renderSchematicPage(s);
 }
 
+// Re-fetch the best/current resource lists ranked by the checked formulas (and
+// the Mustafar filter) — the server does the ranking, matching the website.
+let scdReqToken = 0;
+async function refetchScdBest() {
+  if (!scdState.id) return;
+  const token = ++scdReqToken;
+  const ids = [...scdState.activeFormulas]
+    .map((i) => scdState.formulaIds[i]).filter((x) => x != null).join(',');
+  showGridLoading('#scd-loading');
+  let res;
+  try { res = await api().get_schematic(scdState.id, ids, !scdState.hideMustafar); }
+  catch (_) { res = { ok: false }; }
+  if (token !== scdReqToken) return; // a newer toggle superseded this fetch
+  $('#scd-loading').hidden = true;
+  const s = res.ok && res.data ? (res.data.schematic || res.data) : null;
+  if (s && s.resourceDtoList && scdState.schematic) {
+    scdState.schematic.resourceDtoList = s.resourceDtoList;
+  }
+  renderScdTable();
+}
+
 function initSchematicPage() {
   // Breadcrumb back-nav
   $('#scd-crumbs').addEventListener('click', (e) => {
@@ -303,13 +335,20 @@ function initSchematicPage() {
     renderScdTable();
   });
 
-  // Formula toggles recompute the resource Quality columns live
+  // Formula toggles re-fetch the server-ranked best lists for the checked lines
   $('#scd-formulas').addEventListener('change', (e) => {
     const cb = e.target.closest('[data-scdfid]');
     if (!cb) return;
     if (cb.checked) scdState.activeFormulas.add(cb.dataset.scdfid);
     else scdState.activeFormulas.delete(cb.dataset.scdfid);
-    renderScdTable();
+    refetchScdBest();
+  });
+
+  // Hide/Show Mustafar resources — re-fetch with the server-side mustafar filter
+  $('#scd-mustafar').addEventListener('click', () => {
+    scdState.hideMustafar = !scdState.hideMustafar;
+    updateScdMustafarBtn();
+    refetchScdBest();
   });
 
   // Component links open that schematic's page

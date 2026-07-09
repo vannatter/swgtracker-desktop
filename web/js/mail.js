@@ -2,13 +2,24 @@
    Upload + server-side parsing happen in src/core/mail_monitor.py; this page
    just shows the receipts. */
 
-const mmState = { pollTimer: null, page: 1, perPage: 50 };
+const mmState = { pollTimer: null, page: 1, perPage: 50, category: '' };
 
 const MM_KIND = {
   sale: '<span class="mm-kind mm-sale"><i class="fa-solid fa-tags"></i> sale</span>',
   mail: '<span class="mm-kind"><i class="fa-solid fa-envelope"></i> mail</span>',
   error: '<span class="mm-kind mm-err"><i class="fa-solid fa-triangle-exclamation"></i> error</span>',
 };
+
+// Category labels + display order (keys come from local_db.mail_category).
+const MM_CATS = {
+  sale: 'Sales',
+  factory: 'Factory',
+  'factory-ingredients': 'Factory: no ingredients',
+  structure: 'Structure',
+  guild: 'Guild',
+  other: 'Other',
+};
+const MM_CAT_ORDER = ['sale', 'factory', 'factory-ingredients', 'structure', 'guild', 'other'];
 
 async function loadMail() {
   let state = null;
@@ -25,10 +36,11 @@ async function loadMail() {
   let rows = [];
   let total = 0;
   let salesTotal = 0;
+  let cats = {};
   try {
-    const res = await api().mail_history(mmState.perPage, (mmState.page - 1) * mmState.perPage);
+    const res = await api().mail_history(mmState.perPage, (mmState.page - 1) * mmState.perPage, mmState.category);
     const d = res.ok && res.data;
-    if (d) { rows = d.rows || []; total = safeInt(d.total); salesTotal = safeInt(d.sales); }
+    if (d) { rows = d.rows || []; total = safeInt(d.total); salesTotal = safeInt(d.sales); cats = d.categories || {}; }
   } catch (_) { /* table empty-state below */ }
 
   // known inventory types — sale items already tracked show a check, not a button
@@ -54,6 +66,22 @@ async function loadMail() {
     + card(`fail ${state?.failed ? 'bad' : ''}`, 'fa-triangle-exclamation',
            state ? fmtNum(state.failed) : '—', 'Failed');
 
+  // Category filter chips (+ mass-delete when a category is selected)
+  const totalAll = Object.values(cats).reduce((a, b) => a + b, 0);
+  const chip = (key, label, n) =>
+    `<button class="mm-chip${mmState.category === key ? ' on' : ''}" data-cat="${escapeHtml(key)}">`
+    + `${escapeHtml(label)}<span class="mm-chip-n">${fmtNum(n)}</span></button>`;
+  let chipsHtml = chip('', 'All', totalAll);
+  for (const key of MM_CAT_ORDER) {
+    if (cats[key]) chipsHtml += chip(key, MM_CATS[key] || key, cats[key]);
+  }
+  if (mmState.category && cats[mmState.category]) {
+    chipsHtml += `<button class="mm-massdel" data-massdel="${escapeHtml(mmState.category)}">`
+      + `<i class="fa-solid fa-trash"></i> Delete all ${fmtNum(cats[mmState.category])} in `
+      + `“${escapeHtml(MM_CATS[mmState.category] || mmState.category)}”</button>`;
+  }
+  $('#mm-filters').innerHTML = chipsHtml;
+
   $('#mm-body').innerHTML = rows.map((r) => {
     // sale detail is "ITEM → BUYER — N credits"; the item is what you may
     // want tracked in My Inventory when it's a type you haven't added yet
@@ -65,7 +93,7 @@ async function loadMail() {
            title="Add to My Inventory as a new type"><i class="fa-solid fa-square-plus"></i></button>`;
     return `<tr class="${r.has_raw ? 'mm-row-openable' : ''}" data-mailid="${escapeHtml(r.mail_id)}"
         data-hasraw="${r.has_raw ? 1 : 0}" title="${r.has_raw ? 'Click to read the original mail' : ''}">
-      <td class="col-text">${fmtAgoTip(r.uploaded_at)}</td>
+      <td class="col-text">${fmtAgoTip(r.sent_at || r.uploaded_at)}</td>
       <td class="col-text">${MM_KIND[r.kind] || MM_KIND.mail}</td>
       <td class="col-text">${escapeHtml(r.subject || '')}</td>
       <td class="col-name">${escapeHtml(r.detail || '')}</td>
@@ -124,6 +152,27 @@ function initMail() {
       }
     } catch (err) { toast(String(err), false); }
   });
+  // Category chips + mass-delete
+  $('#mm-filters').addEventListener('click', async (e) => {
+    const cat = e.target.closest('[data-cat]');
+    if (cat) { mmState.category = cat.dataset.cat; mmState.page = 1; loadMail(); return; }
+    const massdel = e.target.closest('[data-massdel]');
+    if (massdel) {
+      if (!confirmArm(massdel, 'Click again to delete ALL of these')) return;
+      massdel.disabled = true;
+      try {
+        const res = await api().delete_mail_category(massdel.dataset.massdel);
+        if (res.ok) {
+          const d = res.data || {};
+          toast(`Deleted ${fmtNum(d.deleted)} mail${d.deleted === 1 ? '' : 's'}`
+            + (d.failed ? `, ${d.failed} failed` : ''));
+          mmState.category = ''; mmState.page = 1;
+          loadMail();
+        } else { toast(res.error || 'Bulk delete failed', false); massdel.disabled = false; }
+      } catch (err) { toast(String(err), false); massdel.disabled = false; }
+    }
+  });
+
   $('#mm-body').addEventListener('click', async (e) => {
     const delBtn = e.target.closest('.mm-del');
     if (delBtn) {

@@ -963,6 +963,23 @@ body:not(.dev-mode) .dev-only { display: none !important; }
 
 /* Mail page — stat cards, kind badges, row action */
 .mm-cards { display: flex; gap: 10px; margin-bottom: 14px; }
+.mm-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 12px; }
+.mm-filters:empty { display: none; }
+.mm-chip {
+  font-size: 12px; color: var(--text-primary); background: var(--bg-input);
+  border: 1px solid var(--border); border-radius: 12px; padding: 3px 10px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.mm-chip:hover { border-color: var(--accent-dark); color: var(--text-hover); }
+.mm-chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.mm-chip-n { font-size: 11px; opacity: .7; }
+.mm-massdel {
+  font-size: 12px; color: #fff; background: var(--accent); border: 1px solid var(--accent);
+  border-radius: 12px; padding: 3px 11px; cursor: pointer; margin-left: auto;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.mm-massdel:hover { filter: brightness(1.12); }
+.mm-massdel[disabled] { opacity: .6; cursor: default; }
 .mm-card {
   flex: 1 1 0; display: flex; align-items: center; gap: 12px;
   background: var(--bg-secondary); border-radius: 8px; padding: 12px 14px;

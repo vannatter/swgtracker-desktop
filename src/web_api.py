@@ -964,13 +964,18 @@ class WebApi:
         except Exception as e:
             return _err(e)
 
-    def mail_history(self, limit=200, offset=0):
-        """Uploaded-mail ledger, newest first, paged — the Mail page's table."""
+    def mail_history(self, limit=200, offset=0, category=""):
+        """Uploaded-mail ledger, newest first (by in-game send time), paged and
+        optionally filtered to one category — the Mail page's table."""
         try:
+            category = str(category or "")
+            counts = self.local_db.mail_category_counts()
+            total = counts.get(category, 0) if category else self.local_db.mail_ledger_count()
             return _ok({
-                "rows": self.local_db.mail_history(int(limit), int(offset)),
-                "total": self.local_db.mail_ledger_count(),
+                "rows": self.local_db.mail_history(int(limit), int(offset), category),
+                "total": total,
                 "sales": self.local_db.mail_sales_count(),
+                "categories": counts,
             })
         except Exception as e:
             return _err(e)
@@ -982,30 +987,53 @@ class WebApi:
         except Exception as e:
             return _err(e)
 
-    def delete_mail(self, mail_id):
+    def _delete_one_mail(self, mail_id):
         """Remove a mail everywhere: server rows (incoming_mail/sales/purchases,
         restocking any depleted inventory), the local ledger row, and the .mail
-        file itself (else the next sweep would just re-upload it)."""
+        file itself (else the next sweep would just re-upload it). (ok, data)."""
+        mail_id = str(mail_id).strip()
+        if not mail_id or "/" in mail_id or ".." in mail_id:
+            return False, "bad mail id"
+        ok, data = self.api.delete_mail(mail_id)
+        if not ok:
+            return False, data
+        self.local_db.mail_ledger_delete(mail_id)
+        from pathlib import Path
+        for entry in self.config.get("mail_paths", []) or []:
+            raw = entry.get("path") if isinstance(entry, dict) else entry
+            if not raw:
+                continue
+            f = Path(str(raw)).expanduser() / f"{mail_id}.mail"
+            if f.is_file():
+                try:
+                    f.unlink()
+                except OSError:
+                    pass
+        return True, data
+
+    def delete_mail(self, mail_id):
         try:
-            mail_id = str(mail_id).strip()
-            if not mail_id or "/" in mail_id or ".." in mail_id:
-                return _err("bad mail id")
-            ok, data = self.api.delete_mail(mail_id)
-            if not ok:
-                return _err(data)
-            self.local_db.mail_ledger_delete(mail_id)
-            from pathlib import Path
-            for entry in self.config.get("mail_paths", []) or []:
-                raw = entry.get("path") if isinstance(entry, dict) else entry
-                if not raw:
-                    continue
-                f = Path(str(raw)).expanduser() / f"{mail_id}.mail"
-                if f.is_file():
-                    try:
-                        f.unlink()
-                    except OSError:
-                        pass
-            return _ok(data)
+            ok, data = self._delete_one_mail(mail_id)
+            return _ok(data) if ok else _err(data)
+        except Exception as e:
+            return _err(e)
+
+    def delete_mail_category(self, category):
+        """Bulk-delete every mail in a category, each via the full server + local
+        + file cleanup. Returns {deleted, failed, total}."""
+        try:
+            category = str(category or "").strip()
+            if not category:
+                return _err("no category")
+            ids = self.local_db.mail_ids_by_category(category)
+            deleted = failed = 0
+            for mid in ids:
+                ok, _ = self._delete_one_mail(mid)
+                if ok:
+                    deleted += 1
+                else:
+                    failed += 1
+            return _ok({"deleted": deleted, "failed": failed, "total": len(ids)})
         except Exception as e:
             return _err(e)
 

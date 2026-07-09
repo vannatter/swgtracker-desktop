@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import sqlite3
 import logging
+import re
 import threading
 import time
 from pathlib import Path
@@ -14,6 +15,39 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 DB_FILE = "swgtracker_local.db"
+
+# --- Mail helpers: in-game send-time + coarse category ------------------------
+_MAIL_TS_RE = re.compile(r"^TIMESTAMP:\s*(\d+)", re.MULTILINE)
+
+
+def parse_mail_sent_at(raw: str) -> int:
+    """The in-game send time (epoch) sits on the mail's `TIMESTAMP:` line."""
+    if not raw:
+        return 0
+    m = _MAIL_TS_RE.search(raw)
+    try:
+        return int(m.group(1)) if m else 0
+    except (TypeError, ValueError):
+        return 0
+
+
+def mail_category(subject: str, kind: str = "mail") -> str:
+    """Coarse category from a mail's subject (+ kind) so the Mail page can filter
+    and bulk-delete by type. Pattern-based; unknowns fall to 'other'."""
+    if kind == "sale":
+        return "sale"
+    s = (subject or "").lower()
+    if "out of ingredient" in s:
+        return "factory-ingredients"
+    if "manufacturing station" in s or "factory" in s or "manufacturing" in s:
+        return "factory"
+    if "maintenance" in s or "structure" in s or "condition" in s or "eviction" in s:
+        return "structure"
+    if "guild" in s:
+        return "guild"
+    if "vendor sale" in s or "sold" in s or "auction" in s:
+        return "sale"
+    return "other"
 
 
 class LocalDB:
@@ -70,7 +104,9 @@ class LocalDB:
                 detail TEXT DEFAULT '',
                 kind TEXT DEFAULT 'mail',
                 raw TEXT DEFAULT '',
-                uploaded_at INTEGER DEFAULT 0
+                uploaded_at INTEGER DEFAULT 0,
+                sent_at INTEGER DEFAULT 0,
+                category TEXT DEFAULT 'other'
             );
 
         """)
@@ -91,13 +127,30 @@ class LocalDB:
                 (DS_SCHEMA_VER,))
         self._init_ds_tables()
 
-        # mail_ledger predates its detail/kind columns in some local DBs
+        # mail_ledger predates its detail/kind/raw + sent_at/category columns
         for col, decl in (("detail", "TEXT DEFAULT ''"), ("kind", "TEXT DEFAULT 'mail'"),
-                          ("raw", "TEXT DEFAULT ''")):
+                          ("raw", "TEXT DEFAULT ''"), ("sent_at", "INTEGER DEFAULT 0"),
+                          ("category", "TEXT DEFAULT 'other'")):
             try:
                 self._conn.execute(f"ALTER TABLE mail_ledger ADD COLUMN {col} {decl}")
             except sqlite3.OperationalError:
                 pass  # already there
+
+        # One-time back-fill of sent_at (from raw's TIMESTAMP line) + category
+        # (from subject) for mails imported before these columns existed.
+        MAIL_META_VER = "1"
+        row = self._conn.execute(
+            "SELECT value FROM sync_meta WHERE key = 'mail_meta_ver'").fetchone()
+        if (row["value"] if row else "") != MAIL_META_VER:
+            for r in self._conn.execute(
+                    "SELECT mail_id, subject, kind, raw FROM mail_ledger").fetchall():
+                self._conn.execute(
+                    "UPDATE mail_ledger SET sent_at = ?, category = ? WHERE mail_id = ?",
+                    (parse_mail_sent_at(r["raw"]), mail_category(r["subject"], r["kind"]),
+                     r["mail_id"]))
+            self._conn.execute(
+                "INSERT OR REPLACE INTO sync_meta (key, value) VALUES ('mail_meta_ver', ?)",
+                (MAIL_META_VER,))
 
         self._conn.commit()
         logger.info(f"Local database initialized: {self.db_path}")
@@ -304,20 +357,40 @@ class LocalDB:
     def mail_ledger_add(self, mail_id: str, subject: str = "", detail: str = "",
                         kind: str = "mail", raw: str = ""):
         self._conn.execute(
-            "INSERT OR REPLACE INTO mail_ledger (mail_id, subject, detail, kind, raw, uploaded_at)"
-            " VALUES (?, ?, ?, ?, ?, ?)",
-            (str(mail_id), subject, detail, kind, raw, int(time.time())))
+            "INSERT OR REPLACE INTO mail_ledger"
+            " (mail_id, subject, detail, kind, raw, uploaded_at, sent_at, category)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (str(mail_id), subject, detail, kind, raw, int(time.time()),
+             parse_mail_sent_at(raw), mail_category(subject, kind)))
         self._conn.commit()
 
-    def mail_history(self, limit: int = 200, offset: int = 0) -> list[dict]:
+    def mail_history(self, limit: int = 200, offset: int = 0,
+                     category: str = "") -> list[dict]:
         # raw stays out of the list payload (big bridge responses drop in WKWebView);
-        # the viewer fetches one mail at a time via mail_raw()
+        # the viewer fetches one mail at a time via mail_raw(). Ordered by the
+        # in-game send time (sent_at), falling back to upload time when unknown.
+        where, params = "", []
+        if category:
+            where = " WHERE category = ?"
+            params.append(str(category))
+        params += [int(limit), int(offset)]
         rows = self._conn.execute(
-            "SELECT mail_id, subject, detail, kind, uploaded_at,"
+            "SELECT mail_id, subject, detail, kind, uploaded_at, sent_at, category,"
             " (COALESCE(raw, '') != '') AS has_raw"
-            " FROM mail_ledger ORDER BY uploaded_at DESC, mail_id DESC LIMIT ? OFFSET ?",
-            (int(limit), int(offset))).fetchall()
+            " FROM mail_ledger" + where +
+            " ORDER BY COALESCE(NULLIF(sent_at, 0), uploaded_at) DESC, mail_id DESC"
+            " LIMIT ? OFFSET ?", params).fetchall()
         return [dict(r) for r in rows]
+
+    def mail_category_counts(self) -> dict:
+        rows = self._conn.execute(
+            "SELECT category, COUNT(*) AS n FROM mail_ledger GROUP BY category").fetchall()
+        return {(r["category"] or "other"): r["n"] for r in rows}
+
+    def mail_ids_by_category(self, category: str) -> list[str]:
+        rows = self._conn.execute(
+            "SELECT mail_id FROM mail_ledger WHERE category = ?", (str(category),)).fetchall()
+        return [r["mail_id"] for r in rows]
 
     def mail_sales_count(self) -> int:
         return self._conn.execute(

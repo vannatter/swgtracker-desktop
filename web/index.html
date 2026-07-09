@@ -78,17 +78,30 @@
         </div>
 
         <div class="filter-bar">
-          <input id="res-search" type="text" class="form-control filter-input" placeholder="Search resources...">
+          <input id="res-search" type="text" class="form-control filter-input" placeholder="Search by name...">
+          <div id="res-filter-wrap" class="res-filter-wrap">
+            <button id="res-filter-btn" type="button" class="btn btn-outline-secondary res-filter-btn" title="Filter">
+              <i class="fa-solid fa-sliders"></i>
+            </button>
+            <div id="res-filter-menu" class="res-filter-menu" hidden></div>
+          </div>
+          <div id="res-bookmark-wrap" class="res-filter-wrap">
+            <button id="res-bookmark-btn" type="button" class="btn btn-outline-secondary res-filter-btn res-bookmark-btn" title="Saved searches">
+              <i class="fa-solid fa-bookmark"></i>
+            </button>
+            <div id="res-bookmark-menu" class="res-filter-menu res-bookmark-menu" hidden></div>
+          </div>
           <select id="res-planet" class="form-select filter-select"></select>
           <select id="res-category" class="form-select filter-select"></select>
-          <button id="res-search-btn" class="btn btn-accent"><i class="fa-solid fa-magnifying-glass"></i> Search</button>
+          <button id="res-search-btn" class="btn btn-accent" title="Search"><i class="fa-solid fa-magnifying-glass"></i></button>
           <label class="pin-toggle ms-auto">
-            <input id="res-stocked-only" type="checkbox"> Stockpiled only
+            <input id="res-stocked-only" type="checkbox"> Stockpiled
           </label>
           <label class="pin-toggle">
-            <input id="res-pinned-only" type="checkbox"> Pinned only
+            <input id="res-pinned-only" type="checkbox"> Pinned
           </label>
         </div>
+        <div id="res-filter-pills" class="res-pills" hidden></div>
 
         <div class="table-wrap">
           <table class="data-grid" id="res-grid">
@@ -536,6 +549,7 @@
             <div class="about-vers">
               <div class="set-ds-line"><span class="set-ds-label">App</span><span id="about-shell">—</span></div>
               <div class="set-ds-line"><span class="set-ds-label">Interface</span><span id="about-ui">—</span></div>
+              <div class="set-ds-line"><span class="set-ds-label">Navigate</span><span id="about-nav-keys">—</span></div>
             </div>
           </div>
 
@@ -674,6 +688,19 @@
       <div class="inv-add-actions">
         <button id="inv-add-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
         <button id="inv-add" class="btn btn-sm btn-accent"><i class="fa-solid fa-plus"></i> Add Item</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="res-save-modal" class="key-gate" hidden>
+    <div class="key-gate-card sp-card inv-add-card">
+      <h2>Save search</h2>
+      <label class="sp-field-label">Name</label>
+      <input id="res-save-name" type="text" class="form-control filter-input settings-input-wide"
+             placeholder="e.g. Capped metals, no Mustafar" maxlength="40" autocomplete="off">
+      <div class="inv-add-actions">
+        <button id="res-save-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
+        <button id="res-save-confirm" class="btn btn-sm btn-accent"><i class="fa-solid fa-bookmark"></i> Save</button>
       </div>
     </div>
   </div>

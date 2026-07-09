@@ -311,14 +311,9 @@ function initResourcePage() {
     }
     const cat = e.target.closest('[data-navcat]');
     if (cat) {
-      // jump to the resources grid pre-filtered to this category
-      const sel = $('#res-category');
-      if ([...sel.options].some((o) => o.value === cat.dataset.navcat)) {
-        sel.value = cat.dataset.navcat;
-      }
-      resState.page = 1;
+      // jump to the resources grid, filtered to this resource's type/category
       showPage('resources');
-      loadResources();
+      applyCategoryFilter(cat.dataset.navcat, cat.textContent.trim());
       return;
     }
     const link = e.target.closest('[data-nav]');

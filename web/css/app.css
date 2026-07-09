@@ -55,6 +55,8 @@ html, body {
   border-bottom: 1px solid var(--bg-tertiary);
 }
 .app-header-brand { display: flex; align-items: center; gap: 10px; }
+
+/* Back/forward navigation is keyboard-only (⌘←/⌘→ or Ctrl+←/→); see the About page. */
 .app-logo { width: 32px; height: 32px; }
 /* Title + subtitle share a BASELINE (different font sizes center unevenly otherwise) */
 .app-titles { display: flex; align-items: baseline; gap: 10px; }
@@ -1192,6 +1194,71 @@ body:not(.dev-mode) .dev-only { display: none !important; }
 .key-gate-row { display: flex; gap: 8px; margin: 14px 0 10px; }
 .key-gate-row .filter-input { max-width: none; flex: 1; }
 .key-gate-status { font-size: 12px; color: var(--accent); min-height: 18px; }
+
+/* ---- Resources: + Filter menu, pills, saved searches ---- */
+.res-filter-wrap { position: relative; flex: none; }
+.res-filter-btn { height: 34px; white-space: nowrap; }
+.res-bookmark-btn { padding-left: 10px; padding-right: 10px; }
+.res-filter-menu {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 40;
+  min-width: 346px; padding: 14px;
+  background: var(--bg-card, var(--bg-secondary));
+  border: 1px solid var(--border); border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+.res-bookmark-menu { min-width: 250px; }
+.rfm-sec-label { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); margin-bottom: 6px; }
+.rfm-sep { height: 1px; background: var(--border); margin: 12px 0; }
+.rfm-presets { display: flex; flex-wrap: wrap; gap: 6px; }
+.rfm-preset {
+  font-size: 12px; color: var(--text-primary);
+  background: var(--bg-input); border: 1px solid var(--border);
+  border-radius: 10px; padding: 3px 10px; cursor: pointer;
+}
+.rfm-preset:hover { border-color: var(--accent-dark); color: var(--text-hover); }
+.rfm-preset.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.rfm-custom { display: flex; align-items: center; gap: 6px; }
+.rfm-custom .form-select, .rfm-custom .form-control {
+  background: var(--bg-input); border: 1px solid var(--border); color: var(--text-primary);
+  height: 30px; font-size: 12px;
+}
+.rfm-custom #rfm-stat { flex: 1 1 auto; min-width: 104px; }
+.rfm-custom #rfm-op { flex: none; width: 58px; }
+.rfm-custom #rfm-val { flex: none; width: 74px; }
+.rfm-custom .btn { flex: none; }
+.rfm-saved-list { display: flex; flex-direction: column; gap: 4px; }
+.rfm-saved-row { display: flex; align-items: center; gap: 6px; }
+.rfm-saved {
+  flex: 1; text-align: left; font-size: 12px; color: var(--text-primary);
+  background: var(--bg-input); border: 1px solid var(--border);
+  border-radius: 8px; padding: 4px 9px; cursor: pointer;
+}
+.rfm-saved:hover { border-color: var(--accent-dark); color: var(--text-hover); }
+.rfm-saved-del { flex: none; background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 2px 4px; }
+.rfm-saved-del:hover { color: var(--accent); }
+.rfm-empty { font-size: 12px; color: var(--text-muted); font-style: italic; }
+.rfm-save { display: flex; gap: 6px; margin-top: 10px; }
+.rfm-save .form-control {
+  flex: 1; background: var(--bg-input); border: 1px solid var(--border);
+  color: var(--text-primary); height: 30px; font-size: 12px;
+}
+.rfm-save .btn { flex: none; white-space: nowrap; }
+
+.res-pills { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: -4px 0 12px; }
+.res-pills-label { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); }
+.res-typelink { cursor: pointer; }  /* clickable to filter, but styled like the plain gray type text */
+.res-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--text-primary);
+  background: var(--bg-tertiary); border: 1px solid var(--border);
+  border-radius: 12px; padding: 3px 6px 3px 11px;
+}
+.res-pill-status { cursor: pointer; }
+.res-pill-x { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 0 2px; line-height: 1; font-size: 11px; }
+.res-pill-x:hover { color: var(--accent); }
+.res-pill-icon { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 14px; line-height: 1; padding: 2px 3px; }
+.res-pill-icon:first-of-type { margin-left: 4px; }
+.res-pill-icon:hover { color: var(--accent); }
 
 /* Scrollbars to match dark theme */
 ::-webkit-scrollbar { width: 10px; height: 10px; }

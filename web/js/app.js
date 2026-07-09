@@ -60,10 +60,65 @@ function initNav() {
     e.currentTarget.blur(); // WebView2 keeps click focus (WKWebView doesn't) — sticky pressed look
   });
   if (localStorage.getItem('sidebar-collapsed') === '1') applyCollapsed(true);
+
+  // Back/forward is keyboard-only: ⌘←/⌘→ (Ctrl on Windows) navigate — but stay
+  // out of the way of cursor/line motion while the user is typing in a field.
+  document.addEventListener('keydown', (e) => {
+    if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return;
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    const el = document.activeElement;
+    if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA'
+      || el.tagName === 'SELECT' || el.isContentEditable)) return;
+    e.preventDefault();
+    if (e.key === 'ArrowLeft') goBack(); else goForward();
+  });
 }
 
-function showPage(key) {
+// Browser-style back/forward across page visits (sidebar clicks, drill-ins to
+// detail pages, category jumps, …). Two stacks; the floating arrows + ⌘←/⌘→
+// drive them. A fresh navigation clears the forward trail, like a browser.
+const navBack = [];
+const navForward = [];
+
+function currentPageKey() {
+  return document.querySelector('.page.active')?.id?.replace(/^page-/, '') || '';
+}
+
+function updateNavArrows() {
+  const wrap = document.getElementById('nav-arrows');
+  if (!wrap) return;
+  const b = document.getElementById('nav-back');
+  const f = document.getElementById('nav-fwd');
+  if (b) b.disabled = navBack.length === 0;
+  if (f) f.disabled = navForward.length === 0;
+  wrap.hidden = navBack.length === 0 && navForward.length === 0;
+}
+
+function goBack() {
+  if (!navBack.length) return;
+  const from = currentPageKey();
+  const prev = navBack.pop();
+  if (from) navForward.push(from);
+  showPage(prev, { internal: true });
+  updateNavArrows();
+}
+
+function goForward() {
+  if (!navForward.length) return;
+  const from = currentPageKey();
+  const next = navForward.pop();
+  if (from) navBack.push(from);
+  showPage(next, { internal: true });
+  updateNavArrows();
+}
+
+function showPage(key, opts = {}) {
   if (!document.getElementById(`page-${key}`)) return; // never blank the app on a bad key
+  // Record where we were so back can return there — but a back/forward hop
+  // manages the stacks itself, and a fresh navigation drops the forward trail.
+  const from = currentPageKey();
+  if (!opts.internal && from && from !== key) { navBack.push(from); navForward.length = 0; }
+  updateNavArrows();
   // Sub-pages (detail views) keep their parent sidebar item lit.
   const navKey = { schematic: 'schematics', resource: 'resources', myschematic: 'myschematics' }[key] || key;
   document.querySelectorAll('.nav-item').forEach((n) => n.classList.toggle('active', n.dataset.page === navKey));
@@ -136,6 +191,10 @@ function renderBundleChip(pending) {
 
 // ---- About page ----
 async function loadAbout() {
+  // Back/forward keyboard nav — ⌘ on Mac, Ctrl on Windows.
+  const isMac = /Mac|iPhone|iPad/i.test(navigator.platform || navigator.userAgent || '');
+  const nk = $('#about-nav-keys');
+  if (nk) nk.textContent = isMac ? 'Back  ⌘ ←   ·   Forward  ⌘ →' : 'Back  Ctrl + ←   ·   Forward  Ctrl + →';
   try {
     const r = await api().app_info();
     if (r.ok && r.data?.version) $('#about-shell').textContent = `v${r.data.version}`;

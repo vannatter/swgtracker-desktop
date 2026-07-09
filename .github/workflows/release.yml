@@ -107,7 +107,9 @@ jobs:
         run: |
           PREV=$(git describe --tags --match "v*" --abbrev=0 "${RELEASE_TAG}^" 2>/dev/null || true)
           RANGE=${PREV:+$PREV..}${RELEASE_TAG}
-          git log --format='%s' $RANGE | sed -nE 's/^v[0-9.]+ — (.+)$/- \1/p' | head -20 > notes.md
+          # keep dev/tooling commits (ci:/chore:/docs:) out of user-facing notes
+          git log --format='%s' $RANGE | sed -nE 's/^v[0-9.]+ — (.+)$/- \1/p' \
+            | { grep -viE '^- (ci|chore|docs):' || true; } | head -20 > notes.md
           [ -s notes.md ] || echo "SWG Tracker Desktop ${RELEASE_TAG}" > notes.md
           cat notes.md
       - name: Stable-name aliases (evergreen /releases/latest/download URLs)

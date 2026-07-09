@@ -80,7 +80,8 @@ def auto_notes() -> str:
     lines = []
     for subj in log.splitlines():
         subj = re.sub(r"^v[0-9.]+ — ", "", subj).strip()  # drop version prefixes
-        if subj and not subj.lower().startswith(("merge", "bundle")):
+        # dev/tooling commits (ci:/chore:/docs:) stay out of user-facing notes
+        if subj and not subj.lower().startswith(("merge", "bundle", "ci:", "chore:", "docs:")):
             lines.append(subj)
     if not lines:
         return "Minor fixes and improvements"

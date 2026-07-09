@@ -141,14 +141,30 @@ function scdSpawnAge(ts) {
   return days === 0 ? '(<1d in spawn)' : `(${days}d in spawn)`;
 }
 
-// One stat cell, "--" like the site's .stat_off.blank when the stat doesn't apply
-function scdStatCell(spawn, field) {
-  const v = safeInt(spawn[field]);
-  if (v <= 0) return '<td class="stat stat_off">--</td>';
-  return statCell(v, spawn[`${field}_max`]);
+// stats that matter for the currently-checked formulas — highlighted like the lab
+// bench; everything else is dimmed so the columns you're capping stand out.
+function scdRelevantStats() {
+  const s = scdState.schematic;
+  const set = new Set();
+  (s?.formula || []).forEach((f, i) => {
+    if (!scdState.activeFormulas.has(String(i))) return;
+    const w = mysParseWeights(f.formulaDescription);
+    if (w) Object.keys(w).forEach((k) => set.add(k));
+  });
+  return set;
 }
 
-function scdSpawnRowHtml(spawn, group, highlight) {
+// One stat cell, "--" like the site's .stat_off.blank when the stat doesn't apply.
+// relevant → green underline (lab-rel); irrelevant → dimmed (lab-dim).
+function scdStatCell(spawn, field, relevant) {
+  const cls = relevant ? 'lab-rel' : 'lab-dim';
+  const v = safeInt(spawn[field]);
+  if (v <= 0) return `<td class="stat stat_off ${cls}">--</td>`;
+  const pct = (v / (safeInt(spawn[`${field}_max`]) || 1000)) * 100;
+  return `<td class="stat ${qualityClass(pct)} ${cls}" title="${pct.toFixed(1)}%">${v}</td>`;
+}
+
+function scdSpawnRowHtml(spawn, group, highlight, rel) {
   const q = scdSpawnQuality(spawn);
   return `<tr class="scd-row ${highlight ? 'activeResource' : ''}" data-group="${group}">
     ${addCellHtml(safeInt(spawn.resourceId), spawn.resourceName)}
@@ -156,7 +172,7 @@ function scdSpawnRowHtml(spawn, group, highlight) {
     <td class="col-text"><span class="scd-reslink" data-res="${escapeHtml(spawn.resourceName || '')}"
       title="${escapeHtml(spawn.resourceTypeName || 'Open resource page')}">${escapeHtml(spawn.resourceName || '')}</span></td>
     <td class="stat ${qualityClass(q / 10)}">${q.toFixed(2)}</td>
-    ${SCD_STATS.map((f) => scdStatCell(spawn, f)).join('')}
+    ${SCD_STATS.map((f) => scdStatCell(spawn, f, rel.has(f))).join('')}
   </tr>`;
 }
 
@@ -165,9 +181,10 @@ function renderScdTable() {
   if (!s) return;
   $('#scd-loading').hidden = true;
 
+  const rel = scdRelevantStats();
   $('#scd-head').innerHTML =
     '<th class="pin-cell"></th><th class="pin-cell"></th><th class="col-name">Resource Name</th><th>Quality</th>' +
-    SCD_STATS.map((f) => `<th>${f.toUpperCase()}</th>`).join('');
+    SCD_STATS.map((f) => `<th class="${rel.has(f) ? 'lab-rel-h' : 'lab-dim'}">${f.toUpperCase()}</th>`).join('');
 
   const listKey = scdState.tab === 'current' ? 'currentBestResourceList' : 'serverBestResourceList';
   const groups = (s.resourceDtoList || []).map((dto) => {
@@ -191,7 +208,7 @@ function renderScdTable() {
       const highlight = scdState.tab === 'current'
         ? active && bestIds.has(String(sp.resourceId))
         : active;
-      return scdSpawnRowHtml(sp, dto.resourceTypeCode, highlight);
+      return scdSpawnRowHtml(sp, dto.resourceTypeCode, highlight, rel);
     }).join('');
   });
 

@@ -84,6 +84,17 @@ function statCell(v, max) {
 
 const fmtNum = (v) => (Number(v) || 0).toLocaleString();
 
+// Compact amount for tight cells: 4532100 -> "4.5m", 300000 -> "300k", 950 -> "950".
+// Mirrors the 300k/4.5m shorthand used for stockpile amounts.
+function fmtShort(v) {
+  const n = Number(v) || 0;
+  const a = Math.abs(n);
+  if (a >= 1e9) return (n / 1e9).toFixed(a >= 1e10 ? 0 : 1).replace(/\.0$/, '') + 'b';
+  if (a >= 1e6) return (n / 1e6).toFixed(a >= 1e7 ? 0 : 1).replace(/\.0$/, '') + 'm';
+  if (a >= 1e3) return (n / 1e3).toFixed(a >= 1e4 ? 0 : 1).replace(/\.0$/, '') + 'k';
+  return String(Math.round(n));
+}
+
 // Site rule (functions.php ecpu_clamp): 0 = unvoted, estimates floor at 1,
 // in-spawn estimates cap at 2 (8 on Mustafar). Returns 0 for unvoted.
 function ecpuClamp(cpu, active, mustafar) {

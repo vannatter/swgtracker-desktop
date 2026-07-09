@@ -19,6 +19,7 @@ const labState = {
   experiments: [],
   currentExpId: null,  // experiment being edited on the bench (null = unsaved draft)
   draftNotes: '',      // notes for a not-yet-saved experiment
+  homeQuery: '',       // free-text filter on the experiments home page
 };
 
 const labClamp01k = (v) => Math.max(0, Math.min(1000, v));
@@ -76,9 +77,11 @@ function labSanitizeHtml(html) {
 function labNotesHtml(notes) {
   const v = String(notes || '');
   if (!v.trim()) return '';
-  // WYSIWYG output can start with a bare text node — anything containing a tag
-  // is HTML; only tag-free legacy notes go through the markdown converter
-  return /<[a-z][^>]*>/i.test(v) ? labSanitizeHtml(v) : labMdToHtml(v);
+  // WYSIWYG output can be a bare text node with no tags — but it's still serialized
+  // HTML, so a single-line note like "foo&nbsp;" or "a &lt; b" carries entities.
+  // Treat anything with a tag OR an HTML entity as HTML; only truly plain legacy
+  // notes go through the markdown converter (which escapes, so it must not see entities).
+  return /<[a-z][^>]*>|&(?:[a-z]+|#\d+);/i.test(v) ? labSanitizeHtml(v) : labMdToHtml(v);
 }
 
 // per-unit cost for the bench: YOUR stockpile cost wins when set (0 = self-mined,
@@ -94,6 +97,15 @@ function labMyCpu(r) {
   const row = stkState.items.find((i) => String(i.id) === String(r.id));
   const v = row ? row.my_cpu : null;
   return v === null || v === undefined || v === '' ? null : Math.max(0, Number(v));
+}
+
+// how many units of this resource you hold (stockpile `stock`); null if not stocked
+function labMyStock(r) {
+  if (typeof stkState === 'undefined') return null;
+  const row = stkState.items.find((i) => String(i.id) === String(r.id));
+  if (!row) return null;
+  const v = Number(row.stock);
+  return Number.isFinite(v) ? v : null;
 }
 
 // ---- math ----
@@ -236,9 +248,9 @@ function labFormulaShort(f) {
 
 function labStatCellHtml(res, stat, relevant) {
   const v = safeInt(res[stat]);
-  if (v <= 0) return `<td class="stat stat_off ${relevant ? 'lab-rel' : ''}">—</td>`;
+  if (v <= 0) return `<td class="stat stat_off ${relevant ? 'lab-rel' : 'lab-dim'}">—</td>`;
   const cap = safeInt(res[`${stat}_max`]) || 1000;
-  return `<td class="stat ${qualityClass((v / cap) * 100)} ${relevant ? 'lab-rel' : ''}">${v}</td>`;
+  return `<td class="stat ${qualityClass((v / cap) * 100)} ${relevant ? 'lab-rel' : 'lab-dim'}">${v}</td>`;
 }
 
 function labSlotVisibleRows(slot) {
@@ -278,7 +290,12 @@ function labSlotTbodyHtml(slot) {
     <tr class="lab-row ${slot.pick && slot.pick.id === r.id ? 'lab-picked' : ''} ${stkState.resourceIds.has(String(r.id)) ? 'lab-stocked' : ''}" data-rid="${r.id}">
       <td class="pin-cell">${r.status === 1 ? '<span class="lab-live" title="In spawn"></span>' : ''}</td>
       <td class="col-name res-name">${escapeHtml(r.name)}
-        ${stkState.resourceIds.has(String(r.id)) ? '<span class="lab-stock" title="In your stockpile">\u2713 stock</span>' : ''}</td>
+        ${stkState.resourceIds.has(String(r.id)) ? (() => {
+          const s = labMyStock(r);
+          return s !== null && s > 0
+            ? `<span class="lab-stock" title="In your stockpile: ${fmtNum(s)} units">\u2713 ${fmtShort(s)}</span>`
+            : '<span class="lab-stock" title="In your stockpile">\u2713 stock</span>';
+        })() : ''}</td>
       <td class="stat ${qualityClass(q / 10)}">${q.toFixed(1)}</td>
       ${stats.map((st) => labStatCellHtml(r, st, rel.has(st))).join('')}
       <td class="stat ${labMyCpu(r) !== null ? 'lab-mycpu' : ''}" title="${labMyCpu(r) !== null
@@ -543,6 +560,7 @@ function labShowView(view) {
   $('#lab-home').hidden = !home;
   $('#lab-work').hidden = home;
   $('#lab-new').hidden = !home;
+  $('#lab-home-tools').hidden = !home;
   $('#lab-back').hidden = home;
   $('#lab-save').hidden = home;
   if (home) labRenderHome();
@@ -572,10 +590,43 @@ function labExpMeters(e) {
   }).join('');
 }
 
+// notes are stored as HTML; flatten to plain text so the filter can search them
+function labNotesText(notes) {
+  const d = document.createElement('div');
+  d.innerHTML = labNotesHtml(notes);
+  return (d.textContent || '').replace(/\s+/g, ' ').trim();
+}
+
+// everything an experiment is searchable by: name, schematic, resources, notes
+function labExpHaystack(e) {
+  return [e.name, e.schematic_name, ...(e.picks || []).map((p) => p.name), labNotesText(e.notes)]
+    .filter(Boolean).join(' • ').toLowerCase();
+}
+
+function labFilterExperiments() {
+  const list = [...labState.experiments].reverse();
+  const q = (labState.homeQuery || '').trim().toLowerCase();
+  if (!q) return list;
+  const terms = q.split(/\s+/);
+  return list.filter((e) => { const h = labExpHaystack(e); return terms.every((t) => h.includes(t)); });
+}
+
 function labRenderHome() {
   const wrap = $('#lab-exps');
-  $('#lab-home-empty').hidden = !!labState.experiments.length;
-  wrap.innerHTML = [...labState.experiments].reverse().map((e) => `
+  const total = labState.experiments.length;
+  const q = (labState.homeQuery || '').trim();
+  const list = labFilterExperiments();
+
+  $('#lab-home-clear').hidden = !q;
+  $('#lab-home-count').textContent = q ? `${list.length} of ${total}` : '';
+  $('#lab-home-empty').hidden = total > 0;
+  $('#lab-home-nomatch').hidden = !(total > 0 && list.length === 0);
+  if (total > 0 && list.length === 0) {
+    $('#lab-home-nomatch').innerHTML = `No experiments match <b>${escapeHtml(q)}</b>. `
+      + '<a role="button" data-homeclear>Clear the filter</a>.';
+  }
+
+  wrap.innerHTML = list.map((e) => `
     <div class="lab-exp-card" data-eid="${e.id}">
       <div class="lab-exp-hd">
         <div class="lab-exp-top">
@@ -587,7 +638,7 @@ function labRenderHome() {
       </div>
       <div class="lab-exp-body">
         <div class="lab-exp-picks">${(e.picks || []).slice(0, 6).map((p) =>
-          `<span class="mys-loadout" title="${escapeHtml(p.slot)}">${escapeHtml(p.name)}</span>`).join(' ')}</div>
+          `<span class="mys-loadout lab-pick-pill" data-pillres="${escapeHtml(p.name)}" title="${escapeHtml(p.slot)} — click to filter by this resource">${escapeHtml(p.name)}</span>`).join(' ')}</div>
         <div class="lab-notes-view lab-card-notes">${labNotesHtml(e.notes)
           || '<span class="stat_off">No notes yet — open on bench to add some.</span>'}</div>
       </div>
@@ -599,6 +650,27 @@ function labRenderHome() {
         <span class="lab-exp-when">${fmtNum(e.cost)} cr · ${fmtAgoTip(e.created)} · ${escapeHtml(e.schematic_name)}</span>
       </div>
     </div>`).join('');
+}
+
+// pull the saved experiments back from config and re-render (header refresh button)
+async function labReloadExperiments() {
+  const btn = $('#lab-home-refresh');
+  const ico = btn && btn.querySelector('i');
+  if (ico) ico.classList.add('fa-spin');
+  try {
+    const res = await api().get_config();
+    if (res.ok && res.data) labState.experiments = res.data.lab_experiments || [];
+    labRenderHome();
+  } catch (_) { toast('Couldn’t reload experiments', false); }
+  if (ico) ico.classList.remove('fa-spin');
+}
+
+// set the home filter and re-render (used by the search box and resource-pill clicks)
+function labSetHomeQuery(q) {
+  labState.homeQuery = q || '';
+  const box = $('#lab-home-search');
+  if (box && box.value !== labState.homeQuery) box.value = labState.homeQuery;
+  labRenderHome();
 }
 
 async function labSaveExperiment() {
@@ -850,6 +922,17 @@ function initLab() {
   });
   $('#lab-back').addEventListener('click', () => labShowView('home'));
 
+  // home filter: free-text across name/resource/schematic/notes
+  $('#lab-home-search').addEventListener('input', (e) => labSetHomeQuery(e.target.value));
+  $('#lab-home-search').addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') labSetHomeQuery('');
+  });
+  $('#lab-home-clear').addEventListener('click', () => { labSetHomeQuery(''); $('#lab-home-search').focus(); });
+  $('#lab-home-nomatch').addEventListener('click', (e) => {
+    if (e.target.closest('[data-homeclear]')) labSetHomeQuery('');
+  });
+  $('#lab-home-refresh').addEventListener('click', () => labReloadExperiments());
+
   // bench notes: WYSIWYG contenteditable + mini toolbar; saves on blur
   document.querySelectorAll('.lab-notes-toolbar [data-cmd]').forEach((btn) => {
     btn.addEventListener('mousedown', (e) => {
@@ -862,6 +945,8 @@ function initLab() {
   });
 
   $('#lab-exps').addEventListener('click', async (e) => {
+    const pill = e.target.closest('[data-pillres]');
+    if (pill) { labSetHomeQuery(pill.dataset.pillres); return; }
     const ren = e.target.closest('[data-rename]');
     if (ren) {
       const exp = labState.experiments.find((x) => x.id === ren.dataset.rename);

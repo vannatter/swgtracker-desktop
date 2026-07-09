@@ -22,6 +22,7 @@ const PLANET_KEYS = [
 // (label, field, css-class) — stat columns get quality coloring
 const RES_COLUMNS = [
   ['Name', 'name', 'col-name'],
+  ['<i class="fa-solid fa-circle-half-stroke" title="In spawn (active) / despawned (inactive)"></i>', 'status', 'col-status'],
   ['Type', 'type_name', 'col-text'],
   ['Score', 'score', 'stat'],
   ['OQ', 'oq', 'stat'], ['CR', 'cr', 'stat'], ['CD', 'cd', 'stat'],
@@ -101,7 +102,7 @@ function buildResHeader() {
        title="Pinned first (default order) — click to reset sort"><i class="fa-solid fa-star"></i></th>` +
     '<th class="pin-cell"></th><th class="pin-cell"></th>' +
     RES_COLUMNS.map(([label, field, cls]) => {
-      const sortable = field !== 'planets'; // no server column for planets
+      const sortable = field !== 'planets' && field !== 'status'; // no server sort column for these
       const arrow = field === resState.sortField ? (resState.sortOrder === 'ASC' ? ' ▲' : ' ▼') : '';
       return `<th class="${cls}"${sortable ? ` data-sort="${field}"` : ''}>${label}${arrow}</th>`;
     }).join('');
@@ -201,10 +202,12 @@ function planetsHtml(res) {
 function resRowHtml(res) {
   const id = res.id ?? '';
   const isPinned = resState.pinned.has(String(id));
-  const isActive = String(res.active ?? res.is_active ?? '0') === '1';
+  // '1' = currently in spawn; the live-API list rows carry `status` (active/is_active are fallbacks)
+  const isActive = String(res.status ?? res.active ?? res.is_active ?? '0') === '1';
 
   const cells = RES_COLUMNS.map(([, field]) => {
     if (field === 'name') return `<td class="col-name res-name">${escapeHtml(res.name || '')}</td>`;
+    if (field === 'status') return `<td class="col-status"><i class="fa-solid fa-circle res-status ${isActive ? 'on' : 'off'}" title="${isActive ? 'Active — in spawn' : 'Inactive — despawned'}"></i></td>`;
     if (field === 'type_name') {
       const name = escapeHtml(res.type_name || '');
       return res.type_code
@@ -241,15 +244,22 @@ async function loadResources() {
   const tokens = resState.filters.map(filterToken).filter(Boolean);
   const search = [nameText, ...tokens].join(' ').trim();
   renderResPills();
+  const status = effectiveStatus();
+  // 'score' is the public alias; the sortable server column is value_rating
+  let sort = resState.sortField === 'score' ? 'value_rating' : resState.sortField;
+  let order = resState.sortField ? resState.sortOrder : '';
+  // Default order (no column chosen) while showing every status: the server would
+  // sort by rating and bury low-quality *active* spawns pages deep. Sort active-first
+  // so currently-harvestable resources surface instead of only historical bests.
+  if (!resState.sortField && status === 'all') { sort = 'status'; order = 'DESC'; }
   const params = {
     search,
-    status: effectiveStatus(),
+    status,
     planet: $('#res-planet').value,
     category: $('#res-category').value,
     page: resState.page,
-    // 'score' is the public alias; the sortable server column is value_rating
-    sort: resState.sortField === 'score' ? 'value_rating' : resState.sortField,
-    order: resState.sortField ? resState.sortOrder : '',
+    sort,
+    order,
   };
 
   let res;

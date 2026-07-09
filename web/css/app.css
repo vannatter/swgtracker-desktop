@@ -26,6 +26,7 @@
   --q-better: #2e6ae2;
   --q-ok:     #cccccc;
   --q-poor:   #777777;
+  --q-accept: #ff9f43;   /* orange — "acceptable", between green (good) and yellow (warning) */
 
   --row-active: #1b3129;
   --row-pinned: #2c3144;
@@ -312,9 +313,18 @@ body.offline .app-body { height: calc(100vh - 76px); }
 .data-grid tbody tr.activeResource { background: var(--row-active); }   /* live spawn tint */
 .data-grid tbody tr.pinned { background: var(--row-pinned); }
 .data-grid tbody tr.pinned:hover, .data-grid tbody tr.activeResource:hover { filter: brightness(1.25); }
+/* Resources page: the status dot carries "active" now — drop the row tint (keep pinned) */
+#res-grid tbody tr.activeResource { background: transparent; }
+#res-grid tbody tr.activeResource.pinned { background: var(--row-pinned); }
+#res-grid tbody tr.activeResource:hover { background: var(--border); filter: none; }
 
 .res-name { color: var(--text-hover); font-weight: 600; }
 .res-type { color: var(--text-muted); }
+/* active/inactive marker — green dot (in spawn) / gray dot (despawned), like the site homepage */
+.col-status { text-align: center; width: 34px; }
+.res-status { font-size: 9px; }
+.res-status.on { color: var(--accent-green); }
+.res-status.off { color: var(--text-muted); opacity: .6; }
 
 /* Stat cells colored by quality, faded when zero (.stat_off) */
 .stat { font-weight: 600; }
@@ -501,17 +511,23 @@ body.offline .app-body { height: calc(100vh - 76px); }
 .lab-slot-stockpick { flex: 0 0 auto; width: auto; max-width: 300px; height: 30px; font-size: 12px; }
 .lab-slot-search { flex: 1 1 auto; width: auto; max-width: none; height: 30px; font-size: 12px; }
 .lab-grid tbody tr { cursor: pointer; }
-.lab-grid tr.lab-stocked { background: rgba(250, 204, 21, .06); box-shadow: inset 3px 0 0 var(--q-fair); }
+/* stockpiled rows are signalled by the ✓ badge + amount on the name, no row tint */
 .lab-grid tr.lab-picked { background: var(--row-active); box-shadow: none; }
 .lab-rel-h { color: var(--q-good) !important; }
 .lab-rel { box-shadow: inset 0 -2px 0 rgba(126, 231, 135, .25); }
 .lab-dim { opacity: .32; }
 .lab-live { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent-green); }
-.lab-stock { margin-left: 6px; font-size: 10px; font-weight: 700; color: var(--q-fair); }
+.lab-stock { margin-left: 6px; font-size: 10px; font-weight: 700; color: var(--q-fair); white-space: nowrap; }
 .lab-mycpu { color: var(--q-fair) !important; font-weight: 700; }
 .lab-pickcell { font-size: 11px; color: var(--text-muted); text-align: center; width: 44px; }
 /* Lab home: experiment cards, notes always visible */
-.lab-head-actions { margin-left: auto; display: flex; gap: 8px; }
+/* home tools live top-right in the page header, like every other page */
+.lab-home-tools { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.lab-home-tools .head-search { margin-left: 0; }   /* the group is already right-aligned */
+.page-head #lab-save { margin-left: auto; }   /* workbench: Save pins right when tools are hidden */
+.lab-home-count { font-size: 12px; color: var(--text-muted); flex: 0 0 auto; }
+.lab-pick-pill { cursor: pointer; }
+.lab-pick-pill:hover { background: var(--row-active); color: var(--text-hover); }
 .lab-exps {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
   align-items: stretch;   /* uniform card height; the notes area flex-fills + scrolls */
@@ -521,9 +537,10 @@ body.offline .app-body { height: calc(100vh - 76px); }
    footer pinned to the bottom — grid stretch keeps cards in a row equal height */
 .lab-exp-card { background: var(--bg-secondary); border-radius: 8px; padding: 0; display: flex; flex-direction: column; overflow: hidden; height: 220px; }
 .lab-exp-hd { background: var(--bg-input); padding: 9px 14px 8px; display: flex; flex-direction: column; gap: 6px; }
-.lab-exp-body { padding: 8px 14px; display: flex; flex-direction: column; gap: 6px; flex: 1 1 auto; min-height: 0; }
+.lab-exp-body { padding: 8px 14px; display: flex; flex-direction: column; gap: 6px; flex: 1 1 auto; min-height: 0; overflow: hidden; }
 .lab-card-notes { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
-.lab-exp-foot { padding: 7px 14px; border-top: 1px solid var(--border); margin-top: auto; }
+.lab-exp-picks { flex: 0 0 auto; }
+.lab-exp-foot { padding: 7px 14px; border-top: 1px solid var(--border); margin-top: auto; flex: 0 0 auto; }
 .lab-exp-top { display: flex; align-items: center; gap: 8px; }
 .lab-exp-name { font-size: 14px; font-weight: 700; color: var(--text-hover); flex: 1 1 auto;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1037,9 +1054,9 @@ body:not(.dev-mode) .dev-only { display: none !important; }
 .inv-sales-table .col-num { text-align: right; }
 
 /* My Schematics: accepted-but-not-optimal (yellow) */
-.mys-st-acc { color: var(--q-good); font-weight: 700; cursor: pointer; }
+.mys-st-acc { color: var(--q-accept); font-weight: 700; cursor: pointer; white-space: nowrap; }
 .mys-st-acc:hover { text-decoration: underline; }
-.mys-badge.acc { background: rgba(255, 255, 110, .1); color: var(--q-good); }
+.mys-badge.acc { background: rgba(255, 159, 67, .12); color: var(--q-accept); }
 .mys-accept {
   background: none; border: 1px solid var(--border); border-radius: 4px;
   color: var(--text-muted); font-size: 11px; padding: 1px 7px; margin-left: 6px; cursor: pointer;
@@ -1049,12 +1066,12 @@ body:not(.dev-mode) .dev-only { display: none !important; }
 /* Sales search: × appears inside the box whenever a filter is active */
 .sales-search-wrap { position: relative; display: flex; }
 .sales-search-wrap .filter-input { width: 100%; max-width: none; padding-right: 28px; }
-#sales-search-clear {
+#sales-search-clear, #lab-home-clear {
   position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
   background: none; border: 0; color: var(--text-muted); cursor: pointer;
   padding: 4px 6px; font-size: 13px;
 }
-#sales-search-clear:hover { color: var(--accent); }
+#sales-search-clear:hover, #lab-home-clear:hover { color: var(--accent); }
 
 /* Sales click-to-filter */
 .sales-cell { cursor: pointer; }

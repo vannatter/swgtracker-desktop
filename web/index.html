@@ -474,16 +474,25 @@
           <h1>The Laboratory</h1>
           <i class="fa-solid fa-circle-info info-tip"
              title="Min/max workbench: find the cheapest resources that still cap an experiment line, factor in crafting buffs, and keep notes per experiment."></i>
-          <span class="lab-head-actions">
-            <button id="lab-back" class="btn btn-sm btn-outline-secondary" hidden><i class="fa-solid fa-arrow-left"></i> Experiments</button>
-            <button id="lab-new" class="btn btn-sm btn-accent"><i class="fa-solid fa-plus"></i> New Experiment</button>
-            <button id="lab-save" class="btn btn-sm btn-accent" hidden disabled><i class="fa-solid fa-flask"></i> Save Experiment</button>
+          <button id="lab-back" class="btn btn-sm btn-outline-secondary" hidden><i class="fa-solid fa-arrow-left"></i> Experiments</button>
+          <button id="lab-new" class="btn btn-sm btn-accent"><i class="fa-solid fa-plus"></i> New Experiment</button>
+          <!-- home-only tools, top-right like every other page -->
+          <span id="lab-home-tools" class="lab-home-tools" hidden>
+            <span id="lab-home-count" class="lab-home-count"></span>
+            <span class="head-search sales-search-wrap">
+              <input id="lab-home-search" type="text" class="form-control filter-input"
+                placeholder="Search experiments…" autocomplete="off">
+              <button id="lab-home-clear" type="button" title="Clear filter" hidden><i class="fa-solid fa-xmark"></i></button>
+            </span>
+            <button id="lab-home-refresh" class="btn btn-icon" title="Reload experiments"><i class="fa-solid fa-rotate-right"></i></button>
           </span>
+          <button id="lab-save" class="btn btn-sm btn-accent" hidden disabled><i class="fa-solid fa-flask"></i> Save Experiment</button>
         </div>
 
         <!-- Home: every saved experiment as a card, notes front and center -->
         <div id="lab-home">
           <div id="lab-exps" class="lab-exps"></div>
+          <div id="lab-home-nomatch" class="al-empty" hidden></div>
           <div id="lab-home-empty" class="al-empty" hidden>
             No experiments yet — hit <b>New Experiment</b>, pick a schematic, fill the slots, and save.
             Each experiment keeps its picks, verdict, cost, and your notes.

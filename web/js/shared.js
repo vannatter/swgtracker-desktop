@@ -395,9 +395,19 @@ function confirmArmLabeled(btn, label = 'Confirm remove?') {
 // Relative "time ago" from a unix timestamp or "YYYY-MM-DD HH:MM:SS" string.
 function fmtAgo(dt) {
   if (!dt) return '';
-  const d = /^\d+$/.test(String(dt))
-    ? new Date(parseInt(dt, 10) * 1000)
-    : new Date(String(dt).replace(' ', 'T')); // WebKit can't parse the space form
+  let d;
+  if (/^\d+$/.test(String(dt))) {
+    d = new Date(parseInt(dt, 10) * 1000); // unix epoch — absolute, no zone needed
+  } else {
+    // Server datetimes are UTC but arrive zoneless ("2026-07-08 23:24:41").
+    // WebKit can't parse the space form, and a naive string parses as LOCAL —
+    // so for anyone behind UTC these read as the future and every recent row
+    // collapses to "just now". Normalise to T-form and pin to UTC when no
+    // zone is present.
+    let str = String(dt).replace(' ', 'T');
+    if (!/[zZ]|[+-]\d\d:?\d\d$/.test(str)) str += 'Z';
+    d = new Date(str);
+  }
   if (Number.isNaN(d.getTime())) return String(dt);
   const s = Math.floor((Date.now() - d.getTime()) / 1000);
   if (s < 60) return 'just now';

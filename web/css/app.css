@@ -254,7 +254,8 @@ body.offline .app-body { height: calc(100vh - 76px); }
    navigation (:focus-visible) keeps its ring. */
 *:focus:not(:focus-visible) { outline: none !important; box-shadow: none !important; }
 .btn-sm, .mys-badge {
-  font-size: 12px; padding: 6px 14px; border-radius: 6px; line-height: 1.34;
+  font-size: 12px; padding: 0 14px; border-radius: 6px; height: 34px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
 }
 .btn-accent { background: var(--accent-dark); color: var(--text-hover); }
 .btn-accent:hover { background: var(--accent); color: #fff; }
@@ -262,6 +263,7 @@ body.offline .app-body { height: calc(100vh - 76px); }
 .btn-outline-secondary:hover { background: var(--border); color: var(--text-hover); }
 .btn-icon {
   background: var(--bg-input); color: var(--text-primary); width: 34px; height: 34px;
+  border-radius: 6px; /* match .btn-sm + .filter-input */
   display: inline-flex; align-items: center; justify-content: center; padding: 0; /* glyph dead-center at any size */
 }
 .btn-icon:hover { color: var(--text-hover); }
@@ -275,6 +277,7 @@ body.offline .app-body { height: calc(100vh - 76px); }
 .filter-input, .filter-select {
   background: var(--bg-input); border: 1px solid var(--border); color: var(--text-primary);
   height: 34px; /* one control height everywhere — icon buttons match below */
+  border-radius: 6px; /* match .btn-sm + .btn-icon */
 }
 .filter-input { max-width: 220px; }
 .filter-input:focus, .filter-select:focus {

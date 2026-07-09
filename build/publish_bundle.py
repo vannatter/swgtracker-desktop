@@ -86,7 +86,14 @@ def auto_notes() -> str:
     if not lines:
         return "Minor fixes and improvements"
     text = "• " + "\n• ".join(lines[:8])
-    return text[:490]
+    if len(text) <= 490:
+        return text
+    # server caps notes at 500 — trim on a word boundary so we never cut mid-word
+    cut = text[:489]
+    sp = cut.rfind(" ")
+    if sp > 400:
+        cut = cut[:sp]
+    return cut.rstrip() + "…"
 
 
 def shell_version() -> str:

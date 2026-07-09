@@ -446,7 +446,7 @@ async function openMySchematicPage(item) {
 function mysdAddBadge(id, name) {
   const inStock = stkState.resourceIds.has(String(id));
   return `<span class="add-cell add-inline ${inStock ? 'in-stock' : ''}" data-add="${id}"
-    data-name="${escapeHtml(name || '')}" title="${inStock ? IN_STOCK_TITLE : 'Add to stockpile'}">
+    data-name="${escapeHtml(name || '')}" title="${inStock ? IN_STOCK_TITLE : ADD_TITLE}">
     <i class="fa-solid ${inStock ? 'fa-check add-ok' : 'fa-plus'}"></i></span>`;
 }
 
@@ -851,7 +851,7 @@ function initMySchematics() {
     const editCell = e.target.closest('[data-editing-ing]');
     if (editCell) { mysdOpenEditor(editCell.closest('[data-using]'), editCell.dataset.editingIng); return; }
     const addBadge = e.target.closest('[data-add]');
-    if (addBadge) { handleAddCellClick(addBadge); return; }
+    if (addBadge) { handleAddCellClick(addBadge, e); return; }
     const resLink = e.target.closest('[data-res]');
     if (resLink) openResourcePage(resLink.dataset.res);
   });

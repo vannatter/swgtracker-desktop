@@ -351,7 +351,7 @@ function initResourcePage() {
   // Row actions: stockpile/wishlist toggles, schematic rows, other-spawn names
   $('#rd-body').addEventListener('click', (e) => {
     const addCell = e.target.closest('[data-add]');
-    if (addCell) { handleAddCellClick(addCell); return; }
+    if (addCell) { handleAddCellClick(addCell, e); return; }
     const wishCell = e.target.closest('[data-wish]');
     if (wishCell) { handleWishCellClick(wishCell); return; }
     const schemRow = e.target.closest('tr[data-schem]');
@@ -367,12 +367,15 @@ function initResourcePage() {
       if (!confirmArmLabeled(btn, 'Confirm remove?')) return; // removal confirms
       btn.disabled = true;
       await removeFromStockpileByResource(rdState.id, rdState.name);
+      updateRdAddButton();
+      updateRdWishButton();
     } else {
-      btn.disabled = true;
-      await addToStockpile(rdState.id, rdState.name); // promotes if wished
+      // Dialog collects an optional amount + CPU; adds (and promotes if wished) on close.
+      openStockpileAddDialog(rdState.id, rdState.name, () => {
+        updateRdAddButton();
+        updateRdWishButton();
+      });
     }
-    updateRdAddButton();
-    updateRdWishButton();
   });
 
   $('#rd-wish').addEventListener('click', async () => {

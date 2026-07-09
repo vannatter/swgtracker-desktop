@@ -619,7 +619,7 @@ function initResources() {
   // Pin toggle + add-to-stockpile + name → resource detail page (event delegation)
   $('#res-body').addEventListener('click', async (e) => {
     const addCell = e.target.closest('[data-add]');
-    if (addCell) { handleAddCellClick(addCell); return; }
+    if (addCell) { handleAddCellClick(addCell, e); return; }
     const wishCell = e.target.closest('[data-wish]');
     if (wishCell) { handleWishCellClick(wishCell); return; }
     const cell = e.target.closest('[data-pin]');

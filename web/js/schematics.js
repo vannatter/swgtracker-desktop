@@ -362,7 +362,7 @@ function initSchematicPage() {
   // Group collapse + add-to-stockpile + resource-name → resource detail page
   $('#scd-body').addEventListener('click', async (e) => {
     const addCell = e.target.closest('[data-add]');
-    if (addCell) { handleAddCellClick(addCell); return; }
+    if (addCell) { handleAddCellClick(addCell, e); return; }
     const wishCell = e.target.closest('[data-wish]');
     if (wishCell) { handleWishCellClick(wishCell); return; }
     const group = e.target.closest('[data-toggle]');

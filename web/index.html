@@ -710,6 +710,32 @@
     </div>
   </div>
 
+  <!-- Add-to-stockpile dialog: optional amount (300k / 4.5m) + optional CPU.
+       Cancelling or leaving both blank still stockpiles the resource. -->
+  <div id="stk-add-modal" class="key-gate" hidden>
+    <div class="key-gate-card sp-card inv-add-card">
+      <h2>Add to Stockpile</h2>
+      <div class="settings-hint">Adding <b id="stk-add-title">resource</b> — amount and CPU are
+        optional. Leave them blank to just stockpile it.</div>
+      <div class="inv-add-row">
+        <div class="inv-add-field">
+          <label class="sp-field-label">Amount</label>
+          <input id="stk-add-amount" type="text" inputmode="decimal" class="form-control filter-input"
+                 placeholder="e.g. 300k, 4.5m" autocomplete="off">
+        </div>
+        <div class="inv-add-field">
+          <label class="sp-field-label">My CPU <span class="settings-sub">optional</span></label>
+          <input id="stk-add-cpu" type="text" inputmode="decimal" class="form-control filter-input"
+                 placeholder="cost/unit — 0 = mined" autocomplete="off">
+        </div>
+      </div>
+      <div class="inv-add-actions">
+        <button id="stk-add-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
+        <button id="stk-add-confirm" class="btn btn-sm btn-accent"><i class="fa-solid fa-plus"></i> Add to Stockpile</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Customers: distinct buyers, windowed, copyable for in-game mail -->
   <div id="cust-modal" class="key-gate" hidden>
     <div class="key-gate-card sp-card cust-card">

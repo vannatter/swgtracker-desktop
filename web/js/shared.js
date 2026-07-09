@@ -156,12 +156,13 @@ function checkAuthError(err) {
 }
 
 const IN_STOCK_TITLE = 'In stockpile — click to remove';
+const ADD_TITLE = 'Add to stockpile — ⌘/Ctrl-click to set amount + CPU';
 
 // Stockpile toggle cell for grid rows; shows ✓ when the resource is already stocked.
 function addCellHtml(id, name) {
   const inStock = typeof stkState !== 'undefined' && stkState.resourceIds.has(String(id));
   return `<td class="pin-cell add-cell ${inStock ? 'in-stock' : ''}" data-add="${id}"
-    data-name="${escapeHtml(name || '')}" title="${inStock ? IN_STOCK_TITLE : 'Add to stockpile'}">
+    data-name="${escapeHtml(name || '')}" title="${inStock ? IN_STOCK_TITLE : ADD_TITLE}">
     <i class="fa-solid ${inStock ? 'fa-check add-ok' : 'fa-plus'}"></i></td>`;
 }
 
@@ -171,7 +172,7 @@ function refreshAddIcons() {
   document.querySelectorAll('[data-add]').forEach((cell) => {
     const inStock = stkState.resourceIds.has(String(cell.dataset.add));
     cell.classList.toggle('in-stock', inStock);
-    cell.title = inStock ? IN_STOCK_TITLE : 'Add to stockpile';
+    cell.title = inStock ? IN_STOCK_TITLE : ADD_TITLE;
     const i = cell.querySelector('i');
     if (i) i.className = `fa-solid ${inStock ? 'fa-check add-ok' : 'fa-plus'}`;
   });
@@ -203,13 +204,27 @@ async function removeFromStockpileByResource(resourceId, name) {
   return res;
 }
 
-// Shared click handler for [data-add] cells: + adds, ✓ removes.
-async function handleAddCellClick(addCell) {
+// Shared click handler for [data-add] cells (event optional).
+//  ✓ in-stock  → removal, gated behind a confirming second click
+//  + add       → instant add, or ⌘/Ctrl-click opens the amount+CPU dialog
+async function handleAddCellClick(addCell, event) {
+  if (addCell.classList.contains('in-stock')) {
+    // Removal is destructive — arm on the first click, act on the second.
+    if (!confirmArm(addCell, 'Click again to remove from stockpile')) return;
+    addCell.classList.remove('confirm-del'); // stop the pulse now that it's confirmed
+    const icon = addCell.querySelector('i');
+    if (icon) icon.className = 'fa-solid fa-hourglass-half';
+    await removeFromStockpileByResource(addCell.dataset.add, addCell.dataset.name);
+    refreshAddIcons();
+    return;
+  }
+  if (event && (event.metaKey || event.ctrlKey)) {
+    openStockpileAddDialog(addCell.dataset.add, addCell.dataset.name, refreshAddIcons);
+    return;
+  }
   const icon = addCell.querySelector('i');
-  const inStock = addCell.classList.contains('in-stock');
-  icon.className = 'fa-solid fa-hourglass-half';
-  if (inStock) await removeFromStockpileByResource(addCell.dataset.add, addCell.dataset.name);
-  else await addToStockpile(addCell.dataset.add, addCell.dataset.name);
+  if (icon) icon.className = 'fa-solid fa-hourglass-half';
+  await addToStockpile(addCell.dataset.add, addCell.dataset.name);
   refreshAddIcons(); // settles the icon whatever happened
 }
 
@@ -284,27 +299,121 @@ async function handleWishCellClick(cell) {
 }
 
 // Add a resource to the stockpile (used by resources grid, schematic page, resource page).
-async function addToStockpile(resourceId, name) {
+// opts (optional): { stock, my_cpu } — initial amount / cost-per-unit applied right
+// after the add. Either may be omitted; both omitted = a plain add.
+async function addToStockpile(resourceId, name, opts) {
   // One-list rule: a wished resource gets PROMOTED instead of re-added.
+  let res = null;
+  let promoted = false;
   if (typeof wishState !== 'undefined' && wishState.resourceIds.has(String(resourceId))) {
     const idx = wishState.items.findIndex((i) => String(i.id) === String(resourceId));
-    if (idx >= 0) return promoteWishItem(idx);
+    if (idx >= 0) { res = await promoteWishItem(idx); promoted = true; }
   }
-  let res;
-  try { res = await api().add_to_stockpile(resourceId); }
-  catch (e) { res = { ok: false, error: String(e) }; }
-  if (res.ok) {
-    toast(`${name || 'Resource'} added to stockpile`);
-    if (typeof stkState !== 'undefined') {
-      stkState.resourceIds.add(String(resourceId)); // optimistic; sync below confirms
-      refreshAddIcons();
-      syncStockpile();
+  if (!promoted) {
+    try { res = await api().add_to_stockpile(resourceId); }
+    catch (e) { res = { ok: false, error: String(e) }; }
+    if (res.ok) {
+      toast(`${name || 'Resource'} added to stockpile`);
+      if (typeof stkState !== 'undefined') {
+        stkState.resourceIds.add(String(resourceId)); // optimistic; sync below confirms
+        refreshAddIcons();
+      }
+    } else {
+      toast(`Couldn't add ${name || 'resource'}: ${res.error || 'server error'}`, false);
+      checkAuthError(res.error);
+      return res;
     }
-  } else {
-    toast(`Couldn't add ${name || 'resource'}: ${res.error || 'server error'}`, false);
-    checkAuthError(res.error);
+  }
+  if (typeof stkState !== 'undefined' && res && res.ok) {
+    const hasInitial = opts && (opts.stock != null || opts.my_cpu !== undefined);
+    if (hasInitial) await applyStockpileInitial(resourceId, opts); // syncs, then sets values
+    else if (!promoted) syncStockpile(); // promote already synced
   }
   return res;
+}
+
+// After an add/promote, push the dialog's initial amount / CPU onto the fresh row.
+// Needs the server-assigned stockpile_id, so it syncs first, then updates.
+async function applyStockpileInitial(resourceId, opts) {
+  await syncStockpile();
+  const item = stkState.items.find((i) => String(i.id) === String(resourceId));
+  if (!item) return;
+  const stock = opts.stock != null ? opts.stock : null;
+  try {
+    // update_stockpile(sid, stock, my_cpu); my_cpu defaults server-side when omitted
+    const res = opts.my_cpu !== undefined
+      ? await api().update_stockpile(item.stockpile_id, stock, opts.my_cpu)
+      : await api().update_stockpile(item.stockpile_id, stock);
+    if (res && res.ok) {
+      if (stock != null) item.stock = stock;
+      if (opts.my_cpu !== undefined) item.my_cpu = opts.my_cpu;
+      if (typeof renderStockpile === 'function') renderStockpile();
+      const bits = [];
+      if (stock != null) bits.push(`amount ${fmtNum(stock)}`);
+      if (opts.my_cpu !== undefined) bits.push(`CPU ${opts.my_cpu}`);
+      if (bits.length) toast(`${item.name}: ${bits.join(', ')} set`);
+    }
+  } catch (_) { /* the add already succeeded — leave initial values unset */ }
+}
+
+// Shared "Add to Stockpile" dialog. Amount + CPU are optional; cancelling or
+// leaving both blank still stockpiles the resource (only the initial values differ).
+// onDone (optional) fires after the add resolves — used to refresh button state.
+function openStockpileAddDialog(resourceId, name, onDone) {
+  const modal = $('#stk-add-modal');
+  if (!modal) { addToStockpile(resourceId, name).then(() => onDone && onDone()); return; }
+  $('#stk-add-title').textContent = name || 'this resource';
+  const amountInput = $('#stk-add-amount');
+  const cpuInput = $('#stk-add-cpu');
+  amountInput.value = '';
+  cpuInput.value = '';
+  modal.hidden = false;
+  amountInput.focus();
+
+  let done = false;
+  // withValues=false (cancel/backdrop/Esc): add with no initial amount/CPU.
+  const commit = async (withValues) => {
+    if (done) return;
+    done = true;
+    cleanup();
+    modal.hidden = true;
+    let opts;
+    if (withValues) {
+      opts = {};
+      const rawAmt = amountInput.value.trim();
+      if (rawAmt !== '') {
+        const parsed = Math.round(parseAmount(rawAmt));
+        if (Number.isNaN(parsed)) toast(`Couldn't read "${rawAmt}" — try 300000, 300k, or 4.5m`, false);
+        else opts.stock = parsed;
+      }
+      const rawCpu = cpuInput.value.trim();
+      if (rawCpu !== '') {
+        const cpu = Number(rawCpu);
+        if (Number.isNaN(cpu) || cpu < 0) toast(`"${rawCpu}" isn't a cost — use a number like 2 or 4.5`, false);
+        else opts.my_cpu = cpu;
+      }
+    }
+    await addToStockpile(resourceId, name, opts);
+    if (onDone) onDone();
+  };
+
+  const onKey = (e) => {
+    if (e.key === 'Enter') commit(true);
+    else if (e.key === 'Escape') commit(false);
+  };
+  const onBackdrop = (e) => { if (e.target === modal) commit(false); };
+  const onSave = () => commit(true);
+  const onCancel = () => commit(false);
+  function cleanup() {
+    modal.removeEventListener('keydown', onKey);
+    modal.removeEventListener('click', onBackdrop);
+    $('#stk-add-confirm').removeEventListener('click', onSave);
+    $('#stk-add-cancel').removeEventListener('click', onCancel);
+  }
+  modal.addEventListener('keydown', onKey);
+  modal.addEventListener('click', onBackdrop);
+  $('#stk-add-confirm').addEventListener('click', onSave);
+  $('#stk-add-cancel').addEventListener('click', onCancel);
 }
 
 // WKWebView never renders native title="" tooltips — this replaces them all.

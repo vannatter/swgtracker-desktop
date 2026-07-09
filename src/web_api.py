@@ -964,18 +964,17 @@ class WebApi:
         except Exception as e:
             return _err(e)
 
-    def mail_history(self, limit=200, offset=0, category=""):
+    def mail_history(self, limit=200, offset=0, category="", search=""):
         """Uploaded-mail ledger, newest first (by in-game send time), paged and
-        optionally filtered to one category — the Mail page's table."""
+        optionally filtered by category and/or subject search — the Mail table."""
         try:
             category = str(category or "")
-            counts = self.local_db.mail_category_counts()
-            total = counts.get(category, 0) if category else self.local_db.mail_ledger_count()
+            search = str(search or "").strip()
             return _ok({
-                "rows": self.local_db.mail_history(int(limit), int(offset), category),
-                "total": total,
+                "rows": self.local_db.mail_history(int(limit), int(offset), category, search),
+                "total": self.local_db.mail_count(category, search),
                 "sales": self.local_db.mail_sales_count(),
-                "categories": counts,
+                "categories": self.local_db.mail_category_counts(),
             })
         except Exception as e:
             return _err(e)
@@ -1018,14 +1017,16 @@ class WebApi:
         except Exception as e:
             return _err(e)
 
-    def delete_mail_category(self, category):
-        """Bulk-delete every mail in a category, each via the full server + local
-        + file cleanup. Returns {deleted, failed, total}."""
+    def delete_mail_matching(self, category="", search=""):
+        """Bulk-delete every mail matching the current category + subject search,
+        each via the full server + local + file cleanup. Requires at least one
+        filter (never deletes the whole ledger). Returns {deleted, failed, total}."""
         try:
             category = str(category or "").strip()
-            if not category:
-                return _err("no category")
-            ids = self.local_db.mail_ids_by_category(category)
+            search = str(search or "").strip()
+            if not category and not search:
+                return _err("no filter — refusing to delete everything")
+            ids = self.local_db.mail_ids_filtered(category, search)
             deleted = failed = 0
             for mid in ids:
                 ok, _ = self._delete_one_mail(mid)

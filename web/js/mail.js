@@ -38,7 +38,7 @@ async function loadMail() {
   let salesTotal = 0;
   let cats = {};
   try {
-    const res = await api().mail_history(mmState.perPage, (mmState.page - 1) * mmState.perPage, mmState.category);
+    const res = await api().mail_history(mmState.perPage, (mmState.page - 1) * mmState.perPage, mmState.category, mmState.search);
     const d = res.ok && res.data;
     if (d) { rows = d.rows || []; total = safeInt(d.total); salesTotal = safeInt(d.sales); cats = d.categories || {}; }
   } catch (_) { /* table empty-state below */ }
@@ -66,21 +66,22 @@ async function loadMail() {
     + card(`fail ${state?.failed ? 'bad' : ''}`, 'fa-triangle-exclamation',
            state ? fmtNum(state.failed) : '—', 'Failed');
 
-  // Category filter chips (+ mass-delete when a category is selected)
+  // Category dropdown (with counts) + a mass-delete for the current filter.
+  // The search input is static markup, so polling never clobbers what you type.
   const totalAll = Object.values(cats).reduce((a, b) => a + b, 0);
-  const chip = (key, label, n) =>
-    `<button class="mm-chip${mmState.category === key ? ' on' : ''}" data-cat="${escapeHtml(key)}">`
-    + `${escapeHtml(label)}<span class="mm-chip-n">${fmtNum(n)}</span></button>`;
-  let chipsHtml = chip('', 'All', totalAll);
+  const opt = (key, label, n) =>
+    `<option value="${escapeHtml(key)}"${mmState.category === key ? ' selected' : ''}>`
+    + `${escapeHtml(label)}${n != null ? ` (${fmtNum(n)})` : ''}</option>`;
+  let opts = opt('', 'All categories', totalAll);
   for (const key of MM_CAT_ORDER) {
-    if (cats[key]) chipsHtml += chip(key, MM_CATS[key] || key, cats[key]);
+    if (cats[key]) opts += opt(key, MM_CATS[key] || key, cats[key]);
   }
-  if (mmState.category && cats[mmState.category]) {
-    chipsHtml += `<button class="mm-massdel" data-massdel="${escapeHtml(mmState.category)}">`
-      + `<i class="fa-solid fa-trash"></i> Delete all ${fmtNum(cats[mmState.category])} in `
-      + `“${escapeHtml(MM_CATS[mmState.category] || mmState.category)}”</button>`;
-  }
-  $('#mm-filters').innerHTML = chipsHtml;
+  $('#mm-category').innerHTML = opts;
+  // mass-delete appears whenever a filter (category or search) narrows the list
+  const filtered = mmState.category || mmState.search;
+  $('#mm-massdel-slot').innerHTML = (filtered && total)
+    ? `<button class="mm-massdel" data-massdel="1"><i class="fa-solid fa-trash"></i> Delete all ${fmtNum(total)} matching</button>`
+    : '';
 
   $('#mm-body').innerHTML = rows.map((r) => {
     // sale detail is "ITEM → BUYER — N credits"; the item is what you may
@@ -152,25 +153,33 @@ function initMail() {
       }
     } catch (err) { toast(String(err), false); }
   });
-  // Category chips + mass-delete
-  $('#mm-filters').addEventListener('click', async (e) => {
-    const cat = e.target.closest('[data-cat]');
-    if (cat) { mmState.category = cat.dataset.cat; mmState.page = 1; loadMail(); return; }
+  // Category dropdown + subject search + mass-delete for the current filter
+  $('#mm-category').addEventListener('change', () => {
+    mmState.category = $('#mm-category').value; mmState.page = 1; loadMail();
+  });
+  let mmSearchTimer = null;
+  $('#mm-search').addEventListener('input', () => {
+    clearTimeout(mmSearchTimer);
+    mmSearchTimer = setTimeout(() => {
+      mmState.search = $('#mm-search').value.trim(); mmState.page = 1; loadMail();
+    }, 300);
+  });
+  $('#mm-massdel-slot').addEventListener('click', async (e) => {
     const massdel = e.target.closest('[data-massdel]');
-    if (massdel) {
-      if (!confirmArm(massdel, 'Click again to delete ALL of these')) return;
-      massdel.disabled = true;
-      try {
-        const res = await api().delete_mail_category(massdel.dataset.massdel);
-        if (res.ok) {
-          const d = res.data || {};
-          toast(`Deleted ${fmtNum(d.deleted)} mail${d.deleted === 1 ? '' : 's'}`
-            + (d.failed ? `, ${d.failed} failed` : ''));
-          mmState.category = ''; mmState.page = 1;
-          loadMail();
-        } else { toast(res.error || 'Bulk delete failed', false); massdel.disabled = false; }
-      } catch (err) { toast(String(err), false); massdel.disabled = false; }
-    }
+    if (!massdel) return;
+    if (!confirmArm(massdel, 'Click again to delete ALL matching')) return;
+    massdel.disabled = true;
+    try {
+      const res = await api().delete_mail_matching(mmState.category, mmState.search);
+      if (res.ok) {
+        const d = res.data || {};
+        toast(`Deleted ${fmtNum(d.deleted)} mail${d.deleted === 1 ? '' : 's'}`
+          + (d.failed ? `, ${d.failed} failed` : ''));
+        mmState.category = ''; mmState.search = ''; mmState.page = 1;
+        $('#mm-search').value = '';
+        loadMail();
+      } else { toast(res.error || 'Bulk delete failed', false); massdel.disabled = false; }
+    } catch (err) { toast(String(err), false); massdel.disabled = false; }
   });
 
   $('#mm-body').addEventListener('click', async (e) => {

@@ -364,32 +364,47 @@ class LocalDB:
              parse_mail_sent_at(raw), mail_category(subject, kind)))
         self._conn.commit()
 
+    @staticmethod
+    def _mail_where(category: str, search: str) -> tuple[str, list]:
+        """Shared WHERE for category + subject/detail search across the mail views."""
+        clauses, params = [], []
+        if category:
+            clauses.append("category = ?")
+            params.append(str(category))
+        if search:
+            like = f"%{search}%"
+            clauses.append("(subject LIKE ? OR detail LIKE ?)")
+            params += [like, like]
+        return (" WHERE " + " AND ".join(clauses)) if clauses else "", params
+
     def mail_history(self, limit: int = 200, offset: int = 0,
-                     category: str = "") -> list[dict]:
+                     category: str = "", search: str = "") -> list[dict]:
         # raw stays out of the list payload (big bridge responses drop in WKWebView);
         # the viewer fetches one mail at a time via mail_raw(). Ordered by the
         # in-game send time (sent_at), falling back to upload time when unknown.
-        where, params = "", []
-        if category:
-            where = " WHERE category = ?"
-            params.append(str(category))
-        params += [int(limit), int(offset)]
+        where, params = self._mail_where(category, search)
         rows = self._conn.execute(
             "SELECT mail_id, subject, detail, kind, uploaded_at, sent_at, category,"
             " (COALESCE(raw, '') != '') AS has_raw"
             " FROM mail_ledger" + where +
             " ORDER BY COALESCE(NULLIF(sent_at, 0), uploaded_at) DESC, mail_id DESC"
-            " LIMIT ? OFFSET ?", params).fetchall()
+            " LIMIT ? OFFSET ?", params + [int(limit), int(offset)]).fetchall()
         return [dict(r) for r in rows]
+
+    def mail_count(self, category: str = "", search: str = "") -> int:
+        where, params = self._mail_where(category, search)
+        return self._conn.execute(
+            "SELECT COUNT(*) AS n FROM mail_ledger" + where, params).fetchone()["n"]
 
     def mail_category_counts(self) -> dict:
         rows = self._conn.execute(
             "SELECT category, COUNT(*) AS n FROM mail_ledger GROUP BY category").fetchall()
         return {(r["category"] or "other"): r["n"] for r in rows}
 
-    def mail_ids_by_category(self, category: str) -> list[str]:
+    def mail_ids_filtered(self, category: str = "", search: str = "") -> list[str]:
+        where, params = self._mail_where(category, search)
         rows = self._conn.execute(
-            "SELECT mail_id FROM mail_ledger WHERE category = ?", (str(category),)).fetchall()
+            "SELECT mail_id FROM mail_ledger" + where, params).fetchall()
         return [r["mail_id"] for r in rows]
 
     def mail_sales_count(self) -> int:

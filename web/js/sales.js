@@ -34,8 +34,10 @@ function updateSalesFilterNote() {
   const note = $('#sales-fnote');
   if (!q) { note.hidden = true; note.innerHTML = ''; return; }
   note.hidden = false;
-  note.innerHTML = `<i class="fa-solid fa-filter"></i> Totals filtered to “${escapeHtml(q)}”
-    <button type="button" id="sales-fclear" title="Clear filter"><i class="fa-solid fa-xmark"></i></button>`;
+  note.innerHTML = `<span class="res-pills-label">Totals filtered to</span>`
+    + `<span class="res-pill">${escapeHtml(q)}`
+    + `<button type="button" id="sales-fclear" class="res-pill-x" title="Clear filter"><i class="fa-solid fa-xmark"></i></button>`
+    + `</span>`;
 }
 
 function updateSalesCards(summaries) {

@@ -517,8 +517,10 @@ body.offline .app-body { height: calc(100vh - 76px); }
 /* stockpiled rows are signalled by the ✓ badge + amount on the name, no row tint */
 .lab-grid tr.lab-picked { background: var(--row-active); box-shadow: none; }
 .lab-rel-h { color: var(--q-good) !important; }
-.lab-rel { box-shadow: inset 0 -2px 0 rgba(126, 231, 135, .25); }
-.lab-dim { opacity: .32; }
+/* relevant data cells just keep their full-strength quality color; the yellow header
+   + grayed off-formula columns already signal which stats matter (no per-row underline) */
+/* off-formula columns: gray the text, keep the cell solid (opacity made headers translucent) */
+.lab-dim { color: var(--text-muted) !important; }
 .lab-live { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent-green); }
 .lab-stock { margin-left: 6px; font-size: 10px; font-weight: 700; color: var(--q-fair); white-space: nowrap; }
 .lab-mycpu { color: var(--q-fair) !important; font-weight: 700; }

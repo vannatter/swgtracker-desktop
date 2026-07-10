@@ -233,6 +233,7 @@ body.offline .app-body { height: calc(100vh - 76px); }
 /* dropdown-first head filters (wishlist pattern): filter leads the right group;
    everything after it flows on the flex gap (no second auto margin = no gaps) */
 .page-head .head-filter { margin-left: auto; width: auto; }
+#mm-category { max-width: none; width: 205px; }   /* fit "All categories (93)" / longer category labels */
 .page-head .head-filter ~ .head-search { margin-left: 0; }
 .page-head .head-filter ~ .btn-icon { margin-left: 0; }
 .page-head .btn-icon.head-filter { width: 34px; flex: 0 0 auto; } /* keep the square when right-aligned alone */
@@ -424,6 +425,7 @@ body.offline .app-body { height: calc(100vh - 76px); }
 .lab-schem-list { max-height: 240px; }
 .lab-boosts { display: flex; flex-direction: column; gap: 6px; }
 .lab-boost { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-primary); margin: 0; }
+.lab-boost-swatch { width: 4px; height: 16px; border-radius: 2px; flex: 0 0 auto; }   /* = the buff's meter-segment color */
 .lab-boost-val { display: flex; align-items: center; gap: 2px; color: var(--text-muted); font-size: 12px; margin-left: auto; }
 .lab-boost-val input { width: 58px; max-width: 58px; height: 26px; padding: 1px 6px; text-align: center; }
 .lab-threshold { margin-top: 8px; }
@@ -439,7 +441,11 @@ body.offline .app-body { height: calc(100vh - 76px); }
 .lab-meter { position: relative; flex: 1 1 auto; height: 8px; border-radius: 4px; background: var(--bg-primary); overflow: hidden; }
 .lab-meter-fill { display: block; height: 100%; background: var(--accent-dark); transition: width .15s; }
 .lab-meter-fill.ok { background: var(--accent-green); }
-.lab-meter-cap { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--q-fair); }
+/* each active buff rides on top of the resource fill as its own colored segment
+   (color set inline from LAB_BOOST_COLORS), so every buff's push is visible */
+.lab-meter-boost { position: absolute; top: 0; bottom: 0; transition: left .15s, width .15s;
+  border-left: 1px solid var(--bg-primary); }
+.lab-meter-cap { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--q-fair); z-index: 1; }
 .lab-line-q { flex: 0 0 52px; text-align: right; font-weight: 700; }
 .lab-caps { color: var(--accent-green); font-weight: 700; font-size: 12px; }
 .lab-nocap { color: var(--accent); font-size: 12px; white-space: nowrap; }
@@ -537,7 +543,7 @@ td.lab-dim { opacity: .45; }
 /* home tools live top-right in the page header, like every other page */
 .lab-home-tools { margin-left: auto; display: flex; align-items: center; gap: 8px; }
 .lab-home-tools .head-search { margin-left: 0; }   /* the group is already right-aligned */
-.page-head #lab-save { margin-left: auto; }   /* workbench: Save pins right when tools are hidden */
+.page-head #lab-back { margin-left: auto; }   /* workbench: Back + Save group on the right */
 .lab-home-count { font-size: 12px; color: var(--text-muted); flex: 0 0 auto; }
 .lab-pick-pill { cursor: pointer; }
 .lab-pick-pill:hover { background: var(--row-active); color: var(--text-hover); }

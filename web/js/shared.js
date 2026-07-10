@@ -4,6 +4,19 @@
 
 const api = () => window.pywebview.api;
 
+// Generic gateway to the swgtracker.com API. Prefer this for NEW endpoints so they
+// ride the auto-updating UI bundle and don't need a client/shell download. Falls back
+// cleanly if the running shell predates the gateway (older .app + freshly-pulled UI).
+//   apiFetch('POST', 'api/foo.php', { data: {...} })
+//   apiFetch('GET',  'api/foo.php', { params: {...} })
+function apiFetch(method, endpoint, opts = {}) {
+  const bridge = api();
+  if (!bridge || typeof bridge.api_request !== 'function') {
+    return Promise.resolve({ ok: false, error: 'This needs a newer app version — please update the desktop client.' });
+  }
+  return bridge.api_request(method, endpoint, opts.data ?? null, opts.params ?? null);
+}
+
 // Forward JS errors to the Python log — the webview has no visible console.
 window.addEventListener('error', (e) => {
   try { window.pywebview?.api?.log_js('error', `${e.message} @ ${e.filename}:${e.lineno}`); } catch (_) { /* ignore */ }
@@ -48,17 +61,26 @@ function parseFormulaWeights(label) {
 // dropped and the remaining weights renormalize — matching SWG experimentation,
 // where a missing attribute is excluded rather than counted as a zero. rec needs
 // stat + stat_max fields.
+// The GAME's experimentation math, verified against the server's resourceQuality
+// (160/160 rows exact on Mark III Droid Interface, all 4 lines):
+//  - raw stat values on the 0–1000 scale — NEVER relative to the class caps
+//    (cap-relative inflated low-cap classes and over-promised CAPS)
+//  - a stat the resource doesn't have (value 0) is dropped and its weight
+//    redistributes across the present stats
+//  - when EVERY weighted stat is present, the printed percents apply literally
+//    over 100 — so "CD=33 OQ=33 SR=33" really loses 1% (Σ=99), like in game
 function weightedQuality(rec, weightsList) {
   if (!rec || !weightsList || !weightsList.length) return null;
   const per = weightsList.map((w) => {
-    let q = 0, wsum = 0;
+    let q = 0, wsum = 0, missing = false;
     for (const [stat, pct] of Object.entries(w)) {
-      const cap = safeInt(rec[`${stat}_max`]);
-      if (!cap) continue; // resource class lacks this attribute — renormalize it away
-      q += (safeInt(rec[stat]) / cap) * 1000 * pct;
+      const v = safeInt(rec[stat]);
+      if (v <= 0) { missing = true; continue; }
+      q += v * pct;
       wsum += pct;
     }
-    return wsum ? q / wsum : 0;
+    if (!wsum) return 0;
+    return q / (missing ? wsum : 100);
   });
   return per.reduce((a, b) => a + b, 0) / per.length;
 }

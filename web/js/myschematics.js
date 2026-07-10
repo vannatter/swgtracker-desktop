@@ -124,19 +124,20 @@ function mysParseWeights(label) {
   return Object.keys(w).length ? w : null;
 }
 
-// Mirrors weightedQuality in shared.js: a stat the resource class can't have
-// (stat_max == 0) is dropped and the remaining weights renormalize.
+// Mirrors weightedQuality in shared.js (the game's math): raw 0–1000 stats, a
+// missing stat's (value 0) weight redistributes, all-present uses percents /100.
 function mysWeightedQuality(rec, weightsList) {
   if (!rec || !weightsList.length) return null;
   const per = weightsList.map((w) => {
-    let q = 0, wsum = 0;
+    let q = 0, wsum = 0, missing = false;
     for (const [stat, pct] of Object.entries(w)) {
-      const cap = safeInt(rec[`${stat}_max`]);
-      if (!cap) continue; // resource class lacks this attribute — renormalize it away
-      q += (safeInt(rec[stat]) / cap) * 1000 * pct;
+      const v = safeInt(rec[stat]);
+      if (v <= 0) { missing = true; continue; }
+      q += v * pct;
       wsum += pct;
     }
-    return wsum ? q / wsum : 0;
+    if (!wsum) return 0;
+    return q / (missing ? wsum : 100);
   });
   return per.reduce((a, b) => a + b, 0) / per.length;
 }

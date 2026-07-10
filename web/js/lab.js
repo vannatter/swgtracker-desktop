@@ -24,6 +24,9 @@ const labState = {
 
 const labClamp01k = (v) => Math.max(0, Math.min(1000, v));
 
+// per-buff meter-segment colors (pink = inspiration, cyan = bracelet)
+const LAB_BOOST_COLORS = { ent: '#d36aa7', bracelet: '#3fb6c4' };
+
 // Tiny markdown → HTML for notes (escaped first, so it's safe): #/##/### headings,
 // **bold**, *italic*, `code`, - and 1. lists, blank-line paragraphs.
 function labMdToHtml(md) {
@@ -146,7 +149,8 @@ function labBench() {
       if (!complete || !units || !f.weights) return { formula: f, composite: null, capped: false };
       const raw = picked.reduce((sum, s) => sum + s.units * labQ(s.pick, f.weights), 0) / units;
       const composite = labClamp01k(raw + boost);
-      return { formula: f, composite, capped: composite >= labState.threshold };
+      // base = resources alone; the meter shows the boost's contribution on top of it
+      return { formula: f, composite, base: labClamp01k(raw), boost, capped: composite >= labState.threshold };
     });
   const cost = picked.reduce((sum, s) => sum + s.units * labEcpu(s.pick), 0);
   return { byFormula, complete, picked: picked.length, cost };
@@ -190,18 +194,30 @@ function labRenderBench() {
   }
   if (!complete) { labState.wasComplete = false; labState.calculating = false; }
 
-  const lines = byFormula.map(({ formula, composite, capped }) => {
-    const pct = composite == null ? 0 : (composite / 1000) * 100;
+  const lines = byFormula.map(({ formula, composite, base, boost, capped }) => {
+    const basePct = base == null ? 0 : (base / 1000) * 100;
     const verdict = composite == null
       ? `<span class="stat_off">${picked}/${labState.slots.length} slots filled</span>`
       : capped
         ? `<span class="lab-caps">CAPS</span>`
         : `<span class="lab-nocap">misses by ${(labState.threshold - composite).toFixed(1)}</span>`;
+    // stacked meter: resources alone, then one colored segment PER active buff
+    // (pink = inspiration, blue = bracelet) so each buff's push is visible
+    let cursor = base ?? 0;
+    const boostSegs = composite == null ? '' : labState.boosts.filter((b) => b.on).map((b) => {
+      const start = cursor;
+      const end = Math.min(1000, start + safeInt(b.value));
+      cursor = end;
+      if (end <= start) return '';
+      return `<span class="lab-meter-boost" style="left:${(start / 10).toFixed(1)}%;width:${((end - start) / 10).toFixed(1)}%;background:${LAB_BOOST_COLORS[b.key] || 'var(--accent)'}"
+        title="${escapeHtml(b.label)} +${b.value} — resources ${base.toFixed(1)}, total ${composite.toFixed(1)}"></span>`;
+    }).join('');
     return `<div class="lab-line">
       <span class="lab-line-name" title="${escapeHtml(formula.formulaDescription || '')}">${escapeHtml(labFormulaShort(formula))}</span>
-      <div class="lab-meter"><span class="lab-meter-fill ${capped ? 'ok' : ''}" style="width:${pct.toFixed(1)}%"></span>
+      <div class="lab-meter"><span class="lab-meter-fill ${capped ? 'ok' : ''}" style="width:${basePct.toFixed(1)}%"></span>${boostSegs}
         <span class="lab-meter-cap" style="left:${(labState.threshold / 10).toFixed(1)}%"></span></div>
-      <span class="lab-line-q ${composite != null ? qualityClass(composite / 10) : ''}">${composite == null ? '—' : composite.toFixed(1)}</span>
+      <span class="lab-line-q ${composite != null ? qualityClass(composite / 10) : ''}"
+        ${composite != null && boost > 0 ? `title="resources ${base.toFixed(1)} + buffs ${boost}"` : ''}>${composite == null ? '—' : composite.toFixed(1)}</span>
       ${verdict}
     </div>`;
   }).join('');
@@ -733,9 +749,12 @@ async function labLoadExperiment(e) {
 // ---- boosts / settings ----
 
 function labRenderBoosts() {
+  // color strip on each row = that buff's meter-segment color (explicit legend)
   $('#lab-boosts').innerHTML = labState.boosts.map((b, i) => `
     <label class="lab-boost">
-      <input type="checkbox" class="form-check-input" data-boost="${i}" ${b.on ? 'checked' : ''}>
+      <span class="lab-boost-swatch" style="background:${LAB_BOOST_COLORS[b.key] || 'var(--accent)'}"></span>
+      <input type="checkbox" class="form-check-input" data-boost="${i}" ${b.on ? 'checked' : ''}
+        style="accent-color:${LAB_BOOST_COLORS[b.key] || 'var(--accent)'}">
       <span>${escapeHtml(b.label)}</span>
       <span class="lab-boost-val">+<input type="number" class="form-control filter-input" data-boostval="${i}"
         value="${b.value}" min="0" max="200"></span>

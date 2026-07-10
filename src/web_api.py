@@ -182,6 +182,24 @@ class WebApi:
             logger.error("get_pulse failed: %s", e, exc_info=True)
             return _err(e)
 
+    # --- Generic API gateway ---------------------------------------------------
+    # Passthrough to the swgtracker.com API so NEW endpoints ship in the auto-updating
+    # UI bundle without a client/shell download. The host is fixed to swgtracker.com
+    # (api_client BASE_URL) — only the api/*.php path is caller-supplied, and the
+    # X-API-Key auth is applied by the client as usual. UI calls this via apiFetch().
+    def api_request(self, method, endpoint, data=None, params=None):
+        try:
+            ep = str(endpoint or "").lstrip("/")
+            if not ep or "://" in ep or ep.startswith("/"):
+                return _err("invalid endpoint")               # never let the caller change host
+            m = str(method or "GET").upper()
+            if m not in ("GET", "POST", "PUT", "DELETE"):
+                return _err("invalid method")
+            return _wrap(*self.api._request(m, ep, data=data, params=params))
+        except Exception as e:
+            logger.error("api_request %s %s failed: %s", method, endpoint, e)
+            return _err(e)
+
     # --- Resources ---
 
     def search_resources(self, params=None):

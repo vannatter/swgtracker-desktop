@@ -130,6 +130,11 @@ function showPage(key, opts = {}) {
     loadedPages.add(key);
     PAGE_LOADERS[key]();
   }
+  // Clicking the Laboratory nav always returns to the experiments list, even if you
+  // left it mid-workbench. (Back/forward — opts.internal — keeps its place.)
+  if (key === 'lab' && !opts.internal && loadedPages.has('lab') && typeof labShowView === 'function') {
+    labShowView('home');
+  }
 }
 
 // ---- App updates ----

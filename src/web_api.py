@@ -1113,9 +1113,10 @@ class WebApi:
             return _err(e)
 
     def dev_make_test_mail(self):
-        """Dev tool: drop TWO fake .mail files into the first configured folder —
-        a vendor sale AND a plain 'misc' letter that lands in the Other category —
-        so the pipeline and the per-category mass-delete both have data to exercise.
+        """Dev tool: drop THREE fake .mail files into the first configured folder —
+        a vendor sale, a plain 'misc' letter (Other category), and a vendor purchase
+        (Purchases category + the purchases table via the server cron) — so the
+        pipeline, per-category mass-delete, and My Purchases all have data.
         Ids are test-prefixed and items [TEST]-marked so everything is easy to purge
         later — locally and in the server tables."""
         try:
@@ -1175,9 +1176,21 @@ class WebApi:
             _write(misc_id, random.choice(["Ariana Morassi", "Vyrul Thane", "Nitoetao", "Remiella Witka"]),
                    misc_subject, "[TEST] Just a miscellaneous in-game letter, here to test the Other category.")
 
+            # 3) Purchase — subject "Vendor Item Purchased"; the body matches the
+            # server cron's parser exactly ( of "ITEM" from "SELLER" for N credits)
+            # so it flows into the purchases table and onto the My Purchases page.
+            pur_id = f"test{base}p"
+            pur_item = "[TEST] " + random.choice(
+                ["Bantha Steak", "Muon Gold Injector", "Vibro Knuckler 200/450", "Synthsteak Display Case"])
+            pur_seller = random.choice(["Thake Darkcloud", "Ariana Morassi", "Nitoetao", "Vyrul Thane"])
+            pur_credits = random.randrange(250, 25001, 25)
+            _write(pur_id, "SWG.Restoration.auctioner", "Vendor Item Purchased",
+                   f'You have purchased 1 of "{pur_item}" from "{pur_seller}" for {pur_credits} credits.')
+
             return _ok({
                 "item": item, "credits": credits, "misc": misc_subject,
-                "files": [f"{sale_id}.mail", f"{misc_id}.mail"],
+                "purchase": pur_item,
+                "files": [f"{sale_id}.mail", f"{misc_id}.mail", f"{pur_id}.mail"],
             })
         except Exception as e:
             return _err(e)

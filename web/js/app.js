@@ -10,6 +10,7 @@ const PAGE_LOADERS = {
   stockpile: () => syncStockpile(),
   wishlist: () => syncWishlist(),
   sales: () => loadSales(),
+  purchases: () => loadPurchases(),
   inventory: () => loadInventory(),
   alerts: () => loadAlerts(),
   lab: () => loadLab(),
@@ -553,6 +554,7 @@ async function boot() {
   initWishlist();
   initMySchematics();
   initSales();
+  initPurchases();
   initInventory();
   initSettings();
   initAlerts();

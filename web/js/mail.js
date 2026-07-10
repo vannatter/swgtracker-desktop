@@ -6,6 +6,7 @@ const mmState = { pollTimer: null, page: 1, perPage: 50, category: '' };
 
 const MM_KIND = {
   sale: '<span class="mm-kind mm-sale"><i class="fa-solid fa-tags"></i> sale</span>',
+  purchase: '<span class="mm-kind mm-purchase"><i class="fa-solid fa-cart-shopping"></i> purchase</span>',
   mail: '<span class="mm-kind"><i class="fa-solid fa-envelope"></i> mail</span>',
   error: '<span class="mm-kind mm-err"><i class="fa-solid fa-triangle-exclamation"></i> error</span>',
 };
@@ -13,13 +14,14 @@ const MM_KIND = {
 // Category labels + display order (keys come from local_db.mail_category).
 const MM_CATS = {
   sale: 'Sales',
+  purchase: 'Purchases',
   factory: 'Factory',
   'factory-ingredients': 'Factory: no ingredients',
   structure: 'Structure',
   guild: 'Guild',
   other: 'Other',
 };
-const MM_CAT_ORDER = ['sale', 'factory', 'factory-ingredients', 'structure', 'guild', 'other'];
+const MM_CAT_ORDER = ['sale', 'purchase', 'factory', 'factory-ingredients', 'structure', 'guild', 'other'];
 
 async function loadMail() {
   let state = null;
@@ -146,7 +148,7 @@ function initMail() {
     try {
       const res = await api().dev_make_test_mail();
       if (res.ok) {
-        toast(`Dropped 2 test mails: a sale (${res.data.item}) + a misc "${res.data.misc}" — monitor picks them up within ~5s`);
+        toast(`Dropped 3 test mails: sale (${res.data.item}), purchase (${res.data.purchase}), misc "${res.data.misc}" — monitor picks them up within ~5s`);
         setTimeout(loadMail, 7000); // give the sweep + upload a beat, then show it
       } else {
         toast(res.error || 'Failed to create test mail', false);

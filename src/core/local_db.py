@@ -36,6 +36,8 @@ def mail_category(subject: str, kind: str = "mail") -> str:
     and bulk-delete by type. Pattern-based; unknowns fall to 'other'."""
     if kind == "sale":
         return "sale"
+    if kind == "purchase":
+        return "purchase"
     s = (subject or "").lower()
     if "out of ingredient" in s:
         return "factory-ingredients"
@@ -45,6 +47,8 @@ def mail_category(subject: str, kind: str = "mail") -> str:
         return "structure"
     if "guild" in s:
         return "guild"
+    if "purchased" in s:  # "Vendor Item Purchased" / "Instant Sale Item Purchased"
+        return "purchase"
     if "vendor sale" in s or "sold" in s or "auction" in s:
         return "sale"
     return "other"
@@ -138,16 +142,20 @@ class LocalDB:
 
         # One-time back-fill of sent_at (from raw's TIMESTAMP line) + category
         # (from subject) for mails imported before these columns existed.
-        MAIL_META_VER = "1"
+        # v3: 'purchase' category + upgrade old purchase rows' kind from 'mail'.
+        MAIL_META_VER = "3"
         row = self._conn.execute(
             "SELECT value FROM sync_meta WHERE key = 'mail_meta_ver'").fetchone()
         if (row["value"] if row else "") != MAIL_META_VER:
             for r in self._conn.execute(
                     "SELECT mail_id, subject, kind, raw FROM mail_ledger").fetchall():
+                kind = r["kind"]
+                if kind == "mail" and "purchased" in (r["subject"] or "").lower():
+                    kind = "purchase"
                 self._conn.execute(
-                    "UPDATE mail_ledger SET sent_at = ?, category = ? WHERE mail_id = ?",
-                    (parse_mail_sent_at(r["raw"]), mail_category(r["subject"], r["kind"]),
-                     r["mail_id"]))
+                    "UPDATE mail_ledger SET sent_at = ?, category = ?, kind = ? WHERE mail_id = ?",
+                    (parse_mail_sent_at(r["raw"]), mail_category(r["subject"], kind),
+                     kind, r["mail_id"]))
             self._conn.execute(
                 "INSERT OR REPLACE INTO sync_meta (key, value) VALUES ('mail_meta_ver', ?)",
                 (MAIL_META_VER,))

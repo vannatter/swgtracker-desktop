@@ -22,6 +22,7 @@ IMPORT_URL = "https://swgtracker.com/import_mailcontent.php"
 SCAN_INTERVAL = 5  # seconds between folder sweeps
 FAIL_RETRY_SECS = 300  # don't re-attempt a failing file every sweep
 SALE_SUBJECT = "Vendor Sale Complete"
+PURCHASE_SUBJECT = "Vendor Item Purchased"
 
 
 class MailMonitor:
@@ -163,7 +164,8 @@ class MailMonitor:
             return
         self._fail_at.pop(mail_id, None)
 
-        kind = "sale" if subject == SALE_SUBJECT else "mail"
+        kind = "sale" if subject == SALE_SUBJECT else (
+            "purchase" if subject == PURCHASE_SUBJECT else "mail")
         detail = ""
         if kind == "sale":
             # "Vendor: X has sold ITEM to BUYER for N credits."
@@ -179,6 +181,17 @@ class MailMonitor:
             except (IndexError, ValueError):
                 if not duplicate:
                     self._sweep_sales.append(("New sale", ""))
+        elif kind == "purchase":
+            # 'You have purchased N of "ITEM" from "SELLER" for N credits.'
+            body = content.split("\n", 4)[-1]
+            try:
+                after = body.split(' of "', 1)[1]
+                item, rest = after.split('" from "', 1)
+                seller = rest.split('" for ', 1)[0]
+                credits = rest.split('" for ', 1)[1].split(" credits", 1)[0]
+                detail = f"{item} ← {seller} — {credits} credits"
+            except (IndexError, ValueError):
+                pass  # unparsed purchase still ledgers with its subject
         self.db.mail_ledger_add(mail_id, subject, detail, kind, raw=content)
         if duplicate:
             self._event(kind, f.name, f"already on server — {detail or subject}")

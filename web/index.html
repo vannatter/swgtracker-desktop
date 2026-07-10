@@ -36,6 +36,7 @@
         <li class="nav-item" data-page="stockpile"><i class="fa-solid fa-cubes"></i> My Stockpile</li>
         <li class="nav-item" data-page="wishlist"><i class="fa-solid fa-heart"></i> My Wishlist</li>
         <li class="nav-item" data-page="sales"><i class="fa-solid fa-tags"></i> My Sales</li>
+        <li class="nav-item" data-page="purchases"><i class="fa-solid fa-cart-shopping"></i> My Purchases</li>
         <li class="nav-item" data-page="inventory"><i class="fa-solid fa-warehouse"></i> My Inventory</li>
         <li class="nav-item" data-page="alerts"><i class="fa-solid fa-bell"></i> Spawn Alerts</li>
         <li class="nav-item" data-page="monitor"><i class="fa-solid fa-envelope"></i> Mail</li>
@@ -397,6 +398,40 @@
         </div>
       </section>
 
+      <!-- Purchases page -->
+      <section id="page-purchases" class="page">
+        <div class="page-head">
+          <h1>My Purchases</h1>
+          <i class="fa-solid fa-circle-info info-tip"
+             title="Everything you've bought, parsed from your uploaded mails. Click an item or seller to filter."></i>
+          <span class="head-search sales-search-wrap">
+            <input id="pur-search" type="text" class="form-control filter-input" placeholder="Search item or seller...">
+            <button id="pur-search-clear" type="button" title="Clear filter" hidden><i class="fa-solid fa-xmark"></i></button>
+          </span>
+          <button class="btn btn-icon" data-refresh="purchases" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
+        </div>
+
+        <div id="pur-fnote" class="sales-fnote" hidden></div>
+        <div class="summary-cards" id="pur-cards"></div>
+
+        <div class="table-wrap">
+          <table class="data-grid" id="pur-grid">
+            <thead><tr id="pur-head"></tr></thead>
+            <tbody id="pur-body"></tbody>
+          </table>
+          <div id="pur-loading" class="grid-loading" hidden><span class="spinner"></span> Loading…</div>
+          <div id="pur-empty" class="grid-empty" hidden></div>
+        </div>
+
+        <div class="pager">
+          <span id="pur-status" class="pager-status"></span>
+          <div class="pager-nav">
+            <button id="pur-prev" class="btn btn-sm btn-outline-secondary" disabled>&lsaquo; Prev</button>
+            <button id="pur-next" class="btn btn-sm btn-outline-secondary" disabled>Next &rsaquo;</button>
+          </div>
+        </div>
+      </section>
+
       <!-- Inventory page -->
       <section id="page-inventory" class="page">
         <div class="page-head">
@@ -442,7 +477,7 @@
           <select id="mm-category" class="form-select filter-select head-filter"></select>
           <input id="mm-search" type="text" class="form-control filter-input head-search" placeholder="Search subject...">
           <button class="btn btn-icon" data-refresh="monitor" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
-          <button id="mm-mktest" class="btn btn-sm btn-outline-secondary dev-only" title="Drop two fake .mail files (a vendor sale + a misc 'Other' letter) into your first mail folder — the monitor uploads them like the real thing, so you can test per-category mass-delete"><i class="fa-solid fa-vial"></i> Test mails</button>
+          <button id="mm-mktest" class="btn btn-sm btn-outline-secondary dev-only" title="Drop three fake .mail files (vendor sale, vendor purchase, misc 'Other' letter) into your first mail folder — the monitor uploads them like the real thing, exercising Sales, Purchases, and per-category mass-delete"><i class="fa-solid fa-vial"></i> Test mails</button>
         </div>
 
         <div class="mm-cards" id="mm-cards"></div>
@@ -911,6 +946,7 @@
   <script src="js/myschematics.js"></script>
   <script src="js/inventory.js"></script>
   <script src="js/sales.js"></script>
+  <script src="js/purchases.js"></script>
   <script src="js/settings.js"></script>
   <script src="js/alerts.js"></script>\n  <script src="js/lab.js"></script>
   <script src="js/mail.js"></script>

@@ -124,22 +124,12 @@ function mysParseWeights(label) {
   return Object.keys(w).length ? w : null;
 }
 
-// Mirrors weightedQuality in shared.js (the game's math): raw 0–1000 stats, a
-// missing stat's (value 0) weight redistributes, all-present uses percents /100.
-function mysWeightedQuality(rec, weightsList) {
+// The game's math (see weightedQuality in shared.js): stats normalize against
+// the INGREDIENT's required class caps, a missing stat's weight redistributes,
+// all-present uses the printed percents /100.
+function mysWeightedQuality(rec, weightsList, caps = null) {
   if (!rec || !weightsList.length) return null;
-  const per = weightsList.map((w) => {
-    let q = 0, wsum = 0, missing = false;
-    for (const [stat, pct] of Object.entries(w)) {
-      const v = safeInt(rec[stat]);
-      if (v <= 0) { missing = true; continue; }
-      q += v * pct;
-      wsum += pct;
-    }
-    if (!wsum) return 0;
-    return q / (missing ? wsum : 100);
-  });
-  return per.reduce((a, b) => a + b, 0) / per.length;
+  return weightedQuality(rec, weightsList, caps);
 }
 
 // formulas: the entry's CSV of formula ids, so the server ranks Best Known by the
@@ -206,7 +196,7 @@ async function analyzeMySchematic(s) {
         (r.resource && String(x.resourceId) === String(r.resource.id)) ||
         x.resourceName === r.resource_name);
       if (hit) assignedQ = Number(hit.resourceQuality) || 0;
-      else assignedQ = mysWeightedQuality(await mysGetResource(r.resource_name), weightsList);
+      else assignedQ = mysWeightedQuality(await mysGetResource(r.resource_name), weightsList, classCaps(r.resource_type));
     }
 
     // dedup spawn candidates by id, best quality first (for the Using editor)

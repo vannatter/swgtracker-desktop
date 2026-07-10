@@ -113,15 +113,21 @@ function labMyStock(r) {
 
 // ---- math ----
 
-function labQ(res, weights) {
-  const q = weightedQuality(res, [weights]);
+// stats normalize against the SLOT's required class caps (the game's math) —
+// pass the slot so e.g. SR 475 in a Beyrllius Copper slot (cap 483) rates ~983
+function labSlotCaps(slot) {
+  return typeof classCaps === 'function' ? classCaps(slot && slot.code) : null;
+}
+
+function labQ(res, weights, slot = null) {
+  const q = weightedQuality(res, [weights], labSlotCaps(slot));
   return q == null ? 0 : q;
 }
 
-function labAvgQ(res) {
+function labAvgQ(res, slot = null) {
   const ws = labCheckedWeights();
   if (!ws.length) return 0;
-  return ws.reduce((sum, w) => sum + labQ(res, w), 0) / ws.length;
+  return ws.reduce((sum, w) => sum + labQ(res, w, slot), 0) / ws.length;
 }
 
 function labCheckedWeights() {
@@ -147,7 +153,7 @@ function labBench() {
     .map((f) => {
       // no verdict until EVERY slot is filled — a partial average overpromises
       if (!complete || !units || !f.weights) return { formula: f, composite: null, capped: false };
-      const raw = picked.reduce((sum, s) => sum + s.units * labQ(s.pick, f.weights), 0) / units;
+      const raw = picked.reduce((sum, s) => sum + s.units * labQ(s.pick, f.weights, s), 0) / units;
       const composite = labClamp01k(raw + boost);
       // base = resources alone; the meter shows the boost's contribution on top of it
       return { formula: f, composite, base: labClamp01k(raw), boost, capped: composite >= labState.threshold };
@@ -270,7 +276,7 @@ function labStatCellHtml(res, stat, relevant) {
 }
 
 function labSlotVisibleRows(slot) {
-  const rated = slot.pool.map((r) => ({ r, q: labAvgQ(r) }));
+  const rated = slot.pool.map((r) => ({ r, q: labAvgQ(r, slot) }));
   const query = (slot.query || '').trim().toLowerCase();
   if (query) {
     // search the FULL class pool — this is how you bench a deliberately shitty resource
@@ -335,7 +341,7 @@ function labRenderSlots() {
         <span class="mys-type">${escapeHtml(slot.label)} \u00b7 ${slot.units} units</span>
         <span class="lab-slot-pick">${(() => {
           if (!slot.pick) return '<span class="stat_off">no pick</span>';
-          const q = labAvgQ(slot.pick);
+          const q = labAvgQ(slot.pick, slot);
           const short = labState.threshold - q;
           const drag = short > 0
             ? `<span class="lab-drag" title="This pick scores below the cap \u2014 it drags the average down by ${short.toFixed(0)} across ${slot.units} units">\u25bc ${short.toFixed(0)}</span>`
@@ -349,7 +355,7 @@ function labRenderSlots() {
           ${(() => {
             const stocked = slot.pool
               .filter((r) => stkState.resourceIds.has(String(r.id)))
-              .map((r) => ({ r, q: labAvgQ(r) }))
+              .map((r) => ({ r, q: labAvgQ(r, slot) }))
               .sort((a, b) => b.q - a.q);
             return `<option value="">My stockpile (${stocked.length})\u2026</option>` + stocked.map((x) =>
               `<option value="${x.r.id}" ${slot.pick && String(slot.pick.id) === String(x.r.id) ? 'selected' : ''}>${escapeHtml(x.r.name)} \u2014 ${x.q.toFixed(1)}</option>`).join('');
@@ -420,7 +426,7 @@ function labAutoPick(mode) {
       const live = slot.pool.filter((r) => r.status === 1);
       // nothing of this class in spawn = nothing to buy at the vendor — leave it open
       if (!live.length) { empty++; slot.pick = null; slot.collapsed = false; continue; }
-      slot.pick = live.reduce((best, r) => (!best || labAvgQ(r) > labAvgQ(best) ? r : best), null);
+      slot.pick = live.reduce((best, r) => (!best || labAvgQ(r, slot) > labAvgQ(best, slot) ? r : best), null);
       slot.collapsed = true;
     }
     if (empty) toast(`${empty} slot${empty > 1 ? 's have' : ' has'} nothing in spawn right now`, false);
@@ -433,7 +439,7 @@ function labAutoPick(mode) {
     for (const slot of labState.slots) {
       const stocked = slot.pool.filter((r) => stkState.resourceIds.has(String(r.id)));
       if (!stocked.length) { empty++; slot.pick = null; slot.collapsed = false; continue; }
-      slot.pick = stocked.reduce((best, r) => (!best || labAvgQ(r) > labAvgQ(best) ? r : best), null);
+      slot.pick = stocked.reduce((best, r) => (!best || labAvgQ(r, slot) > labAvgQ(best, slot) ? r : best), null);
       slot.collapsed = true;
     }
     const next = labState.slots.find((s) => !s.pick);
@@ -452,13 +458,13 @@ function labAutoPick(mode) {
     const source = stockOnly
       ? slot.pool.filter((r) => stkState.resourceIds.has(String(r.id)))
       : slot.pool;
-    const rated = source.map((r) => ({ r, q: labAvgQ(r) })).sort((a, b) => b.q - a.q);
+    const rated = source.map((r) => ({ r, q: labAvgQ(r, slot) })).sort((a, b) => b.q - a.q);
     return rated.slice(0, 60).concat(
       [...rated].sort((a, b) => cost(a.r) - cost(b.r)).slice(0, 20));
   });
   labState.slots.forEach((slot, i) => {
     slot.pick = cands[i].reduce((best, x) =>
-      (!best || cost(x.r) < cost(best) || (cost(x.r) === cost(best) && labAvgQ(x.r) > labAvgQ(best)) ? x.r : best), null);
+      (!best || cost(x.r) < cost(best) || (cost(x.r) === cost(best) && labAvgQ(x.r, slot) > labAvgQ(best, slot)) ? x.r : best), null);
   });
   if (stockOnly && labState.slots.some((s) => !s.pick)) {
     const n = labState.slots.filter((s) => !s.pick).length;

@@ -62,25 +62,30 @@ function parseFormulaWeights(label) {
 // where a missing attribute is excluded rather than counted as a zero. rec needs
 // stat + stat_max fields.
 // The GAME's experimentation math, verified against the server's resourceQuality
-// (160/160 rows exact on Mark III Droid Interface, all 4 lines):
-//  - raw stat values on the 0–1000 scale — NEVER relative to the class caps
-//    (cap-relative inflated low-cap classes and over-promised CAPS)
-//  - a stat the resource doesn't have (value 0) is dropped and its weight
-//    redistributes across the present stats
+// (2919/2950 rows exact across 40 schematics; the rest are one server-side
+// anomaly where even the game reports >1000):
+//  - each stat is relative to the SCHEMATIC SLOT's required class cap (`caps`,
+//    from CLASS_CAPS by slot class code — e.g. Beyrllius Copper caps SR at 483,
+//    so SR 475 ≈ 983). NOT the resource's own subclass caps (the old bug that
+//    inflated low-cap resources), and not raw /1000 unless the slot class caps
+//    at 1000 (most parent classes do). caps == null falls back to raw.
+//  - a stat the resource doesn't have (value 0, or slot cap 0) is dropped and
+//    its weight redistributes across the present stats
 //  - when EVERY weighted stat is present, the printed percents apply literally
 //    over 100 — so "CD=33 OQ=33 SR=33" really loses 1% (Σ=99), like in game
-function weightedQuality(rec, weightsList) {
+function weightedQuality(rec, weightsList, caps = null) {
   if (!rec || !weightsList || !weightsList.length) return null;
   const per = weightsList.map((w) => {
     let q = 0, wsum = 0, missing = false;
     for (const [stat, pct] of Object.entries(w)) {
       const v = safeInt(rec[stat]);
-      if (v <= 0) { missing = true; continue; }
-      q += v * pct;
+      const cap = caps ? safeInt(caps[stat]) : 1000;
+      if (v <= 0 || cap <= 0) { missing = true; continue; }
+      q += (v / cap) * 1000 * pct;
       wsum += pct;
     }
     if (!wsum) return 0;
-    return q / (missing ? wsum : 100);
+    return Math.min(1000, q / (missing ? wsum : 100));
   });
   return per.reduce((a, b) => a + b, 0) / per.length;
 }

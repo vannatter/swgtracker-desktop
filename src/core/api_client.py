@@ -259,6 +259,41 @@ class SWGTrackerAPI:
         """DELETE /api/stockpile.php - Remove from stockpile."""
         return self._request('DELETE', 'api/stockpile.php', data={"stockpile_id": stockpile_id})
 
+    def update_stockpile_notes(self, stockpile_id: int, notes) -> tuple[bool, dict | str]:
+        """PUT /api/stockpile.php - Set/clear a stockpile row's free-text notes."""
+        return self._request('PUT', 'api/stockpile.php',
+                             data={"stockpile_id": int(stockpile_id), "notes": ("" if notes is None else str(notes))})
+
+    # --- Stockpile buckets (folders) — server-persisted so they sync with the website ---
+
+    def get_stockpile_buckets(self) -> tuple[bool, dict | str]:
+        """GET /api/stockpile_buckets.php - The user's stockpile folders + item counts."""
+        return self._request('GET', 'api/stockpile_buckets.php')
+
+    def create_stockpile_bucket(self, name: str) -> tuple[bool, dict | str]:
+        """POST /api/stockpile_buckets.php - Create a bucket."""
+        return self._request('POST', 'api/stockpile_buckets.php', data={"name": name})
+
+    def update_stockpile_bucket(self, bucket_id: int, name=None, sort_order=None) -> tuple[bool, dict | str]:
+        """PUT /api/stockpile_buckets.php - Rename and/or reorder a bucket."""
+        data = {"id": int(bucket_id)}
+        if name is not None:
+            data["name"] = name
+        if sort_order is not None:
+            data["sort_order"] = int(sort_order)
+        return self._request('PUT', 'api/stockpile_buckets.php', data=data)
+
+    def delete_stockpile_bucket(self, bucket_id: int) -> tuple[bool, dict | str]:
+        """DELETE /api/stockpile_buckets.php - Delete a bucket (its items fall back to Unfiled)."""
+        return self._request('DELETE', 'api/stockpile_buckets.php', data={"id": int(bucket_id)})
+
+    def assign_stockpile_bucket(self, stockpile_ids, bucket_id=None) -> tuple[bool, dict | str]:
+        """PUT /api/stockpile.php?action=assign - Bulk-assign stockpile rows to a bucket
+        (bucket_id None = Unfile). One request however many rows are selected."""
+        ids = [int(x) for x in (stockpile_ids or [])]
+        data = {"stockpile_ids": ids, "bucket_id": (int(bucket_id) if bucket_id is not None else None)}
+        return self._request('PUT', 'api/stockpile.php?action=assign', data=data)
+
     # --- Wishlist (requires auth; same table as stockpile, status >= 5) ---
 
     def get_wishlist(self, search: str = "", page: int = 1, perpage: int = 100,
@@ -439,6 +474,11 @@ class SWGTrackerAPI:
         """DELETE /api/mail.php - purge a mail server-side (incoming_mail, sales, purchases)."""
         from urllib.parse import quote
         return self._request('DELETE', f'api/mail.php?mail_id={quote(str(mail_id))}')
+
+    def delete_mails_bulk(self, mail_ids) -> tuple[bool, dict | str]:
+        """DELETE /api/mail.php with a body of many mail_ids — one request per batch,
+        so mass-deleting a category doesn't fire thousands of sequential calls."""
+        return self._request('DELETE', 'api/mail.php', data={"mail_ids": [str(m) for m in mail_ids]})
 
     def save_alert(self, rule: dict) -> tuple[bool, dict | str]:
         """POST /api/alerts.php - create/update a rule; returns rule + backfill."""

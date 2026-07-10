@@ -8,7 +8,7 @@ const SCH_COLUMNS = [['Name', 'name', 'col-name'], ['Category', 'parent', 'col-t
 function buildSchHeader() {
   $('#sch-head').innerHTML =
     `<th class="pin-cell pin-reset ${schState.sortField ? '' : 'active'}" data-pinsort
-       title="Pinned first (default order) — click to reset sort"><i class="fa-solid fa-star"></i></th>` +
+       title="Pinned first (default order) — click to reset sort"><i class="fa-solid fa-thumbtack"></i></th>` +
     '<th class="pin-cell"></th>' +
     sortableHeaderHtml(SCH_COLUMNS, schState.sortField, schState.sortOrder);
 }
@@ -34,7 +34,7 @@ function renderSchRows() {
 function schRowHtml(schem, idx) {
   const id = String(schem.id ?? schem.schematic_id ?? '');
   const isPinned = schState.pinned.has(id);
-  const star = isPinned ? 'fa-solid fa-star' : 'fa-regular fa-star';
+  const star = 'fa-solid fa-thumbtack'; // pin; color (red when pinned) via .pinned-star
   return `<tr class="${isPinned ? 'pinned' : ''}" data-idx="${idx}" data-id="${id}">
     <td class="pin-cell ${isPinned ? 'pinned-star' : ''}" data-pin="${id}" title="Pin"><i class="${star}"></i></td>
     <td class="pin-cell mys-add ${mysState.schematicIds.has(id) ? 'in-mys' : ''}" data-mys="${id}"

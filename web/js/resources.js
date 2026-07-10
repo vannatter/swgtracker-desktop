@@ -22,8 +22,8 @@ const PLANET_KEYS = [
 // (label, field, css-class) — stat columns get quality coloring
 const RES_COLUMNS = [
   ['Name', 'name', 'col-name'],
-  ['<i class="fa-solid fa-circle-half-stroke" title="In spawn (active) / despawned (inactive)"></i>', 'status', 'col-status'],
   ['Type', 'type_name', 'col-text'],
+  ['<i class="fa-solid fa-circle-half-stroke" title="In spawn (active) / despawned (inactive)"></i>', 'status', 'col-status'],
   ['Score', 'score', 'stat'],
   ['OQ', 'oq', 'stat'], ['CR', 'cr', 'stat'], ['CD', 'cd', 'stat'],
   ['DR', 'dr', 'stat'], ['HR', 'hr', 'stat'], ['MA', 'ma', 'stat'],
@@ -99,7 +99,7 @@ function buildResHeader() {
   const head = $('#res-head');
   head.innerHTML =
     `<th class="pin-cell pin-reset ${resState.sortField ? '' : 'active'}" data-pinsort
-       title="Pinned first (default order) — click to reset sort"><i class="fa-solid fa-star"></i></th>` +
+       title="Pinned first (default order) — click to reset sort"><i class="fa-solid fa-thumbtack"></i></th>` +
     '<th class="pin-cell"></th><th class="pin-cell"></th>' +
     RES_COLUMNS.map(([label, field, cls]) => {
       const sortable = field !== 'planets' && field !== 'status'; // no server sort column for these
@@ -224,7 +224,7 @@ function resRowHtml(res) {
     return `<td>${escapeHtml(String(res[field] ?? ''))}</td>`;
   }).join('');
 
-  const star = isPinned ? 'fa-solid fa-star' : 'fa-regular fa-star';
+  const star = 'fa-solid fa-thumbtack'; // pin; color (red when pinned) via .pinned-star
   const rowCls = [isActive ? 'activeResource' : '', isPinned ? 'pinned' : ''].filter(Boolean).join(' ');
   return `<tr class="${rowCls}" data-id="${id}">
     <td class="pin-cell ${isPinned ? 'pinned-star' : ''}" data-pin="${id}" title="Pin"><i class="${star}"></i></td>

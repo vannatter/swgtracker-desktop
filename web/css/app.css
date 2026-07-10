@@ -291,7 +291,7 @@ body.offline .app-body { height: calc(100vh - 76px); }
 /* ---- Data grid ---- */
 .table-wrap {
   position: relative;
-  background: var(--bg-secondary);
+  background: var(--bg-primary);   /* flat on the page like the site — no raised panel */
   border-radius: 8px;
   overflow: auto;
   flex: 1 1 auto;      /* takes whatever height the page has left */
@@ -300,10 +300,10 @@ body.offline .app-body { height: calc(100vh - 76px); }
 .data-grid { width: 100%; border-collapse: collapse; font-size: 13px; }
 .data-grid thead th {
   position: sticky; top: 0; z-index: 2;
-  background: var(--bg-secondary);          /* .rowheader */
-  border-bottom: 1px solid var(--bg-tertiary);
-  color: var(--text-hover);
-  font-weight: 600;
+  background: var(--bg-tertiary);           /* same as the sidebar — consistent dark, red labels like the site */
+  border-bottom: 1px solid var(--border);
+  color: var(--accent);                     /* red column labels, like the site */
+  font-weight: 700;
   text-align: center;
   padding: 9px 8px;
   white-space: nowrap;
@@ -312,14 +312,17 @@ body.offline .app-body { height: calc(100vh - 76px); }
 .data-grid thead th.col-name, .data-grid thead th.col-text { text-align: left; }
 .data-grid tbody td { padding: 6px 8px; text-align: center; border-bottom: 1px solid rgba(47,52,66,.4); }
 .data-grid tbody td.col-name, .data-grid tbody td.col-text { text-align: left; }
-.data-grid tbody tr:hover { background: var(--border); }
+.data-grid tbody tr:hover { background: rgba(0, 0, 0, .22); }   /* darken on hover, like the site */
 .data-grid tbody tr.activeResource { background: var(--row-active); }   /* live spawn tint */
 .data-grid tbody tr.pinned { background: var(--row-pinned); }
-.data-grid tbody tr.pinned:hover, .data-grid tbody tr.activeResource:hover { filter: brightness(1.25); }
+/* pinned rows read as individual rows (not one blob) — a DARKER separator so it
+   recedes into the tint rather than standing out */
+.data-grid tbody tr.pinned > td { border-bottom: 1px solid rgba(0, 0, 0, .28); }
+.data-grid tbody tr.pinned:hover, .data-grid tbody tr.activeResource:hover { filter: brightness(.88); }
 /* Resources page: the status dot carries "active" now — drop the row tint (keep pinned) */
 #res-grid tbody tr.activeResource { background: transparent; }
 #res-grid tbody tr.activeResource.pinned { background: var(--row-pinned); }
-#res-grid tbody tr.activeResource:hover { background: var(--border); filter: none; }
+#res-grid tbody tr.activeResource:hover { background: rgba(0, 0, 0, .22); filter: none; }
 
 .res-name { color: var(--text-hover); font-weight: 600; }
 .res-type { color: var(--text-muted); }
@@ -331,7 +334,9 @@ body.offline .app-body { height: calc(100vh - 76px); }
 
 /* Stat cells colored by quality, faded when zero (.stat_off) */
 .stat { font-weight: 600; }
-.stat.stat_off { opacity: .3; }
+/* fade the "—" text, NOT the cell — opacity would make the cell background
+   translucent and show the page through it (ugly on tinted/selected rows) */
+.stat.stat_off { color: rgba(255, 255, 255, .3); }
 .q-great  { color: var(--q-great); }
 .q-good   { color: var(--q-good); }
 .q-fair   { color: var(--q-fair); }
@@ -341,14 +346,14 @@ body.offline .app-body { height: calc(100vh - 76px); }
 
 /* Pin star */
 .pin-cell { width: 28px; cursor: pointer; color: var(--text-muted); }
-.pin-cell.pinned-star { color: var(--q-good); }
+.pin-cell.pinned-star { color: var(--accent); }   /* pinned = red pin, like the website */
 .pin-cell:hover { color: var(--text-hover); }
 
 /* Pin-column header: solid star = default pinned-first order; click resets sort.
    White like the other header labels — yellow read as data, not chrome. */
-.pin-reset { cursor: pointer; color: var(--text-muted); }
-.pin-reset.active { color: var(--text-hover); }
-.pin-reset:hover { color: var(--text-hover); }
+.pin-reset { cursor: pointer; color: var(--accent-dark) !important; }   /* red pin, dimmer when a column sort is active */
+.pin-reset.active { color: var(--accent) !important; }                  /* full red on the default (pinned-first) order */
+.pin-reset:hover { color: var(--accent-hover) !important; }
 
 /* Stockpile toggle cell: + adds (green hover), ✓ removes (red hover) */
 .add-cell:hover { color: var(--q-fair); }
@@ -519,8 +524,11 @@ body.offline .app-body { height: calc(100vh - 76px); }
 .lab-rel-h { color: var(--q-good) !important; }
 /* relevant data cells just keep their full-strength quality color; the yellow header
    + grayed off-formula columns already signal which stats matter (no per-row underline) */
-/* off-formula columns: gray the text, keep the cell solid (opacity made headers translucent) */
-.lab-dim { color: var(--text-muted) !important; }
+/* off-formula columns read as faded. Data cells KEEP their quality color, just
+   dimmed via opacity (like the website) — safe because a solid bg sits behind them.
+   Headers use solid gray instead: opacity there made the sticky header translucent. */
+th.lab-dim { color: var(--text-muted) !important; }
+td.lab-dim { opacity: .45; }
 .lab-live { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent-green); }
 .lab-stock { margin-left: 6px; font-size: 10px; font-weight: 700; color: var(--q-fair); white-space: nowrap; }
 .lab-mycpu { color: var(--q-fair) !important; font-weight: 700; }
@@ -991,6 +999,10 @@ body:not(.dev-mode) .dev-only { display: none !important; }
 }
 .mm-massdel:hover { filter: brightness(1.12); }
 .mm-massdel[disabled] { opacity: .6; cursor: default; }
+/* armed state: the generic .confirm-del turns text red, but this button is already
+   red — keep the label white (the pulse animation is the "armed" signal) */
+.mm-massdel.confirm-del { color: #fff !important; background: var(--accent-dark); }
+.mm-massdel .spinner { width: 13px; height: 13px; border-color: rgba(255, 255, 255, .45); border-top-color: #fff; vertical-align: -2px; }
 .mm-card {
   flex: 1 1 0; display: flex; align-items: center; gap: 12px;
   background: var(--bg-secondary); border-radius: 8px; padding: 12px 14px;
@@ -1153,6 +1165,65 @@ body:not(.dev-mode) .dev-only { display: none !important; }
 }
 .stock-input:focus { outline: none; }
 
+/* ---- Stockpile folders/buckets ---- */
+.stk-sel-cell { width: 30px; text-align: center; padding: 0; }
+.stk-sel-cell input { cursor: pointer; accent-color: var(--accent); }
+#stk-body tr.stk-row[draggable="true"] { cursor: grab; user-select: none; }
+#stk-body tr.stk-row[draggable="true"]:active { cursor: grabbing; }
+/* selected = a solid off-blue lift (solid so it's uniform across cells) + red left edge */
+#stk-body tr.stk-row.stk-selected > td { background: #262c3e; }
+#stk-body tr.stk-row.stk-selected > td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+#stk-body tr.stk-row.stk-selected:hover > td { background: #2e3550; }
+/* drag image: a solid chip so the drag has a clear body (rows drag as transparent text otherwise) */
+.stk-drag-ghost { position: absolute; top: -1000px; left: -1000px; background: var(--accent); color: #fff;
+  padding: 5px 12px; border-radius: 6px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+
+/* notes + linked-schematics per-row detail */
+.stk-note-cell { cursor: pointer; color: var(--text-muted); }
+.stk-note-cell:hover { color: var(--text-hover); }
+.stk-note-cell .stk-has-notes { color: var(--q-good); }   /* filled note = has notes */
+.stk-note-cell.open { color: var(--accent); }
+#stk-body tr.stk-row.stk-row-open > td { border-bottom-color: transparent; }
+tr.stk-detail > td { background: var(--bg-tertiary); padding: 0; }
+.stk-detail-panel { display: flex; gap: 26px; padding: 12px 18px 16px; }
+.stk-detail-col { flex: 1 1 0; min-width: 0; }
+.stk-detail-notes { flex: 1.8 1 0; }   /* notes gets the wider half */
+.stk-detail-schems { flex: 1 1 0; }
+.stk-detail-label { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); margin-bottom: 6px; }
+.stk-detail-label i { margin-right: 6px; }
+.stk-notes-input { width: 100%; background: var(--bg-input); border: 1px solid var(--bg-input);
+  border-radius: 4px; color: var(--text-primary); font-size: 13px; padding: 6px 8px; resize: vertical; font-family: inherit; }
+.stk-notes-input:focus { outline: none; border-color: var(--accent-dark); }
+.stk-schem-list { display: flex; flex-wrap: wrap; gap: 6px; align-content: flex-start; }
+.stk-schem-chip { background: var(--bg-input); color: var(--text-primary); border-radius: 4px;
+  padding: 3px 9px; font-size: 12px; cursor: pointer; }
+.stk-schem-chip:hover { background: var(--accent-dark); color: #fff; }
+/* folder header row — same language as the schematic-detail group rows */
+/* folder header: distinct from BOTH the near-black table header and the rows —
+   a lighter band with an accent edge so it reads as a section divider */
+.stk-group td { background: var(--bg-secondary); color: var(--text-hover); font-weight: 600;
+  padding: 8px 12px; user-select: none; text-align: left; cursor: pointer;
+  border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.stk-group td:first-child { box-shadow: inset 3px 0 0 var(--accent-dark); }
+.stk-group td.pin-cell { padding: 0; text-align: center; }   /* trash lines up with row remove column */
+.stk-group-gap td { height: 12px; padding: 0; background: transparent; border: none; }
+.stk-group-main { display: flex; align-items: center; }
+.stk-group-left { display: flex; align-items: center; min-width: 0; }
+.stk-caret { width: 14px; color: var(--text-muted); margin-right: 8px; cursor: pointer; font-size: 14px; }
+.stk-group-name { font-size: 15px; cursor: pointer; }
+.stk-group-name:not(.stk-group-unfiled):hover { color: var(--accent); text-decoration: underline; }
+.stk-group-unfiled { color: var(--text-muted); cursor: default; }
+.stk-group-count { font-size: 11px; color: var(--text-muted); font-weight: 400; margin-left: 12px; }
+.stk-group-grip { color: var(--text-muted); margin-right: 8px; font-size: 12px; cursor: grab; }
+.stk-group-draggable td { cursor: grab; }
+.stk-group.stk-reorder-over > td { box-shadow: inset 0 3px 0 var(--accent) !important; }   /* drop-before indicator */
+.stk-bucket-del { border: 0; background: transparent; color: var(--text-muted); cursor: pointer;
+  font-size: 13px; padding: 2px 6px; }
+.stk-bucket-del:hover, .stk-bucket-del.confirm-del { color: var(--accent); }
+.stk-rename-input { width: 200px; height: 26px; display: inline-block; vertical-align: middle; }
+/* drop target while dragging a selection */
+.stk-group.stk-drop-hover td { box-shadow: inset 0 0 0 2px var(--accent); background: rgba(226, 67, 80, .12); }
+
 /* ---- Settings ---- */
 /* masonry-style columns: cards keep natural heights, wide windows get two columns */
 .settings-grid { columns: 2 360px; column-gap: 12px; max-width: 1100px; }
@@ -1274,11 +1345,11 @@ body:not(.dev-mode) .dev-only { display: none !important; }
 .res-pill {
   display: inline-flex; align-items: center; gap: 6px;
   font-size: 12px; color: var(--text-primary);
-  background: var(--bg-tertiary); border: 1px solid var(--border);
-  border-radius: 12px; padding: 3px 6px 3px 11px;
+  background: var(--bg-input); border: 1px solid var(--bg-input); /* solid chip — border matches fill */
+  border-radius: 12px; padding: 3px 11px;   /* symmetric — reads right with or without an × */
 }
 .res-pill-status { cursor: pointer; }
-.res-pill-x { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 0 2px; line-height: 1; font-size: 11px; }
+.res-pill-x { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 0 2px; margin-right: -5px; line-height: 1; font-size: 11px; }
 .res-pill-x:hover { color: var(--accent); }
 .res-pill-icon { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 14px; line-height: 1; padding: 2px 3px; }
 .res-pill-icon:first-of-type { margin-left: 4px; }

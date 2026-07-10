@@ -473,12 +473,21 @@ function confirmArm(cell, title = 'Click again to confirm delete') {
   return false;
 }
 
-// Pre-reserve the width the armed "Confirm …?" label needs: a hidden zero-height
-// ghost of the confirm markup keeps the button's natural width ≥ armed width, so
-// arming never resizes the button. Call after (re)writing a confirm button's label.
+// Pre-reserve the width the armed "Confirm …?" label needs as a min-width, so arming
+// never resizes the button. Measured with an off-screen ghost that is removed right
+// away — a persistent ghost would become a stray flex item inside the (flex) button
+// and add a phantom gap. Call after (re)writing a confirm button's label.
 function reserveConfirmWidth(btn, label = 'Confirm remove?') {
-  btn.insertAdjacentHTML('beforeend',
-    `<span class="confirm-ghost"><i class="fa-solid fa-triangle-exclamation"></i> ${label}</span>`);
+  const ghost = document.createElement('span');
+  ghost.style.cssText = 'position:absolute;left:-9999px;white-space:nowrap;';
+  ghost.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> ${label}`;
+  btn.appendChild(ghost);
+  const content = ghost.offsetWidth;
+  ghost.remove();
+  const cs = getComputedStyle(btn);
+  const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight)
+    + parseFloat(cs.borderLeftWidth) + parseFloat(cs.borderRightWidth);
+  btn.style.minWidth = `${Math.ceil(content + padX)}px`;
 }
 
 // Labeled-button confirm: label flips to "Confirm …?" with a draining

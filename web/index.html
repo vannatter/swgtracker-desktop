@@ -239,6 +239,7 @@
           <i class="fa-solid fa-circle-info info-tip"
              title="Click a stock number to edit it. Changes push to swgtracker.com immediately."></i>
           <input id="stk-search" type="text" class="form-control filter-input head-search" placeholder="Search stockpile...">
+          <button id="stk-new-bucket" class="btn btn-sm btn-accent" title="Create a folder — then drag resources into it to organize your stockpile"><i class="fa-solid fa-folder-plus"></i> New Folder</button>
           <button class="btn btn-icon" data-refresh="stockpile" title="Sync with server"><i class="fa-solid fa-rotate-right"></i></button>
         </div>
 
@@ -441,7 +442,7 @@
           <select id="mm-category" class="form-select filter-select head-filter"></select>
           <input id="mm-search" type="text" class="form-control filter-input head-search" placeholder="Search subject...">
           <button class="btn btn-icon" data-refresh="monitor" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
-          <button id="mm-mktest" class="btn btn-sm btn-outline-secondary dev-only" title="Drop a fake vendor-sale .mail into your first mail folder — the monitor uploads it like the real thing"><i class="fa-solid fa-vial"></i> Test sale</button>
+          <button id="mm-mktest" class="btn btn-sm btn-outline-secondary dev-only" title="Drop two fake .mail files (a vendor sale + a misc 'Other' letter) into your first mail folder — the monitor uploads them like the real thing, so you can test per-category mass-delete"><i class="fa-solid fa-vial"></i> Test mails</button>
         </div>
 
         <div class="mm-cards" id="mm-cards"></div>

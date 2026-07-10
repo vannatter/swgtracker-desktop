@@ -541,6 +541,44 @@ class WebApi:
         except Exception as e:
             return _err(e)
 
+    def update_stockpile_notes(self, stockpile_id, notes):
+        try:
+            return _wrap(*self.api.update_stockpile_notes(int(stockpile_id), notes))
+        except Exception as e:
+            return _err(e)
+
+    # --- Stockpile buckets (folders) ---
+
+    def get_stockpile_buckets(self):
+        try:
+            return _wrap(*self.api.get_stockpile_buckets())
+        except Exception as e:
+            return _err(e)
+
+    def create_stockpile_bucket(self, name):
+        try:
+            return _wrap(*self.api.create_stockpile_bucket(str(name)))
+        except Exception as e:
+            return _err(e)
+
+    def update_stockpile_bucket(self, bucket_id, name=None, sort_order=None):
+        try:
+            return _wrap(*self.api.update_stockpile_bucket(int(bucket_id), name=name, sort_order=sort_order))
+        except Exception as e:
+            return _err(e)
+
+    def delete_stockpile_bucket(self, bucket_id):
+        try:
+            return _wrap(*self.api.delete_stockpile_bucket(int(bucket_id)))
+        except Exception as e:
+            return _err(e)
+
+    def assign_stockpile_bucket(self, stockpile_ids, bucket_id=None):
+        try:
+            return _wrap(*self.api.assign_stockpile_bucket(stockpile_ids, bucket_id=bucket_id))
+        except Exception as e:
+            return _err(e)
+
     # --- Wishlist ---
 
     def get_wishlist(self, params=None):
@@ -997,7 +1035,15 @@ class WebApi:
         if not ok:
             return False, data
         self.local_db.mail_ledger_delete(mail_id)
+        self._unlink_mail_file(mail_id)
+        return True, data
+
+    def _unlink_mail_file(self, mail_id):
+        """Delete the .mail file in every configured folder, else the next sweep re-uploads it."""
         from pathlib import Path
+        mail_id = str(mail_id)
+        if "/" in mail_id or ".." in mail_id:
+            return
         for entry in self.config.get("mail_paths", []) or []:
             raw = entry.get("path") if isinstance(entry, dict) else entry
             if not raw:
@@ -1008,7 +1054,6 @@ class WebApi:
                     f.unlink()
                 except OSError:
                     pass
-        return True, data
 
     def delete_mail(self, mail_id):
         try:
@@ -1028,20 +1073,33 @@ class WebApi:
                 return _err("no filter — refusing to delete everything")
             ids = self.local_db.mail_ids_filtered(category, search)
             deleted = failed = 0
-            for mid in ids:
-                ok, _ = self._delete_one_mail(mid)
+            BATCH = 500  # server caps at 1000/req; stay well under
+            for i in range(0, len(ids), BATCH):
+                chunk = ids[i:i + BATCH]
+                ok, _ = self.api.delete_mails_bulk(chunk)
                 if ok:
-                    deleted += 1
+                    for mid in chunk:
+                        self.local_db.mail_ledger_delete(mid)
+                        self._unlink_mail_file(mid)
+                    deleted += len(chunk)
                 else:
-                    failed += 1
+                    # older server without bulk support — fall back to one-at-a-time
+                    for mid in chunk:
+                        one_ok, _ = self._delete_one_mail(mid)
+                        if one_ok:
+                            deleted += 1
+                        else:
+                            failed += 1
             return _ok({"deleted": deleted, "failed": failed, "total": len(ids)})
         except Exception as e:
             return _err(e)
 
     def dev_make_test_mail(self):
-        """Dev tool: drop a faker vendor-sale .mail into the first configured
-        folder. Ids are test-prefixed and items [TEST]-marked so everything is
-        easy to purge later — locally and in the server tables."""
+        """Dev tool: drop TWO fake .mail files into the first configured folder —
+        a vendor sale AND a plain 'misc' letter that lands in the Other category —
+        so the pipeline and the per-category mass-delete both have data to exercise.
+        Ids are test-prefixed and items [TEST]-marked so everything is easy to purge
+        later — locally and in the server tables."""
         try:
             import random
             import time as _time
@@ -1053,9 +1111,17 @@ class WebApi:
             folder = Path(str(raw)).expanduser()
             if not folder.is_dir():
                 return _err(f"Folder not found: {folder}")
-            mail_id = f"test{int(_time.time() * 1000)}"
-            # prefer a real My Inventory item so the sale exercises the whole
-            # pipeline: upload → cron parse → sales row → inventory depletion
+            base = int(_time.time() * 1000)
+            ts = int(_time.time())
+
+            def _write(mid, sender, subject, body):
+                # line 3 is the subject; the monitor keys kind='sale' off it being
+                # exactly "Vendor Sale Complete", else it's a plain mail.
+                content = f"{mid}\n{sender}\n{subject}\nTIMESTAMP: {ts}\n{body}"
+                (folder / f"{mid}.mail").write_text(content, encoding="utf-8")
+
+            # 1) Vendor sale — prefer a real My Inventory item so it exercises the
+            # whole pipeline: upload → cron parse → sales row → inventory depletion.
             item = None
             credits = None
             try:
@@ -1078,14 +1144,23 @@ class WebApi:
             buyer = random.choice(["Thake Darkcloud", "Ariana Morassi", "Nitoetao", "Vyrul Thane", "Remiella Witka"])
             if credits is None:
                 credits = random.randrange(500, 50001, 25)
-            ts = int(_time.time())
-            content = (f"{mail_id}\n"
-                       "SWG.Restoration.auctioner\n"
-                       "Vendor Sale Complete\n"
-                       f"TIMESTAMP: {ts}\n"
-                       f"Vendor: Test Vendor has sold {item} to {buyer} for {credits} credits.")
-            (folder / f"{mail_id}.mail").write_text(content, encoding="utf-8")
-            return _ok({"file": f"{mail_id}.mail", "item": item, "credits": credits})
+            sale_id = f"test{base}"
+            _write(sale_id, "SWG.Restoration.auctioner", "Vendor Sale Complete",
+                   f"Vendor: Test Vendor has sold {item} to {buyer} for {credits} credits.")
+
+            # 2) Misc — a plain in-game letter whose subject dodges every category
+            # keyword, so it lands in "Other" and the per-category mass-delete has a
+            # non-sale group to test against.
+            misc_id = f"test{base}m"
+            misc_subject = "[TEST] " + random.choice(
+                ["A Friendly Greeting", "Meet up later?", "Long time no see", "About that trade"])
+            _write(misc_id, random.choice(["Ariana Morassi", "Vyrul Thane", "Nitoetao", "Remiella Witka"]),
+                   misc_subject, "[TEST] Just a miscellaneous in-game letter, here to test the Other category.")
+
+            return _ok({
+                "item": item, "credits": credits, "misc": misc_subject,
+                "files": [f"{sale_id}.mail", f"{misc_id}.mail"],
+            })
         except Exception as e:
             return _err(e)
 

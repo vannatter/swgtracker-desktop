@@ -146,7 +146,7 @@ function initMail() {
     try {
       const res = await api().dev_make_test_mail();
       if (res.ok) {
-        toast(`Test sale dropped: ${res.data.item} — the monitor picks it up within ~5s`);
+        toast(`Dropped 2 test mails: a sale (${res.data.item}) + a misc "${res.data.misc}" — monitor picks them up within ~5s`);
         setTimeout(loadMail, 7000); // give the sweep + upload a beat, then show it
       } else {
         toast(res.error || 'Failed to create test mail', false);
@@ -169,6 +169,8 @@ function initMail() {
     if (!massdel) return;
     if (!confirmArm(massdel, 'Click again to delete ALL matching')) return;
     massdel.disabled = true;
+    const orig = massdel.innerHTML;
+    massdel.innerHTML = '<span class="spinner"></span> Deleting…'; // it can take a few seconds — show it's working
     try {
       const res = await api().delete_mail_matching(mmState.category, mmState.search);
       if (res.ok) {
@@ -177,9 +179,9 @@ function initMail() {
           + (d.failed ? `, ${d.failed} failed` : ''));
         mmState.category = ''; mmState.search = ''; mmState.page = 1;
         $('#mm-search').value = '';
-        loadMail();
-      } else { toast(res.error || 'Bulk delete failed', false); massdel.disabled = false; }
-    } catch (err) { toast(String(err), false); massdel.disabled = false; }
+        loadMail(); // rebuilds the button
+      } else { toast(res.error || 'Bulk delete failed', false); massdel.disabled = false; massdel.innerHTML = orig; }
+    } catch (err) { toast(String(err), false); massdel.disabled = false; massdel.innerHTML = orig; }
   });
 
   $('#mm-body').addEventListener('click', async (e) => {

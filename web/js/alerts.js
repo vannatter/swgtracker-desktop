@@ -207,7 +207,7 @@ async function alRefreshSchematicList() {
     </div>` + items.map((s) => `
     <div class="al-schem-row ${String(s.id) === sel ? 'sel' : ''}" data-sid="${escapeHtml(String(s.id))}"
          data-sname="${escapeHtml(s.name || '')}">
-      ${s.pinned ? '<i class="fa-solid fa-star al-schem-star" title="Pinned"></i>' : '<span class="al-schem-star"></span>'}
+      ${s.pinned ? '<i class="fa-solid fa-thumbtack al-schem-star" title="Pinned"></i>' : '<span class="al-schem-star"></span>'}
       <span class="al-schem-name">${escapeHtml(s.name || '')}</span>
       <span class="al-schem-prof">${escapeHtml(s.parent || '')}</span>
     </div>`).join('');

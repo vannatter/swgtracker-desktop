@@ -22,7 +22,8 @@ IMPORT_URL = "https://swgtracker.com/import_mailcontent.php"
 SCAN_INTERVAL = 5  # seconds between folder sweeps
 FAIL_RETRY_SECS = 300  # don't re-attempt a failing file every sweep
 SALE_SUBJECT = "Vendor Sale Complete"
-PURCHASE_SUBJECT = "Vendor Item Purchased"
+# both share the body format: ... of "ITEM" from "SELLER" for N credits ...
+PURCHASE_SUBJECTS = ("Vendor Item Purchased", "Instant Sale Item Purchased")
 
 
 class MailMonitor:
@@ -165,7 +166,7 @@ class MailMonitor:
         self._fail_at.pop(mail_id, None)
 
         kind = "sale" if subject == SALE_SUBJECT else (
-            "purchase" if subject == PURCHASE_SUBJECT else "mail")
+            "purchase" if subject in PURCHASE_SUBJECTS else "mail")
         detail = ""
         if kind == "sale":
             # "Vendor: X has sold ITEM to BUYER for N credits."

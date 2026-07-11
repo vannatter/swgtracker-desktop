@@ -20,7 +20,10 @@ const labState = {
   currentExpId: null,  // experiment being edited on the bench (null = unsaved draft)
   draftNotes: '',      // notes for a not-yet-saved experiment
   homeQuery: '',       // free-text filter on the experiments home page
+  banned: new Set(),   // resource ids hidden from pools/auto-picks ("no vendor supply")
 };
+
+const labIsBanned = (r) => labState.banned.has(String(r.id));
 
 const labClamp01k = (v) => Math.max(0, Math.min(1000, v));
 
@@ -279,16 +282,19 @@ function labSlotVisibleRows(slot) {
   const rated = slot.pool.map((r) => ({ r, q: labAvgQ(r, slot) }));
   const query = (slot.query || '').trim().toLowerCase();
   if (query) {
-    // search the FULL class pool — this is how you bench a deliberately shitty resource
+    // search the FULL class pool (banned included, so they can be un-banned) —
+    // this is also how you bench a deliberately shitty resource
     return rated.filter((x) => (x.r.name || '').toLowerCase().includes(query))
       .sort((a, b) => b.q - a.q).slice(0, 30);
   }
-  const byRate = [...rated].sort((a, b) => b.q - a.q);
+  const usable = rated.filter((x) => !labIsBanned(x.r)); // hidden never suggested
+  const byRate = [...usable].sort((a, b) => b.q - a.q);
   const show = new Map();
   byRate.slice(0, 10).forEach((x) => show.set(x.r.id, x));
-  [...rated].sort((a, b) => labEcpu(a.r) - labEcpu(b.r))
+  [...usable].sort((a, b) => labEcpu(a.r) - labEcpu(b.r))
     .slice(0, 5).forEach((x) => show.set(x.r.id, x));
-  rated.filter((x) => stkState.resourceIds.has(String(x.r.id))).forEach((x) => show.set(x.r.id, x));
+  usable.filter((x) => stkState.resourceIds.has(String(x.r.id))).forEach((x) => show.set(x.r.id, x));
+  if (slot.showBanned) rated.filter((x) => labIsBanned(x.r)).forEach((x) => show.set(x.r.id, x));
   if (slot.pick) {
     const px = rated.find((x) => x.r.id === slot.pick.id);
     if (px) show.set(px.r.id, px);
@@ -304,12 +310,12 @@ function labSlotTbodyHtml(slot) {
   const rows = labSlotVisibleRows(slot);
   if (!rows.length) {
     return (slot.query || '').trim()
-      ? '<tr><td colspan="13" class="stat_off lab-pool-empty">No matches in this class.</td></tr>'
-      : `<tr><td colspan="13" class="stat_off lab-pool-empty">
+      ? '<tr><td colspan="15" class="stat_off lab-pool-empty">No matches in this class.</td></tr>'
+      : `<tr><td colspan="15" class="stat_off lab-pool-empty">
           Couldn\u2019t load this class pool \u2014 <a role="button" data-poolretry="${labState.slots.indexOf(slot)}">retry</a></td></tr>`;
   }
   return rows.map(({ r, q }) => `
-    <tr class="lab-row ${slot.pick && slot.pick.id === r.id ? 'lab-picked' : ''} ${stkState.resourceIds.has(String(r.id)) ? 'lab-stocked' : ''}" data-rid="${r.id}">
+    <tr class="lab-row ${slot.pick && slot.pick.id === r.id ? 'lab-picked' : ''} ${stkState.resourceIds.has(String(r.id)) ? 'lab-stocked' : ''} ${labIsBanned(r) ? 'lab-banned' : ''}" data-rid="${r.id}">
       <td class="pin-cell">${r.status === 1 ? '<span class="lab-live" title="In spawn"></span>' : ''}</td>
       <td class="col-name res-name">${escapeHtml(r.name)}
         ${stkState.resourceIds.has(String(r.id)) ? (() => {
@@ -324,6 +330,9 @@ function labSlotTbodyHtml(slot) {
         ? 'your stockpile cost per unit'
         : ecpuClamp(r.cpu, r.status === 1, safeInt(r.planet_mustafar) === 1) ? 'estimated credits per unit' : 'no eCPU votes yet \u2014 cost math assumes 1'}">${
         labMyCpu(r) !== null ? labMyCpu(r) : (ecpuClamp(r.cpu, r.status === 1, safeInt(r.planet_mustafar) === 1) || '~1')}</td>
+      <td class="pin-cell lab-ban-cell" data-ban="${r.id}"
+        title="${labIsBanned(r) ? 'Hidden from suggestions \u2014 click to unhide' : 'Hide from consideration \u2014 e.g. no vendor supply despite the eCPU'}">
+        <i class="fa-solid ${labIsBanned(r) ? 'fa-eye' : 'fa-eye-slash'}"></i></td>
     </tr>`).join('');
 }
 
@@ -363,12 +372,19 @@ function labRenderSlots() {
         </select>
         <input type="text" class="form-control filter-input lab-slot-search" data-slotsearch="${si}"
           placeholder="Search any ${escapeHtml(slot.className)}\u2026" value="${escapeHtml(slot.query || '')}" autocomplete="off">
+        ${(() => {
+          const n = slot.pool.filter((r) => labIsBanned(r)).length;
+          if (!n) return '';
+          return `<button type="button" class="lab-hidden-chip ${slot.showBanned ? 'on' : ''}" data-showbanned="${si}"
+            title="${slot.showBanned ? 'Stop showing hidden resources' : 'Show them (dimmed) so you can unhide'}">
+            <i class="fa-solid fa-eye-slash"></i> ${n} hidden</button>`;
+        })()}
       </div>
       <table class="data-grid lab-grid"><thead><tr>
         <th class="pin-cell"></th><th class="col-name">Resource</th>
         <th>Rate</th>
         ${stats.map((st) => `<th class="${rel.has(st) ? 'lab-rel-h' : 'lab-dim'}">${st.toUpperCase()}</th>`).join('')}
-        <th>eCPU</th>
+        <th>eCPU</th><th class="pin-cell"></th>
       </tr></thead><tbody>${labSlotTbodyHtml(slot)}</tbody></table>
       </div>
     </div>`).join('');
@@ -423,7 +439,7 @@ function labAutoPick(mode) {
   if (mode === 'best') {
     let empty = 0;
     for (const slot of labState.slots) {
-      const live = slot.pool.filter((r) => r.status === 1);
+      const live = slot.pool.filter((r) => r.status === 1 && !labIsBanned(r));
       // nothing of this class in spawn = nothing to buy at the vendor — leave it open
       if (!live.length) { empty++; slot.pick = null; slot.collapsed = false; continue; }
       slot.pick = live.reduce((best, r) => (!best || labAvgQ(r, slot) > labAvgQ(best, slot) ? r : best), null);
@@ -437,7 +453,7 @@ function labAutoPick(mode) {
   if (mode === 'stock') {
     let empty = 0;
     for (const slot of labState.slots) {
-      const stocked = slot.pool.filter((r) => stkState.resourceIds.has(String(r.id)));
+      const stocked = slot.pool.filter((r) => stkState.resourceIds.has(String(r.id)) && !labIsBanned(r));
       if (!stocked.length) { empty++; slot.pick = null; slot.collapsed = false; continue; }
       slot.pick = stocked.reduce((best, r) => (!best || labAvgQ(r, slot) > labAvgQ(best, slot) ? r : best), null);
       slot.collapsed = true;
@@ -455,9 +471,9 @@ function labAutoPick(mode) {
   const stockOnly = mode === 'cheapstock';
   const cost = (r) => labEcpu(r);
   const cands = labState.slots.map((slot) => {
-    const source = stockOnly
+    const source = (stockOnly
       ? slot.pool.filter((r) => stkState.resourceIds.has(String(r.id)))
-      : slot.pool;
+      : slot.pool).filter((r) => !labIsBanned(r));
     const rated = source.map((r) => ({ r, q: labAvgQ(r, slot) })).sort((a, b) => b.q - a.q);
     return rated.slice(0, 60).concat(
       [...rated].sort((a, b) => cost(a.r) - cost(b.r)).slice(0, 20));
@@ -772,6 +788,7 @@ async function labPersistSettings() {
     await api().set_config('lab_settings', {
       threshold: labState.threshold,
       boosts: labState.boosts.map((b) => ({ key: b.key, on: b.on, value: b.value })),
+      banned: [...labState.banned],
     });
   } catch (_) { /* non-fatal */ }
 }
@@ -789,6 +806,7 @@ async function loadLab() {
         const b = labState.boosts.find((x) => x.key === saved.key);
         if (b) { b.on = !!saved.on; b.value = safeInt(saved.value) || b.value; }
       }
+      labState.banned = new Set((ls.banned || []).map(String));
     }
   } catch (_) { /* defaults */ }
   labRenderBoosts();
@@ -895,6 +913,20 @@ function initLab() {
     if (head) {
       const slot = labState.slots[safeInt(head.closest('.lab-slot').dataset.si)];
       if (slot) { slot.collapsed = !slot.collapsed; labRenderSlots(); }
+      return;
+    }
+    const reveal = e.target.closest('[data-showbanned]');
+    if (reveal) {
+      const slot = labState.slots[safeInt(reveal.dataset.showbanned)];
+      if (slot) { slot.showBanned = !slot.showBanned; labRenderSlots(); }
+      return;
+    }
+    const banCell = e.target.closest('[data-ban]');
+    if (banCell) {
+      const id = String(banCell.dataset.ban);
+      if (labState.banned.has(id)) labState.banned.delete(id); else labState.banned.add(id);
+      labPersistSettings();
+      labRenderAll(); // suggestions + any pick costs re-evaluate
       return;
     }
     const tr = e.target.closest('tr.lab-row');

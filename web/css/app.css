@@ -536,6 +536,16 @@ body.offline .app-body { height: calc(100vh - 76px); }
 th.lab-dim { color: var(--text-muted) !important; }
 td.lab-dim { opacity: .45; }
 .lab-live { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent-green); }
+/* hide-from-consideration: eye toggle per row; hidden rows dim + strike, and only
+   show via search or the "N hidden" chip */
+.lab-ban-cell { cursor: pointer; color: var(--text-muted); font-size: 11px; }
+.lab-ban-cell:hover { color: var(--accent); }
+.lab-grid tr.lab-banned > td { color: var(--text-muted); }
+.lab-grid tr.lab-banned .res-name { text-decoration: line-through; color: var(--text-muted); }
+.lab-grid tr.lab-banned .lab-ban-cell { color: var(--accent); }
+.lab-hidden-chip { flex: 0 0 auto; border: 0; background: var(--bg-input); color: var(--text-muted);
+  border-radius: 12px; font-size: 11px; padding: 4px 10px; cursor: pointer; white-space: nowrap; }
+.lab-hidden-chip:hover, .lab-hidden-chip.on { color: var(--text-hover); background: var(--border); }
 .lab-stock { margin-left: 6px; font-size: 10px; font-weight: 700; color: var(--q-fair); white-space: nowrap; }
 .lab-mycpu { color: var(--q-fair) !important; font-weight: 700; }
 .lab-pickcell { font-size: 11px; color: var(--text-muted); text-align: center; width: 44px; }

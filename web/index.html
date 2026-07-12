@@ -38,6 +38,8 @@
         <li class="nav-item" data-page="sales"><i class="fa-solid fa-tags"></i> My Sales</li>
         <li class="nav-item" data-page="purchases"><i class="fa-solid fa-cart-shopping"></i> My Purchases</li>
         <li class="nav-item" data-page="inventory"><i class="fa-solid fa-warehouse"></i> My Inventory</li>
+        <li class="nav-item" data-page="characters"><i class="fa-solid fa-user-group"></i> Characters</li>
+        <li class="nav-item" data-page="harvesters"><i class="fa-solid fa-tractor"></i> Harvesters</li>
         <li class="nav-item" data-page="alerts"><i class="fa-solid fa-bell"></i> Spawn Alerts</li>
         <li class="nav-item" data-page="monitor"><i class="fa-solid fa-envelope"></i> Mail</li>
         <li class="nav-item" data-page="lab"><i class="fa-solid fa-flask"></i> Laboratory</li>
@@ -57,7 +59,6 @@
         <div class="pulse-heading">SERVER PULSE</div>
         <div id="pulse-status" class="pulse-status">--</div>
         <div id="pulse-online" class="pulse-line"></div>
-        <div id="pulse-peak" class="pulse-line muted"></div>
         <div id="pulse-resources" class="pulse-line muted"></div>
         <div class="pulse-chart-wrap">
           <canvas id="pulse-chart" class="pulse-chart"></canvas>
@@ -398,6 +399,54 @@
         </div>
       </section>
 
+      <!-- Harvesters page -->
+      <section id="page-characters" class="page">
+        <div class="page-head">
+          <h1>Characters</h1>
+          <i class="fa-solid fa-circle-info info-tip"
+             title="Your toons, synced with swgtracker.com. Mail folders and harvesters link to a character — more character-specific features build on this list."></i>
+          <button id="char-add" class="btn btn-sm btn-accent head-right"><i class="fa-solid fa-plus"></i> Add Character</button>
+          <button class="btn btn-icon" data-refresh="characters" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
+        </div>
+
+        <div class="table-wrap">
+          <table class="data-grid">
+            <thead><tr>
+              <th class="col-name">Name</th>
+              <th class="col-num">Mails uploaded</th><th class="col-num">Harvesters</th>
+              <th class="col-text">Designer</th><th class="col-actions"></th>
+            </tr></thead>
+            <tbody id="char-body"></tbody>
+          </table>
+          <div id="char-empty" class="grid-empty" hidden></div>
+        </div>
+      </section>
+
+      <section id="page-harvesters" class="page">
+        <div class="page-head">
+          <h1>Harvesters</h1>
+          <i class="fa-solid fa-circle-info info-tip"
+             title="Track your placed harvesters per character — hopper fill, power and maintenance countdowns from what you loaded them with."></i>
+          <select id="harv-charfilter" class="form-select filter-select head-filter"></select>
+          <input id="harv-search" type="text" class="form-control filter-input head-search" placeholder="Search..."
+                 title="Searches nickname, type, resource, planet, and character" autocomplete="off">
+          <button id="harv-viewtoggle" class="btn btn-icon" title="Switch to grid view"><i class="fa-solid fa-table-cells-large"></i></button>
+          <button id="harv-add" class="btn btn-sm btn-accent"><i class="fa-solid fa-plus"></i> Add Harvester</button>
+          <button class="btn btn-icon" data-refresh="harvesters" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
+        </div>
+
+        <div id="harv-suggest" class="harv-suggest"></div>
+
+        <div class="table-wrap harv-wrap">
+          <div id="harv-list" class="harv-list"></div>
+          <div id="harv-loading" class="grid-loading" hidden><span class="spinner"></span> Loading…</div>
+          <div id="harv-empty" class="grid-empty" hidden>
+            No harvesters yet — hit <b>Add Harvester</b> after you place one in game.
+            Enter what you loaded it with and the countdowns run themselves.
+          </div>
+        </div>
+      </section>
+
       <!-- Purchases page -->
       <section id="page-purchases" class="page">
         <div class="page-head">
@@ -474,8 +523,9 @@
           <i class="fa-solid fa-circle-info info-tip"
              title="Everything the monitor has uploaded from your SWG mail folders. The site parses sales and resource mails into your account automatically."></i>
           <span id="mm-state" class="page-hint-inline"></span>
+          <select id="mm-charfilter" class="form-select filter-select head-filter" title="Filter by character (from each mail folder's character)" hidden></select>
           <select id="mm-category" class="form-select filter-select head-filter"></select>
-          <input id="mm-search" type="text" class="form-control filter-input head-search" placeholder="Search subject...">
+          <input id="mm-search" type="text" class="form-control filter-input head-search" placeholder="Search..." title="Searches mail subjects">
           <button class="btn btn-icon" data-refresh="monitor" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
           <button id="mm-mktest" class="btn btn-sm btn-outline-secondary dev-only" title="Drop three fake .mail files (vendor sale, vendor purchase, misc 'Other' letter) into your first mail folder — the monitor uploads them like the real thing, exercising Sales, Purchases, and per-category mass-delete"><i class="fa-solid fa-vial"></i> Test mails</button>
         </div>
@@ -487,7 +537,7 @@
         <div class="table-wrap">
           <table class="data-grid">
             <thead><tr>
-              <th class="col-text">When</th><th class="col-text">Type</th>
+              <th class="col-text">Character</th><th class="col-text">Type</th><th class="col-text">When</th>
               <th class="col-text">Subject</th><th class="col-name">Parsed</th><th class="col-actions"></th>
             </tr></thead>
             <tbody id="mm-body"></tbody>
@@ -519,6 +569,7 @@
                 placeholder="Search experiments…" autocomplete="off">
               <button id="lab-home-clear" type="button" title="Clear filter" hidden><i class="fa-solid fa-xmark"></i></button>
             </span>
+            <button id="lab-viewtoggle" class="btn btn-icon" title="Switch to grid view"><i class="fa-solid fa-table-cells-large"></i></button>
             <button id="lab-new" class="btn btn-sm btn-accent"><i class="fa-solid fa-plus"></i> New Experiment</button>
             <button id="lab-home-refresh" class="btn btn-icon" title="Reload experiments"><i class="fa-solid fa-rotate-right"></i></button>
           </span>
@@ -575,6 +626,7 @@
                   data-placeholder="Why these picks, buff setup, results in game…"></div>
               </div>
               <div id="lab-empty" class="al-empty">Pick a schematic to start experimenting — the bench shows whether your picks cap, and what they cost.</div>
+              <div id="lab-debug" class="lab-debug dev-only" hidden></div>
             </div>
           </div>
         </div>
@@ -640,9 +692,28 @@
         </div>
 
         <div class="settings-section">
-          <h2>SWG Mail Directories <span class="settings-sub">Up to 4 characters</span></h2>
+          <h2>SWG Mail Directories <span class="settings-sub">Up to 4 folders — each is tied to one of your characters</span></h2>
           <div id="set-mailpaths"></div>
-          <button id="set-addpath" class="btn btn-sm btn-outline-secondary">+ Add Character</button>
+          <div class="set-addpath-row"><button id="set-addpath" class="btn btn-sm btn-outline-secondary">+ Add Character</button></div>
+          <datalist id="set-char-list"></datalist>
+        </div>
+
+        <div class="settings-section">
+          <h2>Mail Handling</h2>
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="set-autostart">
+            <label class="form-check-label" for="set-autostart">Auto-start mail monitoring on launch</label>
+          </div>
+          <div class="set-maildisp">
+            <div class="set-maildisp-label">After a mail file is uploaded:</div>
+            <label class="set-disp-opt"><input type="radio" name="set-maildisp" value="keep">
+              Keep it where it is</label>
+            <label class="set-disp-opt"><input type="radio" name="set-maildisp" value="delete">
+              Delete it <span class="settings-sub">(keeps the SWG mail folders small)</span></label>
+            <label class="set-disp-opt"><input type="radio" name="set-maildisp" value="move" id="set-disp-move">
+              Move it to <code id="set-movedir" class="set-movedir">no folder chosen</code>
+              <button type="button" id="set-movedir-browse" class="btn btn-sm btn-outline-secondary" title="Choose the processed-mail folder"><i class="fa-solid fa-folder-open"></i></button></label>
+          </div>
         </div>
 
         <div class="settings-section">
@@ -667,13 +738,12 @@
             <input class="form-check-input" type="checkbox" id="set-notify">
             <label class="form-check-label" for="set-notify">Show desktop notifications</label>
           </div>
-          <div class="form-check form-switch">
-            <input class="form-check-input" type="checkbox" id="set-autostart">
-            <label class="form-check-label" for="set-autostart">Auto-start mail monitoring on launch</label>
-          </div>
-          <div class="form-check form-switch">
-            <input class="form-check-input" type="checkbox" id="set-delmail">
-            <label class="form-check-label" for="set-delmail">Delete mail files after upload <span class="settings-sub">(keeps the SWG mail folders small)</span></label>
+          <div class="set-inline-pref">
+            <span>Date format</span>
+            <select id="set-datefmt" class="form-select filter-select set-datefmt-select">
+              <option value="us">US — MM/DD/YY</option>
+              <option value="intl">International — DD/MM/YY</option>
+            </select>
           </div>
         </div>
 
@@ -757,6 +827,145 @@
 
   <!-- Add-to-stockpile dialog: optional amount (300k / 4.5m) + optional CPU.
        Cancelling or leaving both blank still stockpiles the resource. -->
+  <!-- compact power/maintenance refill dialog: estimate + slider + quick-add pills -->
+  <div id="harv-pool-modal" class="key-gate" hidden>
+    <div class="key-gate-card sp-card harv-pool-card">
+      <h2 id="harv-pool-title">Set Power</h2>
+      <div id="harv-pool-now" class="harv-pool-now"></div>
+      <input id="harv-pool-slider" type="range" class="harv-pool-slider" min="0" max="100000" step="500">
+      <div class="harv-pool-pills">
+        <button type="button" class="harv-pill" data-pooladd="1000">+1k</button>
+        <button type="button" class="harv-pill" data-pooladd="5000">+5k</button>
+        <button type="button" class="harv-pill" data-pooladd="10000">+10k</button>
+        <button type="button" class="harv-pill" data-pooladd="25000">+25k</button>
+        <input id="harv-pool-input" type="text" inputmode="decimal" class="form-control filter-input harv-pool-exact"
+               placeholder="exact — 12k" autocomplete="off">
+      </div>
+      <div id="harv-pool-new" class="harv-pool-new" hidden></div>
+      <div class="inv-add-actions">
+        <button id="harv-pool-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
+        <button id="harv-pool-save" class="btn btn-sm btn-accent"><i class="fa-solid fa-check"></i> Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="harv-modal" class="key-gate" hidden>
+    <div class="key-gate-card sp-card harv-form-card">
+      <h2 id="harv-form-title">Add Harvester</h2>
+
+      <div class="inv-add-row" id="harv-f-pull">
+        <div class="inv-add-field harv-grow harv-resfind">
+          <label class="sp-field-label">Resource <span class="settings-sub">what it's pulling — this narrows the types</span></label>
+          <input id="harv-f-resource" type="text" class="form-control filter-input harv-wide"
+                 placeholder="Type to search active resources…" autocomplete="off">
+          <div id="harv-f-reslist" class="harv-reslist" hidden></div>
+          <div id="harv-f-resinfo" class="harv-resinfo" hidden></div>
+        </div>
+        <div class="inv-add-field harv-col2">
+          <label class="sp-field-label">Conc. % <span class="settings-sub">from your survey</span></label>
+          <input id="harv-f-conc" type="text" inputmode="numeric" class="form-control filter-input harv-wide" placeholder="e.g. 74" autocomplete="off">
+        </div>
+      </div>
+
+      <div class="inv-add-row">
+        <div class="inv-add-field harv-grow">
+          <label class="sp-field-label">Type</label>
+          <select id="harv-f-type" class="form-select filter-select harv-wide"></select>
+        </div>
+        <div class="inv-add-field harv-col2">
+          <label class="sp-field-label">Character</label>
+          <select id="harv-f-char" class="form-select filter-select harv-wide"></select>
+        </div>
+      </div>
+
+      <div class="inv-add-row">
+        <div class="inv-add-field">
+          <label class="sp-field-label">BER <span class="settings-sub">on the deed</span></label>
+          <input id="harv-f-ber" type="text" inputmode="numeric" class="form-control filter-input" placeholder="e.g. 44" autocomplete="off">
+        </div>
+        <div class="inv-add-field" id="harv-f-hopperwrap">
+          <label class="sp-field-label">Hopper size <span class="settings-sub">on the deed</span></label>
+          <input id="harv-f-hopper" type="text" inputmode="decimal" class="form-control filter-input" placeholder="e.g. 240k" autocomplete="off">
+        </div>
+        <div class="inv-add-field">
+          <label class="sp-field-label">Planet <span class="settings-sub">optional</span></label>
+          <select id="harv-f-planet" class="form-select filter-select"></select>
+        </div>
+        <div class="inv-add-field">
+          <label class="sp-field-label">X / Y <span class="settings-sub">optional</span></label>
+          <div class="harv-xy-row">
+            <input id="harv-f-x" type="text" inputmode="numeric" class="form-control filter-input" placeholder="x" autocomplete="off">
+            <input id="harv-f-y" type="text" inputmode="numeric" class="form-control filter-input" placeholder="y" autocomplete="off">
+          </div>
+        </div>
+      </div>
+
+      <div class="inv-add-row">
+        <div class="inv-add-field harv-grow">
+          <label class="sp-field-label">Nickname <span class="settings-sub">blank = named from your picks</span></label>
+          <input id="harv-f-name" type="text" class="form-control filter-input harv-wide" autocomplete="off">
+        </div>
+      </div>
+
+      <div class="inv-add-row" id="harv-f-amounts">
+        <div class="inv-add-field">
+          <label class="sp-field-label">Power loaded <span class="settings-sub">optional</span></label>
+          <input id="harv-f-power" type="text" inputmode="decimal" class="form-control filter-input" placeholder="e.g. 12k" autocomplete="off">
+        </div>
+        <div class="inv-add-field">
+          <label class="sp-field-label">Maintenance paid <span class="settings-sub">optional</span></label>
+          <input id="harv-f-maint" type="text" inputmode="decimal" class="form-control filter-input" placeholder="e.g. 13k" autocomplete="off">
+        </div>
+      </div>
+
+      <div id="harv-f-ratehint" class="harv-derived" hidden></div>
+
+      <div class="inv-add-actions">
+        <button id="harv-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
+        <button id="harv-save" class="btn btn-sm btn-accent"><i class="fa-solid fa-check"></i> Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Characters page dialogs: profile form (add/edit) + single-field (designer link) -->
+  <div id="char-form-modal" class="key-gate" hidden>
+    <div class="key-gate-card sp-card inv-add-card">
+      <h2 id="char-form-title">Add Character</h2>
+      <div class="inv-add-field">
+        <label class="sp-field-label">Character name</label>
+        <input id="char-f-name" type="text" class="form-control filter-input" placeholder="e.g. Sena" autocomplete="off">
+      </div>
+      <div class="inv-add-field">
+        <label class="sp-field-label">Full name <span class="settings-sub">optional</span></label>
+        <input id="char-f-full" type="text" class="form-control filter-input" placeholder="e.g. Sena Hax" autocomplete="off">
+      </div>
+      <div class="inv-add-field">
+        <label class="sp-field-label">Bio <span class="settings-sub">optional</span></label>
+        <textarea id="char-f-bio" class="form-control filter-input char-f-bio" rows="4"
+          placeholder="Profession, story, whatever you want on the record…"></textarea>
+      </div>
+      <div class="inv-add-actions">
+        <button id="char-form-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
+        <button id="char-form-confirm" class="btn btn-sm btn-accent"></button>
+      </div>
+    </div>
+  </div>
+
+  <div id="char-modal" class="key-gate" hidden>
+    <div class="key-gate-card sp-card inv-add-card">
+      <h2 id="char-modal-title">Add Character</h2>
+      <div id="char-modal-hint" class="settings-hint"></div>
+      <div class="inv-add-field">
+        <label id="char-modal-label" class="sp-field-label">Name</label>
+        <input id="char-modal-input" type="text" class="form-control filter-input" autocomplete="off">
+      </div>
+      <div class="inv-add-actions">
+        <button id="char-modal-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
+        <button id="char-modal-confirm" class="btn btn-sm btn-accent"></button>
+      </div>
+    </div>
+  </div>
+
   <div id="stk-add-modal" class="key-gate" hidden>
     <div class="key-gate-card sp-card inv-add-card">
       <h2>Add to Stockpile</h2>
@@ -947,6 +1156,8 @@
   <script src="js/inventory.js"></script>
   <script src="js/sales.js"></script>
   <script src="js/purchases.js"></script>
+  <script src="js/harvesters.js"></script>
+  <script src="js/characters.js"></script>
   <script src="js/settings.js"></script>
   <script src="js/alerts.js"></script>\n  <script src="js/lab.js"></script>
   <script src="js/mail.js"></script>

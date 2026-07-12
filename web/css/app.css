@@ -160,6 +160,7 @@ body.offline .app-body { height: calc(100vh - 76px); }
 .pulse-status.offline { color: var(--accent); font-weight: 600; }
 .pulse-line { font-size: 12px; margin-top: 2px; }
 .pulse-line.muted { color: var(--text-muted); }
+.pulse-peak-inline { color: var(--text-muted); }
 .pulse-chart-wrap { position: relative; margin-top: 8px; }
 .pulse-chart { display: block; width: 100%; height: 38px; }
 
@@ -191,6 +192,17 @@ body.offline .app-body { height: calc(100vh - 76px); }
   pointer-events: none; box-shadow: 0 3px 10px rgba(0,0,0,.4);
   white-space: pre-line; /* newlines in a title render as line breaks (e.g. formula lists) */
 }
+
+/* rich variant: one-line info chips docked beside the hovered text (lab resources),
+   with a tippy-style arrow pointing back at it */
+.app-tip-rich { white-space: nowrap; max-width: none; padding: 5px 11px; font-size: 12px; }
+.app-tip-rich b { color: var(--text-hover); }
+.app-tip-rich::before, .app-tip-rich::after { content: ''; position: absolute; top: 50%;
+  transform: translateY(-50%); border: 6px solid transparent; }
+.app-tip-rich.tip-side-right::before { left: -12px; border-right-color: var(--border); }
+.app-tip-rich.tip-side-right::after { left: -10px; border-right-color: var(--bg-secondary); }
+.app-tip-rich.tip-side-left::before { right: -12px; border-left-color: var(--border); }
+.app-tip-rich.tip-side-left::after { right: -10px; border-left-color: var(--bg-secondary); }
 
 .pulse-tip {
   position: absolute; transform: translate(-50%, -100%);
@@ -234,8 +246,13 @@ body.offline .app-body { height: calc(100vh - 76px); }
    everything after it flows on the flex gap (no second auto margin = no gaps) */
 .page-head .head-filter { margin-left: auto; width: auto; }
 #mm-category { max-width: none; width: 205px; }   /* fit "All categories (93)" / longer category labels */
-.page-head .head-filter ~ .head-search { margin-left: 0; }
-.page-head .head-filter ~ .btn-icon { margin-left: 0; }
+/* only the FIRST VISIBLE filter takes the auto push — a hidden filter (e.g. the
+   character dropdown before any attribution exists) must not soak it up */
+.page-head .head-filter:not([hidden]) ~ .head-filter { margin-left: 0; }
+.page-head .head-filter:not([hidden]) ~ .head-search { margin-left: 0; }
+.page-head .head-filter:not([hidden]) ~ .btn-icon { margin-left: 0; }
+.page-head .head-right { margin-left: auto; } /* first right-docked control when there's no filter/search */
+.page-head .head-right ~ .btn-icon { margin-left: 0; }
 .page-head .btn-icon.head-filter { width: 34px; flex: 0 0 auto; } /* keep the square when right-aligned alone */
 .page-head .inv-num { max-width: 70px; }
 .info-tip { color: var(--text-muted); font-size: 14px; cursor: help; }
@@ -578,6 +595,7 @@ td.lab-dim { opacity: .45; }
 .lab-notes { width: 100%; max-width: none; min-height: 64px; font-size: 12px; resize: vertical; }
 .lab-exp-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .lab-exp-foot > span:first-child { display: flex; gap: 6px; flex: 0 0 auto; }
+.lab-exp-foot .al-rule-btn { width: 34px; height: 34px; } /* matches the Open on bench button */
 .lab-exp-when {
   font-size: 11px; color: var(--text-muted); text-align: right;
   flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -780,7 +798,9 @@ td.lab-dim { opacity: .45; }
 }
 .cselect-input { width: 100%; text-align: left; }
 .sp-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
-.sp-field-label { display: block; font-size: 12px; font-weight: 600; color: var(--text-muted); margin: 12px 0 5px; }
+.sp-field-label { display: block; font-size: 12px; font-weight: 600; color: var(--text-color); margin: 12px 0 5px; }
+/* hint text riding a field label reads as a hint, not as more label */
+.sp-field-label .settings-sub { font-size: 11px; font-style: italic; opacity: .65; margin-left: 4px; }
 .sp-name-input { max-width: none; width: 100%; }
 /* section headers pop — the formula choice was getting lost as a muted micro-label */
 .sp-section-head { font-size: 13px; font-weight: 700; color: var(--text-hover); margin: 16px 0 7px; }
@@ -1275,9 +1295,8 @@ tr.stk-detail > td { background: var(--bg-tertiary); padding: 0; }
 
 .mail-entry { border-bottom: 1px solid var(--border); padding: 8px 0; }
 .mail-entry:last-of-type { border-bottom: none; }
-.mail-entry-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
-.mail-entry-label { font-size: 12px; color: var(--text-muted); flex: 0 0 190px; }
-.mail-entry .mail-label { max-width: 250px; }
+.mail-entry-row { display: flex; align-items: center; gap: 8px; }
+.mail-entry .mail-label { flex: 0 0 170px; width: 170px; } /* character dropdown column */
 .mail-entry .mail-path { max-width: none; flex: 1 1 auto; }
 .mail-remove { flex: 0 0 auto; }
 
@@ -1377,3 +1396,157 @@ tr.stk-detail > td { background: var(--bg-tertiary); padding: 0; }
 ::-webkit-scrollbar-track { background: var(--bg-tertiary); }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 5px; }
 ::-webkit-scrollbar-thumb:hover { background: #3a4152; }
+
+/* ---- Harvesters ---- */
+.harv-wrap { background: var(--bg-primary); padding: 2px; }
+/* cards stretch to the row's tallest sibling — footer pins to the bottom via
+   the meters' flex-grow, so heights always match across a row */
+.harv-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(430px, 1fr)); gap: 12px; }
+.harv-list.harv-list-grid { display: block; } /* grid view is one table, not card tiles */
+.lab-exps.lab-exps-grid { display: block; }
+/* grid views: numbers, dates, and action icons stay on one line — only pick pills wrap */
+.harv-list-grid td, .lab-exps-grid td { white-space: nowrap; }
+.lab-exps-grid .lab-picks-cell { white-space: normal; }
+.harv-cell.bad { color: var(--accent); font-weight: 700; }
+.harv-cell.warn { color: var(--q-good); }
+/* grid view's hopper gauge — a slim bar ABOVE the numbers, card-meter colors/shimmer;
+   the empty track must read against the row, so it gets its own lighter tint */
+.harv-minibar { display: block; width: 60px; height: 4px; border-radius: 3px;
+  background: rgba(255, 255, 255, .13); overflow: hidden; margin-bottom: 4px; }
+.harv-minibar-text { display: block; }
+/* card anatomy: darker header (name/what/where) → body (meters) → darker footer (actions) */
+.harv-card { background: var(--bg-secondary); border-radius: 8px; padding: 0; overflow: hidden;
+  display: flex; flex-direction: column; }
+.harv-hd { padding: 11px 14px 9px; background: rgba(0, 0, 0, .16); border-bottom: 1px solid var(--border); }
+.harv-title { display: flex; align-items: center; gap: 10px; }
+.harv-name { font-size: 15px; font-weight: 700; color: var(--text-hover); }
+.harv-char { font-size: 11px; color: var(--text-muted); }
+.harv-char i { margin-right: 4px; }
+.harv-flag { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+  border-radius: 3px; padding: 2px 7px; margin-left: auto; }
+.harv-flag.bad { background: rgba(226, 67, 80, .15); color: var(--accent); }
+.harv-flag.warn { background: rgba(255, 255, 110, .1); color: var(--q-good); }
+/* one line, ellipsized — headers stay the same height on every card (full text in the tip) */
+.harv-sub { font-size: 12px; color: var(--text-muted); margin-top: 3px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.harv-sub b { color: var(--text-primary); }
+.harv-reslink { cursor: pointer; }
+.harv-reslink:hover { color: var(--accent); text-decoration: underline; }
+.harv-meters { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; flex: 1 1 auto; }
+.harv-meter-row { display: flex; align-items: center; gap: 10px; }
+.harv-meter-label { flex: 0 0 52px; font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; }
+.harv-meter { position: relative; flex: 1 1 auto; height: 7px; border-radius: 4px; background: var(--bg-primary); overflow: hidden; }
+.harv-meter-fill { display: block; position: relative; overflow: hidden; height: 100%; background: var(--accent-dark); transition: width .2s; }
+/* actively-filling hopper: a highlight streams rightward through the filled part */
+.harv-meter-fill.filling { background: var(--accent-green); }
+.harv-meter-fill.filling::after { content: ''; position: absolute; top: 0; bottom: 0; width: 46px; left: -46px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.35), transparent);
+  animation: harv-flow 2.6s ease-in-out infinite; }
+@keyframes harv-flow { to { left: 100%; } }
+.harv-meter-fill.ok { background: var(--accent-green); }
+.harv-meter-fill.warn { background: #b7a83a; }
+.harv-meter-fill.bad { background: var(--accent); }
+.harv-meter-text { flex: 0 0 auto; font-size: 11px; color: var(--text-primary); min-width: 150px; text-align: right; }
+.harv-meter-text.bad { color: var(--accent); font-weight: 700; }
+.harv-meter-text.warn { color: var(--q-good); }
+.harv-actions { display: flex; align-items: center; gap: 6px; padding: 9px 14px;
+  background: rgba(0, 0, 0, .16); border-top: 1px solid var(--border); }
+.harv-actions .btn-sm { font-size: 11px; padding: 0 10px; height: 28px; white-space: nowrap; }
+.harv-actions-right { margin-left: auto; display: inline-flex; gap: 4px; }
+.harv-log { padding: 8px 14px 10px; display: flex; flex-direction: column; gap: 5px; }
+
+/* compact refill dialog (power / maintenance / hopper) */
+.harv-pool-card { max-width: 400px; }
+.harv-pool-now { font-size: 12px; color: var(--text-muted); margin: -4px 0 12px; }
+.harv-pool-now b { color: var(--text-hover); }
+/* native track renders WHITE in WKWebView — draw our own (fill painted via JS gradient) */
+.harv-pool-slider { -webkit-appearance: none; appearance: none; width: 100%; height: 6px;
+  border-radius: 3px; background: var(--bg-primary); outline: none; margin: 4px 0 12px; }
+.harv-pool-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none;
+  width: 16px; height: 16px; border-radius: 50%; background: var(--accent);
+  cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,.5); }
+.harv-pool-pills { display: flex; align-items: center; gap: 6px; }
+.harv-pill { background: var(--bg-primary); border: 0; border-radius: 12px; color: var(--text-color);
+  font-size: 11px; font-weight: 600; padding: 5px 11px; cursor: pointer; }
+.harv-pill:hover { background: var(--accent-dark); color: #fff; }
+.harv-pool-exact { flex: 1 1 auto; min-width: 0; max-width: none; margin-left: 4px; }
+.harv-pool-new { font-size: 12px; color: var(--text-muted); margin-top: 10px; }
+.harv-pool-new b { color: var(--q-fair); }
+.harv-ev { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-primary); }
+.harv-ev i { width: 14px; color: var(--text-muted); }
+.harv-ev-when { margin-left: auto; color: var(--text-muted); font-size: 11px; white-space: nowrap; }
+.harv-form-card { max-width: 640px; }
+/* Characters page */
+.char-ico { color: var(--text-muted); font-size: 12px; margin-right: 4px; }
+.char-fullname { color: var(--text-muted); font-weight: 400; }
+.char-f-bio { resize: vertical; width: 100%; max-width: none; min-height: 110px; height: auto;
+  font-family: inherit; line-height: 1.5; } /* .filter-input's 220px cap doesn't apply here */
+/* server-parse state, shown INSIDE the type pill (sale/purchase mails only) */
+.mm-typecell { white-space: nowrap; }
+.mm-st-pend { color: var(--q-good); }
+.mm-st-done { color: var(--q-fair); }
+/* dev-mode calc debug — the bench arithmetic, spelled out */
+.lab-debug { margin-top: 14px; background: var(--bg-secondary); border-radius: 8px;
+  padding: 10px 14px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
+.lab-dbg-head { font-size: 12px; font-weight: 600; color: var(--text-hover); margin-bottom: 6px;
+  display: flex; align-items: center; gap: 7px; font-family: inherit; }
+.lab-dbg-head i { color: var(--q-accept); }
+.lab-dbg-sec { margin-top: 8px; }
+.lab-dbg-title { color: var(--q-accept); margin-bottom: 3px; }
+.lab-dbg-table { width: 100%; border-collapse: collapse; }
+.lab-dbg-table th { text-align: left; color: var(--text-muted); font-weight: 400; padding: 2px 10px 2px 0; }
+.lab-dbg-table td { padding: 2px 10px 2px 0; color: var(--text-color); vertical-align: top; }
+.lab-dbg-miss { color: var(--accent); }
+.lab-dbg-sum { margin-top: 4px; color: var(--text-muted); }
+.lab-dbg-sum b { color: var(--text-hover); }
+
+.mail-label-missing { box-shadow: inset 0 0 0 1px var(--accent); } /* folder saved without its character */
+.set-addpath-row { display: flex; justify-content: flex-end; }
+
+.set-inline-pref { display: flex; align-items: center; gap: 10px; font-size: 13px; margin: 6px 0 10px; }
+.set-inline-pref .form-select { width: auto; }
+.set-datefmt-select { min-width: 250px; } /* fits "International — DD/MM/YY" without clipping */
+
+/* three-way mail disposition in Settings */
+.set-maildisp { display: flex; flex-direction: column; gap: 5px; margin-top: 4px; }
+.set-maildisp-label { font-size: 13px; color: var(--text-muted); }
+.set-disp-opt { display: flex; align-items: center; gap: 7px; font-size: 13px; cursor: pointer;
+  white-space: nowrap; } /* "Move it to <path>" stays one line — the path chip ellipsizes instead */
+.set-disp-opt input[type="radio"] { accent-color: var(--accent); flex-shrink: 0; }
+.set-disp-opt:has(input:disabled) { color: var(--text-muted); }
+.set-movedir { font-size: 11px; background: var(--bg-primary); border-radius: 4px; color: var(--text-muted);
+  padding: 2px 7px; flex: 0 1 auto; min-width: 0; max-width: 420px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* add/edit harvester form */
+.harv-derived { margin-top: 14px; background: var(--bg-primary); border-radius: 6px;
+  padding: 9px 13px; font-size: 12px; color: var(--text-muted);
+  box-shadow: inset 3px 0 0 var(--accent-green); }
+.harv-derived b { color: var(--text-hover); font-weight: 600; }
+.harv-derived-good { color: var(--q-fair) !important; }
+.harv-derived-warn { color: var(--q-accept); }
+.harv-grow { flex: 1 1 auto; }
+.harv-wide { width: 100%; max-width: none; }
+.harv-col2 { flex: 0 0 260px; } /* fixed right column keeps the grow columns' edges aligned */
+.harv-xy-row { display: flex; gap: 6px; }
+.harv-xy-row .filter-input { width: 70px; }
+.harv-resfind { position: relative; }
+.harv-reslist { position: absolute; top: 100%; left: 0; right: 0; z-index: 60; margin-top: 4px;
+  background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 6px;
+  box-shadow: 0 6px 18px rgba(0,0,0,.45); overflow: hidden; }
+.harv-res-opt { padding: 7px 12px; font-size: 13px; cursor: pointer; }
+.harv-res-opt:hover { background: var(--bg-primary); }
+.harv-res-type { color: var(--text-muted); font-size: 11px; margin-left: 6px; }
+.harv-res-none { color: var(--text-muted); cursor: default; }
+.harv-res-head { padding: 6px 12px 3px; font-size: 10px; font-weight: 600; letter-spacing: .5px;
+  text-transform: uppercase; color: var(--text-muted); }
+.harv-resinfo { margin-top: 5px; font-size: 11px; color: var(--text-muted); font-style: italic; }
+.harv-res-score { float: right; font-weight: 600; font-size: 12px; }
+
+/* detected-placement suggestions (from Construction Complete mails) */
+.harv-suggest { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; flex-shrink: 0; }
+.harv-suggest-row { display: flex; align-items: center; gap: 10px; background: var(--bg-secondary);
+  border-radius: 8px; padding: 9px 14px; font-size: 13px; box-shadow: inset 3px 0 0 var(--accent-dark); }
+.harv-suggest-row > i { color: var(--q-good); }
+.harv-suggest-actions { margin-left: auto; display: inline-flex; gap: 6px; }
+.harv-suggest-actions .btn-sm { height: 28px; font-size: 11px; padding: 0 10px; }

@@ -3,22 +3,54 @@
    field is write-only: leave it blank to keep the saved key. */
 
 const MAX_MAIL_PATHS = 4;
-const setState = { mailPaths: [] }; // [{path, label}]
+const setState = { mailPaths: [], moveDir: '', characters: [] }; // [{path, label}], move destination, character names
+
+function mailDisposition() {
+  const checked = document.querySelector('input[name="set-maildisp"]:checked');
+  const v = checked ? checked.value : 'keep';
+  return v === 'move' && !setState.moveDir ? 'keep' : v; // move needs a destination
+}
+
+// "Move it to <folder>" is only selectable once a destination exists
+function renderMoveDir() {
+  const label = $('#set-movedir');
+  // front-truncate long paths in JS (CSS rtl-ellipsis scrambles the segments) —
+  // the tail is the part you recognize; the full path lives in the hover tip
+  const dir = setState.moveDir;
+  label.textContent = !dir ? 'no folder chosen' : (dir.length > 44 ? `…${dir.slice(-43)}` : dir);
+  label.title = dir;
+  const move = $('#set-disp-move');
+  move.disabled = !setState.moveDir;
+  if (!setState.moveDir && move.checked) {
+    document.querySelector('input[name="set-maildisp"][value="keep"]').checked = true;
+  }
+}
 
 function mailPathEntryHtml(entry, idx) {
+  // dropdown of the account's characters — a folder is TIED to one, not labeled
+  // freehand. A legacy label that isn't a character yet still shows (and gets
+  // created server-side on save). No characters at all → pointer to the page.
+  const names = setState.characters || [];
+  const known = names.some((n) => n.toLowerCase() === (entry.label || '').toLowerCase());
+  // a character can only watch ONE folder — names picked on other rows are off the menu
+  const taken = new Set(setState.mailPaths
+    .filter((m, i) => i !== idx && m.label)
+    .map((m) => m.label.toLowerCase()));
+  const opts = [`<option value="">${names.length ? 'Select character…' : 'No characters yet'}</option>`]
+    .concat(entry.label && !known ? [`<option value="${escapeHtml(entry.label)}" selected>${escapeHtml(entry.label)}</option>`] : [])
+    .concat(names.map((n) => `<option value="${escapeHtml(n)}"${n.toLowerCase() === (entry.label || '').toLowerCase() ? ' selected' : ''}${taken.has(n.toLowerCase()) ? ' disabled' : ''}>${escapeHtml(n)}${taken.has(n.toLowerCase()) ? ' — already watching a folder' : ''}</option>`))
+    .join('');
   return `<div class="mail-entry" data-idx="${idx}">
     <div class="mail-entry-row">
-      <span class="mail-entry-label">Character ${idx + 1} name (optional)</span>
-      <input type="text" class="form-control filter-input mail-label" placeholder="e.g., Main Tank, Trader"
-             value="${escapeHtml(entry.label || '')}">
-    </div>
-    <div class="mail-entry-row">
+      <select class="form-select filter-select mail-label ${entry.path && !entry.label ? 'mail-label-missing' : ''}"
+              title="The character whose mail lives in this folder">${opts}</select>
       <input type="text" class="form-control filter-input mail-path flex-grow-1"
              placeholder="C:\\SWG Restoration III\\profiles\\character\\mail_CharacterName"
              value="${escapeHtml(entry.path || '')}">
       <button class="btn btn-sm btn-outline-secondary mail-browse" data-browse="${idx}" title="Choose folder"><i class="fa-solid fa-folder-open"></i></button>
       ${idx > 0 ? `<button class="btn btn-sm btn-outline-secondary mail-remove" data-remove="${idx}" title="Remove">&times;</button>` : ''}
     </div>
+    ${!names.length ? '<div class="settings-sub">Add your toons on the <a role="button" data-goto="characters">Characters page</a> first — each folder needs one.</div>' : ''}
   </div>`;
 }
 
@@ -39,6 +71,7 @@ function readMailPathInputs() {
 }
 
 async function loadSettings() {
+  loadCharacters(); // fire-and-forget — server-synced list
   let res;
   try { res = await api().get_config(); }
   catch (e) { res = { ok: false, error: String(e) }; }
@@ -56,6 +89,9 @@ async function loadSettings() {
   setState.mailPaths = (cfg.mail_paths || [])
     .slice(0, MAX_MAIL_PATHS)
     .map((m) => (typeof m === 'object' && m ? { path: m.path || '', label: m.label || '' } : { path: String(m || ''), label: '' }));
+  // remember what each folder was tied to — a changed character on save means
+  // the folder's uploaded history must be re-attributed to the new one
+  setState.origByPath = Object.fromEntries(setState.mailPaths.filter((m) => m.path).map((m) => [m.path, m.label]));
   renderMailPaths();
 
   $('#set-poll').value = String(Math.max(1, Math.round((cfg.alert_poll_interval || 300) / 60)));
@@ -65,7 +101,17 @@ async function loadSettings() {
   $('#set-tray').checked = cfg.minimize_to_tray !== false;
   $('#set-notify').checked = cfg.show_notifications !== false;
   $('#set-autostart').checked = !!cfg.auto_start_monitoring;
-  $('#set-delmail').checked = !!cfg.delete_mail_after_upload;
+  // three-way disposition; legacy shells only stored the delete boolean
+  setState.moveDir = String(cfg.mail_move_dir || '');
+  const disp = ['keep', 'delete', 'move'].includes(cfg.mail_disposition)
+    ? cfg.mail_disposition
+    : (cfg.delete_mail_after_upload ? 'delete' : 'keep');
+  const radio = document.querySelector(`input[name="set-maildisp"][value="${disp}"]`);
+  if (radio) radio.checked = true;
+  renderMoveDir();
+  const df = cfg.date_format === 'intl' ? 'intl' : (cfg.date_format === 'us' ? 'us' : (localStorage.getItem('dateFormat') || 'us'));
+  $('#set-datefmt').value = df;
+  setDateFormat(df);
 
   refreshDatasetStatus();
 }
@@ -105,6 +151,27 @@ async function saveSettings() {
 
   try {
     const mailPaths = setState.mailPaths.filter((m) => m.path);
+    // every watched folder needs its character — sales/harvesters/filtering key off it
+    if (mailPaths.some((m) => !m.label)) {
+      renderMailPaths(); // repaints the missing-label highlight
+      throw new Error('Each mail folder needs a character — pick one above its path.');
+    }
+    // ...and one character can't watch two folders (the game keeps one mail folder per toon)
+    const labels = mailPaths.map((m) => m.label.toLowerCase());
+    if (new Set(labels).size !== labels.length) {
+      throw new Error('Each folder needs a different character — one character has one mail folder.');
+    }
+    // typed a name we don't know yet? create it server-side (409 duplicate = fine)
+    try {
+      const known = new Set([...document.querySelectorAll('#set-char-list option')]
+        .map((o) => o.value.toLowerCase()));
+      for (const m of mailPaths) {
+        if (!known.has(m.label.toLowerCase())) {
+          await apiFetch('POST', 'api/characters.php', { data: { name: m.label } });
+        }
+      }
+      loadCharacters(); // refresh the datalist with anything just created
+    } catch (_) { /* offline — labels still save; sync next time */ }
     const newKey = $('#set-apikey').value.trim();
     const entries = [
       ['mail_paths', mailPaths],
@@ -112,13 +179,37 @@ async function saveSettings() {
       ['minimize_to_tray', $('#set-tray').checked],
       ['show_notifications', $('#set-notify').checked],
       ['auto_start_monitoring', $('#set-autostart').checked],
-      ['delete_mail_after_upload', $('#set-delmail').checked],
+      ['date_format', $('#set-datefmt').value],
+      ['mail_disposition', mailDisposition()],
+      ['mail_move_dir', setState.moveDir || ''],
+      // legacy key kept in sync so an older shell still honors "delete"
+      ['delete_mail_after_upload', mailDisposition() === 'delete'],
       ['api_key', newKey], // always saved — a blank field clears the key
     ];
 
     for (const [key, value] of entries) {
       const res = await api().set_config(key, value);
       if (!res.ok) throw new Error(res.error || `failed to save ${key}`);
+    }
+    // a changed date format must invalidate every already-rendered page —
+    // cached pages would keep showing dates in the old style until relaunch
+    const fmtChanged = ($('#set-datefmt').value === 'intl') !== (appDateFmt === 'intl');
+    setDateFormat($('#set-datefmt').value);
+    if (fmtChanged && typeof loadedPages !== 'undefined') loadedPages.clear();
+
+    // folder re-tied to a different character → migrate its uploaded history
+    if (setState.origByPath && typeof api().mail_rename_character === 'function') {
+      for (const m of mailPaths) {
+        const old = setState.origByPath[m.path];
+        if (old && m.label && old !== m.label) {
+          try {
+            const r = await api().mail_rename_character(old, m.label);
+            const n = r.ok && r.data ? safeInt(r.data.moved) : 0;
+            if (n) toast(`Re-attributed ${fmtNum(n)} mails: ${old} → ${m.label}`);
+          } catch (_) { /* sweep self-heal still catches files in the folder */ }
+        }
+      }
+      setState.origByPath = Object.fromEntries(mailPaths.map((m) => [m.path, m.label]));
     }
 
     $('#set-apikey-hint').textContent = newKey
@@ -145,7 +236,33 @@ function showSettingsStatus(msg, ok) {
   setStatusTimer = setTimeout(() => { el.textContent = ''; }, 4000);
 }
 
+// ---- Characters (server-synced; used by Harvesters, mail filtering, ...) ----
+
+// characters themselves live on the Characters page now — Settings needs the
+// names to populate the per-folder character dropdowns
+async function loadCharacters() {
+  let res;
+  try { res = await apiFetch('GET', 'api/characters.php'); }
+  catch (e) { res = { ok: false, error: String(e) }; }
+  const chars = (res.ok && res.data && res.data.characters) || [];
+  setState.characters = chars.map((c) => c.name);
+  $('#set-char-list').innerHTML = chars.map((c) => `<option value="${escapeHtml(c.name)}">`).join('');
+  // repaint the folder rows with the fresh list (keep any in-flight edits)
+  readMailPathInputs();
+  renderMailPaths();
+}
+
 function initSettings() {
+  $('#set-movedir-browse').addEventListener('click', async () => {
+    let res;
+    try { res = await api().pick_folder(); } catch (_) { return; }
+    if (res.ok && res.data) {
+      setState.moveDir = String(res.data);
+      renderMoveDir();
+      $('#set-disp-move').checked = true; // picking a folder implies you want the move
+    }
+  });
+
   $('#set-addpath').addEventListener('click', () => {
     if (setState.mailPaths.length >= MAX_MAIL_PATHS) return;
     readMailPathInputs();
@@ -153,7 +270,17 @@ function initSettings() {
     renderMailPaths();
   });
 
+  // picking a character on one row greys it out on the others right away
+  $('#set-mailpaths').addEventListener('change', (e) => {
+    if (e.target.closest('.mail-label')) {
+      readMailPathInputs();
+      renderMailPaths();
+    }
+  });
+
   $('#set-mailpaths').addEventListener('click', async (e) => {
+    const goto = e.target.closest('[data-goto]');
+    if (goto) { showPage(goto.dataset.goto); return; }
     const browse = e.target.closest('[data-browse]');
     if (browse) {
       // native Finder/Explorer picker via the bridge

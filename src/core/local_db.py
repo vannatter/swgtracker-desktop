@@ -134,7 +134,8 @@ class LocalDB:
         # mail_ledger predates its detail/kind/raw + sent_at/category columns
         for col, decl in (("detail", "TEXT DEFAULT ''"), ("kind", "TEXT DEFAULT 'mail'"),
                           ("raw", "TEXT DEFAULT ''"), ("sent_at", "INTEGER DEFAULT 0"),
-                          ("category", "TEXT DEFAULT 'other'")):
+                          ("category", "TEXT DEFAULT 'other'"),
+                          ("character", "TEXT DEFAULT ''")):
             try:
                 self._conn.execute(f"ALTER TABLE mail_ledger ADD COLUMN {col} {decl}")
             except sqlite3.OperationalError:
@@ -363,22 +364,25 @@ class LocalDB:
             "SELECT 1 FROM mail_ledger WHERE mail_id = ?", (str(mail_id),)).fetchone() is not None
 
     def mail_ledger_add(self, mail_id: str, subject: str = "", detail: str = "",
-                        kind: str = "mail", raw: str = ""):
+                        kind: str = "mail", raw: str = "", character: str = ""):
         self._conn.execute(
             "INSERT OR REPLACE INTO mail_ledger"
-            " (mail_id, subject, detail, kind, raw, uploaded_at, sent_at, category)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            " (mail_id, subject, detail, kind, raw, uploaded_at, sent_at, category, character)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (str(mail_id), subject, detail, kind, raw, int(time.time()),
-             parse_mail_sent_at(raw), mail_category(subject, kind)))
+             parse_mail_sent_at(raw), mail_category(subject, kind), str(character or "")))
         self._conn.commit()
 
     @staticmethod
-    def _mail_where(category: str, search: str) -> tuple[str, list]:
-        """Shared WHERE for category + subject/detail search across the mail views."""
+    def _mail_where(category: str, search: str, character: str = "") -> tuple[str, list]:
+        """Shared WHERE for category/character + subject/detail search across the mail views."""
         clauses, params = [], []
         if category:
             clauses.append("category = ?")
             params.append(str(category))
+        if character:
+            clauses.append("character = ?")
+            params.append(str(character))
         if search:
             like = f"%{search}%"
             clauses.append("(subject LIKE ? OR detail LIKE ?)")
@@ -386,21 +390,21 @@ class LocalDB:
         return (" WHERE " + " AND ".join(clauses)) if clauses else "", params
 
     def mail_history(self, limit: int = 200, offset: int = 0,
-                     category: str = "", search: str = "") -> list[dict]:
+                     category: str = "", search: str = "", character: str = "") -> list[dict]:
         # raw stays out of the list payload (big bridge responses drop in WKWebView);
         # the viewer fetches one mail at a time via mail_raw(). Ordered by the
         # in-game send time (sent_at), falling back to upload time when unknown.
-        where, params = self._mail_where(category, search)
+        where, params = self._mail_where(category, search, character)
         rows = self._conn.execute(
-            "SELECT mail_id, subject, detail, kind, uploaded_at, sent_at, category,"
+            "SELECT mail_id, subject, detail, kind, uploaded_at, sent_at, category, character,"
             " (COALESCE(raw, '') != '') AS has_raw"
             " FROM mail_ledger" + where +
             " ORDER BY COALESCE(NULLIF(sent_at, 0), uploaded_at) DESC, mail_id DESC"
             " LIMIT ? OFFSET ?", params + [int(limit), int(offset)]).fetchall()
         return [dict(r) for r in rows]
 
-    def mail_count(self, category: str = "", search: str = "") -> int:
-        where, params = self._mail_where(category, search)
+    def mail_count(self, category: str = "", search: str = "", character: str = "") -> int:
+        where, params = self._mail_where(category, search, character)
         return self._conn.execute(
             "SELECT COUNT(*) AS n FROM mail_ledger" + where, params).fetchone()["n"]
 
@@ -409,11 +413,49 @@ class LocalDB:
             "SELECT category, COUNT(*) AS n FROM mail_ledger GROUP BY category").fetchall()
         return {(r["category"] or "other"): r["n"] for r in rows}
 
-    def mail_ids_filtered(self, category: str = "", search: str = "") -> list[str]:
-        where, params = self._mail_where(category, search)
+    def mail_ids_filtered(self, category: str = "", search: str = "", character: str = "") -> list[str]:
+        where, params = self._mail_where(category, search, character)
         rows = self._conn.execute(
             "SELECT mail_id FROM mail_ledger" + where, params).fetchall()
         return [r["mail_id"] for r in rows]
+
+    def mail_character_counts(self) -> dict:
+        rows = self._conn.execute(
+            "SELECT character, COUNT(*) AS n FROM mail_ledger"
+            " WHERE COALESCE(character, '') != '' GROUP BY character").fetchall()
+        return {r["character"]: r["n"] for r in rows}
+
+    def mail_rename_character(self, old: str, new: str) -> int:
+        """Re-attribute every ledgered mail from OLD to NEW — the folder's
+        character changed in Settings, and history must follow it."""
+        if not old or not new or old == new:
+            return 0
+        cur = self._conn.execute(
+            "UPDATE mail_ledger SET character = ? WHERE character = ?",
+            (str(new), str(old)))
+        self._conn.commit()
+        return cur.rowcount
+
+    def mail_set_character(self, mail_id: str, character: str) -> None:
+        """Stamp CHARACTER onto one mail if it differs — sweep self-healing for
+        files still sitting in a re-labeled folder."""
+        if not character:
+            return
+        self._conn.execute(
+            "UPDATE mail_ledger SET character = ? WHERE mail_id = ? AND COALESCE(character, '') != ?",
+            (str(character), str(mail_id), str(character)))
+        self._conn.commit()
+
+    def mail_attribute_unassigned(self, character: str) -> int:
+        """Stamp CHARACTER onto every unattributed mail — safe only when the user
+        has a single mail folder (all history must have come from it)."""
+        if not character:
+            return 0
+        cur = self._conn.execute(
+            "UPDATE mail_ledger SET character = ? WHERE COALESCE(character, '') = ''",
+            (str(character),))
+        self._conn.commit()
+        return cur.rowcount
 
     def mail_sales_count(self) -> int:
         return self._conn.execute(

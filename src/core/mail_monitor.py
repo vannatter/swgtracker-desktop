@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
+import shutil
 import threading
 import time
 from pathlib import Path
@@ -90,11 +91,22 @@ class MailMonitor:
     # --- internals ---
 
     def _paths(self) -> list[Path]:
+        return [p for p, _ in self._folders()]
+
+    def _folders(self) -> list[tuple[Path, str]]:
+        """(folder, character) pairs. Character = the Settings label, else derived
+        from the folder name (SWG mailsave dirs are usually mail_<Character>)."""
         out = []
         for entry in self.config.get("mail_paths", []) or []:
             raw = entry.get("path") if isinstance(entry, dict) else entry
-            if raw:
-                out.append(Path(str(raw)).expanduser())
+            if not raw:
+                continue
+            p = Path(str(raw)).expanduser()
+            label = (entry.get("label") or "").strip() if isinstance(entry, dict) else ""
+            if not label:
+                base = p.name
+                label = base[5:] if base.lower().startswith("mail_") else base
+            out.append((p, label))
         return out
 
     def _loop(self):
@@ -108,10 +120,26 @@ class MailMonitor:
             self._stop.wait(SCAN_INTERVAL)
         logger.info("Mail monitor stopped")
 
+    def _disposition(self):
+        """(disp, move_dir): what happens to a mail file once it's uploaded.
+        'move' without a destination degrades to 'keep' — never move blindly.
+        Legacy configs only have the delete boolean."""
+        disp = str(self.config.get("mail_disposition", "") or "").strip().lower()
+        if disp not in ("keep", "delete", "move"):
+            disp = "delete" if self.config.get("delete_mail_after_upload", False) else "keep"
+        move_dir = None
+        if disp == "move":
+            raw = str(self.config.get("mail_move_dir", "") or "").strip()
+            if raw:
+                move_dir = Path(raw).expanduser()
+            else:
+                disp = "keep"
+        return disp, move_dir
+
     def _sweep(self):
-        delete_after = bool(self.config.get("delete_mail_after_upload", False))
+        disp, move_dir = self._disposition()
         self._sweep_sales = []  # (item, credits) uploaded this pass — notified in one batch
-        for folder in self._paths():
+        for folder, character in self._folders():
             if not folder.is_dir():
                 continue
             for f in sorted(folder.glob("*.mail")):
@@ -119,6 +147,8 @@ class MailMonitor:
                     return
                 mail_id = f.stem
                 if self.db.mail_ledger_has(mail_id):
+                    # folder re-labeled since upload? files still here follow it
+                    self.db.mail_set_character(mail_id, character)
                     if mail_id in self._need_raw:
                         # uploaded before we kept raw copies — grab it while the file exists
                         try:
@@ -126,13 +156,12 @@ class MailMonitor:
                         except OSError:
                             pass
                         self._need_raw.discard(mail_id)
-                    if delete_after:
-                        self._delete(f)
+                    self._dispose(f, disp, move_dir)
                     continue
-                self._upload(f, mail_id, delete_after)
+                self._upload(f, mail_id, disp, move_dir, character)
         self._notify_sales()
 
-    def _upload(self, f: Path, mail_id: str, delete_after: bool):
+    def _upload(self, f: Path, mail_id: str, disp: str = "keep", move_dir=None, character: str = ""):
         # backoff: a file that just failed doesn't get retried every 5s sweep
         last_fail = self._fail_at.get(mail_id, 0)
         if last_fail and time.time() - last_fail < FAIL_RETRY_SECS:
@@ -193,14 +222,13 @@ class MailMonitor:
                 detail = f"{item} ← {seller} — {credits} credits"
             except (IndexError, ValueError):
                 pass  # unparsed purchase still ledgers with its subject
-        self.db.mail_ledger_add(mail_id, subject, detail, kind, raw=content)
+        self.db.mail_ledger_add(mail_id, subject, detail, kind, raw=content, character=character)
         if duplicate:
             self._event(kind, f.name, f"already on server — {detail or subject}")
         else:
             self.session_uploaded += 1
             self._event(kind, f.name, detail or subject)
-        if delete_after:
-            self._delete(f)
+        self._dispose(f, disp, move_dir)
 
     def _notify_sales(self):
         """One notification per sweep: a lone sale gets its detail, a backlog
@@ -228,6 +256,27 @@ class MailMonitor:
             f.unlink()
         except OSError:
             logger.warning("couldn't delete %s", f)
+
+    def _dispose(self, f: Path, disp: str, move_dir):
+        """Post-upload file handling: keep (default), delete, or move to the
+        user's processed-mail folder (collision-safe rename)."""
+        if disp == "delete":
+            self._delete(f)
+            return
+        if disp != "move" or move_dir is None:
+            return
+        try:
+            if f.parent.resolve() == move_dir.resolve():
+                return  # destination IS the watched folder — nothing to do
+            move_dir.mkdir(parents=True, exist_ok=True)
+            dest = move_dir / f.name
+            n = 1
+            while dest.exists():
+                dest = move_dir / f"{f.stem}_{n}{f.suffix}"
+                n += 1
+            shutil.move(str(f), str(dest))
+        except OSError:
+            logger.warning("couldn't move %s to %s", f, move_dir)
 
     def _event(self, kind: str, name: str, detail: str):
         self.recent.insert(0, {"kind": kind, "file": name, "detail": detail,

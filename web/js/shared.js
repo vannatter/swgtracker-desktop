@@ -142,11 +142,35 @@ function parseAmount(text) {
   return parseFloat(m[1]) * mult;
 }
 
-// Unix seconds -> "06/14/26, 3:05 PM" (matches the Tk app's date column)
+// Date format preference — 'us' MM/DD/YY or 'intl' DD/MM/YY (Settings).
+// localStorage-cached so the very first paint already uses it.
+let appDateFmt = localStorage.getItem('dateFormat') === 'intl' ? 'intl' : 'us';
+function setDateFormat(fmt) {
+  appDateFmt = fmt === 'intl' ? 'intl' : 'us';
+  localStorage.setItem('dateFormat', appDateFmt);
+}
+
+// Unix seconds OR a server "YYYY-MM-DD HH:MM:SS" string -> Date (null if neither).
+// Server datetimes are UTC but arrive zoneless; WebKit can't parse the space form
+// and a naive parse reads as LOCAL — normalise to T-form and pin to UTC.
+function parseAnyDate(dt) {
+  if (dt == null || dt === '') return null;
+  if (/^\d+$/.test(String(dt))) {
+    const n = parseInt(dt, 10);
+    return n > 0 ? new Date(n * 1000) : null;
+  }
+  let str = String(dt).replace(' ', 'T');
+  if (!/[zZ]|[+-]\d\d:?\d\d$/.test(str)) str += 'Z';
+  const d = new Date(str);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+// -> "06/14/26, 3:05 PM" (or "14/06/26, 15:05" international) — EVERY visual
+// date goes through here so the Settings date-format pick applies everywhere
 function fmtDate(ts) {
-  const n = parseInt(ts, 10);
-  if (!Number.isFinite(n) || n <= 0) return String(ts ?? '');
-  return new Date(n * 1000).toLocaleString('en-US', {
+  const d = parseAnyDate(ts);
+  if (!d) return String(ts ?? '');
+  return d.toLocaleString(appDateFmt === 'intl' ? 'en-GB' : 'en-US', {
     month: '2-digit', day: '2-digit', year: '2-digit',
     hour: 'numeric', minute: '2-digit',
   });
@@ -166,8 +190,7 @@ function showGridLoading(sel) {
 // Use anywhere a human-readable age is shown.
 function fmtAgoTip(dt) {
   if (!dt) return '\u2014';
-  const exact = /^\d+$/.test(String(dt)) ? fmtDate(dt) : String(dt);
-  return `<span title="${escapeHtml(exact)}">${fmtAgo(dt)}</span>`;
+  return `<span title="${escapeHtml(fmtDate(dt))}">${fmtAgo(dt)}</span>`;
 }
 
 // Transient toast, bottom-center (id #toast; class avoids Bootstrap's .toast)
@@ -464,21 +487,44 @@ function initTooltips() {
   document.body.appendChild(tip);
 
   document.addEventListener('mouseover', (e) => {
-    const el = e.target.closest?.('[title], [data-tip]');
+    const el = e.target.closest?.('[title], [data-tip], [data-richtip]');
     if (!el) { tip.hidden = true; return; }
     if (el.hasAttribute('title')) {
       el.dataset.tip = el.getAttribute('title');
       el.removeAttribute('title');
     }
+    // data-richtip carries pre-built (already-escaped) HTML — the multi-line
+    // resource cards; data-tip stays plain text
+    const rich = el.dataset.richtip;
     const text = el.dataset.tip;
-    if (!text) { tip.hidden = true; return; }
-    tip.textContent = text;
+    if (!rich && !text) { tip.hidden = true; return; }
+    tip.classList.toggle('app-tip-rich', !!rich);
+    if (rich) tip.innerHTML = rich; else tip.textContent = text;
     tip.hidden = false;
     const r = el.getBoundingClientRect();
     const tw = tip.offsetWidth;
     const th = tip.offsetHeight;
-    const x = Math.max(6, Math.min(window.innerWidth - tw - 6, r.left + r.width / 2 - tw / 2));
-    const y = r.top - th - 6 < 4 ? r.bottom + 6 : r.top - th - 6;
+    let x, y;
+    if (rich) {
+      // dock beside the cell's CONTENT (a Range rect ends where the text ends,
+      // not where the padded column ends), arrow pointing back at it
+      let a = r;
+      try {
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        const tr = range.getBoundingClientRect();
+        if (tr.width || tr.height) a = tr;
+      } catch (_) { /* fall back to the element rect */ }
+      x = a.right + 12;
+      let side = 'right';
+      if (x + tw > window.innerWidth - 6) { x = Math.max(6, a.left - tw - 12); side = 'left'; }
+      y = Math.max(4, Math.min(window.innerHeight - th - 4, a.top + a.height / 2 - th / 2));
+      tip.classList.toggle('tip-side-right', side === 'right');
+      tip.classList.toggle('tip-side-left', side === 'left');
+    } else {
+      x = Math.max(6, Math.min(window.innerWidth - tw - 6, r.left + r.width / 2 - tw / 2));
+      y = r.top - th - 6 < 4 ? r.bottom + 6 : r.top - th - 6;
+    }
     tip.style.left = `${x}px`;
     tip.style.top = `${y}px`;
   });
@@ -551,20 +597,8 @@ function confirmArmLabeled(btn, label = 'Confirm remove?') {
 // Relative "time ago" from a unix timestamp or "YYYY-MM-DD HH:MM:SS" string.
 function fmtAgo(dt) {
   if (!dt) return '';
-  let d;
-  if (/^\d+$/.test(String(dt))) {
-    d = new Date(parseInt(dt, 10) * 1000); // unix epoch — absolute, no zone needed
-  } else {
-    // Server datetimes are UTC but arrive zoneless ("2026-07-08 23:24:41").
-    // WebKit can't parse the space form, and a naive string parses as LOCAL —
-    // so for anyone behind UTC these read as the future and every recent row
-    // collapses to "just now". Normalise to T-form and pin to UTC when no
-    // zone is present.
-    let str = String(dt).replace(' ', 'T');
-    if (!/[zZ]|[+-]\d\d:?\d\d$/.test(str)) str += 'Z';
-    d = new Date(str);
-  }
-  if (Number.isNaN(d.getTime())) return String(dt);
+  const d = parseAnyDate(dt);
+  if (!d) return String(dt);
   const s = Math.floor((Date.now() - d.getTime()) / 1000);
   if (s < 60) return 'just now';
   const m = Math.floor(s / 60);

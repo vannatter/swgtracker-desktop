@@ -95,6 +95,22 @@ class WebApi:
         self.app_version = app_version
         # Optional app controller (mail monitor start/stop, connection test).
         self.controller = controller
+        # Single mail folder => all past mails came from it; stamp its character
+        # onto unattributed ledger rows so the Mail character filter covers history.
+        try:
+            entries = [e for e in (self.config.get("mail_paths", []) or [])
+                       if (e.get("path") if isinstance(e, dict) else e)]
+            if self.local_db and len(entries) == 1:
+                e = entries[0]
+                label = (e.get("label") or "").strip() if isinstance(e, dict) else ""
+                if not label:
+                    import os
+                    base = os.path.basename(str(e.get("path") if isinstance(e, dict) else e).rstrip("/"))
+                    label = base[5:] if base.lower().startswith("mail_") else base
+                if label:
+                    self.local_db.mail_attribute_unassigned(label)
+        except Exception:
+            logger.debug("single-folder mail attribution skipped", exc_info=True)
         # Optional offline dataset mirror (dataset_sync.py).
         self.dataset_sync = dataset_sync
 
@@ -771,19 +787,9 @@ class WebApi:
         except Exception as e:
             return _err(e)
 
-    def get_class_pool(self, class_code, active_only=False):
-        """All mirror resources under a class code (any tree depth), with stats,
-        caps, eCPU, spawn state — the Laboratory computes rates client-side."""
-        try:
-            leafs = self.dataset_sync.expand_category(str(class_code)) or [str(class_code)]
-            data = self.local_db.search_ds_resources(
-                type_codes=leafs, status="active" if active_only else "",
-                perpage=5000, sort="timestamp", order="DESC")
-            return _ok(data)
-        except Exception as e:
-            return _err(e)
-
     _POOL_FIELDS = ("id", "name", "type_name", "status", "cpu", "planet_mustafar",
+                    "timestamp",  # spawn-seen epoch — the Lab hover card's age
+                    "value_rating",  # site Score (0–100) — the hover card shows it
                     "oq", "cr", "cd", "dr", "hr", "ma", "sr", "ut", "fl", "pe",
                     "oq_max", "cr_max", "cd_max", "dr_max", "hr_max", "ma_max",
                     "sr_max", "ut_max", "fl_max", "pe_max")
@@ -891,27 +897,33 @@ class WebApi:
 
     # --- Config ---
 
+    # Secrets never cross the bridge; everything else does. A BLOCKLIST (not a
+    # whitelist) so new UI features can persist config keys via set_config and
+    # read them back without a shell release each time.
+    _CONFIG_SECRET_KEYS = ("deploy_token",)
+
     def get_config(self):
         try:
-            cfg = self.config.get_all()
-            return _ok({
-                # The key belongs to the local user; Settings shows it masked with a reveal toggle.
-                "api_key": cfg.get("api_key", ""),
-                "has_api_key": bool(cfg.get("api_key")),
-                "show_notifications": cfg.get("show_notifications", True),
-                "minimize_to_tray": cfg.get("minimize_to_tray", True),
-                "auto_start_monitoring": cfg.get("auto_start_monitoring", False),
-                # honored by the mail monitor once it lands: uploaded .mail files
-                # are deleted from the SWG profile folder to keep it small
-                "delete_mail_after_upload": cfg.get("delete_mail_after_upload", False),
-                "has_deploy_token": bool(cfg.get("deploy_token")),  # boolean only — the token stays out of JS
-                "alert_poll_interval": cfg.get("alert_poll_interval", 300),
-                "mail_paths": cfg.get("mail_paths", []),
-                "alerts": cfg.get("alerts", []),
-                # Laboratory: saved experiments (picks + notes) and boost/cap settings
-                "lab_experiments": cfg.get("lab_experiments", []),
-                "lab_settings": cfg.get("lab_settings", {}),
-            })
+            cfg = {k: v for k, v in self.config.get_all().items()
+                   if k not in self._CONFIG_SECRET_KEYS}
+            # The api key belongs to the local user; Settings shows it masked with a reveal toggle.
+            cfg["has_api_key"] = bool(cfg.get("api_key"))
+            cfg["has_deploy_token"] = bool(self.config.get("deploy_token"))  # boolean only
+            # defaults the UI relies on when keys were never written
+            cfg.setdefault("show_notifications", True)
+            cfg.setdefault("minimize_to_tray", True)
+            cfg.setdefault("auto_start_monitoring", False)
+            cfg.setdefault("delete_mail_after_upload", False)
+            # post-upload file handling: keep | delete | move (legacy bool maps in)
+            cfg.setdefault("mail_disposition",
+                           "delete" if cfg.get("delete_mail_after_upload") else "keep")
+            cfg.setdefault("mail_move_dir", "")
+            cfg.setdefault("alert_poll_interval", 300)
+            cfg.setdefault("mail_paths", [])
+            cfg.setdefault("alerts", [])
+            cfg.setdefault("lab_experiments", [])
+            cfg.setdefault("lab_settings", {})
+            return _ok(cfg)
         except Exception as e:
             return _err(e)
 
@@ -1020,17 +1032,26 @@ class WebApi:
         except Exception as e:
             return _err(e)
 
-    def mail_history(self, limit=200, offset=0, category="", search=""):
+    def mail_rename_character(self, old, new):
+        """Re-attribute ledgered mails after a folder's character changed in
+        Settings — history follows the folder to its new character."""
+        try:
+            return _ok({"moved": self.local_db.mail_rename_character(str(old or ""), str(new or ""))})
+        except Exception as e:
+            return _err(e)
+
+    def mail_history(self, limit=200, offset=0, category="", search="", character=""):
         """Uploaded-mail ledger, newest first (by in-game send time), paged and
         optionally filtered by category and/or subject search — the Mail table."""
         try:
             category = str(category or "")
             search = str(search or "").strip()
             return _ok({
-                "rows": self.local_db.mail_history(int(limit), int(offset), category, search),
-                "total": self.local_db.mail_count(category, search),
+                "rows": self.local_db.mail_history(int(limit), int(offset), category, search, str(character or "")),
+                "total": self.local_db.mail_count(category, search, str(character or "")),
                 "sales": self.local_db.mail_sales_count(),
                 "categories": self.local_db.mail_category_counts(),
+                "characters": self.local_db.mail_character_counts(),
             })
         except Exception as e:
             return _err(e)
@@ -1080,16 +1101,17 @@ class WebApi:
         except Exception as e:
             return _err(e)
 
-    def delete_mail_matching(self, category="", search=""):
+    def delete_mail_matching(self, category="", search="", character=""):
         """Bulk-delete every mail matching the current category + subject search,
         each via the full server + local + file cleanup. Requires at least one
         filter (never deletes the whole ledger). Returns {deleted, failed, total}."""
         try:
             category = str(category or "").strip()
             search = str(search or "").strip()
-            if not category and not search:
+            character = str(character or "").strip()
+            if not category and not search and not character:
                 return _err("no filter — refusing to delete everything")
-            ids = self.local_db.mail_ids_filtered(category, search)
+            ids = self.local_db.mail_ids_filtered(category, search, character)
             deleted = failed = 0
             BATCH = 500  # server caps at 1000/req; stay well under
             for i in range(0, len(ids), BATCH):
@@ -1113,10 +1135,10 @@ class WebApi:
             return _err(e)
 
     def dev_make_test_mail(self):
-        """Dev tool: drop THREE fake .mail files into the first configured folder —
-        a vendor sale, a plain 'misc' letter (Other category), and a vendor purchase
-        (Purchases category + the purchases table via the server cron) — so the
-        pipeline, per-category mass-delete, and My Purchases all have data.
+        """Dev tool: drop FOUR fake .mail files into the first configured folder —
+        a vendor sale, a plain 'misc' letter (Other category), a vendor purchase
+        (Purchases category + the purchases table via the server cron), and a
+        harvester Construction Complete (feeds the Harvesters suggestion banner).
         Ids are test-prefixed and items [TEST]-marked so everything is easy to purge
         later — locally and in the server tables."""
         try:
@@ -1187,10 +1209,20 @@ class WebApi:
             _write(pur_id, "SWG.Restoration.auctioner", "Vendor Item Purchased",
                    f'You have purchased 1 of "{pur_item}" from "{pur_seller}" for {pur_credits} credits.')
 
+            # 4) Harvester placement — the exact structure-mail format; feeds the
+            # Harvesters page's "detected a placement — add it?" suggestion flow.
+            harv_id = f"test{base}h"
+            harv_type = random.choice([
+                "Natural Gas Processor", "Elite Mineral Mining Installation",
+                "High Capacity Flora Farm", "Deep Crust Chemical Extractor"])
+            _write(harv_id, "SWG.Restoration.@player_structure:construction_complete_sender",
+                   "Construction Complete",
+                   f"Construction of your {harv_type} is now complete. You have 0 lots remaining.")
+
             return _ok({
                 "item": item, "credits": credits, "misc": misc_subject,
-                "purchase": pur_item,
-                "files": [f"{sale_id}.mail", f"{misc_id}.mail", f"{pur_id}.mail"],
+                "purchase": pur_item, "harvester": harv_type,
+                "files": [f"{sale_id}.mail", f"{misc_id}.mail", f"{pur_id}.mail", f"{harv_id}.mail"],
             })
         except Exception as e:
             return _err(e)

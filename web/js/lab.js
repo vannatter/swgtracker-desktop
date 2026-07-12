@@ -20,6 +20,7 @@ const labState = {
   currentExpId: null,  // experiment being edited on the bench (null = unsaved draft)
   draftNotes: '',      // notes for a not-yet-saved experiment
   homeQuery: '',       // free-text filter on the experiments home page
+  homeView: 'cards',   // 'cards' | 'grid' — sticky via lab_settings.homeView
   banned: new Set(),   // resource ids hidden from pools/auto-picks ("no vendor supply")
 };
 
@@ -133,6 +134,32 @@ function labAvgQ(res, slot = null) {
   return ws.reduce((sum, w) => sum + labQ(res, w, slot), 0) / ws.length;
 }
 
+// The bench's game math: each stat pools ACROSS slots — unit-weighted average
+// over the slots whose pick has the stat; slots that can't have it drop out of
+// that stat's average (they do NOT zero it, and their weight is carried by the
+// slots that do have it). Confirmed both ways in game: Tibanna Gas Cartridge
+// (gas slot has no CD) still caps with server-best picks, while a "count it as
+// zero over the full weight" model made capping impossible there.
+function labLineValue(weights, picked) {
+  let total = 0;
+  let wsum = 0;
+  let dropped = false;
+  for (const [st, w] of Object.entries(weights)) {
+    let num = 0;
+    let den = 0;
+    for (const s of picked) {
+      const caps = labSlotCaps(s);
+      const cap = caps ? safeInt(caps[st]) : 1000;
+      const v = safeInt(s.pick[st]);
+      if (v > 0 && cap > 0) { num += s.units * (v / cap) * 1000; den += s.units; }
+    }
+    if (den > 0) { total += w * (num / den); wsum += w; } else dropped = true;
+  }
+  if (!wsum) return 0;
+  // literal percents over 100 when every stat found a slot, like the site
+  return Math.min(1000, total / (dropped ? wsum : 100));
+}
+
 function labCheckedWeights() {
   return labState.formulas
     .filter((f) => labState.checked.has(String(f.formulaId)))
@@ -156,7 +183,7 @@ function labBench() {
     .map((f) => {
       // no verdict until EVERY slot is filled — a partial average overpromises
       if (!complete || !units || !f.weights) return { formula: f, composite: null, capped: false };
-      const raw = picked.reduce((sum, s) => sum + s.units * labQ(s.pick, f.weights, s), 0) / units;
+      const raw = labLineValue(f.weights, picked);
       const composite = labClamp01k(raw + boost);
       // base = resources alone; the meter shows the boost's contribution on top of it
       return { formula: f, composite, base: labClamp01k(raw), boost, capped: composite >= labState.threshold };
@@ -236,6 +263,55 @@ function labRenderBench() {
     ${lines || '<div class="al-empty">Select at least one experiment line.</div>'}
     </div>`;
   labBindBenchActions();
+  labRenderDebug();
+}
+
+// dev-mode only: the full composite arithmetic, one section per checked line —
+// one row per weighted STAT showing which slots pool into its average (slots
+// whose pick lacks the stat drop out), then the weighted rollup + buffs
+function labRenderDebug() {
+  const box = $('#lab-debug');
+  if (!box) return;
+  const picked = labState.slots.filter((s) => s.pick);
+  const on = document.body.classList.contains('dev-mode') && labState.schematic && picked.length;
+  box.hidden = !on;
+  if (!on) { box.innerHTML = ''; return; }
+  const boost = labBoostTotal();
+  const secs = labState.formulas
+    .filter((f) => labState.checked.has(String(f.formulaId)) && f.weights)
+    .map((f) => {
+      const rows = Object.entries(f.weights).map(([st, w]) => {
+        let num = 0;
+        let den = 0;
+        const parts = picked.map((s) => {
+          const caps = labSlotCaps(s);
+          const cap = caps ? safeInt(caps[st]) : 1000;
+          const v = safeInt(s.pick[st]);
+          if (v > 0 && cap > 0) {
+            num += s.units * (v / cap) * 1000;
+            den += s.units;
+            return `${escapeHtml(s.pick.name)} ${v}/${cap} ×${s.units}u`;
+          }
+          return `<span class="lab-dbg-miss">${escapeHtml(s.pick.name)} — (out of this stat's pool)</span>`;
+        }).join('&ensp;');
+        const avg = den > 0 ? num / den : 0;
+        return `<tr><td>${st.toUpperCase()} ×${w}%</td><td>${parts}</td>
+          <td>${den > 0 ? `${avg.toFixed(1)} over ${den}u` : '<span class="lab-dbg-miss">no slot has it</span>'}</td></tr>`;
+      }).join('');
+      const raw = labLineValue(f.weights, picked);
+      const final = labClamp01k(raw + boost);
+      return `<div class="lab-dbg-sec">
+        <div class="lab-dbg-title">${escapeHtml(f.formulaDescription || '')}</div>
+        <table class="lab-dbg-table"><thead><tr><th>stat</th>
+          <th>pooled from (value/slot cap × units)</th><th>stat average</th></tr></thead>
+        <tbody>${rows}</tbody></table>
+        <div class="lab-dbg-sum">Σ weight×average = <b>${raw.toFixed(2)}</b> + buffs ${boost}
+          = <b>${final.toFixed(2)}</b> vs caps-at ${labState.threshold}
+          → ${final >= labState.threshold ? '<span class="lab-caps">CAPS</span>' : `<span class="lab-nocap">misses by ${(labState.threshold - final).toFixed(1)}</span>`}</div>
+      </div>`;
+    }).join('');
+  box.innerHTML = `<div class="lab-dbg-head"><i class="fa-solid fa-bug"></i> Calc debug
+      <span class="settings-sub">each stat averages over the slots that HAVE it — a pick without the stat drops out of that stat's pool</span></div>${secs}`;
 }
 
 function labBenchHeadHtml(cost, complete) {
@@ -304,6 +380,21 @@ function labSlotVisibleRows(slot) {
   return [...show.values()].sort((a, b) => b.q - a.q);
 }
 
+// hover chip for a pool row: name — category — score — age, one line, docked
+// to the right of the cell (initTooltips places rich tips beside, not over).
+// Score is the site's value_rating (0–100), not the slot Rate.
+function labResTipHtml(r) {
+  const t = safeInt(r.timestamp);
+  const days = t ? Math.max(0, Math.floor((Date.now() / 1000 - t) / 86400)) : null;
+  const score = r.value_rating == null ? null : safeInt(r.value_rating);
+  return [
+    `<b>${escapeHtml(r.name)}</b>`,
+    escapeHtml(r.type_name || ''),
+    score === null ? '' : `<span class="${qualityClass(score)}">score ${score}</span>`,
+    days === null ? '' : (days === 0 ? 'spawned today' : `${days} day${days === 1 ? '' : 's'} old`),
+  ].filter(Boolean).join(' — ');
+}
+
 function labSlotTbodyHtml(slot) {
   const rel = labRelevantStats();
   const stats = ['oq', 'cr', 'cd', 'dr', 'hr', 'ma', 'sr', 'ut', 'fl', 'pe'];
@@ -317,7 +408,7 @@ function labSlotTbodyHtml(slot) {
   return rows.map(({ r, q }) => `
     <tr class="lab-row ${slot.pick && slot.pick.id === r.id ? 'lab-picked' : ''} ${stkState.resourceIds.has(String(r.id)) ? 'lab-stocked' : ''} ${labIsBanned(r) ? 'lab-banned' : ''}" data-rid="${r.id}">
       <td class="pin-cell">${r.status === 1 ? '<span class="lab-live" title="In spawn"></span>' : ''}</td>
-      <td class="col-name res-name">${escapeHtml(r.name)}
+      <td class="col-name res-name" data-richtip="${escapeHtml(labResTipHtml(r))}">${escapeHtml(r.name)}
         ${stkState.resourceIds.has(String(r.id)) ? (() => {
           const s = labMyStock(r);
           return s !== null && s > 0
@@ -649,6 +740,36 @@ function labFilterExperiments() {
   return list.filter((e) => { const h = labExpHaystack(e); return terms.every((t) => h.includes(t)); });
 }
 
+// grid view: one row per experiment; the same data-* actions the cards use
+function labHomeGridHtml(list) {
+  const rows = list.map((e) => `<tr>
+    <td class="col-name"><span class="lab-exp-name" data-rename="${e.id}" title="Click to rename">${escapeHtml(e.name)}</span></td>
+    <td class="col-text">${escapeHtml(e.schematic_name)}</td>
+    <td class="col-text lab-picks-cell">${(e.picks || []).slice(0, 4).map((p) =>
+      `<span class="mys-loadout lab-pick-pill" data-pillres="${escapeHtml(p.name)}" title="${escapeHtml(p.slot)}">${escapeHtml(p.name)}</span>`).join(' ')
+      || '<span class="stat_off">—</span>'}</td>
+    <td class="col-text">${labExpBadge(e)}</td>
+    <td class="col-num">${fmtNum(e.cost)} cr</td>
+    <td class="col-text">${fmtAgoTip(e.created)}</td>
+    <td class="col-actions">
+      <button class="btn btn-icon" data-load="${e.id}" title="Open on bench"><i class="fa-solid fa-flask"></i></button>
+      <button class="btn btn-icon" data-delexp="${e.id}" title="Delete"><i class="fa-solid fa-trash-can"></i></button>
+    </td>
+  </tr>`).join('');
+  return `<div class="table-wrap"><table class="data-grid"><thead><tr>
+      <th class="col-name">Name</th><th class="col-text">Schematic</th><th class="col-text">Picks</th>
+      <th class="col-text">Result</th><th class="col-num">Cost</th><th class="col-text">Saved</th><th class="col-actions"></th>
+    </tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+function labPaintViewToggle() {
+  const btn = $('#lab-viewtoggle');
+  if (!btn) return;
+  const grid = labState.homeView === 'grid';
+  btn.innerHTML = `<i class="fa-solid ${grid ? 'fa-grip-vertical' : 'fa-table-cells-large'}"></i>`;
+  btn.title = grid ? 'Switch to card view' : 'Switch to grid view';
+}
+
 function labRenderHome() {
   const wrap = $('#lab-exps');
   const total = labState.experiments.length;
@@ -664,6 +785,11 @@ function labRenderHome() {
       + '<a role="button" data-homeclear>Clear the filter</a>.';
   }
 
+  wrap.classList.toggle('lab-exps-grid', labState.homeView === 'grid');
+  if (labState.homeView === 'grid') {
+    wrap.innerHTML = labHomeGridHtml(list);
+    return;
+  }
   wrap.innerHTML = list.map((e) => `
     <div class="lab-exp-card" data-eid="${e.id}">
       <div class="lab-exp-hd">
@@ -789,6 +915,7 @@ async function labPersistSettings() {
       threshold: labState.threshold,
       boosts: labState.boosts.map((b) => ({ key: b.key, on: b.on, value: b.value })),
       banned: [...labState.banned],
+      homeView: labState.homeView,
     });
   } catch (_) { /* non-fatal */ }
 }
@@ -807,8 +934,10 @@ async function loadLab() {
         if (b) { b.on = !!saved.on; b.value = safeInt(saved.value) || b.value; }
       }
       labState.banned = new Set((ls.banned || []).map(String));
+      if (ls.homeView === 'grid' || ls.homeView === 'cards') labState.homeView = ls.homeView;
     }
   } catch (_) { /* defaults */ }
+  labPaintViewToggle();
   labRenderBoosts();
   labShowView('home');
   labRefreshSchemList();
@@ -989,6 +1118,12 @@ function initLab() {
     if (e.target.closest('[data-homeclear]')) labSetHomeQuery('');
   });
   $('#lab-home-refresh').addEventListener('click', () => labReloadExperiments());
+  $('#lab-viewtoggle').addEventListener('click', () => {
+    labState.homeView = labState.homeView === 'grid' ? 'cards' : 'grid';
+    labPaintViewToggle();
+    labRenderHome();
+    labPersistSettings(); // sticky across sessions
+  });
 
   // bench notes: WYSIWYG contenteditable + mini toolbar; saves on blur
   document.querySelectorAll('.lab-notes-toolbar [data-cmd]').forEach((btn) => {

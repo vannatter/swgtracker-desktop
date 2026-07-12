@@ -11,6 +11,8 @@ const PAGE_LOADERS = {
   wishlist: () => syncWishlist(),
   sales: () => loadSales(),
   purchases: () => loadPurchases(),
+  characters: () => loadCharactersPage(),
+  harvesters: () => loadHarvesters(),
   inventory: () => loadInventory(),
   alerts: () => loadAlerts(),
   lab: () => loadLab(),
@@ -126,7 +128,7 @@ function showPage(key, opts = {}) {
   document.querySelectorAll('.page').forEach((p) => p.classList.toggle('active', p.id === `page-${key}`));
   // live-state pages reload on every visit, not just the first — mail uploads
   // and cron inventory depletion both move underneath a cached render
-  const ALWAYS_RELOAD = new Set(['monitor', 'inventory']);
+  const ALWAYS_RELOAD = new Set(['monitor', 'inventory', 'characters']);
   if (PAGE_LOADERS[key] && (!loadedPages.has(key) || ALWAYS_RELOAD.has(key))) {
     loadedPages.add(key);
     PAGE_LOADERS[key]();
@@ -331,7 +333,8 @@ function drawPulseChart(history) {
 }
 
 function pulseTimeLabel(ts) {
-  return new Date(ts * 1000).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  return new Date(ts * 1000).toLocaleTimeString(appDateFmt === 'intl' ? 'en-GB' : 'en-US',
+    { hour: 'numeric', minute: '2-digit' });
 }
 
 function initPulseChart() {
@@ -372,8 +375,8 @@ async function fetchPulse() {
     mini.title = `Online — ${(online.current || 0).toLocaleString()} players · peak today ${(online.peak_today || 0).toLocaleString()}`;
     statusEl.textContent = 'Online';
     statusEl.className = 'pulse-status online';
-    $('#pulse-online').textContent = `Players: ${(online.current || 0).toLocaleString()}`;
-    $('#pulse-peak').textContent = `Peak today: ${(online.peak_today || 0).toLocaleString()}`;
+    $('#pulse-online').innerHTML = `Players: ${(online.current || 0).toLocaleString()}`
+      + ` <span class="pulse-peak-inline">· peak ${(online.peak_today || 0).toLocaleString()}</span>`;
     $('#pulse-resources').textContent = `Active resources: ${(res.data.active_resources || 0).toLocaleString()}`;
     drawPulseChart(online.history);
   } else {
@@ -381,17 +384,28 @@ async function fetchPulse() {
     statusEl.className = 'pulse-status offline';
     mini.classList.add('offline');
     mini.title = 'Server offline';
-    $('#pulse-online').textContent = '';
-    $('#pulse-peak').textContent = '';
+    $('#pulse-online').innerHTML = '';
     $('#pulse-resources').textContent = '';
   }
 }
 
 // ---- Dev mode ----
 // 10 quick clicks on the logo toggles the dev wall (Test Connection,
-// Simulate offline); 10 more hides it again. Persists across restarts.
+// Simulate offline); 10 more hides it again. Persists in the app CONFIG so it
+// survives restarts and rebuilds — WKWebView localStorage does not.
 function initDevMode() {
   if (localStorage.getItem('devMode') === '1') document.body.classList.add('dev-mode');
+  // config is the durable copy; localStorage is just the first-paint cache
+  (async () => {
+    try {
+      const res = await api().get_config();
+      if (res.ok && res.data && res.data.dev_mode != null) {
+        const on = !!res.data.dev_mode;
+        document.body.classList.toggle('dev-mode', on);
+        localStorage.setItem('devMode', on ? '1' : '0');
+      }
+    } catch (_) { /* localStorage verdict stands */ }
+  })();
   let clicks = 0;
   let timer = null;
   $('.app-header-brand').addEventListener('click', () => {
@@ -403,6 +417,7 @@ function initDevMode() {
       clicks = 0;
       document.body.classList.toggle('dev-mode', !on);
       localStorage.setItem('devMode', on ? '0' : '1');
+      try { api().set_config('dev_mode', !on); } catch (_) { /* localStorage still has it */ }
       toast(on ? 'Dev mode hidden' : 'Dev mode unlocked');
       if (on) $('#set-ds-simulate')?.checked && $('#set-ds-simulate').click(); // leaving dev mode ends the simulation too
     } else if (clicks >= 7) {
@@ -427,6 +442,46 @@ function initControls() {
 
   $('#btn-monitor').addEventListener('click', async () => {
     const running = $('#btn-monitor').classList.contains('running');
+    if (!running) {
+      // every watched folder must be tied to one of the account's CHARACTERS
+      // (an old free-text label doesn't count) before tracking starts
+      try {
+        const cfg = await api().get_config();
+        const paths = ((cfg.ok && cfg.data && cfg.data.mail_paths) || [])
+          .map((m) => (typeof m === 'object' && m ? m : { path: String(m || ''), label: '' }))
+          .filter((m) => m.path);
+        if (!paths.length) {
+          toast('Add a mail folder in Settings first', false);
+          showPage('settings');
+          return;
+        }
+        const untied = paths.find((m) => !String(m.label || '').trim());
+        if (untied) {
+          toast('Assign a character to each mail folder in Settings before starting', false);
+          showPage('settings');
+          return;
+        }
+        const labels = paths.map((m) => String(m.label).trim().toLowerCase());
+        if (new Set(labels).size !== labels.length) {
+          toast('Two folders share a character — give each folder its own in Settings', false);
+          showPage('settings');
+          return;
+        }
+        // labels must be real characters — offline we settle for labels existing
+        try {
+          const cres = await apiFetch('GET', 'api/characters.php');
+          if (cres.ok && cres.data && Array.isArray(cres.data.characters)) {
+            const known = new Set(cres.data.characters.map((c) => String(c.name).toLowerCase()));
+            const stray = paths.find((m) => !known.has(String(m.label).trim().toLowerCase()));
+            if (stray) {
+              toast(`"${stray.label}" isn't one of your characters — re-save Settings (or add it on the Characters page) first`, false);
+              showPage('settings');
+              return;
+            }
+          }
+        } catch (_) { /* characters unreachable — labels-present check above stands */ }
+      } catch (_) { /* config unreadable — let the shell decide */ }
+    }
     const res = running ? await api().stop_monitoring() : await api().start_monitoring();
     if (res.ok) setMonitoring(!running, res.data);
     else toast(res.error || res.data || 'Monitor action failed', false);
@@ -555,6 +610,8 @@ async function boot() {
   initMySchematics();
   initSales();
   initPurchases();
+  initCharactersPage();
+  initHarvesters();
   initInventory();
   initSettings();
   initAlerts();

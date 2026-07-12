@@ -2,14 +2,20 @@
    Upload + server-side parsing happen in src/core/mail_monitor.py; this page
    just shows the receipts. */
 
-const mmState = { pollTimer: null, page: 1, perPage: 50, category: '' };
+const mmState = { pollTimer: null, page: 1, perPage: 50, category: '', character: '' };
 
 const MM_KIND = {
-  sale: '<span class="mm-kind mm-sale"><i class="fa-solid fa-tags"></i> sale</span>',
-  purchase: '<span class="mm-kind mm-purchase"><i class="fa-solid fa-cart-shopping"></i> purchase</span>',
-  mail: '<span class="mm-kind"><i class="fa-solid fa-envelope"></i> mail</span>',
-  error: '<span class="mm-kind mm-err"><i class="fa-solid fa-triangle-exclamation"></i> error</span>',
+  sale: { cls: 'mm-sale', icon: 'fa-tags', label: 'sale' },
+  purchase: { cls: 'mm-purchase', icon: 'fa-cart-shopping', label: 'purchase' },
+  mail: { cls: '', icon: 'fa-envelope', label: 'mail' },
+  error: { cls: 'mm-err', icon: 'fa-triangle-exclamation', label: 'error' },
 };
+
+// type pill; a parse-status icon (spinner/check) replaces the type icon inside it
+function mmKindPill(kind, statusIcon = '') {
+  const d = MM_KIND[kind] || MM_KIND.mail;
+  return `<span class="mm-kind ${d.cls}">${statusIcon || `<i class="fa-solid ${d.icon}"></i>`} ${d.label}</span>`;
+}
 
 // Category labels + display order (keys come from local_db.mail_category).
 const MM_CATS = {
@@ -39,11 +45,20 @@ async function loadMail() {
   let total = 0;
   let salesTotal = 0;
   let cats = {};
+  let chars = {};
   try {
-    const res = await api().mail_history(mmState.perPage, (mmState.page - 1) * mmState.perPage, mmState.category, mmState.search);
+    const res = await api().mail_history(mmState.perPage, (mmState.page - 1) * mmState.perPage, mmState.category, mmState.search, mmState.character);
     const d = res.ok && res.data;
-    if (d) { rows = d.rows || []; total = safeInt(d.total); salesTotal = safeInt(d.sales); cats = d.categories || {}; }
+    if (d) { rows = d.rows || []; total = safeInt(d.total); salesTotal = safeInt(d.sales); cats = d.categories || {}; chars = d.characters || {}; }
   } catch (_) { /* table empty-state below */ }
+
+  // server-side "uploaded but the cron hasn't parsed it yet" set — those rows get
+  // a processing badge until the next cron pass (best-effort; ignore on old shells)
+  let pendingIds = new Set();
+  try {
+    const pres = await apiFetch('GET', 'api/mail.php', { params: { action: 'pending' } });
+    if (pres.ok && pres.data && Array.isArray(pres.data.pending)) pendingIds = new Set(pres.data.pending);
+  } catch (_) { /* badge just doesn't show */ }
 
   // known inventory types — sale items already tracked show a check, not a button
   // (null = lookup failed: keep the buttons, the server dedupes adds anyway)
@@ -79,8 +94,15 @@ async function loadMail() {
     if (cats[key]) opts += opt(key, MM_CATS[key] || key, cats[key]);
   }
   $('#mm-category').innerHTML = opts;
+  // character filter — appears once mails carry a character (folder label / mail_<Name>)
+  const charNames = Object.keys(chars).sort((a, b) => a.localeCompare(b));
+  const charSel = $('#mm-charfilter');
+  charSel.hidden = charNames.length === 0;
+  charSel.innerHTML = [opt.call(null, '', 'All characters', null)]
+    .concat(charNames.map((n) => `<option value="${escapeHtml(n)}"${mmState.character === n ? ' selected' : ''}>${escapeHtml(n)} (${fmtNum(chars[n])})</option>`))
+    .join('');
   // mass-delete appears whenever a filter (category or search) narrows the list
-  const filtered = mmState.category || mmState.search;
+  const filtered = mmState.category || mmState.search || mmState.character;
   $('#mm-massdel-slot').innerHTML = (filtered && total)
     ? `<button class="mm-massdel" data-massdel="1"><i class="fa-solid fa-trash"></i> Delete all ${fmtNum(total)} matching</button>`
     : '';
@@ -94,10 +116,18 @@ async function loadMail() {
       ? '<span class="mm-tracked" title="Already in My Inventory"><i class="fa-solid fa-check"></i></span>'
       : `<button class="mm-addinv" data-item="${escapeHtml(item)}"
            title="Add to My Inventory as a new type"><i class="fa-solid fa-square-plus"></i></button>`;
+    // status folds into the Type cell — only sale/purchase mails have a server
+    // parse state: spinning yellow while pending, green check once processed
+    const status = (r.kind === 'sale' || r.kind === 'purchase')
+      ? (pendingIds.has(r.mail_id)
+        ? '<i class="fa-solid fa-circle-notch fa-spin mm-st-pend" title="Uploaded — the server parses it into My Sales / My Purchases within a few minutes"></i>'
+        : '<i class="fa-solid fa-circle-check mm-st-done" title="Parsed into My Sales / My Purchases"></i>')
+      : '';
     return `<tr class="${r.has_raw ? 'mm-row-openable' : ''}" data-mailid="${escapeHtml(r.mail_id)}"
         data-hasraw="${r.has_raw ? 1 : 0}" title="${r.has_raw ? 'Click to read the original mail' : ''}">
+      <td class="col-text">${r.character ? escapeHtml(r.character) : '<span class="stat_off">—</span>'}</td>
+      <td class="col-text mm-typecell">${mmKindPill(r.kind, status)}</td>
       <td class="col-text">${fmtAgoTip(r.sent_at || r.uploaded_at)}</td>
-      <td class="col-text">${MM_KIND[r.kind] || MM_KIND.mail}</td>
       <td class="col-text">${escapeHtml(r.subject || '')}</td>
       <td class="col-name">${escapeHtml(r.detail || '')}</td>
       <td class="col-actions"><span class="mm-slot">${action}</span><button class="mm-del" data-del="${escapeHtml(r.mail_id)}"
@@ -148,7 +178,8 @@ function initMail() {
     try {
       const res = await api().dev_make_test_mail();
       if (res.ok) {
-        toast(`Dropped 3 test mails: sale (${res.data.item}), purchase (${res.data.purchase}), misc "${res.data.misc}" — monitor picks them up within ~5s`);
+        toast(`Dropped ${res.data.files ? res.data.files.length : 4} test mails: sale (${res.data.item}), purchase (${res.data.purchase}), misc, `
+          + `${res.data.harvester ? `harvester (${res.data.harvester})` : 'and more'} — monitor picks them up within ~5s`);
         setTimeout(loadMail, 7000); // give the sweep + upload a beat, then show it
       } else {
         toast(res.error || 'Failed to create test mail', false);
@@ -158,6 +189,9 @@ function initMail() {
   // Category dropdown + subject search + mass-delete for the current filter
   $('#mm-category').addEventListener('change', () => {
     mmState.category = $('#mm-category').value; mmState.page = 1; loadMail();
+  });
+  $('#mm-charfilter').addEventListener('change', () => {
+    mmState.character = $('#mm-charfilter').value; mmState.page = 1; loadMail();
   });
   let mmSearchTimer = null;
   $('#mm-search').addEventListener('input', () => {
@@ -174,12 +208,12 @@ function initMail() {
     const orig = massdel.innerHTML;
     massdel.innerHTML = '<span class="spinner"></span> Deleting…'; // it can take a few seconds — show it's working
     try {
-      const res = await api().delete_mail_matching(mmState.category, mmState.search);
+      const res = await api().delete_mail_matching(mmState.category, mmState.search, mmState.character);
       if (res.ok) {
         const d = res.data || {};
         toast(`Deleted ${fmtNum(d.deleted)} mail${d.deleted === 1 ? '' : 's'}`
           + (d.failed ? `, ${d.failed} failed` : ''));
-        mmState.category = ''; mmState.search = ''; mmState.page = 1;
+        mmState.category = ''; mmState.search = ''; mmState.character = ''; mmState.page = 1;
         $('#mm-search').value = '';
         loadMail(); // rebuilds the button
       } else { toast(res.error || 'Bulk delete failed', false); massdel.disabled = false; massdel.innerHTML = orig; }
@@ -209,7 +243,7 @@ function initMail() {
     if (!btn) {
       const tr = e.target.closest('tr[data-mailid]');
       if (tr && tr.dataset.hasraw === '1') {
-        mmShowRaw(tr.dataset.mailid, tr.children[2]?.textContent);
+        mmShowRaw(tr.dataset.mailid, tr.children[3]?.textContent);
       }
       return;
     }

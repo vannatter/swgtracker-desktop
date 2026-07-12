@@ -720,6 +720,8 @@ td.lab-dim { opacity: .45; }
   border-radius: 10px; padding: 2px 9px; cursor: help; white-space: nowrap;
 }
 .mys-inspawn { font-size: 10px; color: var(--q-fair); border: 1px solid var(--border); border-radius: 3px; padding: 0 4px; margin-left: 6px; }
+.mysd-stocked { font-size: 10px; color: var(--accent-green); background: rgba(75, 121, 103, .18);
+  border-radius: 3px; padding: 0 4px; margin-left: 6px; white-space: nowrap; }
 .mys-despawned { font-size: 10px; color: var(--text-muted); border: 1px solid var(--border); border-radius: 3px; padding: 0 4px; margin-left: 6px; }
 .mys-gone { color: var(--accent); cursor: help; }
 .mys-none { padding: 4px 0; }
@@ -796,7 +798,10 @@ td.lab-dim { opacity: .45; }
   position: sticky; top: 0; z-index: 1;
   background: var(--bg-secondary); padding: 6px; border-bottom: 1px solid var(--border);
 }
-.cselect-input { width: 100%; text-align: left; }
+/* two classes so this outranks .stock-input's 70px centered-cell styling */
+.cselect-search .cselect-input { width: 100%; text-align: left; font-weight: 400;
+  padding: 6px 9px; border-radius: 5px; border-color: var(--border); }
+.cselect-search .cselect-input:focus { border-color: var(--accent-dark); }
 .sp-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
 .sp-field-label { display: block; font-size: 12px; font-weight: 600; color: var(--text-color); margin: 12px 0 5px; }
 /* hint text riding a field label reads as a hint, not as more label */

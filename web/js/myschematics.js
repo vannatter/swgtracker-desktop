@@ -132,6 +132,18 @@ function mysWeightedQuality(rec, weightsList, caps = null) {
   return weightedQuality(rec, weightsList, caps);
 }
 
+// hover chip for picker options — name — full class — score — age, like the lab
+function mysResTipHtml(o) {
+  const t = safeInt(o.ts);
+  const days = t ? Math.max(0, Math.floor((Date.now() / 1000 - t) / 86400)) : null;
+  return [
+    `<b>${escapeHtml(o.name)}</b>`,
+    escapeHtml(o.type || ''),
+    o.score != null ? `<span class="${qualityClass(o.score)}">score ${o.score}</span>` : '',
+    days === null ? '' : (days === 0 ? 'spawned today' : `${days} day${days === 1 ? '' : 's'} old`),
+  ].filter(Boolean).join(' — ');
+}
+
 // formulas: the entry's CSV of formula ids, so the server ranks Best Known by the
 // selected experimentation lines (empty = all). Cached per (schematic, formulas).
 async function mysGetDetail(schematicId, formulas = '') {
@@ -206,7 +218,8 @@ async function analyzeMySchematic(s) {
       const k = String(sp.resourceId);
       if (seen.has(k) || !sp.resourceName) continue;
       seen.add(k);
-      options.push({ name: sp.resourceName, q: Number(sp.resourceQuality) || 0, active: mysSpawnActive(sp) });
+      options.push({ name: sp.resourceName, q: Number(sp.resourceQuality) || 0, active: mysSpawnActive(sp),
+        type: sp.resourceTypeName || '', ts: sp.timestamp });
     }
     options.sort((a, b) => b.q - a.q);
 
@@ -360,6 +373,7 @@ function mysdRowHtml(r) {
 async function openMySchematicPage(item) {
   mysdState.item = item;
   mysdState.analysis = null;
+  mysdState.stockedByType = null;
   showPage('myschematic');
 
   const title = item.custom_name ? `${item.name} · ${item.custom_name}` : (item.name || '');
@@ -378,6 +392,31 @@ async function openMySchematicPage(item) {
   $('#mysd-loading').hidden = true;
   if (mysdState.item !== item) return; // user navigated away mid-fetch
   mysdState.analysis = an;
+
+  // stockpile picks for the Using editor — mirror class pool ∩ stockpile per
+  // slot class, rated by this entry's formulas. Fire-and-forget: the page is
+  // interactive now; editors opened later just get the extra options.
+  (async () => {
+    if (typeof stkState === 'undefined') return;
+    if (!stkState.items.length) { try { await syncStockpile(); } catch (_) { return; } }
+    if (!stkState.resourceIds || !stkState.resourceIds.size) return;
+    let weightsList = mysFormulaList(item).map(mysParseWeights).filter(Boolean);
+    if (!weightsList.length) weightsList = (await mysGetDetail(item.schematic_id, item.formulas || ''))?.weights || [];
+    const byType = {};
+    for (const code of [...new Set((item.resources || []).map((r) => r.resource_type))]) {
+      if (mysdState.item !== item) return; // navigated away
+      try {
+        const res = await api().get_class_pool(String(code));
+        byType[code] = (((res.ok && res.data) || []))
+          .filter((p) => stkState.resourceIds.has(String(p.id)))
+          .map((p) => ({ name: p.name, q: mysWeightedQuality(p, weightsList, classCaps(String(code))) || 0, active: p.status === 1, stocked: true,
+            type: p.type_name || '', score: p.value_rating != null ? safeInt(p.value_rating) : null, ts: p.timestamp }))
+          .sort((a, b) => b.q - a.q)
+          .slice(0, 8);
+      } catch (_) { /* that slot just shows spawn options */ }
+    }
+    if (mysdState.item === item) mysdState.stockedByType = byType;
+  })();
 
   // Entries added via the API have no ingredient rows yet (server-side gap:
   // POST doesn't create user_schematic_resources). Show the schematic's real
@@ -495,14 +534,20 @@ function mysdOpenEditor(cell, ingId) {
   const r = (item?.resources || []).find((x) => String(x.id) === String(ingId));
   if (!r) return;
   const a = mysdState.analysis?.perIng.get(String(ingId));
-  const options = a?.options || [];
+  // your stockpile leads, then the recorded spawns (dedup by name)
+  const stocked = (mysdState.stockedByType || {})[r.resource_type] || [];
+  const stockedNames = new Set(stocked.map((o) => o.name.toLowerCase()));
+  const options = stocked.concat((a?.options || []).filter((o) => !stockedNames.has(o.name.toLowerCase())));
 
   const optHtml = (o) => `<div class="mysd-opt" data-optname="${escapeHtml(o.name)}">
-    <span class="mysd-opt-name">${escapeHtml(o.name)}</span>
-    <span class="mysd-opt-meta">${o.active ? '<span class="mys-inspawn">in spawn</span>' : ''}
+    <span class="mysd-opt-name" data-richtip="${escapeHtml(mysResTipHtml(o))}">${escapeHtml(o.name)}</span>
+    <span class="mysd-opt-meta">${o.stocked ? '<span class="mysd-stocked" title="In your stockpile">✓ stock</span>' : ''}
+      ${o.active ? '<span class="mys-inspawn">in spawn</span>' : ''}
       <span class="stat ${qualityClass(o.q / 10)}">${o.q.toFixed(1)}</span></span>
   </div>`;
 
+  // freeze the cell's width so swapping text → input doesn't shift the column
+  cell.style.width = `${cell.offsetWidth}px`;
   cell.innerHTML = `<span class="mysd-editwrap">
     <input type="text" class="stock-input mysd-input"
       value="${escapeHtml(r.resource_name || '')}" placeholder="Resource name...">
@@ -616,14 +661,42 @@ async function openAddSetup(schematicId, name) {
   // Slot pickers from the schematic's ingredients (resourcesNeeded)
   const needed = schem?.resourcesNeeded || [];
   spState.slots = needed.map((n) => ({ code: n.id, label: n.desc, type_name: n.resourceName }));
+
+  // your STOCKPILE first, like the lab bench: mirror class pool ∩ stockpile,
+  // rated by the schematic's formulas against the slot's class caps
+  const weightsList = formulas.map((f) => mysParseWeights(f.formulaDescription)).filter(Boolean);
+  const stockedBySlot = {};
+  if (typeof stkState !== 'undefined') {
+    if (!stkState.items.length) { try { await syncStockpile(); } catch (_) { /* chips just don't show */ } }
+    if (stkState.resourceIds && stkState.resourceIds.size) {
+      for (const n of needed) { // sequential — parallel multi-MB bridge calls drop in WKWebView
+        try {
+          const r = await api().get_class_pool(String(n.id));
+          const caps = typeof classCaps === 'function' ? classCaps(String(n.id)) : null;
+          stockedBySlot[n.id] = ((r.ok && r.data) || [])
+            .filter((p) => stkState.resourceIds.has(String(p.id)))
+            .map((p) => ({ name: p.name, q: mysWeightedQuality(p, weightsList, caps) || 0, active: p.status === 1, stocked: true,
+              type: p.type_name || '', score: p.value_rating != null ? safeInt(p.value_rating) : null, ts: p.timestamp }))
+            .sort((a, b) => b.q - a.q)
+            .slice(0, 8);
+        } catch (_) { /* slot just shows spawn tops */ }
+      }
+    }
+  }
+
   $('#sp-rows').innerHTML = needed.map((n) => {
     const dto = det?.dtoByCode.get(n.id);
-    const top = (dto?.serverBestResourceList || dto?.currentBestResourceList || []).slice(0, 5)
-      .map((sp) => ({ name: sp.resourceName || '', q: Number(sp.resourceQuality) || 0, active: mysSpawnActive(sp) }));
+    const top = (dto?.serverBestResourceList || dto?.currentBestResourceList || []).slice(0, 15)
+      .map((sp) => ({ name: sp.resourceName || '', q: Number(sp.resourceQuality) || 0, active: mysSpawnActive(sp),
+        type: sp.resourceTypeName || '', ts: sp.timestamp }));
+    // stocked picks lead; a resource both stocked and a top spawn shows once (stocked)
+    const stocked = stockedBySlot[n.id] || [];
+    const names = new Set(stocked.map((o) => o.name.toLowerCase()));
+    const options = stocked.concat(top.filter((o) => !names.has(o.name.toLowerCase())));
     return `<div class="sp-row">
       <span class="sp-label">${escapeHtml(n.desc || '')}
         <div class="mys-type">${escapeHtml(n.resourceName || '')}</div></span>
-      ${cselectHtml(n.id, top)}
+      ${cselectHtml(n.id, options)}
     </div>`;
   }).join('');
 
@@ -636,8 +709,9 @@ async function openAddSetup(schematicId, name) {
 
 function cselectOptHtml(o) {
   return `<div class="mysd-opt cselect-opt" data-value="${escapeHtml(o.name)}">
-    <span class="mysd-opt-name">${escapeHtml(o.name)}</span>
-    <span class="mysd-opt-meta">${o.active ? '<span class="mys-inspawn">in spawn</span>' : ''}
+    <span class="mysd-opt-name" data-richtip="${escapeHtml(mysResTipHtml(o))}">${escapeHtml(o.name)}</span>
+    <span class="mysd-opt-meta">${o.stocked ? '<span class="mysd-stocked" title="In your stockpile">✓ stock</span>' : ''}
+      ${o.active ? '<span class="mys-inspawn">in spawn</span>' : ''}
       <span class="stat ${qualityClass(o.q / 10)}">${o.q.toFixed(1)}</span></span>
   </div>`;
 }
@@ -769,9 +843,21 @@ function initMySchematics() {
       if (menu.hidden) {
         const r = btn.getBoundingClientRect();
         menu.style.left = `${r.left}px`;
-        menu.style.top = `${r.bottom + 3}px`;
         menu.style.minWidth = `${r.width}px`;
+        menu.style.maxHeight = '';
         menu.hidden = false;
+        // fit the viewport: shrink into the space below, or flip above the
+        // button when that side has more room (bottom rows were clipping off)
+        const below = window.innerHeight - r.bottom - 10;
+        const wanted = Math.min(menu.scrollHeight, 230);
+        if (below >= Math.min(wanted, 140)) {
+          menu.style.top = `${r.bottom + 3}px`;
+          menu.style.maxHeight = `${Math.min(wanted, below)}px`;
+        } else {
+          const h = Math.min(wanted, r.top - 10);
+          menu.style.top = `${r.top - 3 - h}px`;
+          menu.style.maxHeight = `${h}px`;
+        }
         const inp = menu.querySelector('.cselect-input');
         inp.value = '';
         menu.querySelectorAll('.cselect-opt').forEach((o) => { o.hidden = false; });
@@ -782,7 +868,9 @@ function initMySchematics() {
       return;
     }
     const opt = e.target.closest('.cselect-opt');
-    if (opt) cselectPick(opt.closest('.cselect'), opt.dataset.value, opt.innerHTML);
+    // outerHTML keeps the .mysd-opt flex wrapper — without it the meta span
+    // (display:flex → block) stacks under the name and the button grows tall
+    if (opt) cselectPick(opt.closest('.cselect'), opt.dataset.value, opt.outerHTML);
   });
 
   // Free-text path: filter as you type; Enter uses the typed name verbatim

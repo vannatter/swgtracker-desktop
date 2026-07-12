@@ -152,7 +152,16 @@ def main() -> int:
     with zipfile.ZipFile(zpath, "w", zipfile.ZIP_DEFLATED) as z:
         for f in sorted(WEB.rglob("*")):
             if f.is_file() and f.name not in SKIP:
-                z.write(f, f"web/{f.relative_to(WEB)}")
+                if f.name == "index.html" and f.parent == WEB:
+                    # cache-bust: hot-applied bundles reload the SAME file paths,
+                    # and WKWebView happily serves last bundle's css/js from memory
+                    # cache. A per-version query string makes every asset URL new.
+                    html = f.read_text(encoding="utf-8")
+                    html = re.sub(r'((?:href|src)="(?:css|js)/[^"?]+)"',
+                                  rf'\1?v={version}"', html)
+                    z.writestr(f"web/{f.relative_to(WEB)}", html)
+                else:
+                    z.write(f, f"web/{f.relative_to(WEB)}")
 
     sha = hashlib.sha256(zpath.read_bytes()).hexdigest()
     manifest = {

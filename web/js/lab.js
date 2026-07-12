@@ -642,6 +642,13 @@ async function labLoadSchematic(id, name) {
       <span>${escapeHtml(f.formulaDescription || '')}</span>
     </label>`).join('');
 
+  // stockpile FIRST — the pools always include your stocked resources, even
+  // ones a size-capped best-first query would drop
+  if (typeof stkState !== 'undefined' && !stkState.items.length) {
+    try { await syncStockpile(); } catch (_) { /* stockpile column just stays empty */ }
+  }
+  const stockIds = typeof stkState !== 'undefined' && stkState.resourceIds ? [...stkState.resourceIds] : [];
+
   // pools per slot, from the mirror — SEQUENTIAL: concurrent js_api calls with
   // multi-MB payloads drop responses in WKWebView, which read as empty slots
   const needed = det.resourcesNeeded || [];
@@ -650,7 +657,7 @@ async function labLoadSchematic(id, name) {
     let pool = [];
     for (let attempt = 0; attempt < 2 && !pool.length; attempt++) {
       try {
-        const r = await api().get_class_pool(String(n.id));
+        const r = await classPool(String(n.id), stockIds);
         pool = (r.ok && r.data) || [];
       } catch (e) {
         api().log_js('error', `lab pool ${n.id} attempt ${attempt}: ${e}`);
@@ -668,10 +675,6 @@ async function labLoadSchematic(id, name) {
   labState.celebratedOnce = false; // fresh schematic earns the full pour again
   labState.currentExpId = null;
   labState.draftNotes = '';
-
-  if (typeof stkState !== 'undefined' && !stkState.items.length) {
-    try { await syncStockpile(); } catch (_) { /* stockpile column just stays empty */ }
-  }
   labRenderAll();
 }
 

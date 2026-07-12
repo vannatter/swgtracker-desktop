@@ -794,16 +794,56 @@ class WebApi:
                     "oq_max", "cr_max", "cd_max", "dr_max", "hr_max", "ma_max",
                     "sr_max", "ut_max", "fl_max", "pe_max")
 
-    def get_class_pool(self, code, limit=4000):
+    def ds_resources_query(self, params=None):
+        """Generic READ-ONLY mirror resource query — the bundle shapes its own
+        pools (sort, status, category, always-include ids, field list) without
+        a shell release each time. Mirror-of-the-gateway idea, for local data."""
+        p = params or {}
+        try:
+            leafs = None
+            if p.get("category"):
+                leafs = self.dataset_sync.expand_category(str(p["category"])) or [str(p["category"])]
+            data = self.local_db.search_ds_resources(
+                search=str(p.get("search", "") or ""),
+                planet=str(p.get("planet", "") or ""),
+                type_codes=leafs,
+                status=str(p.get("status", "") or ""),
+                perpage=int(p.get("limit", 4000)),
+                sort=str(p.get("sort", "value_rating")),
+                order=str(p.get("order", "DESC")))
+            rows = data["results"]
+            ids = p.get("ids") or []
+            if ids:
+                have = {str(r.get("id")) for r in rows}
+                missing = [s for s in ids if str(s) not in have]
+                if missing:
+                    rows += self.local_db.ds_resources_by_ids(missing, leafs)
+            fields = tuple(p.get("fields") or self._POOL_FIELDS)
+            return _ok([{k: r.get(k) for k in fields} for r in rows])
+        except Exception as e:
+            return _err(e)
+
+    def get_class_pool(self, code, limit=4000, stock_ids=None):
         """Every mirror resource under a class code — the Lab's per-slot pools.
         Mirror-backed and slimmed to Lab fields (big classes were ~4MB otherwise,
-        heavy enough to drop js_api responses)."""
+        heavy enough to drop js_api responses).
+
+        BEST-first (value_rating DESC): a giant class like Organic overflows the
+        cap, and newest-first was silently dropping old top spawns (OQ-1000
+        hides never in the pool). stock_ids (the user's stockpile) are always
+        included even when they'd miss the quality cut."""
         try:
             leafs = self.dataset_sync.expand_category(str(code)) or [str(code)]
             data = self.local_db.search_ds_resources(
                 type_codes=leafs, status="", perpage=int(limit),
-                sort="timestamp", order="DESC")
-            return _ok([{k: r.get(k) for k in self._POOL_FIELDS} for r in data["results"]])
+                sort="value_rating", order="DESC")
+            rows = data["results"]
+            if stock_ids:
+                have = {str(r.get("id")) for r in rows}
+                missing = [s for s in stock_ids if str(s) not in have]
+                if missing:
+                    rows += self.local_db.ds_resources_by_ids(missing, leafs)
+            return _ok([{k: r.get(k) for k in self._POOL_FIELDS} for r in rows])
         except Exception as e:
             return _err(e)
 

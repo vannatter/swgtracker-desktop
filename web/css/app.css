@@ -132,6 +132,11 @@ body.offline .app-body { height: calc(100vh - 76px); }
   0%, 100% { transform: scale(1); opacity: 1; box-shadow: 0 0 0 0 rgba(254, 97, 79, .5); }
   50% { transform: scale(1.15); opacity: .85; box-shadow: 0 0 0 5px rgba(254, 97, 79, 0); }
 }
+/* nav upgrade counter — the "go look at My Schematics" nudge */
+.nav-pill { display: inline-block; margin-left: 6px; min-width: 16px; text-align: center;
+  background: var(--accent); color: #fff; font-size: 10px; font-weight: 700;
+  border-radius: 9px; padding: 1px 6px; vertical-align: 1px; }
+
 .nav-item {
   padding: 8px 18px;
   font-size: 13px;
@@ -231,13 +236,17 @@ body.offline .app-body { height: calc(100vh - 76px); }
 .coming-soon h2 { font-size: 20px; font-weight: 700; color: var(--text-primary); margin: 0 0 8px; }
 .coming-soon p { font-size: 13px; color: var(--text-muted); margin: 0; }
 
-.page-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.page-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px;
+  flex-wrap: wrap; row-gap: 8px; } /* small windows: whole controls flow down, never squish */
+.page-head .head-search { flex: 0 1 220px; min-width: 110px; } /* search gives ground first */
 /* line-height hugs the glyphs so flex centering lands on the optical midline */
 .page-head h1 { font-size: 22px; font-weight: 700; color: var(--text-hover); margin: 0; line-height: 1.1; }
 .page-head .info-tip, .page-head .page-hint-inline { line-height: 1; }
 /* icon + hint share the h1's BASELINE — deterministic in every engine, and reads
    as one line of text (center-aligning boxes drifts with font metrics per engine) */
-.page-head h1, .page-head .info-tip, .page-head .page-hint-inline { align-self: baseline; }
+/* title centers on the controls' midline; a hair up — the descender box reads low */
+.page-head h1, .page-head .info-tip, .page-head .page-hint-inline { align-self: center; }
+.page-head h1 { position: relative; top: -2px; }
 .page-head .info-tip { position: relative; top: -1px; } /* circle optically on the text band */
 .page-head .btn-icon { margin-left: auto; } /* reload buttons live on the right */
 .page-head .head-search { margin-left: auto; max-width: 220px; }
@@ -274,6 +283,7 @@ body.offline .app-body { height: calc(100vh - 76px); }
 .btn-sm, .mys-badge {
   font-size: 12px; padding: 0 14px; border-radius: 6px; height: 34px;
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  white-space: nowrap; /* a button's label never folds onto two lines */
 }
 .btn-accent { background: var(--accent-dark); color: var(--text-hover); }
 .btn-accent:hover { background: var(--accent); color: #fff; }

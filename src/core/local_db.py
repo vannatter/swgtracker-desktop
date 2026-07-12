@@ -612,6 +612,22 @@ class LocalDB:
         rows = [dict(r) for r in self._conn.execute(sql, params).fetchall()]
         return {"page": page, "per_page": perpage, "results": rows, "offline": True}
 
+    def ds_resources_by_ids(self, ids: list, type_codes: list | None = None) -> list[dict]:
+        """Specific mirror rows by id (optionally fenced to a class's leaf codes) —
+        lets class pools always include stockpiled resources that a size-capped
+        best-first query would drop."""
+        ids = [str(i) for i in ids if str(i).strip()]
+        if not ids:
+            return []
+        marks = ",".join("?" * len(ids))
+        sql = f"SELECT * FROM ds_resources WHERE id IN ({marks})"
+        params: list = list(ids)
+        if type_codes:
+            tmarks = ",".join("?" * len(type_codes))
+            sql += f" AND type_code IN ({tmarks})"
+            params += list(type_codes)
+        return [dict(r) for r in self._conn.execute(sql, params).fetchall()]
+
     def get_ds_resource(self, name: str) -> dict | None:
         """Single mirror row by exact name (case-insensitive), for offline detail."""
         row = self._conn.execute(

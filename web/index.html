@@ -32,7 +32,8 @@
       <ul class="nav-list">
         <li class="nav-item active" data-page="resources"><i class="fa-solid fa-gem"></i> Resources</li>
         <li class="nav-item" data-page="schematics"><i class="fa-solid fa-scroll"></i> Schematics</li>
-        <li class="nav-item" data-page="myschematics"><i class="fa-solid fa-screwdriver-wrench"></i> My Schematics</li>
+        <li class="nav-item" data-page="myschematics"><i class="fa-solid fa-screwdriver-wrench"></i> My Schematics
+          <span id="nav-mys-pill" class="nav-pill" title="Upgrades available across your schematics" hidden></span></li>
         <li class="nav-item" data-page="stockpile"><i class="fa-solid fa-cubes"></i> My Stockpile</li>
         <li class="nav-item" data-page="wishlist"><i class="fa-solid fa-heart"></i> My Wishlist</li>
         <li class="nav-item" data-page="sales"><i class="fa-solid fa-tags"></i> My Sales</li>
@@ -430,8 +431,10 @@
           <select id="harv-charfilter" class="form-select filter-select head-filter"></select>
           <input id="harv-search" type="text" class="form-control filter-input head-search" placeholder="Search..."
                  title="Searches nickname, type, resource, planet, and character" autocomplete="off">
-          <button id="harv-viewtoggle" class="btn btn-icon" title="Switch to grid view"><i class="fa-solid fa-table-cells-large"></i></button>
+          <button id="harv-emptyall" class="btn btn-sm btn-outline-secondary" title="Mark every hopper in view emptied — the pulled units get offered to your stockpile"><i class="fa-solid fa-box-open"></i> Empty All</button>
+          <button id="harv-packall" class="btn btn-sm btn-outline-secondary" title="Pack up (redeed) every harvester in view — hopper contents offered to your stockpile first"><i class="fa-solid fa-box-archive"></i> Pack All</button>
           <button id="harv-add" class="btn btn-sm btn-accent"><i class="fa-solid fa-plus"></i> Add Harvester</button>
+          <button id="harv-viewtoggle" class="btn btn-icon" title="Switch to grid view"><i class="fa-solid fa-table-cells-large"></i></button>
           <button class="btn btn-icon" data-refresh="harvesters" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
         </div>
 
@@ -569,8 +572,8 @@
                 placeholder="Search experiments…" autocomplete="off">
               <button id="lab-home-clear" type="button" title="Clear filter" hidden><i class="fa-solid fa-xmark"></i></button>
             </span>
-            <button id="lab-viewtoggle" class="btn btn-icon" title="Switch to grid view"><i class="fa-solid fa-table-cells-large"></i></button>
             <button id="lab-new" class="btn btn-sm btn-accent"><i class="fa-solid fa-plus"></i> New Experiment</button>
+            <button id="lab-viewtoggle" class="btn btn-icon" title="Switch to grid view"><i class="fa-solid fa-table-cells-large"></i></button>
             <button id="lab-home-refresh" class="btn btn-icon" title="Reload experiments"><i class="fa-solid fa-rotate-right"></i></button>
           </span>
           <button id="lab-save" class="btn btn-sm btn-accent" hidden disabled><i class="fa-solid fa-flask"></i> Save Experiment</button>

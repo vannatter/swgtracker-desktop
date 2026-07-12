@@ -90,6 +90,19 @@ function weightedQuality(rec, weightsList, caps = null) {
   return per.reduce((a, b) => a + b, 0) / per.length;
 }
 
+// Class pool from the offline mirror, best-first, with the user's stockpile
+// ids always included. Prefers the generic mirror bridge (bundle-shaped);
+// pre-v0.11.26 shells fall back to the fixed-shape pool (no stockpile merge).
+async function classPool(code, stockIds = []) {
+  if (typeof api().ds_resources_query === 'function') {
+    return api().ds_resources_query({
+      category: String(code), status: '', sort: 'value_rating', order: 'DESC',
+      limit: 4000, ids: stockIds,
+    });
+  }
+  return api().get_class_pool(String(code));
+}
+
 // Percent (0–100) of a stat's cap -> quality class.
 // Thresholds reverse-engineered from the live site: great ≥96, good ≥90,
 // fair ≥80, ok ≥50, poor <50. Blue (.q-better) is NOT part of this scale.

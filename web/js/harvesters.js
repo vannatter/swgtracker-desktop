@@ -14,11 +14,13 @@
 // ber = the type's MAX (fully-experimented craft; swgr.org wiki confirms
 // heavy 14 / elite 44 / geo 15 / fusion 19, rest from the NGE templates) —
 // prefilled AND enforced as a ceiling, since no deed can exceed it
+// hopper: typical crafted size, prefilled but editable (deeds vary) —
+// medium 50k / heavy 100k / elite 400k in-game confirmed; personal estimated
 const HARV_TIERS = {
-  personal: { ber: 5, maint: 12, power: 26 },
-  medium:   { ber: 11, maint: 24, power: 50 },
-  heavy:    { ber: 14, maint: 36, power: 75 },
-  elite:    { ber: 44, maint: 126, power: 206 },
+  personal: { ber: 5, maint: 12, power: 26, hopper: 25000 },
+  medium:   { ber: 11, maint: 24, power: 50, hopper: 50000 },
+  heavy:    { ber: 14, maint: 36, power: 75, hopper: 100000 },
+  elite:    { ber: 44, maint: 126, power: 206, hopper: 400000 },
 };
 const HARV_TYPE_DEFAULTS = {
   'Personal Mineral Extractor': HARV_TIERS.personal,
@@ -41,10 +43,12 @@ const HARV_TYPE_DEFAULTS = {
   'Moisture Vaporator': HARV_TIERS.medium,
   'High Efficiency Moisture Vaporator': HARV_TIERS.heavy,
   'Elite Moisture Vaporator': HARV_TIERS.elite,
-  'Wind Power Generator': { ber: 10, maint: 30, power: 0 },
-  'Solar Power Generator': { ber: 15, maint: 15, power: 0 },
-  'Fusion Power Generator': { ber: 19, maint: 24, power: 0 },
-  'Geothermal Power Generator': { ber: 15, maint: 24, power: 0 },
+  // generators bank ENERGY in a hopper too (dsrc: wind 25–50k, solar/geo
+  // 50–75k, fusion 100–150k) and pull surveyed energy resources by conc
+  'Wind Power Generator': { ber: 10, maint: 30, power: 0, hopper: 30000 },
+  'Solar Power Generator': { ber: 15, maint: 15, power: 0, hopper: 55000 },
+  'Fusion Power Generator': { ber: 19, maint: 24, power: 0, hopper: 110000 },
+  'Geothermal Power Generator': { ber: 15, maint: 24, power: 0, hopper: 55000 },
 };
 const HARV_TYPES = Object.keys(HARV_TYPE_DEFAULTS);
 
@@ -61,7 +65,8 @@ const HARV_TYPE_GROUPS = {
 const harvIsGenerator = (type) => String(type || '').includes('Generator');
 
 // resource class (level-2 ancestor) → the only harvester family that pulls it
-const HARV_FAMILY_BY_CLASS = { min: 'Mineral', chm: 'Chemical', gas: 'Gas', wtr: 'Water', frs: 'Flora' };
+// (renewable energy → generators; creature/space stay unharvestable)
+const HARV_FAMILY_BY_CLASS = { min: 'Mineral', chm: 'Chemical', gas: 'Gas', wtr: 'Water', frs: 'Flora', regy: 'Power Generators' };
 
 // class ancestry from the site's resource tree, cached once per session
 async function harvLoadTree() {
@@ -98,7 +103,6 @@ function harvShortType(type) {
 // "Durichewigmiic 74% · Elite Gas". Used when the field is left blank.
 function harvNickText() {
   const type = $('#harv-f-type').value;
-  if (harvIsGenerator(type)) return harvShortType(type);
   return [
     $('#harv-f-resource').value.trim(),
     $('#harv-f-conc').value.trim() ? `${$('#harv-f-conc').value.trim()}%` : '',
@@ -211,10 +215,11 @@ function harvCardHtml(h) {
   const meters = [];
   if (hopper) {
     const full = hopper.pct >= 99.9;
-    // green + shimmer while it fills; red "stalled" once dead power stops it
+    // green + shimmer while it fills; red "stalled" once dead power stops it.
+    // Current units render as a live full number a 1s ticker counts upward.
     meters.push(harvMeter('Hopper', hopper.pct,
       full ? 'FULL'
-        : `${fmtShort(hopper.units)} / ${fmtShort(hopper.size)}${hopper.stalled ? ' · stalled — no power'
+        : `<span class="harv-units" data-uhid="${h.id}">${fmtNum(Math.floor(hopper.units))}</span> / ${fmtShort(hopper.size)}${hopper.stalled ? ' · stalled — no power'
           : hopper.fullAt ? ` · full in ${harvAgo(hopper.fullAt - now)}` : ''}`,
       full ? 'warn' : hopper.stalled ? 'bad' : 'filling'));
   }
@@ -259,6 +264,7 @@ function harvCardHtml(h) {
       <button class="btn btn-sm btn-outline-secondary" data-hact="maint" data-hid="${h.id}" title="Set the maintenance currently paid"><i class="fa-solid fa-coins"></i> Maint</button>
       <span class="harv-actions-right">
         <button class="btn btn-icon al-rule-btn" data-hact="log" data-hid="${h.id}" title="Event log"><i class="fa-solid fa-list"></i></button>
+        <button class="btn btn-icon al-rule-btn" data-hact="clone" data-hid="${h.id}" title="Duplicate — same type/resource/spot, for multi-harvester farms"><i class="fa-solid fa-clone"></i></button>
         <button class="btn btn-icon al-rule-btn" data-hact="edit" data-hid="${h.id}" title="Edit"><i class="fa-solid fa-pen"></i></button>
         <button class="btn btn-icon al-rule-btn" data-hact="del" data-hid="${h.id}" title="Remove (reclaimed/destroyed)"><i class="fa-solid fa-trash-can"></i></button>
       </span>
@@ -297,7 +303,7 @@ function harvGridHtml(items) {
       <td class="col-text">${h.resource_name ? `<b class="harv-reslink" data-res="${escapeHtml(h.resource_name)}">${escapeHtml(h.resource_name)}</b>${h.concentration ? ` @ ${h.concentration}%` : ''}` : '<span class="stat_off">—</span>'}</td>
       <td class="col-text harv-cell ${hopCls}">${hopper
         ? `<span class="harv-minibar"><span class="harv-meter-fill ${hopFull ? 'warn' : hopper.stalled ? 'bad' : 'filling'}" style="width:${Math.max(0, Math.min(100, hopper.pct)).toFixed(1)}%"></span></span>`
-          + `<span class="harv-minibar-text">${hopFull ? 'FULL' : `${fmtShort(hopper.units)} / ${fmtShort(hopper.size)}${hopper.stalled ? ' · stalled' : ''}`}</span>`
+          + `<span class="harv-minibar-text">${hopFull ? 'FULL' : `<span class="harv-units" data-uhid="${h.id}">${fmtNum(Math.floor(hopper.units))}</span> / ${fmtShort(hopper.size)}${hopper.stalled ? ' · stalled' : ''}`}</span>`
         : '—'}</td>
       <td class="col-text harv-cell ${powOut ? 'bad' : ''}">${power ? (powOut ? 'OUT' : `${fmtShort(power.remaining)}${power.depletesAt ? ` · ${harvAgo(power.depletesAt - now)}` : ''}`) : '—'}</td>
       <td class="col-text harv-cell ${mntOut ? 'bad' : ''}">${maint ? (mntOut ? 'EMPTY' : `${fmtShort(maint.remaining)} cr${maint.depletesAt ? ` · ${harvAgo(maint.depletesAt - now)}` : ''}`) : '—'}</td>
@@ -306,6 +312,7 @@ function harvGridHtml(items) {
         <button class="btn btn-icon" data-hact="sethopper" data-hid="${h.id}" title="Set hopper amount"><i class="fa-solid fa-sliders"></i></button>
         <button class="btn btn-icon" data-hact="power" data-hid="${h.id}" title="Set power"><i class="fa-solid fa-bolt"></i></button>
         <button class="btn btn-icon" data-hact="maint" data-hid="${h.id}" title="Set maintenance"><i class="fa-solid fa-coins"></i></button>
+        <button class="btn btn-icon" data-hact="clone" data-hid="${h.id}" title="Duplicate"><i class="fa-solid fa-clone"></i></button>
         <button class="btn btn-icon" data-hact="edit" data-hid="${h.id}" title="Edit"><i class="fa-solid fa-pen"></i></button>
         <button class="btn btn-icon" data-hact="del" data-hid="${h.id}" title="Remove"><i class="fa-solid fa-trash-can"></i></button>
       </td>
@@ -317,8 +324,9 @@ function harvGridHtml(items) {
     </tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
-function renderHarvesters() {
-  const wrap = $('#harv-list');
+// what's currently IN VIEW (character filter + search applied) — the bulk
+// actions operate on exactly this set
+function harvFilteredItems() {
   let items = harvState.items;
   if (harvState.charFilter) items = items.filter((h) => String(h.character_id) === harvState.charFilter);
   const q = (harvState.query || '').toLowerCase();
@@ -326,6 +334,12 @@ function renderHarvesters() {
     items = items.filter((h) => [h.name, h.harvester_type, h.resource_name, h.planet, h.character_name]
       .some((v) => String(v || '').toLowerCase().includes(q)));
   }
+  return items;
+}
+
+function renderHarvesters() {
+  const wrap = $('#harv-list');
+  const items = harvFilteredItems();
 
   $('#harv-empty').hidden = items.length > 0;
   wrap.classList.toggle('harv-list-grid', harvState.view === 'grid');
@@ -431,6 +445,22 @@ async function loadHarvesters() {
   harvState.timer = setInterval(() => {
     if (document.getElementById('page-harvesters').classList.contains('active')) renderHarvesters();
   }, 15000);
+
+  // the fun part: hopper unit counters tick UP every second, in place — no
+  // re-render, just the numbers (an elite pulls ~0.8 units/sec, so they move)
+  clearInterval(harvState.unitsTimer);
+  harvState.unitsTimer = setInterval(() => {
+    if (!document.getElementById('page-harvesters').classList.contains('active')) return;
+    document.querySelectorAll('.harv-units').forEach((el) => {
+      const h = harvState.items.find((x) => String(x.id) === el.dataset.uhid);
+      if (!h) return;
+      const hop = harvHopper(h);
+      if (hop) {
+        const v = fmtNum(Math.floor(hop.units));
+        if (el.textContent !== v) el.textContent = v;
+      }
+    });
+  }, 1000);
 }
 
 // ---- actions ----
@@ -583,12 +613,139 @@ async function harvEmptyHopper(h) {
   } });
   harvState.events = {};
   loadHarvesters();
+  if (hopper && hopper.units > 0 && h.resource_name) {
+    await harvOfferStockpile(h.resource_name, hopper.units);
+  }
+}
+
+// resource name → site id (exact match) for the stockpile hand-off
+async function harvResourceId(name) {
+  try {
+    const res = await api().search_resources({ search: name, page: 1 });
+    const rows = (res.ok && res.data && res.data.results) || [];
+    const hit = rows.find((r) => String(r.name).toLowerCase() === String(name).toLowerCase());
+    return hit ? hit.id : null;
+  } catch (_) { return null; }
+}
+
+// "you just pulled ~N units of X — stockpile them?" — create-or-increment
+async function harvOfferStockpile(name, units) {
+  if (!name || !(units > 0)) return;
+  const raw = await charDialog({
+    title: 'Add to My Stockpile?',
+    label: `${name} units`,
+    hint: `Emptied ≈ <b>${fmtNum(Math.floor(units))}</b> units of <b>${escapeHtml(name)}</b> — save them to your stockpile, or cancel to skip.`,
+    value: String(Math.floor(units)),
+    confirm: 'Add to Stockpile',
+    icon: 'fa-cubes',
+  });
+  if (raw === null) return;
+  const add = Math.round(parseAmount(raw));
+  if (Number.isNaN(add) || add <= 0) return;
+  try {
+    if (typeof stkState !== 'undefined' && !stkState.items.length) {
+      try { await syncStockpile(); } catch (_) { /* lookup below still tries */ }
+    }
+    let item = stkState.items.find((i) => String(i.name).toLowerCase() === name.toLowerCase());
+    if (!item) {
+      const rid = await harvResourceId(name);
+      if (!rid) { toast(`Couldn't find ${name} on the site — add it to your stockpile manually`, false); return; }
+      const res = await api().add_to_stockpile(rid);
+      if (!res.ok) { toast(res.error || 'Stockpile add failed', false); return; }
+      await syncStockpile();
+      item = stkState.items.find((i) => String(i.id) === String(rid));
+    }
+    if (!item) { toast('Stockpile row not found after adding — check My Stockpile', false); return; }
+    const newStock = (Number(item.stock) || 0) + add;
+    const res = await api().update_stockpile(item.stockpile_id, newStock);
+    if (res.ok) { toast(`${name}: stockpile → ${fmtNum(newStock)}`); syncStockpile(); }
+    else toast(res.error || 'Stockpile update failed', false);
+  } catch (e) { toast(String(e), false); }
+}
+
+// bulk rounds: Empty All marks every in-view hopper emptied; Pack All also
+// redeeds (removes) them — either way the pulled units get offered per resource
+async function harvBulk(packUp) {
+  const items = harvFilteredItems();
+  if (!items.length) { toast('No harvesters in view', false); return; }
+  const totals = {};
+  const now = harvNow();
+  for (const h of items) {
+    const hop = harvHopper(h);
+    if (hop && hop.units > 0 && h.resource_name) {
+      totals[h.resource_name] = (totals[h.resource_name] || 0) + hop.units;
+    }
+    if (packUp) {
+      await apiFetch('DELETE', 'api/harvesters.php', { data: { id: h.id } });
+    } else {
+      await apiFetch('PUT', 'api/harvesters.php', { data: { id: h.id, hopper_emptied_at: now } });
+      await apiFetch('POST', 'api/harvesters.php?action=event', { data: {
+        harvester_id: h.id, kind: 'hopper',
+        detail: `Emptied hopper${hop ? ` (~${fmtShort(hop.units)} units)` : ''}`,
+        amount: hop ? Math.round(hop.units) : null,
+      } });
+    }
+  }
+  harvState.events = {};
+  toast(packUp ? `Packed up ${items.length} harvester${items.length === 1 ? '' : 's'}`
+    : `Emptied ${items.length} hopper${items.length === 1 ? '' : 's'}`);
+  loadHarvesters();
+  for (const [name, units] of Object.entries(totals)) {
+    await harvOfferStockpile(name, units); // one ask per distinct resource
+  }
+}
+
+// "Nickname #2", "#3", … — first free number among the current names
+function harvCloneName(base) {
+  const stem = String(base || '').replace(/\s*#\d+$/, '').trim() || 'Harvester';
+  const names = new Set(harvState.items.map((x) => String(x.name || '').toLowerCase()));
+  let n = 2;
+  while (names.has(`${stem.toLowerCase()} #${n}`)) n += 1;
+  return `${stem} #${n}`;
+}
+
+// four elites on one node = add one, clone three times. Copies everything about
+// the SETUP (type/character/resource/deed/planet) and the current power/maint
+// loads (farms get filled identically) — only the exact coordinates stay blank.
+async function harvClone(h) {
+  const now = harvNow();
+  const power = harvDrain(h.power_amount, h.power_rate, h.power_set_at);
+  const maint = harvDrain(h.maint_amount, h.maint_rate, h.maint_set_at);
+  const fields = {
+    harvester_type: h.harvester_type,
+    name: harvCloneName(h.name || h.harvester_type),
+    character_id: h.character_id || null,
+    planet: h.planet || '',
+    x: '',
+    y: '',
+    resource_name: h.resource_name || '',
+    concentration: h.concentration ?? '',
+    ber: h.ber ?? '',
+    hopper_size: h.hopper_size ?? '',
+    extraction_rate: h.extraction_rate ?? '',
+    maint_rate: h.maint_rate ?? '',
+    power_rate: h.power_rate ?? '',
+    // clone what's LEFT right now, timestamped fresh — the copy's meters match
+    power_amount: power ? Math.max(0, Math.round(power.remaining)) : (h.power_amount ?? ''),
+    power_set_at: now,
+    maint_amount: maint ? Math.max(0, Math.round(maint.remaining)) : (h.maint_amount ?? ''),
+    maint_set_at: now,
+  };
+  const res = await apiFetch('POST', 'api/harvesters.php', { data: fields });
+  if (res.ok) { toast(`Cloned → ${fields.name}`); loadHarvesters(); }
+  else toast(res.error || 'Clone failed', false);
 }
 
 async function harvDelete(h) {
+  const hopper = harvHopper(h); // capture before it's gone
   const res = await apiFetch('DELETE', 'api/harvesters.php', { data: { id: h.id } });
-  if (res.ok) { toast(`Removed ${h.name || h.harvester_type}`); loadHarvesters(); }
-  else toast(res.error || 'Delete failed', false);
+  if (!res.ok) { toast(res.error || 'Delete failed', false); return; }
+  toast(`Removed ${h.name || h.harvester_type}`);
+  loadHarvesters();
+  // reclaiming dumps the hopper into your inventory — offer it to the stockpile
+  if (hopper && hopper.units > 0 && h.resource_name) {
+    await harvOfferStockpile(h.resource_name, hopper.units);
+  }
 }
 
 // ---- add/edit form (one modal, create or update) ----
@@ -634,15 +791,12 @@ function harvOpenForm(h = null) {
 // what got derived (extraction from BER × conc, burn rates from the type)
 function harvSyncFormMode() {
   const type = $('#harv-f-type').value;
-  const gen = harvIsGenerator(type);
-  $('#harv-f-pull').hidden = gen;
-  $('#harv-f-hopperwrap').hidden = gen;
   const d = HARV_TYPE_DEFAULTS[type];
   // BER can't exceed the type's cap — snap it back and say so in the placeholder
   const berEl = $('#harv-f-ber');
   berEl.placeholder = d ? `max ${d.ber}` : 'e.g. 44';
   if (d && safeInt(berEl.value) > d.ber) berEl.value = d.ber;
-  const rate = gen ? 0 : harvRate($('#harv-f-ber').value.trim(), $('#harv-f-conc').value.trim());
+  const rate = harvRate($('#harv-f-ber').value.trim(), $('#harv-f-conc').value.trim());
   // the derived strip at the bottom — only exists when it has real numbers
   const bits = [];
   if (harvState.resFamilyWarn) bits.push(`<span class="harv-derived-warn">⚠ ${escapeHtml(harvState.resFamilyWarn)} can't be pulled by a harvester (creature/space/energy resource)</span>`);
@@ -659,7 +813,6 @@ async function harvSubmitForm() {
   const m = $('#harv-modal');
   const charId = $('#harv-f-char').value;
   const type = $('#harv-f-type').value.trim();
-  const gen = harvIsGenerator(type);
   const d = HARV_TYPE_DEFAULTS[type] || null;
   const fields = {
     harvester_type: type,
@@ -668,10 +821,11 @@ async function harvSubmitForm() {
     planet: $('#harv-f-planet').value.trim(),
     x: $('#harv-f-x').value.trim(),
     y: $('#harv-f-y').value.trim(),
-    resource_name: gen ? '' : $('#harv-f-resource').value.trim(),
-    concentration: gen ? '' : $('#harv-f-conc').value.trim(),
+    // generators track like harvesters: energy resource + conc + a hopper of it
+    resource_name: $('#harv-f-resource').value.trim(),
+    concentration: $('#harv-f-conc').value.trim(),
     ber: $('#harv-f-ber').value.trim(),
-    hopper_size: (!gen && $('#harv-f-hopper').value.trim()) ? Math.round(parseAmount($('#harv-f-hopper').value)) : '',
+    hopper_size: $('#harv-f-hopper').value.trim() ? Math.round(parseAmount($('#harv-f-hopper').value)) : '',
     // burn rates come from the type — never typed in (custom legacy rates survive edits)
     maint_rate: d ? d.maint : (harvState.editRates && harvState.editRates.maint != null ? Number(harvState.editRates.maint) : ''),
     power_rate: d ? d.power : (harvState.editRates && harvState.editRates.power != null ? Number(harvState.editRates.power) : ''),
@@ -713,6 +867,14 @@ function initHarvesters() {
     harvState.query = $('#harv-search').value.trim();
     renderHarvesters();
   });
+  $('#harv-emptyall').addEventListener('click', (e) => {
+    if (!confirmArm(e.currentTarget, 'Click again to empty ALL in view')) return;
+    harvBulk(false);
+  });
+  $('#harv-packall').addEventListener('click', (e) => {
+    if (!confirmArm(e.currentTarget, 'Click again to PACK UP all in view')) return;
+    harvBulk(true);
+  });
   $('#harv-viewtoggle').addEventListener('click', () => {
     harvState.view = harvState.view === 'grid' ? 'cards' : 'grid';
     harvPaintViewToggle();
@@ -726,6 +888,7 @@ function initHarvesters() {
   $('#harv-f-type').addEventListener('change', () => {
     const d = HARV_TYPE_DEFAULTS[$('#harv-f-type').value];
     if (d && d.ber) $('#harv-f-ber').value = d.ber;
+    if (d && d.hopper) $('#harv-f-hopper').value = fmtShort(d.hopper); // typical craft — edit if yours differs
     harvSyncFormMode();
   });
   ['#harv-f-ber', '#harv-f-conc'].forEach((sel) => $(sel).addEventListener('input', harvSyncFormMode));
@@ -846,6 +1009,7 @@ function initHarvesters() {
     if (!h) return;
     const act = btn.dataset.hact;
     if (act === 'log') { harvExpandLog(h.id); return; }
+    if (act === 'clone') { harvClone(h); return; }
     if (act === 'edit') { harvOpenForm(h); return; }
     if (act === 'power') { harvSetPool(h, 'power'); return; }
     if (act === 'maint') { harvSetPool(h, 'maint'); return; }

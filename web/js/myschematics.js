@@ -345,6 +345,13 @@ async function loadMySchematics() {
     total.className = 'mys-badge ok';
     total.hidden = false;
   }
+
+  // sidebar pill mirrors the total — gone the moment everything's optimal
+  const pill = $('#nav-mys-pill');
+  if (pill) {
+    pill.textContent = totalUp;
+    pill.hidden = totalUp <= 0;
+  }
 }
 
 // ---- Detail page ----
@@ -353,7 +360,10 @@ function mysdRowHtml(r) {
   const res = r.resource;
   let using;
   if (r.resource_name) {
-    using = `<span class="mys-using" data-editing-ing="${escapeHtml(String(r.id))}" title="Click to change">
+    // same stockpile add/manage cell the Best Known column has (⌘/Ctrl-click
+    // opens the amount/CPU dialog) — only when the name resolved to a real id
+    using = `${res?.id ? mysdAddBadge(res.id, r.resource_name) : ''}
+      <span class="mys-using" data-editing-ing="${escapeHtml(String(r.id))}" title="Click to change">
       ${escapeHtml(r.resource_name)}</span>
       ${res?.in_spawn ? '<span class="mys-inspawn">in spawn</span>' : ''}
       <span data-uq></span>`;
@@ -406,7 +416,7 @@ async function openMySchematicPage(item) {
     for (const code of [...new Set((item.resources || []).map((r) => r.resource_type))]) {
       if (mysdState.item !== item) return; // navigated away
       try {
-        const res = await api().get_class_pool(String(code));
+        const res = await classPool(String(code), [...stkState.resourceIds]);
         byType[code] = (((res.ok && res.data) || []))
           .filter((p) => stkState.resourceIds.has(String(p.id)))
           .map((p) => ({ name: p.name, q: mysWeightedQuality(p, weightsList, classCaps(String(code))) || 0, active: p.status === 1, stocked: true,
@@ -671,7 +681,7 @@ async function openAddSetup(schematicId, name) {
     if (stkState.resourceIds && stkState.resourceIds.size) {
       for (const n of needed) { // sequential — parallel multi-MB bridge calls drop in WKWebView
         try {
-          const r = await api().get_class_pool(String(n.id));
+          const r = await classPool(String(n.id), [...stkState.resourceIds]);
           const caps = typeof classCaps === 'function' ? classCaps(String(n.id)) : null;
           stockedBySlot[n.id] = ((r.ok && r.data) || [])
             .filter((p) => stkState.resourceIds.has(String(p.id)))

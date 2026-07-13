@@ -68,7 +68,9 @@ def announce_discord(version_label: str, message: str) -> None:
     try:
         req = urllib.request.Request(
             hook, data=json.dumps({"content": body}).encode("utf-8"),
-            headers={"Content-Type": "application/json"}, method="POST")
+            # Discord's Cloudflare 403s the default Python urllib UA — send a real one
+            headers={"Content-Type": "application/json", "User-Agent": "swgtracker-ship/1.0"},
+            method="POST")
         with urllib.request.urlopen(req, timeout=15) as resp:
             ok = 200 <= resp.status < 300
         print(f"discord: announced {version_label}" if ok else f"discord: HTTP {resp.status}")

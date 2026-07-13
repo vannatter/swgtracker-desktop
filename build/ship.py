@@ -20,15 +20,60 @@ bundle version and leave v0.x.y alone.
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import subprocess
 import sys
+import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SHELL_PATHS = ("src/", "run_web.py")
 UI_PATHS = ("web/",)
 CO_AUTHOR = "\n\nCo-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
+SECRETS = ROOT / "build" / "ship_secrets.json"
+
+
+def discord_webhook() -> str | None:
+    """The release-announce webhook, from the gitignored build/ship_secrets.json."""
+    try:
+        return json.loads(SECRETS.read_text()).get("discord_webhook") or None
+    except (OSError, ValueError):
+        return None
+
+
+def notes_to_bullets(message: str) -> list[str]:
+    """Split a release message into human bullet points. Our notes are one line
+    of '; '-separated changes (sometimes with a 'vX.Y.Z — ' prefix); fall back to
+    newlines / sentence splits so anything reads cleanly as a list."""
+    msg = message.strip()
+    msg = re.sub(r"^v[\d.]+\s*—\s*", "", msg)          # drop a leading version prefix
+    msg = re.sub(r"^v[\d.]+\s*—\s*", "", msg)          # ...twice (ship double-prefixes shell msgs)
+    parts = [msg] if "\n" not in msg else msg.splitlines()
+    if len(parts) == 1:
+        parts = re.split(r";\s+", parts[0])            # our usual separator
+    return [p.strip().rstrip(".") for p in parts if p.strip()]
+
+
+def announce_discord(version_label: str, message: str) -> None:
+    """Post 'Desktop release <version>:' + bullet points to Discord. Best-effort:
+    a webhook failure never fails the ship (the release already went out)."""
+    hook = discord_webhook()
+    if not hook:
+        print("discord: no webhook configured (build/ship_secrets.json) — skipped")
+        return
+    bullets = notes_to_bullets(message)
+    body = f"**Desktop release {version_label}**\n" + "\n".join(f"• {b}" for b in bullets)
+    body = body[:1990]  # Discord hard-caps content at 2000 chars
+    try:
+        req = urllib.request.Request(
+            hook, data=json.dumps({"content": body}).encode("utf-8"),
+            headers={"Content-Type": "application/json"}, method="POST")
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            ok = 200 <= resp.status < 300
+        print(f"discord: announced {version_label}" if ok else f"discord: HTTP {resp.status}")
+    except Exception as e:  # noqa: BLE001 — never let an announce break a ship
+        print(f"discord: announce failed ({e}) — release still went out")
 
 
 def run(*cmd, check=True, capture=True):
@@ -75,6 +120,8 @@ def main() -> int:
     ap.add_argument("--no-app", action="store_true", help="skip the local .app rebuild")
     ap.add_argument("--no-tag", action="store_true",
                     help="skip pushing the v* release tag (no shell installer build)")
+    ap.add_argument("--no-announce", action="store_true",
+                    help="don't post the release notes to the Discord webhook")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
@@ -114,12 +161,15 @@ def main() -> int:
             print(f"tagged + pushed {tag} — release.yml is building the mac .app + "
                   f"Windows installer and will announce version.json to installed apps")
 
+    bundle_label = None
     if ui:
         r = run(sys.executable, "build/publish_bundle.py", "--deploy", check=False)
         tail = [l for l in (r.stdout + r.stderr).splitlines() if "DEPLOYED" in l or "•" in l]
         print("\n".join(tail) if tail else "bundle deploy FAILED:\n" + r.stdout + r.stderr)
         if "DEPLOYED" not in r.stdout:
             return 1
+        m = re.search(r"/bundles/([\d.]+)\.zip", r.stdout)  # 2026.07.13.1
+        bundle_label = m.group(1) if m else None
 
     if shell and not args.no_app:
         print("rebuilding .app …")
@@ -130,6 +180,12 @@ def main() -> int:
             return 1
         print("note: shell users need the new .app (version.json release "
               "once that channel is live)")
+
+    # Announce to Discord — shell ship reads as the app version, a UI-only ship
+    # as the bundle stamp. Best-effort; a failure here never fails the ship.
+    if not args.no_announce:
+        label = f"v{new_version}" if shell else (bundle_label or f"v{version} (UI update)")
+        announce_discord(label, args.message)
     return 0
 
 

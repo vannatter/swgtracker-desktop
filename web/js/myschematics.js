@@ -403,29 +403,39 @@ async function openMySchematicPage(item) {
   if (mysdState.item !== item) return; // user navigated away mid-fetch
   mysdState.analysis = an;
 
-  // stockpile picks for the Using editor — mirror class pool ∩ stockpile per
-  // slot class, rated by this entry's formulas. Fire-and-forget: the page is
-  // interactive now; editors opened later just get the extra options.
+  // Load the FULL class pool per slot (like the Lab) so the Using editor can
+  // search ANY resource of the class, not just stockpile + recorded spawns.
+  // Fire-and-forget: the page is interactive now; editors get the extra
+  // options once this lands. Rating is lazy (done on render), so this just
+  // caches raw rows + the caps/weights they'll be rated with.
   (async () => {
-    if (typeof stkState === 'undefined') return;
-    if (!stkState.items.length) { try { await syncStockpile(); } catch (_) { return; } }
-    if (!stkState.resourceIds || !stkState.resourceIds.size) return;
+    if (typeof stkState !== 'undefined' && !stkState.items.length) {
+      try { await syncStockpile(); } catch (_) { /* stock chips just won't show */ }
+    }
     let weightsList = mysFormulaList(item).map(mysParseWeights).filter(Boolean);
     if (!weightsList.length) weightsList = (await mysGetDetail(item.schematic_id, item.formulas || ''))?.weights || [];
-    const byType = {};
+    mysdState.weightsList = weightsList;
+    const stockIds = (typeof stkState !== 'undefined' && stkState.resourceIds) ? [...stkState.resourceIds] : [];
+    const poolByType = {};
+    const stockedByType = {};
     for (const code of [...new Set((item.resources || []).map((r) => r.resource_type))]) {
       if (mysdState.item !== item) return; // navigated away
       try {
-        const res = await classPool(String(code), [...stkState.resourceIds]);
-        byType[code] = (((res.ok && res.data) || []))
-          .filter((p) => stkState.resourceIds.has(String(p.id)))
-          .map((p) => ({ name: p.name, q: mysWeightedQuality(p, weightsList, classCaps(String(code))) || 0, active: p.status === 1, stocked: true,
-            type: p.type_name || '', score: p.value_rating != null ? safeInt(p.value_rating) : null, ts: p.timestamp }))
+        const res = await classPool(String(code), stockIds);
+        const rows = (res.ok && res.data) || [];
+        poolByType[code] = rows;
+        // stocked shortlist (rated) — leads the default editor view
+        stockedByType[code] = rows
+          .filter((p) => stkState && stkState.resourceIds && stkState.resourceIds.has(String(p.id)))
+          .map((p) => mysdPoolOpt(p, code))
           .sort((a, b) => b.q - a.q)
           .slice(0, 8);
-      } catch (_) { /* that slot just shows spawn options */ }
+      } catch (_) { /* that slot just shows recorded spawns */ }
     }
-    if (mysdState.item === item) mysdState.stockedByType = byType;
+    if (mysdState.item === item) {
+      mysdState.poolByType = poolByType;
+      mysdState.stockedByType = stockedByType;
+    }
   })();
 
   // Entries added via the API have no ingredient rows yet (server-side gap:
@@ -538,47 +548,187 @@ async function mysdSaveUsing(ingId, name) {
   openMySchematicPage(fresh || item);
 }
 
-function mysdOpenEditor(cell, ingId) {
-  if (cell.querySelector('input')) return;
-  const item = mysdState.item;
-  const r = (item?.resources || []).find((x) => String(x.id) === String(ingId));
-  if (!r) return;
-  const a = mysdState.analysis?.perIng.get(String(ingId));
-  // your stockpile leads, then the recorded spawns (dedup by name)
-  const stocked = (mysdState.stockedByType || {})[r.resource_type] || [];
-  const stockedNames = new Set(stocked.map((o) => o.name.toLowerCase()));
-  const options = stocked.concat((a?.options || []).filter((o) => !stockedNames.has(o.name.toLowerCase())));
+// a mirror pool row -> a rated Using-editor option (rated against the slot caps)
+function mysdPoolOpt(p, code) {
+  return {
+    name: p.name,
+    q: mysWeightedQuality(p, mysdState.weightsList || [], classCaps(String(code))) || 0,
+    active: p.status === 1,
+    stocked: !!(typeof stkState !== 'undefined' && stkState.resourceIds && stkState.resourceIds.has(String(p.id))),
+    type: p.type_name || '',
+    score: p.value_rating != null ? safeInt(p.value_rating) : null,
+    ts: p.timestamp,
+  };
+}
 
-  const optHtml = (o) => `<div class="mysd-opt" data-optname="${escapeHtml(o.name)}">
+function mysdOptHtml(o) {
+  return `<div class="mysd-opt" data-optname="${escapeHtml(o.name)}">
     <span class="mysd-opt-name" data-richtip="${escapeHtml(mysResTipHtml(o))}">${escapeHtml(o.name)}</span>
     <span class="mysd-opt-meta">${o.stocked ? '<span class="mysd-stocked" title="In your stockpile">✓ stock</span>' : ''}
       ${o.active ? '<span class="mys-inspawn">in spawn</span>' : ''}
       <span class="stat ${qualityClass(o.q / 10)}">${o.q.toFixed(1)}</span></span>
   </div>`;
+}
+
+// ---- Lab-style resource picker (modal): stockpile dropdown + search-any +
+// a full quality table. Opens from a Using cell; picking saves the slot. ----
+
+const MYSD_PICK_STATS = ['oq', 'cr', 'cd', 'dr', 'hr', 'ma', 'sr', 'ut', 'fl', 'pe'];
+
+function mysdPickRelevant() {
+  const set = new Set();
+  for (const w of (mysdState.weightsList || [])) Object.keys(w).forEach((s) => set.add(s));
+  return set;
+}
+
+async function mysdOpenPicker(ingId) {
+  const item = mysdState.item;
+  const r = (item?.resources || []).find((x) => String(x.id) === String(ingId));
+  if (!r) return;
+  const code = r.resource_type;
+  const modal = $('#mysd-picker-modal');
+  mysdState.picker = { ingId, code, query: '', current: r.resource_name || '' };
+
+  $('#mysd-picker-title').innerHTML =
+    `${escapeHtml(r.resource_label || 'Slot')} <span class="mys-type">${escapeHtml(r.type_name || '')}</span>`;
+  $('#mysd-picker-search').value = '';
+  $('#mysd-picker-search').placeholder = `Search any ${r.type_name || 'resource'}…`;
+  $('#mysd-picker-head').innerHTML = `<th class="pin-cell"></th><th class="col-name">Resource</th>
+    <th>Rate</th>${MYSD_PICK_STATS.map((s) => `<th class="${mysdPickRelevant().has(s) ? '' : 'lab-dim'}">${s.toUpperCase()}</th>`).join('')}
+    <th>eCPU</th>`;
+  modal.hidden = false;
+  $('#mysd-picker-search').focus();
+
+  // load the class pool if not already cached, then render
+  if (!(mysdState.poolByType || {})[code]) {
+    $('#mysd-picker-body').innerHTML = '<tr><td colspan="14" class="stat_off lab-pool-empty">Loading class…</td></tr>';
+    try {
+      const stockIds = (typeof stkState !== 'undefined' && stkState.resourceIds) ? [...stkState.resourceIds] : [];
+      const res = await classPool(String(code), stockIds);
+      (mysdState.poolByType = mysdState.poolByType || {})[code] = (res.ok && res.data) || [];
+    } catch (_) { (mysdState.poolByType = mysdState.poolByType || {})[code] = []; }
+    if (modal.hidden || mysdState.picker.ingId !== ingId) return; // closed meanwhile
+  }
+  mysdRenderPicker();
+}
+
+function mysdRenderPicker() {
+  const p = mysdState.picker;
+  if (!p) return;
+  const pool = (mysdState.poolByType || {})[p.code] || [];
+  const caps = typeof classCaps === 'function' ? classCaps(String(p.code)) : null;
+  const rel = mysdPickRelevant();
+  const q = (p.query || '').trim().toLowerCase();
+
+  let rows = pool.map((res) => ({ res, q: mysWeightedQuality(res, mysdState.weightsList || [], caps) || 0 }));
+  if (q) rows = rows.filter((x) => String(x.res.name).toLowerCase().includes(q));
+  else if (p.stockOnly) rows = rows.filter((x) => stkState && stkState.resourceIds && stkState.resourceIds.has(String(x.res.id)));
+  rows.sort((a, b) => b.q - a.q);
+  rows = rows.slice(0, q ? 40 : 60);
+
+  // stockpile dropdown (stocked resources of this class)
+  const stocked = pool
+    .filter((res) => stkState && stkState.resourceIds && stkState.resourceIds.has(String(res.id)))
+    .map((res) => ({ res, q: mysWeightedQuality(res, mysdState.weightsList || [], caps) || 0 }))
+    .sort((a, b) => b.q - a.q);
+  $('#mysd-picker-stock').innerHTML = `<option value="">My stockpile (${stocked.length})…</option>`
+    + stocked.map((x) => `<option value="${escapeHtml(x.res.name)}">${escapeHtml(x.res.name)} — ${x.q.toFixed(1)}</option>`).join('');
+
+  const body = $('#mysd-picker-body');
+  if (!rows.length) {
+    body.innerHTML = `<tr><td colspan="14" class="stat_off lab-pool-empty">${q ? 'No matches in this class.' : 'Class pool is empty.'}</td></tr>`;
+    return;
+  }
+  body.innerHTML = rows.map(({ res, q: rate }) => {
+    const inStock = !!(stkState && stkState.resourceIds && stkState.resourceIds.has(String(res.id)));
+    const stockN = inStock && typeof stkState !== 'undefined' ? (stkState.items.find((i) => String(i.id) === String(res.id))?.stock) : null;
+    return `<tr class="lab-row ${p.current === res.name ? 'lab-picked' : ''} ${inStock ? 'lab-stocked' : ''}" data-pickres="${escapeHtml(res.name)}">
+      <td class="pin-cell">${res.status === 1 ? '<span class="lab-live" title="In spawn"></span>' : ''}</td>
+      <td class="col-name res-name" data-richtip="${escapeHtml(mysResTipHtml({ name: res.name, type: res.type_name, score: res.value_rating != null ? safeInt(res.value_rating) : null, ts: res.timestamp }))}">${escapeHtml(res.name)}
+        ${inStock ? `<span class="lab-stock" title="In your stockpile${stockN != null ? `: ${fmtNum(stockN)} units` : ''}">✓ ${stockN != null && stockN > 0 ? fmtShort(stockN) : 'stock'}</span>` : ''}</td>
+      <td class="stat ${qualityClass(rate / 10)}">${rate.toFixed(1)}</td>
+      ${MYSD_PICK_STATS.map((st) => {
+        const v = safeInt(res[st]);
+        if (v <= 0) return `<td class="stat stat_off ${rel.has(st) ? '' : 'lab-dim'}">—</td>`;
+        const cap = safeInt(res[`${st}_max`]) || 1000;
+        return `<td class="stat ${qualityClass((v / cap) * 100)} ${rel.has(st) ? '' : 'lab-dim'}">${v}</td>`;
+      }).join('')}
+      <td class="stat">${ecpuClamp(res.cpu, res.status === 1, safeInt(res.planet_mustafar) === 1) || '~1'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function mysdClosePicker() {
+  $('#mysd-picker-modal').hidden = true;
+  mysdState.picker = null;
+}
+
+function mysdOpenEditor(cell, ingId) {
+  if (cell.querySelector('input')) return;
+  const item = mysdState.item;
+  const r = (item?.resources || []).find((x) => String(x.id) === String(ingId));
+  if (!r) return;
+  const code = r.resource_type;
+  const a = mysdState.analysis?.perIng.get(String(ingId));
+
+  // DEFAULT list (no query): stockpile picks first, then recorded top spawns.
+  const stocked = (mysdState.stockedByType || {})[code] || [];
+  const stockedNames = new Set(stocked.map((o) => o.name.toLowerCase()));
+  const defaultOpts = stocked.concat((a?.options || []).filter((o) => !stockedNames.has(o.name.toLowerCase())));
+
+  // SEARCH source: the whole class pool (best-first from the mirror), rated
+  // lazily as matches surface. Falls back to recorded spawns until it loads.
+  const searchPool = (q) => {
+    const pool = (mysdState.poolByType || {})[code];
+    if (pool) {
+      return pool
+        .filter((p) => String(p.name).toLowerCase().includes(q))
+        .slice(0, 60) // pool is best-first, so cap the rate work
+        .map((p) => mysdPoolOpt(p, code))
+        .sort((x, y) => y.q - x.q)
+        .slice(0, 20);
+    }
+    return defaultOpts.filter((o) => o.name.toLowerCase().includes(q)).slice(0, 20);
+  };
+
+  // load the class pool on demand if the background load hasn't landed yet, so
+  // search works the instant the editor opens (not only after the page settles)
+  if (!(mysdState.poolByType || {})[code]) {
+    (async () => {
+      try {
+        const stockIds = (typeof stkState !== 'undefined' && stkState.resourceIds) ? [...stkState.resourceIds] : [];
+        const res = await classPool(String(code), stockIds);
+        (mysdState.poolByType = mysdState.poolByType || {})[code] = (res.ok && res.data) || [];
+        if (!done && input.isConnected) refresh(); // re-run the current query against the now-loaded pool
+      } catch (_) { /* stays on the fallback list */ }
+    })();
+  }
 
   // freeze the cell's width so swapping text → input doesn't shift the column
   cell.style.width = `${cell.offsetWidth}px`;
   cell.innerHTML = `<span class="mysd-editwrap">
     <input type="text" class="stock-input mysd-input"
-      value="${escapeHtml(r.resource_name || '')}" placeholder="Resource name...">
-    <div class="mysd-sug">${options.map(optHtml).join('') ||
-      '<div class="mysd-opt-none">No recorded spawns — type any resource name</div>'}</div>
+      value="${escapeHtml(r.resource_name || '')}" placeholder="Search any ${escapeHtml(r.type_name || 'resource')}…">
+    <div class="mysd-sug"></div>
   </span>`;
   const input = cell.querySelector('input');
   const sug = cell.querySelector('.mysd-sug');
   input.focus();
   input.select();
 
-  // Show ALL candidates on open; filter only once the user actually types.
-  let touched = false;
-  const applyFilter = () => {
-    const q = touched ? input.value.trim().toLowerCase() : '';
-    sug.querySelectorAll('.mysd-opt').forEach((el) => {
-      el.hidden = !!q && !el.dataset.optname.toLowerCase().includes(q);
-    });
+  const render = (opts, note = '') => {
+    sug.innerHTML = opts.length ? opts.map(mysdOptHtml).join('')
+      : `<div class="mysd-opt-none">${note || 'No matches — type any resource name to use it.'}</div>`;
   };
-  input.addEventListener('input', () => { touched = true; applyFilter(); });
-  applyFilter();
+  // open on the default list; typing searches the full class
+  let touched = false;
+  const refresh = () => {
+    const q = input.value.trim().toLowerCase();
+    if (!touched || !q) { render(defaultOpts, 'No recorded spawns — type any resource name.'); return; }
+    render(searchPool(q));
+  };
+  input.addEventListener('input', () => { touched = true; refresh(); });
+  refresh();
 
   let done = false;
   const finish = (save, chosen) => {
@@ -675,23 +825,26 @@ async function openAddSetup(schematicId, name) {
   // your STOCKPILE first, like the lab bench: mirror class pool ∩ stockpile,
   // rated by the schematic's formulas against the slot's class caps
   const weightsList = formulas.map((f) => mysParseWeights(f.formulaDescription)).filter(Boolean);
+  spState.weightsList = weightsList;
+  spState.poolBySlot = {}; // full class pool per slot — the searchbox searches it
   const stockedBySlot = {};
-  if (typeof stkState !== 'undefined') {
-    if (!stkState.items.length) { try { await syncStockpile(); } catch (_) { /* chips just don't show */ } }
-    if (stkState.resourceIds && stkState.resourceIds.size) {
-      for (const n of needed) { // sequential — parallel multi-MB bridge calls drop in WKWebView
-        try {
-          const r = await classPool(String(n.id), [...stkState.resourceIds]);
-          const caps = typeof classCaps === 'function' ? classCaps(String(n.id)) : null;
-          stockedBySlot[n.id] = ((r.ok && r.data) || [])
-            .filter((p) => stkState.resourceIds.has(String(p.id)))
-            .map((p) => ({ name: p.name, q: mysWeightedQuality(p, weightsList, caps) || 0, active: p.status === 1, stocked: true,
-              type: p.type_name || '', score: p.value_rating != null ? safeInt(p.value_rating) : null, ts: p.timestamp }))
-            .sort((a, b) => b.q - a.q)
-            .slice(0, 8);
-        } catch (_) { /* slot just shows spawn tops */ }
-      }
-    }
+  if (typeof stkState !== 'undefined' && !stkState.items.length) {
+    try { await syncStockpile(); } catch (_) { /* chips just don't show */ }
+  }
+  const stockIds = (typeof stkState !== 'undefined' && stkState.resourceIds) ? [...stkState.resourceIds] : [];
+  for (const n of needed) { // sequential — parallel multi-MB bridge calls drop in WKWebView
+    try {
+      const r = await classPool(String(n.id), stockIds);
+      const rows = (r.ok && r.data) || [];
+      spState.poolBySlot[n.id] = rows;
+      const caps = typeof classCaps === 'function' ? classCaps(String(n.id)) : null;
+      stockedBySlot[n.id] = rows
+        .filter((p) => stkState && stkState.resourceIds && stkState.resourceIds.has(String(p.id)))
+        .map((p) => ({ name: p.name, q: mysWeightedQuality(p, weightsList, caps) || 0, active: p.status === 1, stocked: true,
+          type: p.type_name || '', score: p.value_rating != null ? safeInt(p.value_rating) : null, ts: p.timestamp }))
+        .sort((a, b) => b.q - a.q)
+        .slice(0, 8);
+    } catch (_) { /* slot just shows spawn tops */ }
   }
 
   $('#sp-rows').innerHTML = needed.map((n) => {
@@ -741,8 +894,8 @@ function cselectHtml(rowId, options) {
                title="Filter the list, or press Enter to use exactly what you typed">
       </div>
       <div class="mysd-opt cselect-opt" data-value=""><span class="stat_off">— choose later —</span></div>
-      ${options.map(cselectOptHtml).join('') ||
-        '<div class="mysd-opt-none">No recorded spawns for this slot</div>'}
+      <div class="cselect-opts">${options.map(cselectOptHtml).join('') ||
+        '<div class="mysd-opt-none">No recorded spawns for this slot</div>'}</div>
     </div>
   </div>`;
 }
@@ -819,6 +972,31 @@ async function saveSlotPicker() {
 
 function initMySchematics() {
   buildMysHeader();
+
+  // Lab-style resource picker modal wiring
+  $('#mysd-picker-close').addEventListener('click', mysdClosePicker);
+  $('#mysd-picker-modal').addEventListener('click', (e) => { if (e.target === $('#mysd-picker-modal')) mysdClosePicker(); });
+  $('#mysd-picker-search').addEventListener('input', () => {
+    if (!mysdState.picker) return;
+    mysdState.picker.query = $('#mysd-picker-search').value;
+    mysdRenderPicker();
+  });
+  $('#mysd-picker-search').addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') mysdClosePicker();
+    else if (e.key === 'Enter' && mysdState.picker) { // use the typed name verbatim
+      const v = $('#mysd-picker-search').value.trim();
+      if (v) { const p = mysdState.picker; mysdClosePicker(); mysdSaveUsing(p.ingId, v); }
+    }
+  });
+  $('#mysd-picker-stock').addEventListener('change', () => {
+    const v = $('#mysd-picker-stock').value;
+    if (v && mysdState.picker) { const p = mysdState.picker; mysdClosePicker(); mysdSaveUsing(p.ingId, v); }
+  });
+  $('#mysd-picker-body').addEventListener('click', (e) => {
+    const row = e.target.closest('[data-pickres]');
+    if (row && mysdState.picker) { const p = mysdState.picker; mysdClosePicker(); mysdSaveUsing(p.ingId, row.dataset.pickres); }
+  });
+
   $('[data-refresh="myschematics"]').addEventListener('click', () => loadMySchematics());
   $('#mys-search').addEventListener('input', () => renderMysList()); // local list — instant typeahead
   $('#mys-head').addEventListener('click', (e) => {
@@ -883,15 +1061,38 @@ function initMySchematics() {
     if (opt) cselectPick(opt.closest('.cselect'), opt.dataset.value, opt.outerHTML);
   });
 
-  // Free-text path: filter as you type; Enter uses the typed name verbatim
-  // (they may own a lower-quality spawn that isn't in the top lists)
+  // Free-text path: an empty query keeps the default (stockpile + top spawns);
+  // typing searches the WHOLE class pool (best-first from the mirror), like the
+  // Lab. Enter still uses the typed name verbatim.
   $('#sp-rows').addEventListener('input', (e) => {
     const inp = e.target.closest('.cselect-input');
     if (!inp) return;
+    const sp = mysdState._setup || {};
+    const cs = inp.closest('.cselect');
+    const optsBox = cs.querySelector('.cselect-opts');
+    if (optsBox._defaultHtml === undefined) optsBox._defaultHtml = optsBox.innerHTML; // stockpile + top spawns
     const q = inp.value.trim().toLowerCase();
-    inp.closest('.cselect-menu').querySelectorAll('.cselect-opt').forEach((o) => {
-      o.hidden = !!q && !o.dataset.value.toLowerCase().includes(q);
-    });
+    const code = cs.dataset.sp;
+    const pool = q && sp.poolBySlot ? sp.poolBySlot[code] : null;
+    if (!q) { optsBox.innerHTML = optsBox._defaultHtml; return; } // cleared → restore default
+    if (q && pool) {
+      const caps = typeof classCaps === 'function' ? classCaps(String(code)) : null;
+      const hits = pool
+        .filter((p) => String(p.name).toLowerCase().includes(q))
+        .slice(0, 60)
+        .map((p) => ({ name: p.name, q: mysWeightedQuality(p, sp.weightsList || [], caps) || 0,
+          active: p.status === 1, stocked: !!(stkState && stkState.resourceIds && stkState.resourceIds.has(String(p.id))),
+          type: p.type_name || '', score: p.value_rating != null ? safeInt(p.value_rating) : null, ts: p.timestamp }))
+        .sort((x, y) => y.q - x.q)
+        .slice(0, 20);
+      optsBox.innerHTML = hits.length ? hits.map(cselectOptHtml).join('')
+        : '<div class="mysd-opt-none">No match — press Enter to use the typed name.</div>';
+    } else {
+      // no query (or pool not loaded): plain substring filter over what's shown
+      optsBox.querySelectorAll('.cselect-opt').forEach((o) => {
+        o.hidden = !!q && !o.dataset.value.toLowerCase().includes(q);
+      });
+    }
   });
   $('#sp-rows').addEventListener('keydown', (e) => {
     const inp = e.target.closest('.cselect-input');
@@ -937,11 +1138,13 @@ function initMySchematics() {
     if (acc) { mysdSetAccept(acc.dataset.acceptrow, true); return; }
     const unacc = e.target.closest('[data-unaccept]');
     if (unacc) { mysdSetAccept(unacc.dataset.unaccept, false); return; }
+    // clicking a resource name (link) opens its page; clicking elsewhere on the
+    // Using cell opens the Lab-style picker
+    const resLink = e.target.closest('[data-res]');
+    if (resLink) { openResourcePage(resLink.dataset.res); return; }
     const editCell = e.target.closest('[data-editing-ing]');
-    if (editCell) { mysdOpenEditor(editCell.closest('[data-using]'), editCell.dataset.editingIng); return; }
+    if (editCell) { mysdOpenPicker(editCell.dataset.editingIng); return; }
     const addBadge = e.target.closest('[data-add]');
     if (addBadge) { handleAddCellClick(addBadge, e); return; }
-    const resLink = e.target.closest('[data-res]');
-    if (resLink) openResourcePage(resLink.dataset.res);
   });
 }

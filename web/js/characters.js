@@ -23,6 +23,7 @@ function charFormDialog({ title, confirm, icon = 'fa-check', values = {} }) {
     $('#char-f-name').value = values.name || '';
     $('#char-f-full').value = values.full_name || '';
     $('#char-f-bio').value = values.bio || '';
+    $('#char-f-merchant').checked = !!Number(values.master_merchant);
     modal.hidden = false;
     $('#char-f-name').focus();
     $('#char-f-name').select();
@@ -36,6 +37,7 @@ function charFormDialog({ title, confirm, icon = 'fa-check', values = {} }) {
         name: $('#char-f-name').value.trim(),
         full_name: $('#char-f-full').value.trim(),
         bio: $('#char-f-bio').value.trim(),
+        master_merchant: $('#char-f-merchant').checked ? 1 : 0,
       } : null);
     }
     function onKey(e) {
@@ -122,8 +124,10 @@ async function loadCharactersPage() {
     charPageState.designer[c.id] = dz;
     charPageState.rows[c.id] = c;
     const full = c.full_name ? ` <span class="char-fullname">· ${escapeHtml(c.full_name)}</span>` : '';
+    const mm = Number(c.master_merchant)
+      ? ' <span class="char-mm" title="Master Merchant — harvester bonuses apply">MM</span>' : '';
     return `<tr data-cid="${c.id}" data-cname="${escapeHtml(c.name)}">
-      <td class="col-name" ${c.bio ? `title="${escapeHtml(c.bio)}"` : ''}><i class="fa-solid fa-user char-ico"></i> ${escapeHtml(c.name)}${full}</td>
+      <td class="col-name" ${c.bio ? `title="${escapeHtml(c.bio)}"` : ''}><i class="fa-solid fa-user char-ico"></i> ${escapeHtml(c.name)}${mm}${full}</td>
       <td class="col-num">${mails ? fmtNum(mails) : '<span class="stat_off">—</span>'}</td>
       <td class="col-num">${harv ? fmtNum(harv) : '<span class="stat_off">—</span>'}</td>
       <td class="col-text">

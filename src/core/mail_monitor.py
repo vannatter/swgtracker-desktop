@@ -195,8 +195,13 @@ class MailMonitor:
         self._fail_at.pop(mail_id, None)
 
         kind = "sale" if subject == SALE_SUBJECT else (
-            "purchase" if subject in PURCHASE_SUBJECTS else "mail")
+            "purchase" if subject in PURCHASE_SUBJECTS else
+            "banktip" if "bank transfer" in subject.lower() or "wire transfer" in subject.lower()
+            else "mail")
         detail = ""
+        if kind == "banktip":
+            # detail + tip amounts get parsed in local_db.mail_ledger_add from raw
+            pass
         if kind == "sale":
             # "Vendor: X has sold ITEM to BUYER for N credits."
             body = content.split("\n", 4)[-1]

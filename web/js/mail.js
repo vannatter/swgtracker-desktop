@@ -7,6 +7,7 @@ const mmState = { pollTimer: null, page: 1, perPage: 50, category: '', character
 const MM_KIND = {
   sale: { cls: 'mm-sale', icon: 'fa-tags', label: 'sale' },
   purchase: { cls: 'mm-purchase', icon: 'fa-cart-shopping', label: 'purchase' },
+  banktip: { cls: 'mm-banktip', icon: 'fa-money-bill-transfer', label: 'bank tip' },
   mail: { cls: '', icon: 'fa-envelope', label: 'mail' },
   error: { cls: 'mm-err', icon: 'fa-triangle-exclamation', label: 'error' },
 };
@@ -21,13 +22,14 @@ function mmKindPill(kind, statusIcon = '') {
 const MM_CATS = {
   sale: 'Sales',
   purchase: 'Purchases',
+  banktip: 'Bank transfers',
   factory: 'Factory',
   'factory-ingredients': 'Factory: no ingredients',
   structure: 'Structure',
   guild: 'Guild',
   other: 'Other',
 };
-const MM_CAT_ORDER = ['sale', 'purchase', 'factory', 'factory-ingredients', 'structure', 'guild', 'other'];
+const MM_CAT_ORDER = ['sale', 'purchase', 'banktip', 'factory', 'factory-ingredients', 'structure', 'guild', 'other'];
 
 async function loadMail() {
   let state = null;
@@ -46,10 +48,11 @@ async function loadMail() {
   let salesTotal = 0;
   let cats = {};
   let chars = {};
+  let tips = null;
   try {
     const res = await api().mail_history(mmState.perPage, (mmState.page - 1) * mmState.perPage, mmState.category, mmState.search, mmState.character);
     const d = res.ok && res.data;
-    if (d) { rows = d.rows || []; total = safeInt(d.total); salesTotal = safeInt(d.sales); cats = d.categories || {}; chars = d.characters || {}; }
+    if (d) { rows = d.rows || []; total = safeInt(d.total); salesTotal = safeInt(d.sales); cats = d.categories || {}; chars = d.characters || {}; tips = d.tips || null; }
   } catch (_) { /* table empty-state below */ }
 
   // server-side "uploaded but the cron hasn't parsed it yet" set — those rows get
@@ -71,14 +74,20 @@ async function loadMail() {
     }
   } catch (_) { /* keep the buttons */ }
 
-  const card = (cls, icon, val, label) => `
-    <div class="mm-card ${cls}">
+  const card = (cls, icon, val, label, tip = '') => `
+    <div class="mm-card ${cls}"${tip ? ` title="${escapeHtml(tip)}"` : ''}>
       <div class="mm-card-ico"><i class="fa-solid ${icon}"></i></div>
       <div><div class="mm-card-val">${val}</div><div class="mm-card-label">${label}</div></div>
     </div>`;
+  // the fun stat: total surcharge burned on bank tips you SENT (5% each)
+  const feeCard = tips && tips.fees > 0
+    ? card('fee', 'fa-hand-holding-dollar', fmtShort(tips.fees), 'Wasted on tip fees',
+           `${fmtNum(tips.sent)} cr sent over ${fmtNum(tips.sent_count)} bank tips · ${fmtNum(tips.received)} cr received`)
+    : '';
   $('#mm-cards').innerHTML =
     card('', 'fa-envelope', fmtNum(total), 'Mails uploaded')
     + card('sale', 'fa-tags', fmtNum(salesTotal), 'Vendor sales')
+    + feeCard
     + card('session', 'fa-bolt', state ? fmtNum(state.uploaded) : '—', 'This session')
     + card(`fail ${state?.failed ? 'bad' : ''}`, 'fa-triangle-exclamation',
            state ? fmtNum(state.failed) : '—', 'Failed');
@@ -249,9 +258,22 @@ function initMail() {
     }
     btn.disabled = true;
     try {
-      const res = await api().add_inventory_item({ item_name: btn.dataset.item, stocked: 1 });
+      // pull the vendor out of the original mail ("Vendor: X has sold …") so the
+      // inventory row records where it sold — go through the gateway to carry it
+      let vendor = '';
+      const tr = btn.closest('tr[data-mailid]');
+      if (tr && tr.dataset.hasraw === '1') {
+        try {
+          const raw = await api().mail_raw(tr.dataset.mailid);
+          const m = /Vendor:\s*(.+?)\s+has sold /.exec((raw.ok && raw.data) || '');
+          if (m) vendor = m[1].trim();
+        } catch (_) { /* just add without a vendor */ }
+      }
+      const res = await apiFetch('POST', 'api/inventory.php', { data: {
+        item_name: btn.dataset.item, vendor, stocked: 1,
+      } });
       if (res.ok) {
-        toast(`Added "${btn.dataset.item}" to My Inventory`);
+        toast(`Added "${btn.dataset.item}"${vendor ? ` (${vendor})` : ''} to My Inventory`);
         btn.outerHTML = '<span class="mm-tracked" title="Already in My Inventory"><i class="fa-solid fa-check"></i></span>';
       } else {
         toast(res.error || res.data || 'Add failed', false);

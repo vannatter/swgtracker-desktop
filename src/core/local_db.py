@@ -31,6 +31,28 @@ def parse_mail_sent_at(raw: str) -> int:
         return 0
 
 
+# bank /tip surcharge — 5% on money you SEND via bank wire (classic SWG rate)
+BANK_TIP_FEE_RATE = 0.05
+
+
+def parse_bank_transfer(raw: str):
+    """A 'Bank Transfer Complete' mail body -> {dir, amount, fee, party} or None.
+      sent:     'RECIPIENT has received N credits from you, via bank wire transfer.'
+      received: 'N credits from SENDER have been successfully delivered from escrow...'
+    """
+    body = (raw or "").split("\n")[-1] if raw else ""
+    m = re.search(r"^(.+?) has received ([\d,]+) credits from you", body)
+    if m:
+        amt = int(m.group(1 + 1).replace(",", ""))
+        return {"dir": "out", "amount": amt, "fee": round(amt * BANK_TIP_FEE_RATE),
+                "party": m.group(1).strip()}
+    m = re.search(r"^([\d,]+) credits from (.+?) have been successfully delivered", body)
+    if m:
+        return {"dir": "in", "amount": int(m.group(1).replace(",", "")), "fee": 0,
+                "party": m.group(2).strip()}
+    return None
+
+
 def mail_category(subject: str, kind: str = "mail") -> str:
     """Coarse category from a mail's subject (+ kind) so the Mail page can filter
     and bulk-delete by type. Pattern-based; unknowns fall to 'other'."""
@@ -39,6 +61,8 @@ def mail_category(subject: str, kind: str = "mail") -> str:
     if kind == "purchase":
         return "purchase"
     s = (subject or "").lower()
+    if "bank transfer" in s or "wire transfer" in s:
+        return "banktip"
     if "out of ingredient" in s:
         return "factory-ingredients"
     if "manufacturing station" in s or "factory" in s or "manufacturing" in s:
@@ -135,7 +159,9 @@ class LocalDB:
         for col, decl in (("detail", "TEXT DEFAULT ''"), ("kind", "TEXT DEFAULT 'mail'"),
                           ("raw", "TEXT DEFAULT ''"), ("sent_at", "INTEGER DEFAULT 0"),
                           ("category", "TEXT DEFAULT 'other'"),
-                          ("character", "TEXT DEFAULT ''")):
+                          ("character", "TEXT DEFAULT ''"),
+                          ("tip_out", "INTEGER DEFAULT 0"), ("tip_in", "INTEGER DEFAULT 0"),
+                          ("tip_fee", "INTEGER DEFAULT 0")):
             try:
                 self._conn.execute(f"ALTER TABLE mail_ledger ADD COLUMN {col} {decl}")
             except sqlite3.OperationalError:
@@ -144,7 +170,8 @@ class LocalDB:
         # One-time back-fill of sent_at (from raw's TIMESTAMP line) + category
         # (from subject) for mails imported before these columns existed.
         # v3: 'purchase' category + upgrade old purchase rows' kind from 'mail'.
-        MAIL_META_VER = "3"
+        # v4: 'banktip' category + parse tip in/out/fee from bank-transfer bodies.
+        MAIL_META_VER = "4"
         row = self._conn.execute(
             "SELECT value FROM sync_meta WHERE key = 'mail_meta_ver'").fetchone()
         if (row["value"] if row else "") != MAIL_META_VER:
@@ -153,10 +180,18 @@ class LocalDB:
                 kind = r["kind"]
                 if kind == "mail" and "purchased" in (r["subject"] or "").lower():
                     kind = "purchase"
+                cat = mail_category(r["subject"], kind)
+                t_out = t_in = t_fee = 0
+                if cat == "banktip":
+                    tip = parse_bank_transfer(r["raw"])
+                    if tip:
+                        t_out = tip["amount"] if tip["dir"] == "out" else 0
+                        t_in = tip["amount"] if tip["dir"] == "in" else 0
+                        t_fee = tip["fee"]
                 self._conn.execute(
-                    "UPDATE mail_ledger SET sent_at = ?, category = ?, kind = ? WHERE mail_id = ?",
-                    (parse_mail_sent_at(r["raw"]), mail_category(r["subject"], kind),
-                     kind, r["mail_id"]))
+                    "UPDATE mail_ledger SET sent_at = ?, category = ?, kind = ?,"
+                    " tip_out = ?, tip_in = ?, tip_fee = ? WHERE mail_id = ?",
+                    (parse_mail_sent_at(r["raw"]), cat, kind, t_out, t_in, t_fee, r["mail_id"]))
             self._conn.execute(
                 "INSERT OR REPLACE INTO sync_meta (key, value) VALUES ('mail_meta_ver', ?)",
                 (MAIL_META_VER,))
@@ -365,13 +400,39 @@ class LocalDB:
 
     def mail_ledger_add(self, mail_id: str, subject: str = "", detail: str = "",
                         kind: str = "mail", raw: str = "", character: str = ""):
+        category = mail_category(subject, kind)
+        t_out = t_in = t_fee = 0
+        if category == "banktip":
+            tip = parse_bank_transfer(raw)
+            if tip:
+                t_out = tip["amount"] if tip["dir"] == "out" else 0
+                t_in = tip["amount"] if tip["dir"] == "in" else 0
+                t_fee = tip["fee"]
+                if not detail:
+                    detail = (f"→ {tip['party']} · {tip['amount']:,} cr"
+                              f" · {tip['fee']:,} fee" if tip["dir"] == "out"
+                              else f"← {tip['party']} · {tip['amount']:,} cr")
         self._conn.execute(
             "INSERT OR REPLACE INTO mail_ledger"
-            " (mail_id, subject, detail, kind, raw, uploaded_at, sent_at, category, character)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            " (mail_id, subject, detail, kind, raw, uploaded_at, sent_at, category, character,"
+            "  tip_out, tip_in, tip_fee)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (str(mail_id), subject, detail, kind, raw, int(time.time()),
-             parse_mail_sent_at(raw), mail_category(subject, kind), str(character or "")))
+             parse_mail_sent_at(raw), category, str(character or ""),
+             t_out, t_in, t_fee))
         self._conn.commit()
+
+    def mail_tip_totals(self) -> dict:
+        """Bank-transfer running totals for the Mail page: credits sent, received,
+        and the surcharge you burned sending."""
+        r = self._conn.execute(
+            "SELECT COALESCE(SUM(tip_out),0) AS sent, COALESCE(SUM(tip_in),0) AS received,"
+            " COALESCE(SUM(tip_fee),0) AS fees,"
+            " SUM(CASE WHEN tip_out > 0 THEN 1 ELSE 0 END) AS sent_n,"
+            " SUM(CASE WHEN tip_in > 0 THEN 1 ELSE 0 END) AS recv_n"
+            " FROM mail_ledger WHERE category = 'banktip'").fetchone()
+        return {"sent": r["sent"], "received": r["received"], "fees": r["fees"],
+                "sent_count": r["sent_n"] or 0, "recv_count": r["recv_n"] or 0}
 
     @staticmethod
     def _mail_where(category: str, search: str, character: str = "") -> tuple[str, list]:

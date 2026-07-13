@@ -17,6 +17,7 @@
         <span class="app-title">SWG Tracker Desktop</span>
         <span class="app-subtitle">swgtracker.com companion <span id="build-id" class="build-id" title="App version — click to check for updates now"></span><span id="bundle-id" class="bundle-id" hidden></span></span>
       </span>
+      <span id="dev-pill" class="dev-pill" title="Dev mode is on — 10-click the logo to hide"><i class="fa-solid fa-glasses"></i> DEV</span>
     </div>
     <div class="app-header-controls">
       <button id="update-chip" class="update-chip" hidden></button>
@@ -659,11 +660,6 @@
           </div>
 
           <div class="settings-section about-card">
-            <h2>What's new</h2>
-            <div id="about-notes" class="about-history">—</div>
-          </div>
-
-          <div class="settings-section about-card">
             <h2>Acknowledgements</h2>
             <div class="about-ack">
               <p>Dustin V <span class="settings-sub">(DoS)</span> — swgtracker.com and this companion app.</p>
@@ -673,6 +669,11 @@
                  <a role="button" data-ext="https://fontawesome.com">Font Awesome</a> ·
                  <a role="button" data-ext="https://swgtracker.com">swgtracker.com</a></p>
             </div>
+          </div>
+
+          <div class="settings-section about-card">
+            <h2>What's new</h2>
+            <div id="about-notes" class="about-history">—</div>
           </div>
         </div>
       </section>
@@ -792,12 +793,18 @@
   <!-- Add-inventory dialog: name + stocked + threshold, nothing else -->
   <div id="inv-add-modal" class="key-gate" hidden>
     <div class="key-gate-card sp-card inv-add-card">
-      <h2>Add Inventory Item</h2>
+      <h2 id="inv-modal-title">Add Inventory Item</h2>
       <label class="sp-field-label">Item name</label>
       <input id="inv-new-name" type="text" class="form-control filter-input settings-input-wide"
              placeholder="e.g. UL Composite Armor Helmet 7000/5000/6000 [SENA]" autocomplete="off">
       <div class="settings-hint">Use the exact in-game name — sales parsed from your mail
         automatically deplete the matching item's stock.</div>
+      <label class="sp-field-label">Vendor <span class="settings-sub">optional — which vendor sells it, so you know where to restock</span></label>
+      <div class="inv-vendor-wrap">
+        <input id="inv-new-vendor" type="text" class="form-control filter-input settings-input-wide"
+               placeholder="e.g. Sena's Armor Shack — Mos Eisley" autocomplete="off">
+        <div id="inv-vendor-sug" class="inv-vendor-sug" hidden></div>
+      </div>
       <div class="inv-add-row">
         <div class="inv-add-field">
           <label class="sp-field-label">Stocked</label>
@@ -811,6 +818,27 @@
       <div class="inv-add-actions">
         <button id="inv-add-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
         <button id="inv-add" class="btn btn-sm btn-accent"><i class="fa-solid fa-plus"></i> Add Item</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- My Schematics resource picker — the Lab's slot picker, standalone:
+       stockpile dropdown + search-any + a full quality table -->
+  <div id="mysd-picker-modal" class="key-gate" hidden>
+    <div class="key-gate-card sp-card mysd-picker-card">
+      <div class="mysd-picker-head">
+        <h2 id="mysd-picker-title">Pick a resource</h2>
+        <button id="mysd-picker-close" class="btn btn-icon" title="Close"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="mysd-picker-controls">
+        <select id="mysd-picker-stock" class="form-select filter-select"></select>
+        <input id="mysd-picker-search" type="text" class="form-control filter-input" autocomplete="off">
+      </div>
+      <div class="table-wrap mysd-picker-wrap">
+        <table class="data-grid lab-grid">
+          <thead><tr id="mysd-picker-head"></tr></thead>
+          <tbody id="mysd-picker-body"></tbody>
+        </table>
       </div>
     </div>
   </div>
@@ -859,10 +887,12 @@
       <div class="inv-add-row" id="harv-f-pull">
         <div class="inv-add-field harv-grow harv-resfind">
           <label class="sp-field-label">Resource <span class="settings-sub">what it's pulling — this narrows the types</span></label>
-          <input id="harv-f-resource" type="text" class="form-control filter-input harv-wide"
-                 placeholder="Type to search active resources…" autocomplete="off">
+          <div class="harv-res-inputwrap">
+            <input id="harv-f-resource" type="text" class="form-control filter-input harv-wide"
+                   placeholder="Type to search active resources…" autocomplete="off">
+            <span id="harv-f-resinfo" class="harv-res-suffix" hidden></span>
+          </div>
           <div id="harv-f-reslist" class="harv-reslist" hidden></div>
-          <div id="harv-f-resinfo" class="harv-resinfo" hidden></div>
         </div>
         <div class="inv-add-field harv-col2">
           <label class="sp-field-label">Conc. % <span class="settings-sub">from your survey</span></label>
@@ -910,8 +940,9 @@
         </div>
       </div>
 
+
       <div class="inv-add-row" id="harv-f-amounts">
-        <div class="inv-add-field">
+        <div class="inv-add-field" id="harv-f-powerwrap">
           <label class="sp-field-label">Power loaded <span class="settings-sub">optional</span></label>
           <input id="harv-f-power" type="text" inputmode="decimal" class="form-control filter-input" placeholder="e.g. 12k" autocomplete="off">
         </div>
@@ -924,6 +955,11 @@
       <div id="harv-f-ratehint" class="harv-derived" hidden></div>
 
       <div class="inv-add-actions">
+        <label class="harv-wp-opt harv-wp-inline" id="harv-f-wprow" hidden
+               title="Publishes this spot as a public waypoint on swgtracker.com when you save">
+          <input type="checkbox" id="harv-f-waypoint" disabled>
+          <span><i class="fa-solid fa-location-dot harv-wp-pin"></i> Share waypoint</span>
+        </label>
         <button id="harv-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
         <button id="harv-save" class="btn btn-sm btn-accent"><i class="fa-solid fa-check"></i> Save</button>
       </div>
@@ -947,6 +983,10 @@
         <textarea id="char-f-bio" class="form-control filter-input char-f-bio" rows="4"
           placeholder="Profession, story, whatever you want on the record…"></textarea>
       </div>
+      <label class="harv-wp-opt">
+        <input type="checkbox" id="char-f-merchant">
+        <span>Master Merchant <span class="settings-sub">Merchant Efficiency IV+ — structures this character places burn 25% less maintenance</span></span>
+      </label>
       <div class="inv-add-actions">
         <button id="char-form-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
         <button id="char-form-confirm" class="btn btn-sm btn-accent"></button>

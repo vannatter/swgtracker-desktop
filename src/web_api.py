@@ -1092,6 +1092,7 @@ class WebApi:
                 "sales": self.local_db.mail_sales_count(),
                 "categories": self.local_db.mail_category_counts(),
                 "characters": self.local_db.mail_character_counts(),
+                "tips": self.local_db.mail_tip_totals(),
             })
         except Exception as e:
             return _err(e)
@@ -1259,10 +1260,19 @@ class WebApi:
                    "Construction Complete",
                    f"Construction of your {harv_type} is now complete. You have 0 lots remaining.")
 
+            # 5) Bank tip SENT — feeds the Mail page's "wasted on fees" stat
+            # (5% surcharge on the amount). Real format, sender = recipient.
+            tip_id = f"test{base}t"
+            tip_to = random.choice(["dos", "Khatana", "Philmor ALF", "Semm Da'kal"])
+            tip_amt = random.randrange(25000, 500001, 25000)
+            _write(tip_id, f"SWG.Restoration.{tip_to}", "Bank Transfer Complete...",
+                   f"{tip_to} has received {tip_amt} credits from you, via bank wire transfer.")
+
             return _ok({
                 "item": item, "credits": credits, "misc": misc_subject,
-                "purchase": pur_item, "harvester": harv_type,
-                "files": [f"{sale_id}.mail", f"{misc_id}.mail", f"{pur_id}.mail", f"{harv_id}.mail"],
+                "purchase": pur_item, "harvester": harv_type, "tip": tip_amt,
+                "files": [f"{sale_id}.mail", f"{misc_id}.mail", f"{pur_id}.mail",
+                          f"{harv_id}.mail", f"{tip_id}.mail"],
             })
         except Exception as e:
             return _err(e)

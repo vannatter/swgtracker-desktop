@@ -298,6 +298,18 @@ body.offline .app-body { height: calc(100vh - 76px); }
   display: inline-flex; align-items: center; justify-content: center; padding: 0; /* glyph dead-center at any size */
 }
 .btn-icon:hover { color: var(--text-hover); }
+/* row-action icons live bare in a table cell — no button chrome, just the glyph */
+td.col-actions .btn-icon { background: transparent; color: var(--text-muted); width: 28px; height: 28px; }
+td.col-actions .btn-icon:hover { background: transparent; color: var(--text-hover); }
+td.col-actions .btn-icon[data-iremove]:hover, td.col-actions .btn-icon[data-hact="del"]:hover { color: var(--accent); }
+
+/* inventory vendor suggestions — styled dropdown (replaces native datalist) */
+.inv-vendor-wrap { position: relative; }
+.inv-vendor-sug { position: absolute; top: 100%; left: 0; right: 0; z-index: 60; margin-top: 3px;
+  max-height: 200px; overflow: auto; background: var(--bg-secondary);
+  border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 6px 18px rgba(0,0,0,.5); }
+.inv-vendor-opt { padding: 7px 12px; font-size: 13px; cursor: pointer; color: var(--text-hover); }
+.inv-vendor-opt:hover { background: var(--bg-primary); }
 
 /* ---- Filter bar ---- */
 .filter-bar {
@@ -1017,6 +1029,11 @@ td.lab-dim { opacity: .45; }
 
 /* dev wall — testing tools stay invisible until 10 logo clicks (see initDevMode) */
 body:not(.dev-mode) .dev-only { display: none !important; }
+/* dev-mode header badge — visible only while dev mode is on */
+.dev-pill { display: none; align-items: center; gap: 5px; margin-left: 12px; align-self: center;
+  font-size: 10px; font-weight: 700; letter-spacing: .06em; color: var(--q-accept);
+  background: rgba(255, 159, 67, .14); border-radius: 10px; padding: 2px 9px; }
+body.dev-mode .dev-pill { display: inline-flex; }
 
 /* Header monitor toggle: dark gray chip, fixed width so the label swap never
    moves the header; while running a red wave throbs sideways through it */
@@ -1069,6 +1086,8 @@ body:not(.dev-mode) .dev-only { display: none !important; }
 .mm-card.sale .mm-card-ico { background: rgba(69, 233, 126, .1); color: var(--accent-green); }
 .mm-card.session .mm-card-ico { background: rgba(226, 67, 80, .12); color: var(--accent); }
 .mm-card.fail.bad .mm-card-ico { background: rgba(226, 67, 80, .15); color: var(--accent); }
+.mm-card.fee .mm-card-ico { background: rgba(255, 159, 67, .14); color: var(--q-accept); }
+.mm-card.fee .mm-card-val { color: var(--q-accept); }
 .mm-card-val { font-size: 22px; font-weight: 700; color: var(--text-hover); line-height: 1.1; }
 .mm-card.fail.bad .mm-card-val { color: var(--accent); }
 .mm-card-label { font-size: 11px; color: var(--text-muted); letter-spacing: .03em; }
@@ -1079,6 +1098,7 @@ body:not(.dev-mode) .dev-only { display: none !important; }
   background: var(--bg-secondary); color: var(--text-muted); white-space: nowrap; }
 .mm-kind.mm-sale { background: rgba(69, 233, 126, .12); color: var(--accent-green); }
 .mm-kind.mm-purchase { background: rgba(63, 182, 196, .12); color: #3fb6c4; }   /* cyan — money out */
+.mm-kind.mm-banktip { background: rgba(255, 159, 67, .12); color: var(--q-accept); }  /* orange — tip/fee */
 .mm-kind.mm-err, .mm-err { color: var(--accent); }
 .mm-kind.mm-err { background: rgba(233, 69, 96, .12); }
 /* row actions: two fixed-width icon slots so checks/pluses/trashes align
@@ -1186,7 +1206,7 @@ body:not(.dev-mode) .dev-only { display: none !important; }
 .inv-add-row { display: flex; gap: 12px; margin-top: 12px; }
 .inv-add-field { flex: 1 1 0; }
 .inv-add-field input { width: 100%; max-width: none; }
-.inv-add-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.inv-add-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 .mm-row-openable { cursor: pointer; }
 .mm-row-openable:hover td { background: var(--bg-secondary); }
 .mm-raw-card { max-width: 640px; }
@@ -1427,6 +1447,14 @@ tr.stk-detail > td { background: var(--bg-tertiary); padding: 0; }
 .lab-exps-grid .lab-picks-cell { white-space: normal; }
 .harv-cell.bad { color: var(--accent); font-weight: 700; }
 .harv-cell.warn { color: var(--q-good); }
+/* despawned-resource harvester — flagged for removal, extraction paused */
+.harv-card.harv-gone { box-shadow: inset 3px 0 0 var(--accent); }
+.harv-gone-banner { background: rgba(226, 67, 80, .12); color: var(--accent); font-size: 12px;
+  padding: 8px 14px; border-bottom: 1px solid var(--border); }
+.harv-gone-banner i { margin-right: 6px; }
+.harv-gone-banner b { color: var(--text-hover); }
+.harv-gone-tag { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--accent); background: rgba(226, 67, 80, .14); border-radius: 3px; padding: 1px 5px; }
 /* grid view's hopper gauge — a slim bar ABOVE the numbers, card-meter colors/shimmer;
    the empty track must read against the row, so it gets its own lighter tint */
 .harv-minibar { display: block; width: 60px; height: 4px; border-radius: 3px;
@@ -1494,9 +1522,27 @@ tr.stk-detail > td { background: var(--bg-tertiary); padding: 0; }
 .harv-ev i { width: 14px; color: var(--text-muted); }
 .harv-ev-when { margin-left: auto; color: var(--text-muted); font-size: 11px; white-space: nowrap; }
 .harv-form-card { max-width: 640px; }
+
+/* My Schematics resource picker — the Lab's slot picker in a wide modal */
+.mysd-picker-card { max-width: 1040px; width: 92vw; display: flex; flex-direction: column; max-height: 86vh; }
+.mysd-picker-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.mysd-picker-head h2 { margin: 0; }
+.mysd-picker-head .btn-icon { margin-left: auto; }
+.mysd-picker-controls { display: flex; gap: 10px; margin-bottom: 10px; }
+.mysd-picker-controls .filter-select { flex: 0 0 220px; width: 220px; }
+.mysd-picker-controls .filter-input { flex: 1 1 auto; max-width: none; }
+.mysd-picker-wrap { overflow-y: auto; overflow-x: hidden; flex: 1 1 auto; }
+/* compact the 14-column table so it fits the modal with no horizontal scroll */
+.mysd-picker-wrap .data-grid { table-layout: fixed; }
+.mysd-picker-wrap .data-grid th, .mysd-picker-wrap .data-grid td { padding: 5px 3px; font-size: 12px; }
+.mysd-picker-wrap .data-grid th.col-name, .mysd-picker-wrap .data-grid td.col-name { width: 30%; padding-left: 8px; }
+.mysd-picker-wrap .data-grid .pin-cell { width: 18px; }
+.mysd-picker-wrap .lab-stock { margin-left: 4px; font-size: 9px; }
 /* Characters page */
 .char-ico { color: var(--text-muted); font-size: 12px; margin-right: 4px; }
 .char-fullname { color: var(--text-muted); font-weight: 400; }
+.char-mm { font-size: 9px; font-weight: 700; letter-spacing: .04em; vertical-align: 2px;
+  background: rgba(75, 121, 103, .25); color: var(--q-fair); border-radius: 3px; padding: 1px 5px; }
 .char-f-bio { resize: vertical; width: 100%; max-width: none; min-height: 110px; height: auto;
   font-family: inherit; line-height: 1.5; } /* .filter-input's 220px cap doesn't apply here */
 /* server-parse state, shown INSIDE the type pill (sale/purchase mails only) */
@@ -1537,6 +1583,15 @@ tr.stk-detail > td { background: var(--bg-tertiary); padding: 0; }
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* add/edit harvester form */
+.harv-wp-opt { display: flex; align-items: center; gap: 8px; margin-top: 12px;
+  font-size: 13px; cursor: pointer; }
+.harv-wp-opt input[type="checkbox"] { accent-color: var(--accent); }
+.harv-wp-opt:has(input:disabled) { color: var(--text-muted); cursor: default; }
+/* a filled pill in the actions row so it reads as an option, not stray text */
+.harv-wp-inline { margin: 0 6px 0 0; height: 34px; padding: 0 12px; border-radius: 6px;
+  background: rgba(226, 67, 80, .12); box-shadow: inset 0 0 0 1px rgba(226, 67, 80, .35); }
+.harv-wp-inline:has(input:checked) { background: rgba(226, 67, 80, .22); }
+.harv-wp-pin { color: var(--accent); margin-right: 2px; }
 .harv-derived { margin-top: 14px; background: var(--bg-primary); border-radius: 6px;
   padding: 9px 13px; font-size: 12px; color: var(--text-muted);
   box-shadow: inset 3px 0 0 var(--accent-green); }
@@ -1558,7 +1613,11 @@ tr.stk-detail > td { background: var(--bg-tertiary); padding: 0; }
 .harv-res-none { color: var(--text-muted); cursor: default; }
 .harv-res-head { padding: 6px 12px 3px; font-size: 10px; font-weight: 600; letter-spacing: .5px;
   text-transform: uppercase; color: var(--text-muted); }
-.harv-resinfo { margin-top: 5px; font-size: 11px; color: var(--text-muted); font-style: italic; }
+/* picked resource's class shown INSIDE the box, right-aligned, muted */
+.harv-res-inputwrap { position: relative; }
+.harv-res-suffix { position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+  font-size: 12px; color: var(--text-muted); pointer-events: none;
+  max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .harv-res-score { float: right; font-weight: 600; font-size: 12px; }
 
 /* detected-placement suggestions (from Construction Complete mails) */

@@ -1,5 +1,7 @@
 # secrets — config.json carries the live API key (config.example.json is the template)
 config.json
+# ship secrets — the Discord release-announce webhook
+build/ship_secrets.json
 
 # local state
 swgtracker_local.db*

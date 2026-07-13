@@ -15,7 +15,30 @@ const invState = { page: 1, perPage: 100, hasNext: false, sortField: 'item_name'
 
 function buildInvHeader() {
   $('#inv-head').innerHTML = sortableHeaderHtml(INV_COLUMNS, invState.sortField, invState.sortOrder) +
-    '<th class="pin-cell"></th>';
+    '<th class="col-actions"></th>';
+}
+
+// your distinct SELL vendors (from api/sales.php) — cached for the styled
+// suggestion dropdown. A native <datalist> was ugly AND merged WKWebView autofill
+// history (which pulled in purchase-seller names), so we render our own.
+async function invLoadVendorSuggestions() {
+  try {
+    const res = await apiFetch('GET', 'api/sales.php', { params: { action: 'vendors' } });
+    invState.vendors = ((res.ok && res.data && res.data.results) || []).map((r) => r.vendor);
+  } catch (_) { invState.vendors = []; }
+}
+
+// filtered vendor suggestions under the vendor input (most-sold first)
+function invRenderVendorSug() {
+  const box = $('#inv-vendor-sug');
+  const q = $('#inv-new-vendor').value.trim().toLowerCase();
+  const hits = (invState.vendors || [])
+    .filter((v) => !q || v.toLowerCase().includes(q))
+    .slice(0, 8);
+  if (!hits.length) { box.hidden = true; return; }
+  box.innerHTML = hits.map((v) =>
+    `<div class="inv-vendor-opt" data-vendor="${escapeHtml(v)}">${escapeHtml(v)}</div>`).join('');
+  box.hidden = false;
 }
 
 function invRowHtml(item, idx) {
@@ -30,7 +53,10 @@ function invRowHtml(item, idx) {
     <td class="col-num">${item.match_price != null && item.match_price !== '' ? fmtNum(item.match_price) : '<span class="stat_off">—</span>'}</td>
     <td class="stat ${safeInt(item.sales_count) ? 'inv-sales' : ''}" ${safeInt(item.sales_count) ? `data-sales="${idx}" title="Click to see the matched sales"` : ''}>${safeInt(item.sales_count) ? fmtNum(item.sales_count) : '<span class="stat_off">—</span>'}</td>
     <td class="col-text res-type">${fmtAgoTip(item.last_updated)}</td>
-    <td class="pin-cell" data-iremove="${idx}" title="Remove item"><i class="fa-solid fa-trash-can"></i></td>
+    <td class="col-actions">
+      <button class="btn btn-icon" data-iedit="${idx}" title="Edit vendor / stock"><i class="fa-solid fa-pen"></i></button>
+      <button class="btn btn-icon" data-iremove="${idx}" title="Remove item"><i class="fa-solid fa-trash-can"></i></button>
+    </td>
   </tr>`;
 }
 
@@ -148,23 +174,65 @@ async function addInvItem() {
   if (!name) { toast('Enter an item name first', false); return; }
   const btn = $('#inv-add');
   btn.disabled = true;
+  const editId = $('#inv-add-modal').dataset.editId || '';
   let res;
   try {
-    res = await api().add_inventory_item({
-      item_name: name,
-      stocked: safeInt($('#inv-new-stocked').value),
-      threshold: safeInt($('#inv-new-threshold').value),
-    });
+    // gateway (not the shell bridge): it carries the vendor field. POST for a
+    // new item (server dedupes per item+vendor); PUT to update an existing one.
+    if (editId) {
+      res = await apiFetch('PUT', 'api/inventory.php', { data: {
+        inventory_id: safeInt(editId),
+        item_name: name,
+        vendor: $('#inv-new-vendor').value.trim(),
+        stocked: safeInt($('#inv-new-stocked').value),
+        threshold: safeInt($('#inv-new-threshold').value),
+      } });
+    } else {
+      res = await apiFetch('POST', 'api/inventory.php', { data: {
+        item_name: name,
+        vendor: $('#inv-new-vendor').value.trim(),
+        stocked: safeInt($('#inv-new-stocked').value),
+        threshold: safeInt($('#inv-new-threshold').value),
+      } });
+    }
   } catch (e) { res = { ok: false, error: String(e) }; }
   btn.disabled = false;
   if (res.ok) {
-    toast(`${name} added to inventory`);
+    toast(editId ? `${name} updated` : `${name} added to inventory`);
     $('#inv-add-modal').hidden = true;
     loadInventory();
   } else {
-    toast(`Couldn't add ${name}: ${res.error || 'server error'}`, false); // 409 = duplicate
+    toast(`Couldn't save ${name}: ${res.error || 'server error'}`, false); // 409 = duplicate
     checkAuthError(res.error);
   }
+}
+
+// open the shared dialog: no item = add mode, item = edit mode (name locked,
+// since a rename would orphan the sales that match on it)
+function openInvDialog(item = null) {
+  invLoadVendorSuggestions();
+  const modal = $('#inv-add-modal');
+  const nameInput = $('#inv-new-name');
+  nameInput.readOnly = false;
+  if (item) {
+    modal.dataset.editId = String(item.id);
+    $('#inv-modal-title').textContent = 'Edit Inventory Item';
+    $('#inv-add').innerHTML = '<i class="fa-solid fa-check"></i> Save';
+    nameInput.value = item.item_name || '';
+    $('#inv-new-vendor').value = item.vendor || '';
+    $('#inv-new-stocked').value = String(safeInt(item.stocked));
+    $('#inv-new-threshold').value = String(safeInt(item.threshold));
+  } else {
+    delete modal.dataset.editId;
+    $('#inv-modal-title').textContent = 'Add Inventory Item';
+    $('#inv-add').innerHTML = '<i class="fa-solid fa-plus"></i> Add Item';
+    nameInput.value = '';
+    $('#inv-new-vendor').value = '';
+    $('#inv-new-stocked').value = '10';
+    $('#inv-new-threshold').value = '1';
+  }
+  modal.hidden = false;
+  (item ? $('#inv-new-vendor') : nameInput).focus();
 }
 
 function initInventory() {
@@ -188,12 +256,17 @@ function initInventory() {
   $('[data-refresh="inventory"]').addEventListener('click', () => loadInventory());
   $('#inv-prev').addEventListener('click', () => { if (invState.page > 1) { invState.page--; loadInventory(); } });
   $('#inv-next').addEventListener('click', () => { if (invState.hasNext) { invState.page++; loadInventory(); } });
-  $('#inv-add-open').addEventListener('click', () => {
-    $('#inv-new-name').value = '';
-    $('#inv-new-stocked').value = '10';
-    $('#inv-new-threshold').value = '1';
-    $('#inv-add-modal').hidden = false;
-    $('#inv-new-name').focus();
+  $('#inv-add-open').addEventListener('click', () => openInvDialog());
+  // styled vendor suggestions (own dropdown, not native datalist)
+  $('#inv-new-vendor').addEventListener('focus', invRenderVendorSug);
+  $('#inv-new-vendor').addEventListener('input', invRenderVendorSug);
+  $('#inv-new-vendor').addEventListener('blur', () => setTimeout(() => { $('#inv-vendor-sug').hidden = true; }, 150));
+  $('#inv-vendor-sug').addEventListener('mousedown', (e) => {
+    const opt = e.target.closest('[data-vendor]');
+    if (!opt) return;
+    e.preventDefault();
+    $('#inv-new-vendor').value = opt.dataset.vendor;
+    $('#inv-vendor-sug').hidden = true;
   });
   $('#inv-add-cancel').addEventListener('click', () => { $('#inv-add-modal').hidden = true; });
   $('#inv-add-modal').addEventListener('click', (e) => {
@@ -250,6 +323,8 @@ function initInventory() {
 
   // Inline edits + two-step delete (arm, then confirm within 2.5s)
   $('#inv-body').addEventListener('click', (e) => {
+    const editRow = e.target.closest('[data-iedit]');
+    if (editRow) { openInvDialog(invState.items[safeInt(editRow.dataset.iedit)]); return; }
     const editCell = e.target.closest('[data-edit]');
     if (editCell) { openInvEditor(editCell); return; }
     const removeCell = e.target.closest('[data-iremove]');

@@ -38,6 +38,7 @@
         <li class="nav-item" data-page="stockpile"><i class="fa-solid fa-cubes"></i> My Stockpile</li>
         <li class="nav-item" data-page="wishlist"><i class="fa-solid fa-heart"></i> My Wishlist</li>
         <li class="nav-item" data-page="sales"><i class="fa-solid fa-tags"></i> My Sales</li>
+        <li class="nav-item" data-page="insights"><i class="fa-solid fa-chart-line"></i> Sales Insights</li>
         <li class="nav-item" data-page="purchases"><i class="fa-solid fa-cart-shopping"></i> My Purchases</li>
         <li class="nav-item" data-page="inventory"><i class="fa-solid fa-warehouse"></i> My Inventory</li>
         <li class="nav-item" data-page="characters"><i class="fa-solid fa-user-group"></i> Characters</li>
@@ -397,6 +398,70 @@
           <div class="pager-nav">
             <button id="sales-prev" class="btn btn-sm btn-outline-secondary" disabled>&lsaquo; Prev</button>
             <button id="sales-next" class="btn btn-sm btn-outline-secondary" disabled>Next &rsaquo;</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Sales Insights page -->
+      <section id="page-insights" class="page">
+        <div class="page-head">
+          <h1>Sales Insights</h1>
+          <i class="fa-solid fa-circle-info info-tip"
+             title="Trends, buy-times, and your best items, customers and vendors — drawn from your uploaded sales. Times are in-game (server) time."></i>
+          <select id="ins-range" class="form-select filter-select head-filter">
+            <option value="30">Last 30 days</option>
+            <option value="90" selected>Last 90 days</option>
+            <option value="180">Last 180 days</option>
+            <option value="0">All time</option>
+          </select>
+          <button class="btn btn-icon" data-refresh="insights" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
+        </div>
+
+        <div id="ins-loading" class="grid-loading" hidden><span class="spinner"></span> Loading…</div>
+        <div id="ins-empty" class="grid-empty" hidden></div>
+
+        <div id="ins-content" hidden>
+          <div class="ins-kpis" id="ins-kpis"></div>
+
+          <div class="ins-scroll">
+            <div class="ins-panel" data-panel="trend">
+              <div class="ins-panel-head">
+                <i class="ins-caret fa-solid fa-chevron-down"></i>
+                <h2>Revenue trend</h2><span id="ins-trend-sub" class="ins-sub"></span>
+                <div class="ins-seg" id="ins-trend-mode">
+                  <button type="button" data-mode="period" class="active">Per period</button>
+                  <button type="button" data-mode="cumulative">Cumulative</button>
+                </div>
+              </div>
+              <div class="ins-panel-body">
+                <div class="ins-trend-wrap">
+                  <canvas id="ins-trend-chart"></canvas>
+                  <div id="ins-trend-tip" class="ins-trend-tip" hidden></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="ins-panel" data-panel="heat">
+              <div class="ins-panel-head"><i class="ins-caret fa-solid fa-chevron-down"></i><h2>When people buy</h2><span id="ins-heat-sub" class="ins-sub"></span></div>
+              <div class="ins-panel-body"><div id="ins-heat"></div></div>
+            </div>
+
+            <div class="ins-cols2">
+              <div class="ins-panel" data-panel="dow">
+                <div class="ins-panel-head"><i class="ins-caret fa-solid fa-chevron-down"></i><h2>Revenue by day of week</h2><span id="ins-dow-sub" class="ins-sub"></span></div>
+                <div class="ins-panel-body"><div id="ins-dow" class="ins-dow"></div></div>
+              </div>
+              <div class="ins-panel" data-panel="loyalty">
+                <div class="ins-panel-head"><i class="ins-caret fa-solid fa-chevron-down"></i><h2>Customer loyalty</h2><span id="ins-loyalty-sub" class="ins-sub"></span></div>
+                <div class="ins-panel-body"><div id="ins-loyalty"></div></div>
+              </div>
+            </div>
+
+            <div class="ins-cols">
+              <div class="ins-panel" data-panel="items"><div class="ins-panel-head"><i class="ins-caret fa-solid fa-chevron-down"></i><h2>Top items</h2></div><div class="ins-panel-body"><div id="ins-items" class="ins-leaders"></div></div></div>
+              <div class="ins-panel" data-panel="buyers"><div class="ins-panel-head"><i class="ins-caret fa-solid fa-chevron-down"></i><h2>Top customers</h2></div><div class="ins-panel-body"><div id="ins-buyers" class="ins-leaders"></div></div></div>
+              <div class="ins-panel" data-panel="vendors"><div class="ins-panel-head"><i class="ins-caret fa-solid fa-chevron-down"></i><h2>Top vendors</h2></div><div class="ins-panel-body"><div id="ins-vendors" class="ins-leaders"></div></div></div>
+            </div>
           </div>
         </div>
       </section>
@@ -1198,6 +1263,7 @@
   <script src="js/myschematics.js"></script>
   <script src="js/inventory.js"></script>
   <script src="js/sales.js"></script>
+  <script src="js/insights.js"></script>
   <script src="js/purchases.js"></script>
   <script src="js/harvesters.js"></script>
   <script src="js/characters.js"></script>

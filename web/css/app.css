@@ -1627,3 +1627,106 @@ tr.stk-detail > td { background: var(--bg-tertiary); padding: 0; }
 .harv-suggest-row > i { color: var(--q-good); }
 .harv-suggest-actions { margin-left: auto; display: inline-flex; gap: 6px; }
 .harv-suggest-actions .btn-sm { height: 28px; font-size: 11px; padding: 0 10px; }
+
+/* ── Sales Insights ─────────────────────────────────────────────── */
+/* Header + KPI row stay pinned (flex-shrink:0); only .ins-scroll scrolls —
+   same "top section locked" behaviour as the My Sales grid. */
+#ins-content:not([hidden]) { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+.ins-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 2px; }
+.ins-kpis { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 14px; flex-shrink: 0; }
+@media (max-width: 1200px) { .ins-kpis { grid-template-columns: repeat(3, 1fr); } }
+.ins-kpi { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
+  padding: 12px 14px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ins-kpi-label { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); }
+.ins-kpi-val { font-size: 20px; font-weight: 700; color: var(--accent); line-height: 1.15;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ins-kpi-sub { font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.ins-panel { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
+  padding: 14px 16px; margin-bottom: 14px; }
+.ins-panel-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; }
+.ins-panel-head h2 { font-size: 14px; font-weight: 600; color: var(--text-hover); margin: 0; }
+.ins-sub { font-size: 12px; color: var(--text-muted); }
+
+.ins-trend-wrap { position: relative; }
+#ins-trend-chart { width: 100%; height: 190px; display: block; }
+.ins-trend-tip { position: absolute; top: -2px; transform: translateX(-50%); pointer-events: none;
+  background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 5px;
+  padding: 4px 8px; font-size: 12px; color: var(--text-primary); white-space: nowrap; z-index: 3; }
+.ins-trend-tip b { color: var(--text-hover); }
+
+/* buy-time heatmap */
+.ins-heat-grid { display: grid; grid-template-columns: 34px 1fr; gap: 3px 6px; align-items: center; }
+.ins-heat-daylabel { font-size: 11px; color: var(--text-muted); text-align: right; position: relative; }
+.ins-heat-dayfull { display: none; }
+.ins-heat-cells { display: grid; grid-template-columns: repeat(24, 1fr); gap: 3px; }
+.ins-heat-cell { height: 13px; border-radius: 2px; background: rgba(255,255,255,.04); }
+.ins-heat-cell.empty { background: rgba(255,255,255,.035); }
+.ins-heat-axis { display: grid; grid-template-columns: 34px 1fr; gap: 6px; margin-top: 5px; }
+.ins-heat-axisticks { display: grid; grid-template-columns: repeat(24, 1fr); gap: 3px; }
+.ins-heat-tick { font-size: 9px; color: var(--text-muted); text-align: left; }
+.ins-heat-legend { display: flex; align-items: center; gap: 4px; justify-content: flex-end;
+  margin-top: 8px; font-size: 10px; color: var(--text-muted); }
+.ins-heat-legend i { width: 12px; height: 12px; border-radius: 2px; display: inline-block; }
+
+/* leaderboards */
+.ins-cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+@media (max-width: 1100px) { .ins-cols { grid-template-columns: 1fr; } }
+.ins-leaders { display: flex; flex-direction: column; gap: 4px; }
+.ins-lead { position: relative; display: grid;
+  grid-template-columns: 18px 1fr auto; grid-template-rows: auto auto;
+  column-gap: 8px; align-items: center; padding: 6px 9px; border-radius: 5px; overflow: hidden;
+  cursor: pointer; }
+.ins-lead:hover { background: rgba(255,255,255,.05); }
+.ins-lead:hover .ins-lead-name { color: var(--accent-hover); }
+.ins-lead-bar { position: absolute; inset: 0 auto 0 0; background: rgba(122,138,153,.18);
+  border-radius: 5px; z-index: 0; }
+.ins-lead-rank { grid-column: 1; grid-row: 1 / span 2; z-index: 1;
+  font-size: 12px; font-weight: 700; color: var(--text-muted); text-align: center; }
+.ins-lead-name { grid-column: 2; grid-row: 1; z-index: 1; font-size: 13px; color: var(--text-hover);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ins-lead-val { grid-column: 3; grid-row: 1; z-index: 1; font-size: 13px; font-weight: 600;
+  color: var(--text-hover); white-space: nowrap; }
+.ins-lead-sub { grid-column: 2 / span 2; grid-row: 2; z-index: 1; font-size: 11px; color: var(--text-muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ins-empty-mini { color: var(--text-muted); font-size: 12px; padding: 10px 4px; }
+
+/* per-period / cumulative toggle */
+.ins-seg { margin-left: auto; display: inline-flex; background: var(--bg-input); border-radius: 6px; padding: 2px; align-self: center; }
+.ins-seg button { border: 0; background: transparent; color: var(--text-muted); font-size: 11px;
+  padding: 3px 10px; border-radius: 4px; cursor: pointer; line-height: 1.5; }
+.ins-seg button.active { background: var(--bg-secondary); color: var(--text-hover); }
+
+/* two-up row (day-of-week bars + revenue share) */
+.ins-cols2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 1000px) { .ins-cols2 { grid-template-columns: 1fr; } }
+
+/* revenue by day of week — vertical bars */
+.ins-dow { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; height: 172px; }
+.ins-dow-col { display: flex; flex-direction: column; align-items: center; gap: 5px; min-width: 0; }
+.ins-dow-val { font-size: 10px; color: var(--text-muted); height: 12px; white-space: nowrap; }
+.ins-dow-track { flex: 1 1 auto; width: 62%; max-width: 34px; display: flex; align-items: flex-end; }
+.ins-dow-fill { width: 100%; min-height: 2px; border-radius: 3px 3px 0 0;
+  background: linear-gradient(180deg, var(--accent) 0%, var(--accent-dark) 100%); }
+.ins-dow-label { font-size: 11px; color: var(--text-muted); }
+
+/* customer loyalty — one-time vs repeat split bars */
+.ins-loyalty-row { margin-bottom: 14px; }
+.ins-loyalty-caption { display: flex; justify-content: space-between; font-size: 11px;
+  color: var(--text-muted); margin-bottom: 5px; }
+.ins-loyalty-bar { display: flex; height: 24px; border-radius: 5px; overflow: hidden; background: var(--bg-input); }
+.ins-loyalty-seg { display: flex; align-items: center; justify-content: center; font-size: 11px;
+  font-weight: 600; color: #fff; white-space: nowrap; overflow: hidden; }
+.ins-loyalty-seg.repeat { background: var(--accent-dark); }
+.ins-loyalty-seg.onetime { background: rgba(122,138,153,.3); }
+.ins-loyalty-legend { display: flex; gap: 18px; font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.ins-loyalty-legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; margin-right: 6px; vertical-align: middle; }
+.ins-loyalty-legend i.repeat { background: var(--accent-dark); }
+.ins-loyalty-legend i.onetime { background: rgba(122,138,153,.3); }
+
+/* collapsible chart panels */
+.ins-panel-head { cursor: pointer; }
+.ins-caret { color: var(--text-muted); font-size: 11px; transition: transform .15s; margin-right: 2px; align-self: center; }
+.ins-panel.collapsed .ins-caret { transform: rotate(-90deg); }
+.ins-panel.collapsed .ins-panel-head { margin-bottom: 0; }
+.ins-panel.collapsed .ins-panel-body { display: none; }

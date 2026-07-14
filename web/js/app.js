@@ -10,6 +10,7 @@ const PAGE_LOADERS = {
   stockpile: () => syncStockpile(),
   wishlist: () => syncWishlist(),
   sales: () => loadSales(),
+  insights: () => loadInsights(),
   purchases: () => loadPurchases(),
   characters: () => loadCharactersPage(),
   harvesters: () => loadHarvesters(),
@@ -609,6 +610,7 @@ async function boot() {
   initWishlist();
   initMySchematics();
   initSales();
+  initInsights();
   initPurchases();
   initCharactersPage();
   initHarvesters();

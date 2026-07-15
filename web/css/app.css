@@ -1218,6 +1218,41 @@ body.dev-mode .dev-pill { display: inline-flex; }
   white-space: pre-wrap; word-break: break-word;
   max-height: 60vh; overflow-y: auto; margin: 0; text-align: left;
 }
+/* ---- Help topic dialog ---- */
+.key-gate-card.help-card { max-width: 560px; }
+.help-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.help-head h2 { font-size: 16px; margin: 0; text-align: left; }
+.help-body {
+  font-size: 13px; line-height: 1.6; color: var(--text-primary);
+  max-height: 60vh; overflow-y: auto; text-align: left;
+}
+.help-body h3 {
+  font-size: 12px; font-weight: 700; color: var(--text-muted);
+  letter-spacing: .05em; text-transform: uppercase;
+  margin: 18px 0 6px; padding-top: 12px; border-top: 1px solid var(--border);
+}
+/* "###" subsection — sits inside a section, so no rule above it */
+.help-body h4 {
+  font-size: 13px; font-weight: 700; color: var(--text-hover);
+  margin: 14px 0 5px;
+}
+.help-body > :first-child { margin-top: 0; }
+.help-body h3:first-child { border-top: none; padding-top: 0; }
+.help-body p { margin: 0 0 10px; }
+.help-body ol, .help-body ul { margin: 0 0 10px; padding-left: 20px; }
+.help-body li { margin-bottom: 5px; }
+.help-body li::marker { color: var(--text-muted); }
+.help-body strong { color: var(--text-hover); font-weight: 700; }
+/* inline code carries the /mailsave commands and folder names — the payload of
+   most topics, so it reads as the accent rather than body text */
+.help-body code {
+  background: var(--bg-primary); border-radius: 3px; padding: 1px 5px;
+  font-size: 12px; color: var(--accent-hover); word-break: break-word;
+}
+/* A "?" opens a help topic, so it clicks; the plain ⓘ tips are hover-only and
+   keep cursor:help. Same styling otherwise. */
+.info-tip[data-help] { cursor: pointer; }
+
 .sum-card {
   flex: 1 1 0; background: var(--bg-secondary); border-radius: 8px;
   padding: 12px 10px; text-align: center;

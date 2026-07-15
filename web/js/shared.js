@@ -500,7 +500,7 @@ function initTooltips() {
   document.body.appendChild(tip);
 
   document.addEventListener('mouseover', (e) => {
-    const el = e.target.closest?.('[title], [data-tip], [data-richtip]');
+    const el = e.target.closest?.('[title], [data-tip], [data-richtip], [data-help]');
     if (!el) { tip.hidden = true; return; }
     if (el.hasAttribute('title')) {
       el.dataset.tip = el.getAttribute('title');
@@ -509,7 +509,11 @@ function initTooltips() {
     // data-richtip carries pre-built (already-escaped) HTML — the multi-line
     // resource cards; data-tip stays plain text
     const rich = el.dataset.richtip;
-    const text = el.dataset.tip;
+    // help icons keep their summary in the topic registry rather than the
+    // markup, so it stays right when a topic is edited. Looked up per hover,
+    // never stamped onto the element — topics can load in after this point.
+    let text = el.dataset.tip;
+    if (!text && el.dataset.help && typeof helpSummary === 'function') text = helpSummary(el.dataset.help);
     if (!rich && !text) { tip.hidden = true; return; }
     tip.classList.toggle('app-tip-rich', !!rich);
     if (rich) tip.innerHTML = rich; else tip.textContent = text;

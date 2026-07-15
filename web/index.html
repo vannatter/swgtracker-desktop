@@ -761,7 +761,8 @@
         </div>
 
         <div class="settings-section">
-          <h2>SWG Mail Directories <span class="settings-sub">Up to 4 folders — each is tied to one of your characters</span></h2>
+          <h2>SWG Mail Directories <i class="fa-solid fa-circle-question info-tip" data-help="mail-directories"></i>
+            <span class="settings-sub">Up to 4 folders — each is tied to one of your characters</span></h2>
           <div id="set-mailpaths"></div>
           <div class="set-addpath-row"><button id="set-addpath" class="btn btn-sm btn-outline-secondary">+ Add Character</button></div>
           <datalist id="set-char-list"></datalist>
@@ -774,7 +775,8 @@
             <label class="form-check-label" for="set-autostart">Auto-start mail monitoring on launch</label>
           </div>
           <div class="set-maildisp">
-            <div class="set-maildisp-label">After a mail file is uploaded:</div>
+            <div class="set-maildisp-label">After a mail file is uploaded:
+              <i class="fa-solid fa-circle-question info-tip" data-help="mail-handling"></i></div>
             <label class="set-disp-opt"><input type="radio" name="set-maildisp" value="keep">
               Keep it where it is</label>
             <label class="set-disp-opt"><input type="radio" name="set-maildisp" value="delete">
@@ -1136,6 +1138,18 @@
   </div>
 
   <!-- Raw mail viewer: the original .mail file exactly as uploaded -->
+  <!-- Help topic viewer: title + rendered markdown. Content comes from the
+       topic registry in help.js, never from this markup. -->
+  <div id="help-modal" class="key-gate" hidden>
+    <div class="key-gate-card sp-card help-card">
+      <div class="help-head">
+        <h2 id="help-title">Help</h2>
+        <button id="help-close" class="btn btn-icon" title="Close"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div id="help-body" class="help-body"></div>
+    </div>
+  </div>
+
   <div id="mm-raw-modal" class="key-gate" hidden>
     <div class="key-gate-card sp-card mm-raw-card">
       <div class="mm-raw-head">
@@ -1255,6 +1269,7 @@
   <!-- Classic scripts sharing one top-level scope; app.js boots last. -->
   <script src="js/class_caps.js"></script>
   <script src="js/shared.js"></script>
+  <script src="js/help.js"></script>
   <script src="js/resources.js"></script>
   <script src="js/resource.js"></script>
   <script src="js/schematics.js"></script>

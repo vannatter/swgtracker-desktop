@@ -625,6 +625,7 @@ async function boot() {
   initKeyGate();
   initPulseChart();
   initTooltips(); // WKWebView shows no native title tooltips
+  initHelp();     // delegated — every [data-help] icon, now and later
   // thin client: confirm this UI booted (crash-rollback guard), then watch
   // for freshly installed bundles and offer a hot apply
   try { api().bundle_mark_ok(); } catch (_) { /* builtin UI — no-op */ }

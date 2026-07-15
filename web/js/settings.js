@@ -36,7 +36,7 @@ function mailPathEntryHtml(entry, idx) {
   const taken = new Set(setState.mailPaths
     .filter((m, i) => i !== idx && m.label)
     .map((m) => m.label.toLowerCase()));
-  const opts = [`<option value="">${names.length ? 'Select character…' : 'No characters yet'}</option>`]
+  const opts = [`<option value="">${names.length ? 'Select…' : 'No characters yet'}</option>`]
     .concat(entry.label && !known ? [`<option value="${escapeHtml(entry.label)}" selected>${escapeHtml(entry.label)}</option>`] : [])
     .concat(names.map((n) => `<option value="${escapeHtml(n)}"${n.toLowerCase() === (entry.label || '').toLowerCase() ? ' selected' : ''}${taken.has(n.toLowerCase()) ? ' disabled' : ''}>${escapeHtml(n)}${taken.has(n.toLowerCase()) ? ' — already watching a folder' : ''}</option>`))
     .join('');
@@ -45,7 +45,7 @@ function mailPathEntryHtml(entry, idx) {
       <select class="form-select filter-select mail-label ${entry.path && !entry.label ? 'mail-label-missing' : ''}"
               title="The character whose mail lives in this folder">${opts}</select>
       <input type="text" class="form-control filter-input mail-path flex-grow-1"
-             placeholder="C:\\SWG Restoration III\\profiles\\character\\mail_CharacterName"
+             placeholder="C:\\SWG Restoration III\\profiles\\…\\mail_CharacterName"
              value="${escapeHtml(entry.path || '')}">
       <button class="btn btn-sm btn-outline-secondary mail-browse" data-browse="${idx}" title="Choose folder"><i class="fa-solid fa-folder-open"></i></button>
       ${idx > 0 ? `<button class="btn btn-sm btn-outline-secondary mail-remove" data-remove="${idx}" title="Remove">&times;</button>` : ''}

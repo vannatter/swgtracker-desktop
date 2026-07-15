@@ -78,8 +78,8 @@ function stkRowHtml(item, idx) {
   const group = item.bucket_id != null ? String(item.bucket_id) : UNFILED;
   const hasNotes = item.notes && String(item.notes).trim();
   const open = stkState.expanded.has(sid);
-  const noteCell = `<td class="pin-cell stk-note-cell${open ? ' open' : ''}" data-notes="${idx}" title="${hasNotes ? 'Notes + linked schematics' : 'Notes / linked schematics'}"><i class="fa-${hasNotes ? 'solid' : 'regular'} fa-note-sticky${hasNotes ? ' stk-has-notes' : ''}"></i></td>`;
-  return `<tr data-idx="${idx}" data-sid="${sid}"${buckets ? ` data-group="${group}" draggable="true"` : ''} class="stk-row${selected ? ' stk-selected' : ''}${open ? ' stk-row-open' : ''}">
+  const noteCell = `<td class="pin-cell note-cell${open ? ' open' : ''}" data-notes="${idx}" title="${hasNotes ? 'Notes + linked schematics' : 'Notes / linked schematics'}"><i class="fa-${hasNotes ? 'solid' : 'regular'} fa-note-sticky${hasNotes ? ' has-notes' : ''}"></i></td>`;
+  return `<tr data-idx="${idx}" data-sid="${sid}"${buckets ? ` data-group="${group}" draggable="true"` : ''} class="stk-row${selected ? ' stk-selected' : ''}${open ? ' row-open' : ''}">
     ${selCell}${cells}
     ${noteCell}
     <td class="pin-cell" data-remove="${idx}" title="Remove from stockpile"><i class="fa-solid fa-trash-can"></i></td>
@@ -95,16 +95,16 @@ function stkRowsHtml(item, idx) {
 
 function stkDetailRowHtml(item) {
   const sid = String(item.stockpile_id);
-  return `<tr class="stk-detail" data-detailfor="${sid}">
+  return `<tr class="row-detail" data-detailfor="${sid}">
     <td colspan="${stkColCount()}">
       <div class="stk-detail-panel">
         <div class="stk-detail-col stk-detail-notes">
-          <div class="stk-detail-label"><i class="fa-solid fa-pen"></i> Notes</div>
-          <textarea class="stk-notes-input" data-notesfor="${sid}" rows="3"
+          <div class="detail-label"><i class="fa-solid fa-pen"></i> Notes</div>
+          <textarea class="notes-input" data-notesfor="${sid}" rows="3"
             placeholder="Notes for ${escapeHtml(item.name)}…">${escapeHtml(item.notes || '')}</textarea>
         </div>
         <div class="stk-detail-col stk-detail-schems">
-          <div class="stk-detail-label"><i class="fa-solid fa-scroll"></i> Your schematics using this</div>
+          <div class="detail-label"><i class="fa-solid fa-scroll"></i> Your schematics using this</div>
           <div class="stk-schem-list" data-schemfor="${item.id}" data-resname="${escapeHtml(item.name)}">
             <span class="stat_off">Loading…</span>
           </div>
@@ -162,8 +162,8 @@ async function stkSaveNotes(sid, value) {
   if ((item.notes || '') === v) return; // unchanged
   item.notes = v; // optimistic
   // flip the note icon indicator in place (avoid a re-render that would drop focus)
-  const ico = $(`#stk-body tr[data-sid="${sid}"] .stk-note-cell i`);
-  if (ico) ico.className = v ? 'fa-solid fa-note-sticky stk-has-notes' : 'fa-regular fa-note-sticky';
+  const ico = $(`#stk-body tr[data-sid="${sid}"] .note-cell i`);
+  if (ico) ico.className = v ? 'fa-solid fa-note-sticky has-notes' : 'fa-regular fa-note-sticky';
   try {
     const res = await api().update_stockpile_notes(item.stockpile_id, v);
     $('#stk-status').textContent = res.ok ? `Notes saved — ${item.name}` : `Failed to save notes: ${res.error || 'server error'}`;

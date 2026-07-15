@@ -11,7 +11,13 @@ const INV_COLUMNS = [
   ['Updated', 'last_updated', 'col-text'],
 ];
 
-const invState = { page: 1, perPage: 100, hasNext: false, sortField: 'item_name', sortOrder: 'ASC', items: [] };
+// expanded: inventory_ids whose notes row is open. Lives in state, not the DOM,
+// so it survives the re-render after a save. Notes is deliberately NOT in
+// INV_COLUMNS — the list is server-sorted and api/inventory.php's sort allowlist
+// has no `notes`, so a sortable notes header would silently sort by item_name.
+const invState = { page: 1, perPage: 100, hasNext: false, sortField: 'item_name', sortOrder: 'ASC', items: [], expanded: new Set() };
+
+const invColCount = () => INV_COLUMNS.length + 1; // + the actions cell
 
 function buildInvHeader() {
   $('#inv-head').innerHTML = sortableHeaderHtml(INV_COLUMNS, invState.sortField, invState.sortOrder) +
@@ -45,7 +51,10 @@ function invRowHtml(item, idx) {
   const stocked = safeInt(item.stocked);
   const threshold = safeInt(item.threshold);
   const stockCls = stocked < 0 ? 'inv-neg' : stocked <= threshold ? 'inv-low' : '';
-  return `<tr data-idx="${idx}">
+  const iid = String(item.id);
+  const hasNotes = item.notes && String(item.notes).trim();
+  const open = invState.expanded.has(iid);
+  return `<tr data-idx="${idx}" data-iid="${iid}"${open ? ' class="row-open"' : ''}>
     <td class="stat inv-edit ${stockCls}" data-edit="stocked" data-idx="${idx}" title="Click to edit">${fmtNum(stocked)}</td>
     <td class="col-name res-name">${escapeHtml(item.item_name || '')}</td>
     <td class="stat inv-edit" data-edit="threshold" data-idx="${idx}" title="Click to edit">${fmtNum(threshold)}</td>
@@ -54,10 +63,60 @@ function invRowHtml(item, idx) {
     <td class="stat ${safeInt(item.sales_count) ? 'inv-sales' : ''}" ${safeInt(item.sales_count) ? `data-sales="${idx}" title="Click to see the matched sales"` : ''}>${safeInt(item.sales_count) ? fmtNum(item.sales_count) : '<span class="stat_off">—</span>'}</td>
     <td class="col-text res-type">${fmtAgoTip(item.last_updated)}</td>
     <td class="col-actions">
+      <button class="btn btn-icon${open ? ' open' : ''}" data-notes="${idx}" title="${hasNotes ? 'Notes' : 'Add notes'}"><i class="fa-${hasNotes ? 'solid' : 'regular'} fa-note-sticky${hasNotes ? ' has-notes' : ''}"></i></button>
       <button class="btn btn-icon" data-iedit="${idx}" title="Edit vendor / stock"><i class="fa-solid fa-pen"></i></button>
       <button class="btn btn-icon" data-iremove="${idx}" title="Remove item"><i class="fa-solid fa-trash-can"></i></button>
     </td>
   </tr>`;
+}
+
+// item row + (when expanded) its notes detail row
+function invRowsHtml(item, idx) {
+  let html = invRowHtml(item, idx);
+  if (invState.expanded.has(String(item.id))) html += invDetailRowHtml(item);
+  return html;
+}
+
+// Re-render from state — no refetch. Toggling a notes row uses this.
+function renderInvRows() {
+  $('#inv-body').innerHTML = invState.items.map(invRowsHtml).join('');
+}
+
+function invDetailRowHtml(item) {
+  const iid = String(item.id);
+  return `<tr class="row-detail" data-detailfor="${iid}">
+    <td colspan="${invColCount()}">
+      <div class="inv-detail-panel">
+        <div class="detail-label"><i class="fa-solid fa-pen"></i> Notes</div>
+        <textarea class="notes-input" data-notesfor="${iid}" rows="3"
+          placeholder="Notes for ${escapeHtml(item.item_name || 'this item')}…">${escapeHtml(item.notes || '')}</textarea>
+      </div>
+    </td>
+  </tr>`;
+}
+
+/* Saved on blur — Enter has to stay a newline in a textarea. Mirrors
+   stkSaveNotes: skip if unchanged, update optimistically, and mutate the icon in
+   place rather than re-rendering (a re-render would rip out the focused
+   textarea mid-edit). */
+async function invSaveNotes(iid, value) {
+  const item = invState.items.find((i) => String(i.id) === String(iid));
+  if (!item) return;
+  const v = (value || '').trim();
+  if ((item.notes || '') === v) return; // unchanged
+  item.notes = v; // optimistic
+  const btn = $(`#inv-body tr[data-iid="${iid}"] [data-notes]`);
+  if (btn) {
+    btn.title = v ? 'Notes' : 'Add notes';
+    btn.querySelector('i').className = v ? 'fa-solid fa-note-sticky has-notes' : 'fa-regular fa-note-sticky';
+  }
+  try {
+    // apiFetch, not the shell bridge — this ships as a UI bundle with no client download
+    const res = await apiFetch('PUT', 'api/inventory.php', { data: { inventory_id: safeInt(iid), notes: v } });
+    $('#inv-status').textContent = res.ok
+      ? `Notes saved — ${item.item_name}`
+      : `Failed to save notes: ${res.error || 'server error'}`;
+  } catch (e) { $('#inv-status').textContent = `Failed to save notes: ${e}`; }
 }
 
 async function loadInventory() {
@@ -104,7 +163,7 @@ async function loadInventory() {
     empty.hidden = false;
     $('#inv-status').textContent = '';
   } else {
-    $('#inv-body').innerHTML = rows.map(invRowHtml).join('');
+    renderInvRows();
     $('#inv-status').textContent = `Page ${page} — ${rows.length} items`;
   }
   $('#inv-prev').disabled = page <= 1;
@@ -277,6 +336,27 @@ function initInventory() {
   $('#inv-sales-modal').addEventListener('click', (e) => {
     if (e.target === $('#inv-sales-modal')) $('#inv-sales-modal').hidden = true;
   });
+  // Notes: toggle the detail row open/shut, then focus the textarea so it's
+  // typeable straight away.
+  $('#inv-body').addEventListener('click', (e) => {
+    const noteCell = e.target.closest('[data-notes]');
+    if (!noteCell) return;
+    const item = invState.items[safeInt(noteCell.dataset.notes)];
+    if (!item) return;
+    const iid = String(item.id);
+    if (invState.expanded.has(iid)) invState.expanded.delete(iid);
+    else invState.expanded.add(iid);
+    renderInvRows();
+    const ta = $(`#inv-body [data-notesfor="${iid}"]`);
+    if (ta) ta.focus();
+  });
+
+  // Blur commits — Enter has to stay a newline inside the textarea.
+  $('#inv-body').addEventListener('focusout', (e) => {
+    const notes = e.target.closest('[data-notesfor]');
+    if (notes) invSaveNotes(notes.dataset.notesfor, notes.value);
+  });
+
   $('#inv-body').addEventListener('click', async (e) => {
     const cell = e.target.closest('[data-sales]');
     if (!cell) return;

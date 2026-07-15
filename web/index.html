@@ -1146,7 +1146,10 @@
         <h2 id="help-title">Help</h2>
         <button id="help-close" class="btn btn-icon" title="Close"><i class="fa-solid fa-xmark"></i></button>
       </div>
-      <div id="help-body" class="help-body"></div>
+      <!-- tabindex: focused on open so Esc reaches the modal and the arrow keys
+           scroll a long topic. Focusing the close button instead lit up
+           Bootstrap's blue :focus glow on Windows. -->
+      <div id="help-body" class="help-body" tabindex="-1"></div>
     </div>
   </div>
 

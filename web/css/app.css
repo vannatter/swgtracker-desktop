@@ -302,6 +302,10 @@ body.offline .app-body { height: calc(100vh - 76px); }
 td.col-actions .btn-icon { background: transparent; color: var(--text-muted); width: 28px; height: 28px; }
 td.col-actions .btn-icon:hover { background: transparent; color: var(--text-hover); }
 td.col-actions .btn-icon[data-iremove]:hover, td.col-actions .btn-icon[data-hact="del"]:hover { color: var(--accent); }
+/* Notes icon when it lives in the actions cell (inventory) rather than its own
+   pin-cell (stockpile) — needs to out-specify td.col-actions .btn-icon above. */
+td.col-actions .btn-icon .has-notes { color: var(--q-good); }   /* filled note = has notes */
+td.col-actions .btn-icon.open { color: var(--accent); }
 
 /* inventory vendor suggestions — styled dropdown (replaces native datalist) */
 .inv-vendor-wrap { position: relative; }
@@ -1226,6 +1230,9 @@ body.dev-mode .dev-pill { display: inline-flex; }
   font-size: 13px; line-height: 1.6; color: var(--text-primary);
   max-height: 60vh; overflow-y: auto; text-align: left;
 }
+/* focused on open (for Esc + arrow-key scrolling) — it's a scroll region, not a
+   control, so it should never look focused */
+.help-body:focus, .help-body:focus-visible { outline: none; }
 .help-body h3 {
   font-size: 12px; font-weight: 700; color: var(--text-muted);
   letter-spacing: .05em; text-transform: uppercase;
@@ -1288,22 +1295,33 @@ body.dev-mode .dev-pill { display: inline-flex; }
 .stk-drag-ghost { position: absolute; top: -1000px; left: -1000px; background: var(--accent); color: #fff;
   padding: 5px 12px; border-radius: 6px; font-size: 12px; font-weight: 700; white-space: nowrap; }
 
-/* notes + linked-schematics per-row detail */
-.stk-note-cell { cursor: pointer; color: var(--text-muted); }
-.stk-note-cell:hover { color: var(--text-hover); }
-.stk-note-cell .stk-has-notes { color: var(--q-good); }   /* filled note = has notes */
-.stk-note-cell.open { color: var(--accent); }
-#stk-body tr.stk-row.stk-row-open > td { border-bottom-color: transparent; }
-tr.stk-detail > td { background: var(--bg-tertiary); padding: 0; }
+/* Per-row notes detail — shared by My Stockpile and My Inventory: the expanded
+   detail row, its label and the textarea look the same on both, and only what's
+   INSIDE the panel differs (see the two -detail-panel rules below).
+   The note ICON is not shared: stockpile gives it a standalone .note-cell column
+   (matching its pin-cell trash), while inventory makes it a .btn-icon alongside
+   the pen and trash in .col-actions (see the col-actions rules up top). A
+   pin-cell carries the row's cell padding, so mixing the two idioms in one row
+   spaces the icons unevenly. */
+.note-cell { cursor: pointer; color: var(--text-muted); }
+.note-cell:hover { color: var(--text-hover); }
+.note-cell .has-notes { color: var(--q-good); }   /* filled note = has notes */
+.note-cell.open { color: var(--accent); }
+tr.row-open > td { border-bottom-color: transparent; } /* row + detail read as one unit */
+tr.row-detail > td { background: var(--bg-tertiary); padding: 0; }
+.detail-label { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); margin-bottom: 6px; }
+.detail-label i { margin-right: 6px; }
+.notes-input { width: 100%; background: var(--bg-input); border: 1px solid var(--bg-input);
+  border-radius: 4px; color: var(--text-primary); font-size: 13px; padding: 6px 8px; resize: vertical; font-family: inherit; }
+.notes-input:focus { outline: none; border-color: var(--accent-dark); }
+
+/* stockpile splits its detail into notes + linked schematics; inventory's is
+   notes alone, so it just needs the padding */
 .stk-detail-panel { display: flex; gap: 26px; padding: 12px 18px 16px; }
+.inv-detail-panel { padding: 12px 18px 16px; }
 .stk-detail-col { flex: 1 1 0; min-width: 0; }
 .stk-detail-notes { flex: 1.8 1 0; }   /* notes gets the wider half */
 .stk-detail-schems { flex: 1 1 0; }
-.stk-detail-label { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); margin-bottom: 6px; }
-.stk-detail-label i { margin-right: 6px; }
-.stk-notes-input { width: 100%; background: var(--bg-input); border: 1px solid var(--bg-input);
-  border-radius: 4px; color: var(--text-primary); font-size: 13px; padding: 6px 8px; resize: vertical; font-family: inherit; }
-.stk-notes-input:focus { outline: none; border-color: var(--accent-dark); }
 .stk-schem-list { display: flex; flex-wrap: wrap; gap: 6px; align-content: flex-start; }
 .stk-schem-chip { background: var(--bg-input); color: var(--text-primary); border-radius: 4px;
   padding: 3px 9px; font-size: 12px; cursor: pointer; }

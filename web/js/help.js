@@ -187,7 +187,7 @@ function openHelp(id) {
   $('#help-body').innerHTML = renderHelpBody(topic.body);
   $('#help-body').scrollTop = 0;
   modal.hidden = false;
-  $('#help-close').focus();
+  $('#help-body').focus(); // the scroll region, not the ✕ — see index.html
 
   const close = () => {
     modal.hidden = true;

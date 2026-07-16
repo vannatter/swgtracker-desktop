@@ -20,7 +20,7 @@ class SWGTrackerAPI:
 
     TIMEOUT = 15
 
-    def __init__(self, api_key: str):
+    def __init__(self, api_key: str, app_version: str = ""):
         self.api_key = api_key
         # Testing hook (Settings → Offline Data): fail every request as if the
         # network were down, so the offline fallbacks/banner can be exercised.
@@ -31,6 +31,10 @@ class SWGTrackerAPI:
             'Accept': 'application/json',
             'X-API-Key': api_key,
         })
+        if app_version:
+            # server-side presence ("how many desktops are online, on what
+            # version") reads this off the regular pulse poll
+            self.session.headers['X-App-Version'] = app_version
 
     def _request(self, method: str, endpoint: str, data: Optional[dict] = None,
                  params: Optional[dict] = None) -> tuple[bool, dict | str]:

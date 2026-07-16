@@ -29,7 +29,7 @@ from src.core.alert_poller import AlertPoller
 from src.core.bundle_manager import BundleManager
 from src.web_api import WebApi
 
-APP_VERSION = "0.11.27"  # keep in sync with pyproject.toml — bump with every change batch
+APP_VERSION = "0.11.28"  # keep in sync with pyproject.toml — bump with every change batch
 
 logging.basicConfig(
     level=logging.INFO,
@@ -68,7 +68,7 @@ def _set_mac_dock_icon():
 def main():
     _set_mac_dock_icon()
     config = ConfigManager(str(DATA_DIR / "config.json"))
-    api_client = SWGTrackerAPI(config.get("api_key", "") or "")
+    api_client = SWGTrackerAPI(config.get("api_key", "") or "", app_version=APP_VERSION)
     local_db = LocalDB(str(DATA_DIR / "swgtracker_local.db"))
 
     # thin client: the web UI can ship as a server-hosted bundle; the packaged
@@ -88,6 +88,17 @@ def main():
     monitor = MailMonitor(config, api_client, local_db,
                           notifier=lambda t, m: bridge.notify(t, m))
     bridge.controller = monitor
+
+    # In-game scanner: global hotkey → screen region → native OCR → review
+    # queue. Import is guarded — a machine without pynput/OCR just runs
+    # without the feature (scan_get_config reports available: false).
+    try:
+        from src.core.scanner import Scanner
+        bridge.scanner = Scanner(config, notify=lambda t, m: bridge.notify(t, m))
+        if config.get("scan_enabled", False):
+            bridge.scanner.start_hotkey()
+    except Exception:  # noqa: BLE001
+        logging.getLogger(__name__).info("scanner unavailable", exc_info=True)
     if config.get("auto_start_monitoring", False):
         monitor.start_monitoring()
 

@@ -301,6 +301,11 @@ function initSettings() {
   });
 
   $('#set-save').addEventListener('click', saveSettings);
+  $('#set-reset').addEventListener('click', async () => {
+    await loadSettings(); // repaint every field from the saved config
+    try { loadScanConfig(); } catch (_) {} // dev-only scanner section
+    showSettingsStatus('Unsaved changes discarded.', true);
+  });
 
   // Show/hide the API key
   $('#set-apikey-eye').addEventListener('click', () => {

@@ -95,6 +95,8 @@ class WebApi:
         self.app_version = app_version
         # Optional app controller (mail monitor start/stop, connection test).
         self.controller = controller
+        # In-game scanner — attached by run_web.py (needs the webview screens).
+        self.scanner = None
         # Single mail folder => all past mails came from it; stamp its character
         # onto unattributed ledger rows so the Mail character filter covers history.
         try:
@@ -884,6 +886,92 @@ class WebApi:
     def mark_alerts_seen(self, ids="all"):
         try:
             return _wrap(*self.api.mark_alerts_seen(ids))
+        except Exception as e:
+            return _err(e)
+
+    # --- In-game scanner (hotkey → OCR → review queue) ---
+    # self.scanner is attached by run_web.py. The shell surface stays dumb:
+    # raw OCR lines + the capture image. Parsing/matching/approve lives in the
+    # bundle (web/js/scanner.js) so it iterates without installer releases.
+
+    def scan_get_config(self):
+        try:
+            from src.core import ocr_engine
+            s = self.scanner
+            if s is None:
+                return _ok({"available": False})
+            from src.core.scanner import SCAN_SOUNDS
+            return _ok({
+                "available": ocr_engine.available(),
+                "enabled": bool(self.config.get("scan_enabled", False)),
+                "hotkey": s.get_hotkey(),
+                "frame_hotkey": s.get_frame_hotkey(),
+                "region": s.get_region(),
+                "armed": s._listener is not None,
+                "hotkey_supported": True,  # pynput (win) / Carbon (mac)
+                "sound_enabled": s.sound_enabled(),
+                "sound": s.get_sound(),
+                "sounds": list(SCAN_SOUNDS),
+            })
+        except Exception as e:
+            return _err(e)
+
+    def scan_set_config(self, params=None):
+        """Enable/disable + hotkey. Rearms the listener; returns the new state."""
+        p = params or {}
+        try:
+            if "enabled" in p:
+                self.config.set("scan_enabled", bool(p["enabled"]))
+            if p.get("hotkey"):
+                self.config.set("scan_hotkey", str(p["hotkey"]).strip())
+            if p.get("frame_hotkey"):
+                self.config.set("scan_frame_hotkey", str(p["frame_hotkey"]).strip())
+            if "sound_enabled" in p:
+                self.config.set("scan_sound_enabled", bool(p["sound_enabled"]))
+            if p.get("sound"):
+                self.config.set("scan_sound", str(p["sound"]).strip())
+            self.config.save()
+            self.scanner.start_hotkey()
+            return self.scan_get_config()
+        except Exception as e:
+            return _err(e)
+
+    def scan_play_sound(self, params=None):
+        """Preview a success-sound choice (Settings dropdown)."""
+        try:
+            from src.core.scanner import _play_sound
+            p = params or {}
+            _play_sound(str(p.get("sound") or self.scanner.get_sound()))
+            return _ok(True)
+        except Exception as e:
+            return _err(e)
+
+    def scan_show_frame(self):
+        """Show the positioning outline (the 'focus area' the scan will read)."""
+        try:
+            self.scanner.show_frame()
+            return _ok(True)
+        except Exception as e:
+            return _err(e)
+
+    def scan_capture_now(self):
+        """Manual capture from the app UI — same path as the hotkey."""
+        try:
+            item = self.scanner.capture_and_queue()
+            return _ok(item is not None)
+        except Exception as e:
+            return _err(e)
+
+    def scan_queue(self):
+        try:
+            return _ok(self.scanner.queue_list())
+        except Exception as e:
+            return _err(e)
+
+    def scan_queue_remove(self, item_id):
+        try:
+            self.scanner.queue_remove(int(item_id))
+            return _ok(True)
         except Exception as e:
             return _err(e)
 

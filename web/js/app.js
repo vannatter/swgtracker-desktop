@@ -18,7 +18,8 @@ const PAGE_LOADERS = {
   alerts: () => loadAlerts(),
   lab: () => loadLab(),
   monitor: () => loadMail(),
-  settings: () => loadSettings(),
+  scanner: () => loadScanner(),
+  settings: () => { loadSettings(); loadScanConfig(); }, // scan config renders into #set-scan-section
   about: () => loadAbout(),
 };
 const loadedPages = new Set();
@@ -378,7 +379,10 @@ async function fetchPulse() {
     statusEl.className = 'pulse-status online';
     $('#pulse-online').innerHTML = `Players: ${(online.current || 0).toLocaleString()}`
       + ` <span class="pulse-peak-inline">· peak ${(online.peak_today || 0).toLocaleString()}</span>`;
-    $('#pulse-resources').textContent = `Active resources: ${(res.data.active_resources || 0).toLocaleString()}`;
+    // dev-only: how many desktop apps are phoning home right now
+    $('#pulse-desktop').textContent = res.data.desktop_online != null
+      ? `Desktop apps: ${res.data.desktop_online.toLocaleString()}` : '';
+    showBroadcasts(res.data.broadcasts);
     drawPulseChart(online.history);
   } else {
     statusEl.textContent = 'Offline';
@@ -386,8 +390,96 @@ async function fetchPulse() {
     mini.classList.add('offline');
     mini.title = 'Server offline';
     $('#pulse-online').innerHTML = '';
-    $('#pulse-resources').textContent = '';
   }
+}
+
+// ---- Broadcasts ----
+// Server-pushed announcements ride the pulse payload (admin/broadcasts.php on
+// the site). A new one fires a native notification (reaches the user in game),
+// then sticks to a bottom banner until dismissed; every one stays in the bell
+// inbox (header) until deleted. Inbox lives in localStorage, capped at 50.
+function loadBroadcastInbox() {
+  try { return JSON.parse(localStorage.getItem('broadcastInbox')) || []; } catch (_) { return []; }
+}
+function saveBroadcastInbox(inbox) {
+  localStorage.setItem('broadcastInbox', JSON.stringify(inbox.slice(-50)));
+}
+
+function showBroadcasts(list) {
+  if (!Array.isArray(list) || !list.length) return;
+  const inbox = loadBroadcastInbox();
+  let added = false;
+  for (const b of list) {
+    if (!b || !b.id || !b.message || inbox.some((i) => i.id === b.id)) continue;
+    inbox.push({ id: b.id, message: String(b.message), ts: b.created_at || 0, dismissed: false });
+    try { api().notify('SWG Tracker', String(b.message)); } catch (_) {}
+    added = true;
+  }
+  if (added) { saveBroadcastInbox(inbox); renderBroadcastUI(); }
+}
+
+function renderBroadcastUI() {
+  const inbox = loadBroadcastInbox();
+  const open = inbox.filter((i) => !i.dismissed);
+  const bar = $('#broadcast-bar');
+  if (open.length) {
+    const latest = open[open.length - 1];
+    $('#broadcast-bar-msg').textContent = latest.message
+      + (open.length > 1 ? `  (+${open.length - 1} more in the bell)` : '');
+    bar.hidden = false;
+  } else {
+    bar.hidden = true;
+  }
+  const badge = $('#bell-badge');
+  badge.hidden = !open.length;
+  badge.textContent = open.length;
+  renderBellPanel(inbox);
+}
+
+function renderBellPanel(inbox) {
+  const items = (inbox || loadBroadcastInbox()).slice().reverse();
+  $('#bell-list').innerHTML = items.length ? items.map((i) => `
+    <div class="bell-item ${i.dismissed ? '' : 'unread'}">
+      <div class="bell-item-msg">${escapeHtml(i.message)}</div>
+      <span class="bell-item-meta">${i.ts ? fmtAgo(i.ts) : ''}</span>
+      <button class="bell-item-del" data-delbc="${i.id}" title="Delete"><i class="fa-solid fa-trash"></i></button>
+    </div>`).join('')
+    : '<div class="bell-empty">No notifications.</div>';
+}
+
+function initBroadcasts() {
+  $('#broadcast-bar-close').addEventListener('click', () => {
+    // dismiss just the banner's current message; the rest surface in turn
+    const inbox = loadBroadcastInbox();
+    const open = inbox.filter((i) => !i.dismissed);
+    if (open.length) { open[open.length - 1].dismissed = true; saveBroadcastInbox(inbox); }
+    renderBroadcastUI();
+  });
+  $('#bell-btn').addEventListener('click', () => {
+    const panel = $('#bell-panel');
+    panel.hidden = !panel.hidden;
+    if (!panel.hidden) {
+      // opening the inbox acknowledges everything: banner + badge clear
+      const inbox = loadBroadcastInbox();
+      inbox.forEach((i) => { i.dismissed = true; });
+      saveBroadcastInbox(inbox);
+      renderBroadcastUI();
+    }
+  });
+  $('#bell-panel').addEventListener('click', (e) => {
+    const del = e.target.closest('[data-delbc]');
+    if (del) {
+      saveBroadcastInbox(loadBroadcastInbox().filter((i) => i.id !== safeInt(del.dataset.delbc)));
+      renderBroadcastUI();
+    } else if (e.target.closest('#bell-clear')) {
+      saveBroadcastInbox([]);
+      renderBroadcastUI();
+    }
+  });
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#bell-panel') && !e.target.closest('#bell-btn')) $('#bell-panel').hidden = true;
+  });
+  renderBroadcastUI(); // undismissed banner survives a restart
 }
 
 // ---- Dev mode ----
@@ -429,7 +521,8 @@ function initDevMode() {
 
 // ---- Header controls ----
 function initControls() {
-  $('#btn-test').addEventListener('click', async () => {
+  // the status line IS the test button (the old dev-only Test Connection went away)
+  $('#pulse-status').addEventListener('click', async () => {
     const el = $('#pulse-status');
     const prev = el.textContent;
     el.textContent = 'Testing…';
@@ -604,6 +697,7 @@ function startData() {
 async function boot() {
   initNav();
   initControls();
+  initBroadcasts();
   initResources();
   initSchematics();
   initStockpile();
@@ -619,6 +713,7 @@ async function boot() {
   initAlerts();
   initLab();
   initMail();
+  initScanner();
   initDevMode();
   initAbout();
   refreshMonitorState(); // header button reflects auto-started monitoring

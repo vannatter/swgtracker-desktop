@@ -42,6 +42,7 @@ html, body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
   font-size: 14px;
   overflow: hidden;
+  overscroll-behavior: none; /* belt & braces vs WKWebView rubber-banding */
   user-select: none;
 }
 
@@ -80,6 +81,48 @@ html, body {
 .app-body { display: flex; height: calc(100vh - 50px); }
 
 /* Offline banner: slim fixed bar; .offline on <body> shrinks the app so nothing hides */
+/* ---- Broadcasts: bottom banner (sticks until dismissed) + bell inbox ---- */
+#broadcast-bar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 240;
+  display: flex; align-items: center; gap: 10px; padding: 9px 14px;
+  background: var(--bg-tertiary); border-top: 2px solid var(--accent);
+  font-size: 13px; color: var(--text-hover);
+}
+#broadcast-bar .fa-bullhorn { color: var(--accent); }
+#broadcast-bar-msg { flex: 1; min-width: 0; }
+#broadcast-bar button { background: transparent; border: 0; color: var(--text-muted);
+  cursor: pointer; font-size: 15px; padding: 0 4px; }
+#broadcast-bar button:hover { color: var(--text-hover); }
+body.offline #broadcast-bar { bottom: 26px; } /* stack above the offline bar */
+
+.bell-btn { position: relative; background: transparent; color: var(--text-muted); }
+.bell-btn:hover { color: var(--text-hover); background: transparent; }
+.bell-badge {
+  position: absolute; top: -3px; right: -5px; min-width: 15px; text-align: center;
+  background: var(--accent); color: #fff; font-size: 10px; font-weight: 700;
+  border-radius: 8px; padding: 1px 5px;
+}
+.bell-panel {
+  position: fixed; top: 54px; right: 12px; width: 340px; max-height: 60vh; overflow-y: auto;
+  background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px;
+  z-index: 300; box-shadow: 0 8px 24px rgba(0, 0, 0, .45);
+}
+.bell-head {
+  display: flex; align-items: center; justify-content: space-between; padding: 10px 12px;
+  font-size: 13px; font-weight: 700; color: var(--text-hover);
+  border-bottom: 1px solid var(--border);
+}
+.bell-item { display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px;
+  border-bottom: 1px solid var(--border); }
+.bell-item:last-child { border-bottom: none; }
+.bell-item.unread { background: rgba(226, 67, 80, .07); }
+.bell-item-msg { flex: 1; min-width: 0; font-size: 12.5px; color: var(--text-primary);
+  user-select: text; overflow-wrap: break-word; }
+.bell-item-meta { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+.bell-item-del { background: transparent; border: 0; color: var(--text-muted); cursor: pointer; }
+.bell-item-del:hover { color: var(--accent); }
+.bell-empty { padding: 16px; font-size: 12.5px; color: var(--text-muted); }
+
 #offline-bar {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 250;
   height: 26px; display: flex; align-items: center; justify-content: center; gap: 8px;
@@ -102,7 +145,9 @@ body.offline .app-body { height: calc(100vh - 76px); }
   flex-direction: column;
   padding: 10px 0;
 }
-.nav-list { list-style: none; margin: 0; padding: 0; }
+/* the nav scrolls when the window is short — the pulse panel below it is
+   always pinned in view, never pushed off the bottom */
+.nav-list { list-style: none; margin: 0; padding: 0; overflow-y: auto; min-height: 0; flex: 0 1 auto; }
 
 /* icon-only sidebar (toggle at the bottom; state persists) */
 .app-sidebar { transition: width .15s ease, flex-basis .15s ease; }
@@ -112,7 +157,7 @@ body.offline .app-body { height: calc(100vh - 76px); }
   padding-left: 0; padding-right: 2px; /* mirror the 2px active border so icons sit dead-center */
 }
 .app-sidebar.collapsed .nav-item i { font-size: 16px; margin: 0; }
-.app-sidebar.collapsed .pulse-panel, .app-sidebar.collapsed .test-btn { display: none; }
+.app-sidebar.collapsed .pulse-panel { display: none; }
 /* above the pulse, pulled right; borderless glyph-only button
    (compound selector — the plain .btn-icon background rule sits later in the file) */
 .btn-icon.side-collapse { margin: 0 10px 8px auto; flex: 0 0 auto; background: transparent; color: var(--text-muted); }
@@ -216,7 +261,8 @@ body.offline .app-body { height: calc(100vh - 76px); }
   white-space: nowrap; pointer-events: none; z-index: 5;
 }
 
-.test-btn { margin: 10px 18px 0; }
+.pulse-status { cursor: pointer; }
+.pulse-status:hover { text-decoration: underline; }
 
 /* ---- Content ----
    Pages fill the window exactly; only the grid (.table-wrap) scrolls.
@@ -226,6 +272,7 @@ body.offline .app-body { height: calc(100vh - 76px); }
 .page.active {
   display: flex; flex-direction: column;
   height: 100%; min-height: 0; overflow: auto; /* overflow only as a small-window fallback */
+  overscroll-behavior: none; /* no rubber-band bounce — sticky bars (settings save) shake with it */
 }
 .page.active > *:not(.table-wrap) { flex-shrink: 0; }
 .placeholder { color: var(--text-muted); padding: 60px; text-align: center; border: 1px dashed var(--border); border-radius: 8px; }
@@ -1366,8 +1413,23 @@ tr.row-detail > td { background: var(--bg-tertiary); padding: 0; }
 .set-ds-when { color: var(--text-muted); }
 .set-ds-err { color: var(--accent); }
 
+/* Floating action bar: pinned to the bottom of the settings page (sticky in
+   the page's own scroll), with content sliding underneath it. margin-top:auto
+   keeps it at the bottom even when the page is short. */
 .settings-actions {
-  display: flex; align-items: center; gap: 12px; margin-top: 2px;
+  display: flex; align-items: center; gap: 12px;
+  position: sticky; bottom: 0; margin-top: auto;
+  background: var(--bg-primary);
+  border-top: 1px solid var(--border);
+  /* no bottom padding — .app-content's own 20px sits below, so 20px top
+     padding puts the buttons on the bar's midline */
+  padding: 20px 0 0;
+}
+/* uniform button height (matches .btn-sm elsewhere) — bootstrap's defaults
+   render the accent and outline variants a few px apart */
+.settings-actions .btn {
+  height: 34px; padding: 0 16px; font-size: 13px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
 }
 .settings-keyrow { display: flex; align-items: center; gap: 8px; }
 .settings-keyrow .filter-input { flex: 1 1 auto; max-width: none; }
@@ -1396,6 +1458,37 @@ tr.row-detail > td { background: var(--bg-tertiary); padding: 0; }
 .form-check-input { background-color: var(--bg-input); border-color: var(--border); }
 .form-check-input:checked { background-color: var(--accent-dark); border-color: var(--accent-dark); }
 .form-check-input:focus { box-shadow: none; border-color: var(--accent-dark); }
+
+/* ---- Scanner (dev-only): in-game OCR review queue; config lives in the
+   dev-only Settings section (#set-scan-section) ---- */
+#scan-controls .filter-input { width: 180px; font-family: monospace; font-size: 12px; }
+#scan-controls .settings-row { margin: 6px 0 10px; }
+/* fixed label column so the hotkey inputs and sound select line up */
+#scan-controls .settings-row > span { flex: 0 0 100px; }
+#scan-sound { width: 120px; }
+.scan-queue { display: flex; flex-direction: column; gap: 10px; }
+/* first-run empty state — the queue starts blank, which reads as broken */
+.scan-empty { text-align: center; padding: 56px 20px; color: var(--text-muted); }
+.scan-empty > i { font-size: 42px; color: var(--accent); opacity: .6; margin-bottom: 14px; }
+.scan-empty h2 { font-size: 17px; color: var(--text-hover); margin: 0 0 6px; }
+.scan-empty p { font-size: 13px; margin: 0 0 6px; }
+.scan-empty ol { display: inline-block; text-align: left; font-size: 13px; margin: 8px 0 4px;
+  padding-left: 22px; line-height: 1.9; }
+.scan-empty b { color: var(--text-primary); }
+.scan-empty-more { font-size: 12px; margin-top: 10px; }
+.scan-item { display: flex; gap: 14px; background: var(--bg-secondary); border-radius: 8px; padding: 12px; }
+.scan-shot { max-width: 230px; max-height: 300px; object-fit: contain; align-self: flex-start;
+  border-radius: 6px; background: var(--bg-primary); }
+.scan-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.scan-title { font-size: 15px; font-weight: 700; color: var(--text-hover); }
+.scan-class { font-size: 12px; font-weight: 400; color: var(--text-muted); margin-left: 8px; }
+.scan-stats { display: flex; flex-wrap: wrap; gap: 5px; }
+.scan-stat { background: var(--bg-input); border-radius: 4px; padding: 2px 8px; font-size: 12px; color: var(--text-primary); }
+.scan-stat-ok { color: var(--q-good); }        /* agrees with the picked match */
+.scan-stat-bad { color: var(--accent); }       /* disagrees — probably OCR or wrong match */
+.scan-warn { font-size: 12px; color: var(--accent-hover); }
+.scan-pick { max-width: 520px; }
+.scan-actions { display: flex; gap: 8px; margin-top: 2px; }
 
 /* ---- API-key gate ---- */
 .key-gate {
@@ -1628,7 +1721,8 @@ tr.row-detail > td { background: var(--bg-tertiary); padding: 0; }
 .set-maildisp { display: flex; flex-direction: column; gap: 5px; margin-top: 4px; }
 .set-maildisp-label { font-size: 13px; color: var(--text-muted); }
 .set-disp-opt { display: flex; align-items: center; gap: 7px; font-size: 13px; cursor: pointer;
-  white-space: nowrap; } /* "Move it to <path>" stays one line — the path chip ellipsizes instead */
+  white-space: nowrap; /* "Move it to <path>" stays one line — the path chip ellipsizes instead */
+  min-height: 34px; } /* uniform row height — tall enough for the Move row's standard browse button */
 .set-disp-opt input[type="radio"] { accent-color: var(--accent); flex-shrink: 0; }
 .set-disp-opt:has(input:disabled) { color: var(--text-muted); }
 .set-movedir { font-size: 11px; background: var(--bg-primary); border-radius: 4px; color: var(--text-muted);

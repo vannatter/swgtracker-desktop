@@ -62,6 +62,54 @@ monitoring on, the app notices the new files and uploads them on its own.
 `,
   },
 
+  'scanner': {
+    title: 'Scanning resources out of the game',
+    summary: 'Point the scan area at an Examine window once, then one hotkey reads the stats for you.',
+    body: `
+The scanner reads a resource's stats straight off the screen, so you don't have
+to type them in. You line up a scan area over the game's **Examine** window
+once, and from then on a single hotkey grabs whatever is inside it, reads the
+text, and queues it here for review — even while the game has focus.
+
+## One-time setup
+
+1. Open the Scanner page and press **Position scan area**. A dashed outline
+   appears that always stays on top.
+2. In game, examine a resource so its stats window is open.
+3. Drag the outline over the Examine window (or move the game window under it),
+   and resize it to fit snugly around the name and stats.
+4. Press **Test scan** to check the fit — a capture should land in the queue
+   with the stats read out.
+5. Press **Save**. The scanner reads that exact spot from now on.
+
+## Day-to-day use
+
+Examine a resource, press the scan hotkey (**ctrl+shift+x** unless you changed
+it), and keep playing — each press captures one resource. A second hotkey
+(**ctrl+shift+a**) shows or hides the scan-area outline if you need to reposition
+it. You'll hear a sound when a scan lands: the chosen success sound when text
+was read, and a low error sound when something went wrong. Both can be changed
+or turned off in Settings.
+
+Captures pile up in the queue on the Scanner page. Each one shows what was
+read, the stats it parsed, and the closest matches from the resource database —
+stats are matched exactly, so even a mangled name usually finds the right
+resource. Pick the match, press **Add to stockpile**, done.
+
+## If a scan fails
+
+- **No text found** — the Examine window probably wasn't inside the outline.
+  Show the outline and check the fit.
+- **Capture blocked** — on a Mac, screen capture needs permission the first
+  time: allow it under Privacy & Security, Screen Recording, then relaunch.
+- **Wrong numbers** — OCR can misread a digit. The capture image is shown next
+  to what was read, so a quick glance catches it before it goes anywhere.
+
+Scanning needs the built-in text recognition of Windows 10 or newer (or macOS).
+Nothing extra to install.
+`,
+  },
+
   'mail-handling': {
     title: 'What happens to a mail after it uploads',
     summary: 'Choose whether processed mail files are kept, deleted, or moved aside.',

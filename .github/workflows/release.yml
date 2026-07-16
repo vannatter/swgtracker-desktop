@@ -31,7 +31,9 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
       - name: Install deps
-        run: pip install requests pywebview pyinstaller
+        # pillow + pynput + Vision: the in-game scanner (screen capture, global
+        # hotkey, Apple Vision OCR). All tiny; OCR models are the OS's own.
+        run: pip install requests pywebview pyinstaller pillow pynput pyobjc-framework-Vision
       - name: Build .app
         run: |
           pyinstaller --noconfirm --clean --windowed \
@@ -56,7 +58,9 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
       - name: Install deps
-        run: pip install requests pywebview pyinstaller pillow
+        # pynput + winsdk: the in-game scanner (global hotkey + Windows.Media.Ocr
+        # — the OS's built-in OCR, no Tesseract install, no bundled models).
+        run: pip install requests pywebview pyinstaller pillow pynput winsdk
       - name: Make .ico
         run: python -c "from PIL import Image; Image.open('src/resources/icon.png').save('build/icon.ico', sizes=[(16,16),(32,32),(48,48),(64,64),(128,128),(256,256)])"
       - name: Version resource for the exe (file properties otherwise say 0.0.0.0)

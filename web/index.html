@@ -21,6 +21,9 @@
     </div>
     <div class="app-header-controls">
       <button id="update-chip" class="update-chip" hidden></button>
+      <button id="bell-btn" class="btn btn-icon bell-btn" title="Notifications">
+        <i class="fa-solid fa-bell"></i><span id="bell-badge" class="bell-badge" hidden></span>
+      </button>
       <button id="btn-monitor" class="btn btn-sm btn-outline-secondary mon-btn">
         <span class="mon-btn-label"><i class="fa-solid fa-circle-pause"></i> Start Mail Monitor</span>
       </button>
@@ -46,6 +49,8 @@
         <li class="nav-item" data-page="alerts"><i class="fa-solid fa-bell"></i> Spawn Alerts</li>
         <li class="nav-item" data-page="monitor"><i class="fa-solid fa-envelope"></i> Mail</li>
         <li class="nav-item" data-page="lab"><i class="fa-solid fa-flask"></i> Laboratory</li>
+        <!-- dev-only while the scanner bakes: shell + OCR ship dark, UI hidden -->
+        <li class="nav-item dev-only" data-page="scanner"><i class="fa-solid fa-expand"></i> Scanner</li>
         <li class="nav-item" data-page="settings"><i class="fa-solid fa-gear"></i> Settings</li>
         <li class="nav-item" data-page="about"><i class="fa-solid fa-circle-info"></i> About</li>
       </ul>
@@ -57,12 +62,12 @@
       <!-- collapsed-mode stand-in for the pulse panel: pulsing dot, hover for numbers -->
       <div id="pulse-mini" class="pulse-mini"><span class="pulse-mini-dot"></span></div>
 
-      <!-- Server pulse -->
+      <!-- Server pulse; clicking the status line re-tests the connection -->
       <div class="pulse-panel">
         <div class="pulse-heading">SERVER PULSE</div>
-        <div id="pulse-status" class="pulse-status">--</div>
+        <div id="pulse-status" class="pulse-status" title="Click to test the connection">--</div>
         <div id="pulse-online" class="pulse-line"></div>
-        <div id="pulse-resources" class="pulse-line muted"></div>
+        <div id="pulse-desktop" class="pulse-line muted dev-only"></div>
         <div class="pulse-chart-wrap">
           <canvas id="pulse-chart" class="pulse-chart"></canvas>
           <span id="pulse-dot" class="pulse-dot" hidden></span>
@@ -70,7 +75,6 @@
         </div>
       </div>
 
-      <button id="btn-test" class="btn btn-sm btn-outline-secondary test-btn dev-only">Test Connection</button>
     </nav>
 
     <!-- Content -->
@@ -743,6 +747,21 @@
         </div>
       </section>
 
+      <!-- Scanner (dev-only): review queue for in-game OCR captures -->
+      <section id="page-scanner" class="page">
+        <div class="page-head">
+          <h1>Scanner</h1>
+          <i class="fa-solid fa-circle-question info-tip" data-help="scanner"></i>
+          <button id="scan-now" class="btn btn-sm btn-outline-secondary head-right"><i class="fa-solid fa-camera"></i> Scan now</button>
+          <button id="scan-frame" class="btn btn-sm btn-accent"><i class="fa-solid fa-expand"></i> Position scan area</button>
+        </div>
+        <div id="scan-unavailable" class="page-hint" hidden>
+          Scanning isn't available on this machine — it needs the built-in OCR of Windows 10+ or macOS,
+          and a newer app version than this one.
+        </div>
+        <div id="scan-queue" class="scan-queue"></div>
+      </section>
+
       <section id="page-settings" class="page">
         <div class="page-head"><h1>Settings</h1></div>
 
@@ -824,6 +843,41 @@
           <button id="set-ds-sync" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-rotate"></i> Sync now</button>
         </div>
 
+        <!-- dev-only while the scanner bakes, like the Scanner page itself -->
+        <div class="settings-section dev-only" id="set-scan-section">
+          <h2>Scanner <i class="fa-solid fa-circle-question info-tip" data-help="scanner"></i>
+            <span class="settings-sub">In-game resource scanning — hotkey &amp; scan feedback</span></h2>
+          <div id="scan-controls" hidden>
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="scan-enable">
+              <label class="form-check-label" for="scan-enable">Enable the in-game hotkey</label>
+            </div>
+            <div class="settings-row">
+              <span>Scan hotkey</span>
+              <input id="scan-hotkey" type="text" class="form-control filter-input" spellcheck="false"
+                     title="pynput format — e.g. <ctrl>+<shift>+x">
+            </div>
+            <div class="settings-row" id="scan-frame-hotkey-row">
+              <span>Overlay hotkey</span>
+              <input id="scan-frame-hotkey" type="text" class="form-control filter-input" spellcheck="false"
+                     title="Shows / hides the scan-area overlay — pynput format, e.g. <ctrl>+<shift>+a">
+            </div>
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="scan-sound-enable">
+              <label class="form-check-label" for="scan-sound-enable">Play a sound when a scan lands</label>
+            </div>
+            <div class="settings-row" id="scan-sound-row">
+              <span>Sound</span>
+              <select id="scan-sound" class="form-select filter-select"></select>
+              <button id="scan-sound-preview" class="btn btn-sm btn-outline-secondary" type="button"
+                      title="Play it"><i class="fa-solid fa-volume-high"></i></button>
+            </div>
+          </div>
+          <div id="scan-unsupported" class="settings-hint" hidden>
+            Scanning isn't available on this machine — it needs the built-in OCR of Windows 10+ or macOS.
+          </div>
+        </div>
+
         <div class="settings-section dev-only" id="set-dev-section">
           <h2>Developer</h2>
           <div class="form-check form-switch">
@@ -845,6 +899,8 @@
 
         <div class="settings-actions">
           <button id="set-save" class="btn btn-accent settings-save"><i class="fa-solid fa-floppy-disk"></i> Save Settings</button>
+          <button id="set-reset" class="btn btn-outline-secondary" title="Discard unsaved changes and reload the saved settings">
+            <i class="fa-solid fa-rotate-left"></i> Reset</button>
           <span id="set-status" class="settings-status"></span>
         </div>
       </section>
@@ -854,6 +910,22 @@
   <!-- Offline banner — driven by setOffline() (pulse poll + cached search responses) -->
   <div id="offline-bar" hidden>
     <i class="fa-solid fa-wifi"></i> Offline — showing cached data where available
+  </div>
+
+  <!-- Broadcast banner: server announcements stick here until dismissed; the
+       bell inbox (header) keeps them until deleted. Driven by renderBroadcastUI(). -->
+  <div id="broadcast-bar" hidden>
+    <i class="fa-solid fa-bullhorn"></i>
+    <span id="broadcast-bar-msg"></span>
+    <button id="broadcast-bar-close" title="Dismiss"><i class="fa-solid fa-xmark"></i></button>
+  </div>
+
+  <!-- Bell inbox dropdown -->
+  <div id="bell-panel" class="bell-panel" hidden>
+    <div class="bell-head">Notifications
+      <button id="bell-clear" class="btn btn-sm btn-outline-secondary">Clear all</button>
+    </div>
+    <div id="bell-list"></div>
   </div>
 
 
@@ -1288,6 +1360,7 @@
   <script src="js/settings.js"></script>
   <script src="js/alerts.js"></script>\n  <script src="js/lab.js"></script>
   <script src="js/mail.js"></script>
+  <script src="js/scanner.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

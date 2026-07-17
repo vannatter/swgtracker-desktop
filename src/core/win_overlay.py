@@ -79,6 +79,12 @@ _LRESULT = ctypes.c_ssize_t
 _WNDPROC = ctypes.WINFUNCTYPE(_LRESULT, wintypes.HWND, wintypes.UINT,
                               wintypes.WPARAM, wintypes.LPARAM)
 
+# EVERY function that takes or returns a handle needs explicit types: ctypes'
+# default conversion is 32-bit C int, and while HWNDs are guaranteed to fit
+# (USER interop rule), GDI handles on 64-bit Windows are NOT — an HDC/HBRUSH
+# above 2^31 raised OverflowError inside WM_PAINT, which showed up in the wild
+# as "the outline paints once, then every reopen is a blank faded box".
+_HANDLE = ctypes.c_void_p
 _user32.DefWindowProcW.restype = _LRESULT
 _user32.DefWindowProcW.argtypes = [wintypes.HWND, wintypes.UINT,
                                    wintypes.WPARAM, wintypes.LPARAM]
@@ -86,18 +92,41 @@ _user32.CreateWindowExW.restype = wintypes.HWND
 _user32.CreateWindowExW.argtypes = [
     wintypes.DWORD, wintypes.LPCWSTR, wintypes.LPCWSTR, wintypes.DWORD,
     ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int,
-    wintypes.HWND, ctypes.c_void_p, wintypes.HINSTANCE, ctypes.c_void_p]
+    wintypes.HWND, _HANDLE, wintypes.HINSTANCE, ctypes.c_void_p]
 _user32.PostMessageW.argtypes = [wintypes.HWND, wintypes.UINT,
                                  wintypes.WPARAM, wintypes.LPARAM]
-_user32.LoadCursorW.restype = ctypes.c_void_p
-_user32.LoadCursorW.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-_user32.BeginPaint.restype = ctypes.c_void_p
-_user32.DrawTextW.argtypes = [ctypes.c_void_p, wintypes.LPCWSTR, ctypes.c_int,
+_user32.LoadCursorW.restype = _HANDLE
+_user32.LoadCursorW.argtypes = [_HANDLE, ctypes.c_void_p]
+_user32.BeginPaint.restype = _HANDLE
+_user32.BeginPaint.argtypes = [wintypes.HWND, ctypes.c_void_p]
+_user32.EndPaint.argtypes = [wintypes.HWND, ctypes.c_void_p]
+_user32.FillRect.argtypes = [_HANDLE, ctypes.c_void_p, _HANDLE]
+_user32.DrawTextW.argtypes = [_HANDLE, wintypes.LPCWSTR, ctypes.c_int,
                               ctypes.c_void_p, wintypes.UINT]
-_gdi32.CreateSolidBrush.restype = ctypes.c_void_p
-_gdi32.GetStockObject.restype = ctypes.c_void_p
-_gdi32.SelectObject.restype = ctypes.c_void_p
-_gdi32.SelectObject.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+_user32.GetClientRect.argtypes = [wintypes.HWND, ctypes.c_void_p]
+_user32.GetWindowRect.argtypes = [wintypes.HWND, ctypes.c_void_p]
+_user32.IsIconic.argtypes = [wintypes.HWND]
+_user32.SetLayeredWindowAttributes.argtypes = [wintypes.HWND, wintypes.DWORD,
+                                               ctypes.c_ubyte, wintypes.DWORD]
+_user32.ShowWindow.argtypes = [wintypes.HWND, ctypes.c_int]
+_user32.UpdateWindow.argtypes = [wintypes.HWND]
+_user32.DestroyWindow.argtypes = [wintypes.HWND]
+_user32.GetMessageW.restype = ctypes.c_int
+_user32.GetMessageW.argtypes = [ctypes.c_void_p, wintypes.HWND,
+                                wintypes.UINT, wintypes.UINT]
+_user32.TranslateMessage.argtypes = [ctypes.c_void_p]
+_user32.DispatchMessageW.restype = _LRESULT
+_user32.DispatchMessageW.argtypes = [ctypes.c_void_p]
+_gdi32.CreateSolidBrush.restype = _HANDLE
+_gdi32.CreateSolidBrush.argtypes = [wintypes.DWORD]
+_gdi32.DeleteObject.argtypes = [_HANDLE]
+_gdi32.GetStockObject.restype = _HANDLE
+_gdi32.GetStockObject.argtypes = [ctypes.c_int]
+_gdi32.SelectObject.restype = _HANDLE
+_gdi32.SelectObject.argtypes = [_HANDLE, _HANDLE]
+_gdi32.SetBkMode.argtypes = [_HANDLE, ctypes.c_int]
+_gdi32.SetTextColor.restype = wintypes.DWORD
+_gdi32.SetTextColor.argtypes = [_HANDLE, wintypes.DWORD]
 
 
 class _WNDCLASSW(ctypes.Structure):

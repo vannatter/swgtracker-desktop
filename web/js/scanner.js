@@ -271,12 +271,17 @@ function wlPlanetLabel(w) {
 }
 
 function renderWorklist() {
-  const wrap = $('#scan-wl-wrap');
   const host = $('#scan-worklist');
   const list = scanState.worklist;
-  wrap.hidden = !list.length;
+  // header button: the way IN to the dialog — visible only when there's work
+  $('#scan-wl-open').hidden = !list.length;
   $('#scan-wl-count').textContent = list.length ? `(${list.length})` : '';
-  if (!list.length) { host.innerHTML = ''; return; }
+  $('#scan-wl-count2').textContent = list.length ? `(${list.length})` : '';
+  if (!list.length) {
+    host.innerHTML = '';
+    $('#scan-wl-modal').hidden = true; // last row removed/cleared — nothing to show
+    return;
+  }
   host.innerHTML = list.map((w) => `
     <div class="scan-wl-row" data-wlid="${w.id}">
       ${w.image
@@ -334,6 +339,26 @@ function wlRenderClassOpts(optsHost, query = '') {
 
 function wlCloseMenus() {
   document.querySelectorAll('.scan-wl-menu').forEach((m) => { m.hidden = true; });
+}
+
+// The shared .cselect-menu is position:fixed so it escapes the dialog's scroll
+// clip — anchor it to its button and flip above when the bottom lacks room.
+function wlAnchorMenu(btn, menu) {
+  const r = btn.getBoundingClientRect();
+  menu.style.left = `${r.left}px`;
+  menu.style.minWidth = `${r.width}px`;
+  menu.style.maxHeight = '';
+  menu.hidden = false;
+  const below = window.innerHeight - r.bottom - 10;
+  const wanted = Math.min(menu.scrollHeight, 320);
+  if (below >= Math.min(wanted, 160)) {
+    menu.style.top = `${r.bottom + 3}px`;
+    menu.style.maxHeight = `${Math.min(wanted, below)}px`;
+  } else {
+    const h = Math.min(wanted, r.top - 10);
+    menu.style.top = `${r.top - h - 3}px`;
+    menu.style.maxHeight = `${h}px`;
+  }
 }
 
 function wlExportLines() {
@@ -536,7 +561,7 @@ function initScanner() {
       });
       wlSave();
       renderWorklist();
-      toast(`${parsed.name || 'Capture'} queued as a new spawn — pick its class below`);
+      toast(`${parsed.name || 'Capture'} queued — open the New spawn worklist (top right) to finish it`);
       finishScan(id);
       return;
     }
@@ -600,12 +625,15 @@ function initScanner() {
       const menu = btn.parentElement.querySelector('.scan-wl-menu');
       const wasHidden = menu.hidden;
       wlCloseMenus();
-      menu.hidden = !wasHidden;
-      if (!menu.hidden && btn.parentElement.hasAttribute('data-wlcls')) {
+      if (!wasHidden) return;
+      if (btn.parentElement.hasAttribute('data-wlcls')) {
         const filter = menu.querySelector('[data-wlclsfilter]');
         filter.value = '';
         wlRenderClassOpts(menu.querySelector('[data-wlclsopts]'));
+        wlAnchorMenu(btn, menu);
         filter.focus();
+      } else {
+        wlAnchorMenu(btn, menu);
       }
     }
   });
@@ -613,16 +641,32 @@ function initScanner() {
     if (!e.target.closest('.scan-wl-combo')) wlCloseMenus();
   });
 
-  // ---- capture zoom — the crops are small; blow them up to readable size
+  // ---- worklist dialog open/close
+  $('#scan-wl-open').addEventListener('click', () => { $('#scan-wl-modal').hidden = false; });
+  $('#scan-wl-close').addEventListener('click', () => { wlCloseMenus(); $('#scan-wl-modal').hidden = true; });
+  $('#scan-wl-modal').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) { wlCloseMenus(); e.currentTarget.hidden = true; }
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    if (!$('#scan-zoom').hidden) $('#scan-zoom').hidden = true;
+    else if (!$('#scan-wl-modal').hidden) { wlCloseMenus(); $('#scan-wl-modal').hidden = true; }
+  });
+
+  // ---- capture zoom — the crops are small; blow them up to readable size,
+  // scaled uniformly (never stretched) and capped to the viewport
   document.addEventListener('click', (e) => {
     const zoomable = e.target.closest('#page-scanner .scan-shot, #page-scanner [data-zoom]');
     if (zoomable && zoomable.src) {
       const img = $('#scan-zoom-img');
-      img.src = zoomable.src;
       img.style.width = '';
       img.onload = () => {
-        img.style.width = `${Math.min(img.naturalWidth * 3, window.innerWidth * 0.92)}px`;
+        const s = Math.min(3, (window.innerWidth * 0.92) / img.naturalWidth,
+                           (window.innerHeight * 0.92) / img.naturalHeight);
+        img.style.width = `${Math.round(img.naturalWidth * s)}px`;
       };
+      img.src = zoomable.src;
+      if (img.complete) img.onload(); // cached data-URL: onload may not refire
       $('#scan-zoom').hidden = false;
       return;
     }

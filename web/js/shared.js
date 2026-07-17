@@ -433,16 +433,19 @@ async function applyStockpileInitial(resourceId, opts) {
 // Shared "Add to Stockpile" dialog. Amount + CPU are optional; cancelling or
 // leaving both blank still stockpiles the resource (only the initial values differ).
 // onDone (optional) fires after the add resolves — used to refresh button state.
-function openStockpileAddDialog(resourceId, name, onDone) {
+function openStockpileAddDialog(resourceId, name, onDone, prefill) {
   const modal = $('#stk-add-modal');
   if (!modal) { addToStockpile(resourceId, name).then(() => onDone && onDone()); return; }
   $('#stk-add-title').textContent = name || 'this resource';
   const amountInput = $('#stk-add-amount');
   const cpuInput = $('#stk-add-cpu');
-  amountInput.value = '';
+  // prefill.stock: e.g. the scanner's Resource Quantity — shown pre-selected
+  // so it's one Enter to accept and typing replaces it wholesale.
+  amountInput.value = prefill && prefill.stock != null ? String(prefill.stock) : '';
   cpuInput.value = '';
   modal.hidden = false;
   amountInput.focus();
+  if (amountInput.value) amountInput.select();
 
   let done = false;
   // withValues=false (cancel/backdrop/Esc): add with no initial amount/CPU.

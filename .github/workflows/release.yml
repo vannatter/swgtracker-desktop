@@ -89,6 +89,7 @@ jobs:
           --version-file build/win_version_info.txt
           --add-data "web;web"
           --add-data "src/resources;src/resources"
+          --hidden-import src.core.win_overlay
           run_web.py
       - name: Build installer (zip-extracted DLLs hit Mark-of-the-Web; installed files don't)
         shell: pwsh

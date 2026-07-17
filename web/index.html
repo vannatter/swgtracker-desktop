@@ -760,6 +760,18 @@
           and a newer app version than this one.
         </div>
         <div id="scan-queue" class="scan-queue"></div>
+        <div id="scan-wl-wrap" class="scan-worklist" hidden>
+          <div class="scan-wl-head">
+            <h2>New spawn worklist <span id="scan-wl-count" class="scan-wl-count"></span></h2>
+            <button id="scan-wl-copy" class="btn btn-sm btn-accent head-right"><i class="fa-solid fa-copy"></i> Copy SWGAide lines</button>
+            <button id="scan-wl-clear" class="btn btn-sm btn-outline-secondary">Clear list</button>
+          </div>
+          <p class="page-hint">Spawns not in the system yet, captured by the scanner. Fill in the
+            <b>resource class</b> (abbreviations are fine) and optionally <b>planet(s)</b>, then copy the
+            lines into your SWGAide submit file — new spawns flow through SWGAide so the rest of the
+            community gets them too.</p>
+          <div id="scan-worklist"></div>
+        </div>
       </section>
 
       <section id="page-settings" class="page">

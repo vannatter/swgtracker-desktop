@@ -1487,6 +1487,16 @@ tr.row-detail > td { background: var(--bg-tertiary); padding: 0; }
 .scan-stat-ok { color: var(--q-good); }        /* agrees with the picked match */
 .scan-stat-bad { color: var(--accent); }       /* disagrees — probably OCR or wrong match */
 .scan-warn { font-size: 12px; color: var(--accent-hover); }
+.scan-qty-ask { font-size: 12px; color: var(--text-muted); align-self: center; }
+.scan-qty { border: 1px solid var(--accent); }
+.scan-worklist { margin-top: 28px; }
+.scan-wl-head { display: flex; align-items: center; gap: 8px; }
+.scan-wl-head h2 { font-size: 16px; margin: 0; }
+.scan-wl-head .head-right { margin-left: auto; }
+.scan-wl-count { color: var(--text-muted); font-weight: normal; }
+.scan-wl-row { display: grid; grid-template-columns: 1fr 1.3fr 0.9fr 1.4fr auto auto;
+               gap: 6px; margin-bottom: 6px; align-items: center; }
+.scan-wl-order { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
 .scan-pick { max-width: 520px; }
 .scan-actions { display: flex; gap: 8px; margin-top: 2px; }
 

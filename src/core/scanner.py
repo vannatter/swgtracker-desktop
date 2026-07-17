@@ -418,6 +418,14 @@ class Scanner:
     def set_region(self, x: int, y: int, w: int, h: int) -> None:
         self.config.set("scan_region", {"x": int(x), "y": int(y),
                                         "w": max(60, int(w)), "h": max(60, int(h))})
+        import sys
+        if sys.platform == "win32":
+            # capture reads the PHYSICAL rect on Windows — keep it in sync when
+            # the region is set from logical coords (the webview fallback frame)
+            s = _windows_dpi_scale()
+            self.config.set("scan_region_px", {
+                "x": round(x * s), "y": round(y * s),
+                "w": max(60, round(w * s)), "h": max(60, round(h * s))})
         self.config.save()
 
     def get_region_px(self) -> dict:
@@ -644,13 +652,26 @@ class Scanner:
         if sys.platform == "win32":
             if self._overlay is not None and self._overlay.visible:
                 return
-            from src.core import win_overlay
-            r = self.get_region_px()
-            self._overlay = win_overlay.Overlay(
-                (r["x"], r["y"], r["w"], r["h"]),
-                lambda rect: self.set_region_px(*rect))
-            self._overlay.show()
-            return
+            err = None
+            try:
+                from src.core import win_overlay
+                r = self.get_region_px()
+                o = win_overlay.Overlay(
+                    (r["x"], r["y"], r["w"], r["h"]),
+                    lambda rect: self.set_region_px(*rect))
+                self._overlay = o
+                o.show()
+                if o.wait_shown(2.0):
+                    return
+                err = o.error or "timed out without appearing"
+                self._overlay = None
+            except Exception as e:  # noqa: BLE001 — incl. module missing from a frozen build
+                err = repr(e)
+            # A dead button is the worst outcome — say so and show the webview
+            # frame instead (it works, it just takes focus when clicked).
+            logger.error("native scan overlay unavailable (%s) — webview fallback", err)
+            self.notify("Scan area", "The native overlay failed to open — using the "
+                        "basic frame instead. Please report this!")
         if self._frame is not None:
             return
         import webview

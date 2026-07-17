@@ -36,6 +36,11 @@ _user32 = ctypes.windll.user32
 _gdi32 = ctypes.windll.gdi32
 _kernel32 = ctypes.windll.kernel32
 
+# Without a restype, ctypes truncates returns to 32-bit — a 64-bit module
+# handle (ASLR puts image bases above 4GB) would come back mangled.
+_kernel32.GetModuleHandleW.restype = ctypes.c_void_p
+_kernel32.GetModuleHandleW.argtypes = [wintypes.LPCWSTR]
+
 _CLASS_NAME = "SWGTrackerScanOverlay"
 
 WS_POPUP = 0x80000000
@@ -155,6 +160,9 @@ class Overlay:
         self._hwnd = None
         self._thread: Optional[threading.Thread] = None
         self._wndproc = None  # keep the callback alive for the window's life
+        self._shown = threading.Event()
+        self._proc_err = False  # log the first wndproc failure, not a storm
+        self.error: Optional[str] = None
 
     @property
     def visible(self) -> bool:
@@ -166,6 +174,12 @@ class Overlay:
         self._thread = threading.Thread(target=self._run, name="scan-overlay",
                                         daemon=True)
         self._thread.start()
+
+    def wait_shown(self, timeout: float) -> bool:
+        """True once the window is actually on screen. False = it never made
+        it (self.error says why) — callers should fall back to something
+        visible rather than leave the user with a button that does nothing."""
+        return self._shown.wait(timeout)
 
     def close(self) -> None:
         hwnd = self._hwnd
@@ -183,7 +197,8 @@ class Overlay:
                 _CLASS_NAME, "Scan area", WS_POPUP, x, y, w, h,
                 None, None, _kernel32.GetModuleHandleW(None), None)
             if not hwnd:
-                logger.error("scan overlay: CreateWindowExW failed")
+                self.error = "CreateWindowExW failed (err=%d)" % _kernel32.GetLastError()
+                logger.error("scan overlay: %s", self.error)
                 return
             self._hwnd = hwnd
             self._wndproc = _WNDPROC(self._proc)
@@ -191,17 +206,34 @@ class Overlay:
             _user32.SetLayeredWindowAttributes(hwnd, 0, _ALPHA, 2)  # LWA_ALPHA
             _user32.ShowWindow(hwnd, 4)  # SW_SHOWNOACTIVATE
             _user32.UpdateWindow(hwnd)
+            logger.info("scan overlay shown at x=%d y=%d w=%d h=%d", x, y, w, h)
+            self._shown.set()
             msg = wintypes.MSG()
             while _user32.GetMessageW(ctypes.byref(msg), None, 0, 0) > 0:
                 _user32.TranslateMessage(ctypes.byref(msg))
                 _user32.DispatchMessageW(ctypes.byref(msg))
-        except Exception:  # noqa: BLE001 — overlay death must not hurt the app
+        except Exception as e:  # noqa: BLE001 — overlay death must not hurt the app
+            self.error = repr(e)
             logger.error("scan overlay crashed", exc_info=True)
         finally:
             self._hwnd = None
             self._wndproc = None
 
     def _proc(self, hwnd, msg, wp, lp):
+        # ctypes swallows callback exceptions and (in a windowed app) prints
+        # them to a stderr that doesn't exist — so catch, log ONCE, and let
+        # DefWindowProc keep the window alive (it also validates WM_PAINT,
+        # preventing an endless paint loop from a broken handler).
+        try:
+            return self._handle(hwnd, msg, wp, lp)
+        except Exception:  # noqa: BLE001
+            if not self._proc_err:
+                self._proc_err = True
+                logger.error("scan overlay wndproc failed (msg=0x%04x)", msg,
+                             exc_info=True)
+            return _user32.DefWindowProcW(hwnd, msg, wp, lp)
+
+    def _handle(self, hwnd, msg, wp, lp):
         if msg == WM_MOUSEACTIVATE:
             return MA_NOACTIVATE  # THE point of this window
         if msg == WM_NCHITTEST:

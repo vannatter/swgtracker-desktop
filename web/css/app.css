@@ -1507,7 +1507,7 @@ tr.row-detail > td { background: var(--bg-tertiary); padding: 0; }
                 color: var(--text-muted); padding: 14px 0 6px; }
 .scan-wl-colhint { text-transform: none; letter-spacing: 0; opacity: .8; }
 .scan-wl-body { flex: 1; overflow-y: auto; min-height: 0; }
-.scan-wl-row { padding: 8px 0; border-top: 1px solid var(--border); }
+.scan-wl-row { padding: 8px 0 20px; border-top: 1px solid var(--border); }
 .scan-wl-row .filter-input { max-width: none; width: 100%; }
 .scan-wl-thumb { width: 56px; height: 44px; object-fit: cover; object-position: top;
                  border-radius: 4px; border: 1px solid var(--border); cursor: zoom-in; }
@@ -1518,8 +1518,11 @@ tr.row-detail > td { background: var(--bg-tertiary); padding: 0; }
                   font-size: 13px; cursor: pointer; }
 .scan-wl-pl-opt:hover { background: var(--border); }
 .scan-wl-pl-opt input { accent-color: var(--accent); }
-.scan-wl-statwrap { display: flex; flex-direction: column; gap: 2px; }
-.scan-wl-order { font-size: 10px; color: var(--text-muted); letter-spacing: .06em; }
+/* the scanned-order label floats BELOW the input (absolute, zero height in the
+   grid) so the stats box stays vertically aligned with the row's other inputs */
+.scan-wl-statwrap { position: relative; }
+.scan-wl-order { position: absolute; top: 100%; left: 2px; margin-top: 3px;
+                 font-size: 10px; color: var(--text-muted); letter-spacing: .06em; }
 .scan-shot { cursor: zoom-in; }
 .scan-zoom { position: fixed; inset: 0; z-index: 500; background: rgba(0, 0, 0, .78);
              display: flex; align-items: center; justify-content: center; cursor: zoom-out; }

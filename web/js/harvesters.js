@@ -732,8 +732,10 @@ async function harvOfferStockpile(name, units) {
     if (!item) {
       const rid = await harvResourceId(name);
       if (!rid) { toast(`Couldn't find ${name} on the site — add it to your stockpile manually`, false); return; }
-      const res = await api().add_to_stockpile(rid);
-      if (!res.ok) { toast(res.error || 'Stockpile add failed', false); return; }
+      // shared helper, NOT the raw api: it promotes a wishlisted resource
+      // instead of tripping the server's "already in stockpile" 409
+      const res = await addToStockpile(rid, name);
+      if (!res || !res.ok) return; // it already toasted the reason
       await syncStockpile();
       item = stkState.items.find((i) => String(i.id) === String(rid));
     }

@@ -386,16 +386,29 @@ async function addToStockpile(resourceId, name, opts) {
   if (!promoted) {
     try { res = await api().add_to_stockpile(resourceId); }
     catch (e) { res = { ok: false, error: String(e) }; }
-    if (res.ok) {
-      toast(`${name || 'Resource'} added to stockpile`);
-      if (typeof stkState !== 'undefined') {
-        stkState.resourceIds.add(String(resourceId)); // optimistic; sync below confirms
-        refreshAddIcons();
+    if (!res.ok && /already in stockpile/i.test(res.error || '')) {
+      // One-list quirk: the server keeps wishlist + stockpile in ONE table, so
+      // a WISHLISTED resource 409s as "already in stockpile" — misleading when
+      // our local wishlist state was stale (fresh boot, hopper-empty flow).
+      // Resync and promote: what the branch above would have done.
+      try { await syncWishlist(); } catch (_) { /* offline — keep the 409 */ }
+      if (typeof wishState !== 'undefined') {
+        const idx = wishState.items.findIndex((i) => String(i.id) === String(resourceId));
+        if (idx >= 0) { res = await promoteWishItem(idx); promoted = true; }
       }
-    } else {
-      toast(`Couldn't add ${name || 'resource'}: ${res.error || 'server error'}`, false);
-      checkAuthError(res.error);
-      return res;
+    }
+    if (!promoted) {
+      if (res.ok) {
+        toast(`${name || 'Resource'} added to stockpile`);
+        if (typeof stkState !== 'undefined') {
+          stkState.resourceIds.add(String(resourceId)); // optimistic; sync below confirms
+          refreshAddIcons();
+        }
+      } else {
+        toast(`Couldn't add ${name || 'resource'}: ${res.error || 'server error'}`, false);
+        checkAuthError(res.error);
+        return res;
+      }
     }
   }
   if (typeof stkState !== 'undefined' && res && res.ok) {

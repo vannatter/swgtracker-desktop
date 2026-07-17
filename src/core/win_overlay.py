@@ -162,6 +162,7 @@ class Overlay:
         self._wndproc = None  # keep the callback alive for the window's life
         self._shown = threading.Event()
         self._proc_err = False  # log the first wndproc failure, not a storm
+        self._cancel = False    # close() can arrive before the window exists
         self.error: Optional[str] = None
 
     @property
@@ -182,6 +183,12 @@ class Overlay:
         return self._shown.wait(timeout)
 
     def close(self) -> None:
+        """Async close. The cancel flag matters: the scan flow closes and
+        reopens the outline within ~250ms, so a close can land before the
+        window exists — posting to a null hwnd would do nothing and leave an
+        ORPHAN window nobody can ever close (seen in the wild as overlays
+        stacking up / going blank across toggles)."""
+        self._cancel = True
         hwnd = self._hwnd
         if hwnd:
             _user32.PostMessageW(hwnd, WM_CLOSE, 0, 0)
@@ -208,10 +215,13 @@ class Overlay:
             _user32.UpdateWindow(hwnd)
             logger.info("scan overlay shown at x=%d y=%d w=%d h=%d", x, y, w, h)
             self._shown.set()
+            if self._cancel:  # close() raced creation — honor it immediately
+                _user32.PostMessageW(hwnd, WM_CLOSE, 0, 0)
             msg = wintypes.MSG()
             while _user32.GetMessageW(ctypes.byref(msg), None, 0, 0) > 0:
                 _user32.TranslateMessage(ctypes.byref(msg))
                 _user32.DispatchMessageW(ctypes.byref(msg))
+            logger.info("scan overlay thread exiting cleanly")
         except Exception as e:  # noqa: BLE001 — overlay death must not hurt the app
             self.error = repr(e)
             logger.error("scan overlay crashed", exc_info=True)
@@ -255,12 +265,21 @@ class Overlay:
             return 0
         if msg == WM_CLOSE:
             r = wintypes.RECT()
-            if _user32.GetWindowRect(hwnd, ctypes.byref(r)):
+            # A minimized window reports (-32000,-32000) — committing that
+            # would park the region off-screen FOREVER (the outline recreates
+            # wherever the rect says, visible or not). Skip the commit.
+            if (not _user32.IsIconic(hwnd)
+                    and _user32.GetWindowRect(hwnd, ctypes.byref(r))
+                    and r.left > -30000 and r.top > -30000):
                 try:
                     self._on_commit((r.left, r.top,
                                      r.right - r.left, r.bottom - r.top))
+                    logger.info("scan overlay closed — committed x=%d y=%d w=%d h=%d",
+                                r.left, r.top, r.right - r.left, r.bottom - r.top)
                 except Exception:  # noqa: BLE001
                     logger.error("scan overlay commit failed", exc_info=True)
+            else:
+                logger.info("scan overlay closed — rect not committed (minimized/off-screen)")
             _user32.DestroyWindow(hwnd)
             return 0
         if msg == WM_DESTROY:

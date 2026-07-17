@@ -149,6 +149,19 @@ def _windows_dpi_scale() -> float:
             return 1.0
 
 
+def _win_rect_visible(r: dict) -> bool:
+    """Does this physical rect meaningfully overlap the virtual desktop?
+    Guards against a region committed while the outline was minimized or
+    dragged off-screen — restoring THAT would make the outline invisible
+    forever with no error anywhere."""
+    import ctypes
+    u = ctypes.windll.user32
+    vx, vy = u.GetSystemMetrics(76), u.GetSystemMetrics(77)   # SM_X/YVIRTUALSCREEN
+    vw, vh = u.GetSystemMetrics(78), u.GetSystemMetrics(79)   # SM_CX/CYVIRTUALSCREEN
+    return (r["x"] + r["w"] > vx + 20 and r["x"] < vx + vw - 20 and
+            r["y"] + r["h"] > vy + 20 and r["y"] < vy + vh - 20)
+
+
 def _play_sound(name: str, fail: bool = False) -> None:
     """Capture feedback the user can hear IN GAME — with the game focused,
     sounds land where notifications don't. Zero new deps: winsound is stdlib,
@@ -435,15 +448,25 @@ class Scanner:
         (the old logical round-trip truncated a pixel per open/close)."""
         r = self.config.get("scan_region_px")
         if isinstance(r, dict) and all(k in r for k in "xywh"):
-            return {k: int(r[k]) for k in "xywh"}
-        s = _windows_dpi_scale()  # first run / pre-px config: convert legacy
+            r = {k: int(r[k]) for k in "xywh"}
+            if _win_rect_visible(r):
+                return r
+            logger.warning("scan region %s is off-screen — resetting to default", r)
+        s = _windows_dpi_scale()  # first run / bad rect / pre-px config
         r = self.get_region()
-        return {"x": int(r["x"] * s), "y": int(r["y"] * s),
-                "w": int(r["w"] * s), "h": int(r["h"] * s)}
+        r = {"x": int(r["x"] * s), "y": int(r["y"] * s),
+             "w": int(r["w"] * s), "h": int(r["h"] * s)}
+        if not _win_rect_visible(r):  # legacy logical rect can be junk too
+            r = {"x": int(DEFAULT_REGION["x"] * s), "y": int(DEFAULT_REGION["y"] * s),
+                 "w": int(DEFAULT_REGION["w"] * s), "h": int(DEFAULT_REGION["h"] * s)}
+        return r
 
     def set_region_px(self, x: int, y: int, w: int, h: int) -> None:
-        self.config.set("scan_region_px", {"x": int(x), "y": int(y),
-                                           "w": max(60, int(w)), "h": max(60, int(h))})
+        r = {"x": int(x), "y": int(y), "w": max(60, int(w)), "h": max(60, int(h))}
+        if not _win_rect_visible(r):
+            logger.warning("refusing to save off-screen scan region %s", r)
+            return
+        self.config.set("scan_region_px", r)
         s = _windows_dpi_scale() or 1.0
         # keep the legacy logical mirror in rough sync (older shells read it)
         self.config.set("scan_region", {"x": round(x / s), "y": round(y / s),
@@ -664,6 +687,7 @@ class Scanner:
                 if o.wait_shown(2.0):
                     return
                 err = o.error or "timed out without appearing"
+                o.close()  # a late-arriving window must not linger as an orphan
                 self._overlay = None
             except Exception as e:  # noqa: BLE001 — incl. module missing from a frozen build
                 err = repr(e)

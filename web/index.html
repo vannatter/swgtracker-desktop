@@ -763,15 +763,21 @@
         <div id="scan-wl-wrap" class="scan-worklist" hidden>
           <div class="scan-wl-head">
             <h2>New spawn worklist <span id="scan-wl-count" class="scan-wl-count"></span></h2>
-            <button id="scan-wl-copy" class="btn btn-sm btn-accent head-right"><i class="fa-solid fa-copy"></i> Copy SWGAide lines</button>
-            <button id="scan-wl-clear" class="btn btn-sm btn-outline-secondary">Clear list</button>
+            <div class="scan-wl-actions">
+              <button id="scan-wl-copy" class="btn btn-sm btn-accent"><i class="fa-solid fa-copy"></i> Copy SWGAide lines</button>
+              <button id="scan-wl-clear" class="btn btn-sm btn-outline-secondary">Clear list</button>
+            </div>
           </div>
-          <p class="page-hint">Spawns not in the system yet, captured by the scanner. Fill in the
-            <b>resource class</b> (abbreviations are fine) and optionally <b>planet(s)</b>, then copy the
-            lines into your SWGAide submit file — new spawns flow through SWGAide so the rest of the
-            community gets them too.</p>
+          <p class="page-hint">Spawns not in the system yet, captured by the scanner. Pick the
+            <b>resource class</b> and the <b>planet(s)</b> it spawned on, then copy the lines into your
+            SWGAide submit file — new spawns flow through SWGAide so the rest of the community gets them too.</p>
+          <div class="scan-wl-cols">
+            <span></span><span>Name</span><span>Resource class</span><span>Planet(s)</span>
+            <span>Stats <span class="scan-wl-colhint">— scanned order</span></span><span></span>
+          </div>
           <div id="scan-worklist"></div>
         </div>
+        <div id="scan-zoom" class="scan-zoom" hidden><img id="scan-zoom-img" alt="Scan capture"></div>
       </section>
 
       <section id="page-settings" class="page">

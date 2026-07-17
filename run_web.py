@@ -29,7 +29,7 @@ from src.core.alert_poller import AlertPoller
 from src.core.bundle_manager import BundleManager
 from src.web_api import WebApi
 
-APP_VERSION = "0.11.31"  # keep in sync with pyproject.toml — bump with every change batch
+APP_VERSION = "0.11.32"  # keep in sync with pyproject.toml — bump with every change batch
 
 logging.basicConfig(
     level=logging.INFO,
@@ -108,8 +108,8 @@ def main():
                                notifier=lambda t, m: bridge.notify(t, m))
     alert_poller.start()
 
-    logger.info("SWG Tracker Desktop (web UI) starting — ui: %s (%s)",
-                bundles.active_version or "builtin", bundles.active_source)
+    logger.info("SWG Tracker Desktop v%s starting — ui: %s (%s)",
+                APP_VERSION, bundles.active_version or "builtin", bundles.active_source)
     window = webview.create_window(
         "SWG Tracker Desktop",
         url=str(index),

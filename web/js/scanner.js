@@ -240,16 +240,34 @@ async function renderScanQueue() {
    Stats stay in scanned (= in-game display) order, which is what Aide expects.
    Persisted in shell config so a restart doesn't lose the batch. */
 
+// Restoration's planet set. SWGAide's submit line wants space-separated
+// lowercase tokens, so multi-word names collapse ("Yavin IV" → yavin4).
+const SCAN_PLANETS = ['Corellia', 'Dantooine', 'Dathomir', 'Endor', 'Kashyyyk',
+  'Lok', 'Mustafar', 'Naboo', 'Rori', 'Talus', 'Tatooine', 'Yavin IV'];
+const SCAN_PLANET_TOKENS = { 'Yavin IV': 'yavin4' };
+const scanPlanetToken = (p) => SCAN_PLANET_TOKENS[p] || p.toLowerCase();
+
 async function wlLoad() {
   try {
     const res = await api().get_config();
-    scanState.worklist = (res.ok && Array.isArray(res.data.scan_worklist))
-      ? res.data.scan_worklist : [];
+    const raw = (res.ok && Array.isArray(res.data.scan_worklist)) ? res.data.scan_worklist : [];
+    // planets was a free-text string in the first cut — normalize to an array
+    scanState.worklist = raw.map((w) => ({
+      ...w,
+      planets: Array.isArray(w.planets)
+        ? w.planets
+        : String(w.planets || '').split(/[\s,]+/).filter(Boolean),
+    }));
   } catch (_) { scanState.worklist = []; }
 }
 
 async function wlSave() {
   try { await api().set_config('scan_worklist', scanState.worklist); } catch (_) {}
+}
+
+function wlPlanetLabel(w) {
+  if (!w.planets.length) return 'Pick planet(s)…';
+  return w.planets.map((p) => p === 'Yavin IV' ? 'Yavin' : p).join(', ');
 }
 
 function renderWorklist() {
@@ -261,26 +279,69 @@ function renderWorklist() {
   if (!list.length) { host.innerHTML = ''; return; }
   host.innerHTML = list.map((w) => `
     <div class="scan-wl-row" data-wlid="${w.id}">
+      ${w.image
+        ? `<img class="scan-wl-thumb" src="${w.image}" alt="capture" data-zoom title="Click to zoom">`
+        : '<span class="scan-wl-thumb scan-wl-nothumb"><i class="fa-solid fa-image"></i></span>'}
       <input class="form-control filter-input" data-wlfield="name"
              value="${escapeHtml(w.name || '')}" placeholder="Name" spellcheck="false">
-      <input class="form-control filter-input" data-wlfield="klass"
-             value="${escapeHtml(w.klass || '')}" placeholder="Resource class (abbrev ok)" spellcheck="false">
-      <input class="form-control filter-input" data-wlfield="planets"
-             value="${escapeHtml(w.planets || '')}" placeholder="Planet(s) — optional" spellcheck="false">
-      <input class="form-control filter-input scan-wl-stats" data-wlfield="stats"
-             value="${escapeHtml(w.stats || '')}" spellcheck="false"
-             title="Stats in scanned (in-game) order: ${escapeHtml(w.order || '')}">
-      <span class="scan-wl-order" title="The order the stats were scanned in — how they'll be submitted">${escapeHtml(w.order || '')}</span>
-      <button class="btn btn-sm btn-outline-secondary" data-wlremove="${w.id}" title="Remove from worklist">
+      <div class="cselect scan-wl-combo" data-wlcls>
+        <button type="button" class="cselect-btn">
+          <span class="scan-wl-cls-cur ${w.klass ? '' : 'scan-wl-unset'}">${escapeHtml(w.klass || 'Pick class…')}</span>
+          <i class="fa-solid fa-caret-down"></i></button>
+        <div class="cselect-menu scan-wl-menu" hidden>
+          <div class="cselect-search">
+            <input type="text" class="form-control filter-input cselect-input" data-wlclsfilter
+                   placeholder="Type to filter — e.g. gemstone" autocomplete="off" spellcheck="false">
+          </div>
+          <div data-wlclsopts></div>
+        </div>
+      </div>
+      <div class="cselect scan-wl-combo" data-wlpl>
+        <button type="button" class="cselect-btn">
+          <span class="scan-wl-pl-cur ${w.planets.length ? '' : 'scan-wl-unset'}">${escapeHtml(wlPlanetLabel(w))}</span>
+          <i class="fa-solid fa-caret-down"></i></button>
+        <div class="cselect-menu scan-wl-menu scan-wl-pl-menu" hidden>
+          ${SCAN_PLANETS.map((p) => `<label class="scan-wl-pl-opt">
+            <input type="checkbox" value="${escapeHtml(p)}" ${w.planets.includes(p) ? 'checked' : ''}> ${escapeHtml(p)}
+          </label>`).join('')}
+        </div>
+      </div>
+      <div class="scan-wl-statwrap">
+        <input class="form-control filter-input" data-wlfield="stats"
+               value="${escapeHtml(w.stats || '')}" spellcheck="false" placeholder="Stats">
+        <span class="scan-wl-order" title="The order the stats were scanned in — how they'll be submitted">${escapeHtml(w.order || '')}</span>
+      </div>
+      <button class="btn btn-icon" data-wlremove="${w.id}" title="Remove from worklist">
         <i class="fa-solid fa-xmark"></i></button>
     </div>`).join('');
+}
+
+// Options for one row's class menu, filtered. Depth-indented like the site's
+// dropdown when unfiltered; flat matches when a query narrows it.
+function wlRenderClassOpts(optsHost, query = '') {
+  if (!scanState.classNodes) {
+    optsHost.innerHTML = '<div class="mysd-opt-none">Loading classes… (needs one online sync)</div>';
+    return;
+  }
+  const q = query.trim().toLowerCase();
+  const rows = q
+    ? scanState.classNodes.filter((n) => n.desc.toLowerCase().includes(q)).slice(0, 200)
+    : scanState.classNodes;
+  optsHost.innerHTML = rows.map((n) =>
+    `<div class="mysd-opt" data-clsdesc="${escapeHtml(n.desc)}">${q ? '' : '&nbsp; '.repeat(n.depth)}${escapeHtml(n.desc)}</div>`
+  ).join('') || '<div class="mysd-opt-none">No classes match.</div>';
+}
+
+function wlCloseMenus() {
+  document.querySelectorAll('.scan-wl-menu').forEach((m) => { m.hidden = true; });
 }
 
 function wlExportLines() {
   const ready = [], missing = [];
   for (const w of scanState.worklist) {
     const name = (w.name || '').trim(), klass = (w.klass || '').trim();
-    const stats = (w.stats || '').trim(), planets = (w.planets || '').trim();
+    const stats = (w.stats || '').trim();
+    const planets = (w.planets || []).map(scanPlanetToken).join(' ');
     if (!name || !klass) { missing.push(w); continue; }
     const body = `${name} , ${klass}, ${stats}`;
     ready.push(planets ? `${planets}, ${body}` : body);
@@ -338,6 +399,10 @@ async function loadScanner() {
   await loadScanConfig();
   await wlLoad();
   renderWorklist();
+  if (!scanState.classNodes) {
+    // full class tree down to exact types — the worklist's class picker
+    fetchCategoryNodes(true).then((nodes) => { if (nodes) scanState.classNodes = nodes; });
+  }
   await refreshScanQueue(true);
   // poll while the page is open — captures land from the hotkey at any time
   clearInterval(scanState.timer);
@@ -455,16 +520,23 @@ function initScanner() {
       const id = safeInt(ns.dataset.newspawn);
       const item = scanState.queue.find((q) => q.id === id);
       if (!item) return;
+      if (scanState.worklist.length >= 30) {
+        toast('Worklist is full (30) — copy the SWGAide lines and clear it first', false);
+        return;
+      }
       const parsed = parseScan(item.lines);
+      // The capture IMAGE moves onto the worklist row (zoomable there), so
+      // the scan isn't lost when the queue card resolves.
       scanState.worklist.push({
         id: Date.now(),
-        name: parsed.name, klass: parsed.klass, planets: '',
+        name: parsed.name, klass: parsed.klass, planets: [],
         stats: parsed.statsOrder.map(([, v]) => v).join(' '),
         order: parsed.statsOrder.map(([k]) => k.toUpperCase()).join(' '),
+        image: item.image,
       });
       wlSave();
       renderWorklist();
-      toast(`${parsed.name || 'Capture'} queued as a new spawn — fill in its class below`);
+      toast(`${parsed.name || 'Capture'} queued as a new spawn — pick its class below`);
       finishScan(id);
       return;
     }
@@ -473,21 +545,90 @@ function initScanner() {
   });
 
   // ---- worklist events
+  const wlRowOf = (el) => {
+    const row = el.closest('[data-wlid]');
+    return row ? scanState.worklist.find((x) => String(x.id) === row.dataset.wlid) : null;
+  };
   $('#scan-worklist').addEventListener('change', (e) => {
-    const field = e.target.dataset.wlfield;
-    if (!field) return;
-    const row = e.target.closest('[data-wlid]');
-    const w = scanState.worklist.find((x) => String(x.id) === row.dataset.wlid);
+    const w = wlRowOf(e.target);
     if (!w) return;
-    w[field] = e.target.value;
-    wlSave();
+    if (e.target.dataset.wlfield) {
+      w[e.target.dataset.wlfield] = e.target.value;
+      wlSave();
+      return;
+    }
+    if (e.target.type === 'checkbox') { // planet multi-select — stays open
+      const p = e.target.value;
+      w.planets = e.target.checked
+        ? [...w.planets, p] : w.planets.filter((x) => x !== p);
+      w.planets.sort((a, b) => SCAN_PLANETS.indexOf(a) - SCAN_PLANETS.indexOf(b));
+      const cur = e.target.closest('[data-wlpl]').querySelector('.scan-wl-pl-cur');
+      cur.textContent = wlPlanetLabel(w);
+      cur.classList.toggle('scan-wl-unset', !w.planets.length);
+      wlSave();
+    }
+  });
+  $('#scan-worklist').addEventListener('input', (e) => {
+    if (e.target.dataset.wlclsfilter !== undefined) {
+      wlRenderClassOpts(e.target.closest('.scan-wl-menu').querySelector('[data-wlclsopts]'),
+                        e.target.value);
+    }
   });
   $('#scan-worklist').addEventListener('click', (e) => {
     const rm = e.target.closest('[data-wlremove]');
-    if (!rm) return;
-    scanState.worklist = scanState.worklist.filter((x) => String(x.id) !== rm.dataset.wlremove);
-    wlSave();
-    renderWorklist();
+    if (rm) {
+      scanState.worklist = scanState.worklist.filter((x) => String(x.id) !== rm.dataset.wlremove);
+      wlSave();
+      renderWorklist();
+      return;
+    }
+    const opt = e.target.closest('[data-clsdesc]');
+    if (opt) {
+      const w = wlRowOf(opt);
+      if (w) {
+        w.klass = opt.dataset.clsdesc;
+        const cur = opt.closest('[data-wlcls]').querySelector('.scan-wl-cls-cur');
+        cur.textContent = w.klass;
+        cur.classList.remove('scan-wl-unset');
+        wlSave();
+      }
+      wlCloseMenus();
+      return;
+    }
+    const btn = e.target.closest('.cselect-btn');
+    if (btn) {
+      const menu = btn.parentElement.querySelector('.scan-wl-menu');
+      const wasHidden = menu.hidden;
+      wlCloseMenus();
+      menu.hidden = !wasHidden;
+      if (!menu.hidden && btn.parentElement.hasAttribute('data-wlcls')) {
+        const filter = menu.querySelector('[data-wlclsfilter]');
+        filter.value = '';
+        wlRenderClassOpts(menu.querySelector('[data-wlclsopts]'));
+        filter.focus();
+      }
+    }
+  });
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.scan-wl-combo')) wlCloseMenus();
+  });
+
+  // ---- capture zoom — the crops are small; blow them up to readable size
+  document.addEventListener('click', (e) => {
+    const zoomable = e.target.closest('#page-scanner .scan-shot, #page-scanner [data-zoom]');
+    if (zoomable && zoomable.src) {
+      const img = $('#scan-zoom-img');
+      img.src = zoomable.src;
+      img.style.width = '';
+      img.onload = () => {
+        img.style.width = `${Math.min(img.naturalWidth * 3, window.innerWidth * 0.92)}px`;
+      };
+      $('#scan-zoom').hidden = false;
+      return;
+    }
+    if (!$('#scan-zoom').hidden && e.target.closest('#scan-zoom') !== null) {
+      $('#scan-zoom').hidden = true;
+    }
   });
   $('#scan-wl-copy').addEventListener('click', async () => {
     const { ready, missing } = wlExportLines();

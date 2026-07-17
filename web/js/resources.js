@@ -1,7 +1,7 @@
 /* Resources page — mirrors src/gui/resources_tab.py. */
 
 const PLANETS = ['Corellia', 'Dantooine', 'Dathomir', 'Endor', 'Kashyyyk',
-  'Lok', 'Mustafar', 'Naboo', 'Rori', 'Tatooine', 'Yavin IV'];
+  'Lok', 'Mustafar', 'Naboo', 'Rori', 'Talus', 'Tatooine', 'Yavin IV'];
 // Fallback if categories.php is unreachable — codes the server's category filter
 // accepts (it matches level codes, not display names).
 const RESOURCE_CATEGORY_FALLBACK = [

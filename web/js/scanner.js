@@ -16,12 +16,18 @@ const scanState = { cfg: null, queue: [], matches: {}, timer: null };
 
 // ---- parsing --------------------------------------------------------------
 
-// Digits only, fixing the confusables OCR actually produces INSIDE numbers.
-// Conservative on purpose: only O/o->0 and l/I/|->1 — anything else stays and
-// fails validation visibly rather than being silently "corrected".
+// Digits only, mapping the confusables OCR actually produces INSIDE numbers
+// (the game font's 8 reads as B/&, 5 as S, …). Anything left over after the
+// map is NOT silently stripped — the value fails validation and the line gets
+// flagged visibly. Stripping is how "Heat Resistance: 814" once became 14:
+// the 8 read as a letter and vanished.
 function scanNumber(raw) {
-  const fixed = String(raw).replace(/[Oo]/g, '0').replace(/[lI|]/g, '1').replace(/[^\d]/g, '');
-  if (!fixed) return null;
+  const fixed = String(raw).trim()
+    .replace(/[Oo]/g, '0').replace(/[lI|]/g, '1').replace(/[Zz]/g, '2')
+    .replace(/[S$]/g, '5').replace(/[Gb]/g, '6').replace(/[B&]/g, '8')
+    .replace(/[qg]/g, '9').replace(/D/g, '0')
+    .replace(/[.,\s%]/g, ''); // punctuation noise around the digits
+  if (!fixed || /[^\d]/.test(fixed)) return null;
   const n = parseInt(fixed, 10);
   return n >= 1 && n <= 1000 ? n : null; // stats are 1..1000 in game
 }
@@ -44,31 +50,49 @@ const scanNameSim = (a, b) =>
   1 - scanLevenshtein(a, b) / Math.max(a.length, b.length, 1);
 
 // OCR labels arrive slightly mangled ("Mallleability") — match each line's
-// label to the nearest known stat name instead of demanding exact text.
-function scanStatKey(label) {
+// label to the nearest name in a known set instead of demanding exact text.
+function scanNearestLabel(label, known) {
   const l = label.trim().toLowerCase();
-  if (SCAN_STATS[l]) return SCAN_STATS[l];
+  if (known[l] !== undefined) return known[l];
   let best = null, bestD = Infinity;
-  for (const known of Object.keys(SCAN_STATS)) {
-    const d = scanLevenshtein(l, known);
-    if (d < bestD) { bestD = d; best = known; }
+  for (const k of Object.keys(known)) {
+    const d = scanLevenshtein(l, k);
+    if (d < bestD) { bestD = d; best = k; }
   }
-  return bestD <= 3 ? SCAN_STATS[best] : null;
+  return bestD <= 3 ? known[best] : null;
 }
+const scanStatKey = (label) => scanNearestLabel(label, SCAN_STATS);
+
+// Non-stat labeled lines the examine window always has. 'name' carries the
+// resource's spawn name ("Resource Type: Quadeniom"); 'skip' lines are benign
+// and must NOT count toward the didn't-parse warning.
+const SCAN_META = {
+  'resource type': 'name', 'resource class': 'klass',
+  'condition': 'skip', 'resource quantity': 'skip', 'volume': 'skip',
+};
 
 // Raw OCR lines -> {name, klass, stats:{oq:...}, unparsed:[...]}
 function parseScan(lines) {
   const texts = lines.map((l) => String(l.text || '').trim()).filter(Boolean);
   const out = { name: '', klass: '', stats: {}, unparsed: [] };
-  for (const t of texts) {
+  let klassAt = -1; // a long class wraps: the NEXT line may be its tail
+  for (let i = 0; i < texts.length; i++) {
+    const t = texts[i];
     const kv = t.match(/^(.+?)\s*[:;]\s*(.*)$/);
     if (!kv) {
-      // the first free line is the examine window's title = the resource name
-      if (!out.name && !/unrefined|natural resource|examine/i.test(t)) out.name = t;
+      if (i === klassAt + 1 && out.klass && /^[A-Za-z][A-Za-z ]{2,30}$/.test(t)) {
+        out.klass += ` ${t}`; // "Green Diamond Cryst" + "Gemstone"
+      } else if (!out.name && !/unrefined|natural resource|examine|standard|this container/i.test(t)) {
+        // free-line fallback: the window title — 'Standard' is the tab label
+        out.name = t;
+      }
       continue;
     }
     const [, label, value] = kv;
-    if (/resource class/i.test(label)) { out.klass = value.trim(); continue; }
+    const meta = scanNearestLabel(label, SCAN_META);
+    if (meta === 'name') { out.name = value.trim() || out.name; continue; }
+    if (meta === 'klass') { out.klass = value.trim(); klassAt = i; continue; }
+    if (meta === 'skip') continue;
     const key = scanStatKey(label);
     if (!key) { out.unparsed.push(t); continue; }
     const n = scanNumber(value);

@@ -1,10 +1,12 @@
 """In-game resource scanner — hotkey → screen region → native OCR → review queue.
 
-The flow: the user positions a persistent, always-on-top OUTLINE (a small
-frameless pywebview window) once — either dragging the outline over the game's
-Examine window, or dragging the game window into the outline; both work, it's
-just "what's inside this rectangle gets scanned". The geometry persists in
-config. After that, a global hotkey (works while the game has focus) captures
+The flow: the user positions a persistent, always-on-top OUTLINE once — either
+dragging the outline over the game's Examine window, or dragging the game
+window into the outline; both work, it's just "what's inside this rectangle
+gets scanned". The geometry persists in config. On Windows the outline is a
+native Win32 window (src/core/win_overlay.py) that never takes focus — a
+webview one can't do that, and the game minimizes on focus loss; on macOS it
+is a small frameless pywebview window. After that, a global hotkey (works while the game has focus) captures
 the region, OCRs it with the OS engine (src/core/ocr_engine.py), and appends
 the raw lines + a review PNG to an in-memory queue.
 
@@ -35,9 +37,10 @@ DEFAULT_FRAME_HOTKEY = "<ctrl>+<shift>+a"  # toggles the scan-area overlay
 DEFAULT_REGION = {"x": 60, "y": 60, "w": 260, "h": 340}
 QUEUE_CAP = 50  # hotkey mashing shouldn't grow memory forever
 
-# The positioning outline. Shell-owned HTML (it ships with the shell anyway —
-# create_window is shell code). Kept minimal: a border, the "this is the focus
-# area" explanation, and Save / Test / Close. The whole window IS the region.
+# The macOS positioning outline (Windows uses the native win_overlay instead).
+# Shell-owned HTML (it ships with the shell anyway — create_window is shell
+# code). Kept minimal: a border, the "this is the focus area" explanation, and
+# the buttons. The whole window IS the region.
 _FRAME_HTML = """<!doctype html><html><head><meta charset="utf-8"><style>
   html, body { margin:0; height:100%; font-family:system-ui,sans-serif; }
   body { box-sizing:border-box; border:3px dashed #e24350; background:rgba(14,16,20,.92);
@@ -403,7 +406,8 @@ class Scanner:
         self._qlock = threading.Lock()
         self._next_id = 1
         self._listener = None
-        self._frame = None
+        self._frame = None    # macOS pywebview outline
+        self._overlay = None  # Windows native outline (win_overlay.Overlay)
 
     # ------------------------------------------------------------ config
 
@@ -414,6 +418,29 @@ class Scanner:
     def set_region(self, x: int, y: int, w: int, h: int) -> None:
         self.config.set("scan_region", {"x": int(x), "y": int(y),
                                         "w": max(60, int(w)), "h": max(60, int(h))})
+        self.config.save()
+
+    def get_region_px(self) -> dict:
+        """Windows: the region in EXACT physical pixels. The native overlay is
+        created from this rect and commits back to it verbatim, and capture
+        crops it directly — no logical/physical conversion anywhere to drift
+        (the old logical round-trip truncated a pixel per open/close)."""
+        r = self.config.get("scan_region_px")
+        if isinstance(r, dict) and all(k in r for k in "xywh"):
+            return {k: int(r[k]) for k in "xywh"}
+        s = _windows_dpi_scale()  # first run / pre-px config: convert legacy
+        r = self.get_region()
+        return {"x": int(r["x"] * s), "y": int(r["y"] * s),
+                "w": int(r["w"] * s), "h": int(r["h"] * s)}
+
+    def set_region_px(self, x: int, y: int, w: int, h: int) -> None:
+        self.config.set("scan_region_px", {"x": int(x), "y": int(y),
+                                           "w": max(60, int(w)), "h": max(60, int(h))})
+        s = _windows_dpi_scale() or 1.0
+        # keep the legacy logical mirror in rough sync (older shells read it)
+        self.config.set("scan_region", {"x": round(x / s), "y": round(y / s),
+                                        "w": max(60, round(w / s)),
+                                        "h": max(60, round(h / s))})
         self.config.save()
 
     def get_hotkey(self) -> str:
@@ -512,11 +539,9 @@ class Scanner:
     def capture(self):
         """Grab the saved region → PIL image, or None.
 
-        The saved region is in pywebview's logical pixels; the grab is physical
-        pixels. macOS: physical grab width ÷ logical screen width gives the
-        retina factor. Windows: that division reads 1.0 (screens are physical
-        there too — see below), so the factor comes from the system DPI.
-        Primary display only for now.
+        Windows: region and grab are both physical pixels — direct crop.
+        macOS: region is logical points; physical grab width ÷ logical screen
+        width gives the retina factor. Primary display only for now.
         """
         try:
             import sys
@@ -526,18 +551,16 @@ class Scanner:
             from PIL import ImageGrab
             shot = ImageGrab.grab()
             if sys.platform == "win32":
-                # pywebview runs system-DPI-aware on Windows, so BOTH the grab
-                # and webview.screens report PHYSICAL pixels — dividing them
-                # reads 1.0 while the saved region (pywebview window geometry)
-                # is LOGICAL pixels. At 125%/150% scaling that crops up-left of
-                # the outline. Ask the OS for the real factor instead.
-                scale = _windows_dpi_scale()
+                # The grab is physical px and so is the stored region — the
+                # native overlay commits its exact window rect. Crop verbatim.
+                r = self.get_region_px()
+                box = (r["x"], r["y"], r["x"] + r["w"], r["y"] + r["h"])
             else:
                 logical_w = webview.screens[0].width if webview.screens else shot.width
                 scale = shot.width / max(1, logical_w)
-            r = self.get_region()
-            box = (int(r["x"] * scale), int(r["y"] * scale),
-                   int((r["x"] + r["w"]) * scale), int((r["y"] + r["h"]) * scale))
+                r = self.get_region()
+                box = (int(r["x"] * scale), int(r["y"] * scale),
+                       int((r["x"] + r["w"]) * scale), int((r["y"] + r["h"]) * scale))
             box = (max(0, box[0]), max(0, box[1]),
                    min(shot.width, box[2]), min(shot.height, box[3]))
             if box[2] - box[0] < 20 or box[3] - box[1] < 20:
@@ -549,7 +572,7 @@ class Scanner:
 
     def capture_and_queue(self) -> Optional[dict]:
         """Hotkey path: capture → OCR → queue. Returns the queue item."""
-        was_visible = self._frame is not None
+        was_visible = self.frame_visible()
         if was_visible:
             self.hide_frame()  # commits the outline's position as the region
             time.sleep(0.25)  # let the compositor actually remove it
@@ -605,64 +628,42 @@ class Scanner:
 
     # ------------------------------------------------------------ frame
 
+    def frame_visible(self) -> bool:
+        o = self._overlay
+        return (o is not None and o.visible) or self._frame is not None
+
     def show_frame(self) -> None:
-        """Show the positioning outline at the saved region."""
+        """Show the positioning outline at the saved region.
+
+        Windows gets a NATIVE overlay (src/core/win_overlay.py), not a
+        pywebview window: WebView2 steals focus on any click no matter the
+        window styles, and the game minimizes the moment it loses focus. The
+        native window never activates anything and stores exact physical px.
+        macOS keeps the pywebview outline — Cocoa has no such problem."""
+        import sys
+        if sys.platform == "win32":
+            if self._overlay is not None and self._overlay.visible:
+                return
+            from src.core import win_overlay
+            r = self.get_region_px()
+            self._overlay = win_overlay.Overlay(
+                (r["x"], r["y"], r["w"], r["h"]),
+                lambda rect: self.set_region_px(*rect))
+            self._overlay.show()
+            return
         if self._frame is not None:
             return
-        import sys
         import webview
         r = self.get_region()
-        prev_fg = 0
-        if sys.platform == "win32":
-            try:
-                import ctypes
-                prev_fg = ctypes.windll.user32.GetForegroundWindow()
-            except Exception:  # noqa: BLE001
-                pass
         self._frame = webview.create_window(
             "Scan area", html=_FRAME_HTML, js_api=_FrameApi(self),
             x=r["x"], y=r["y"], width=r["w"], height=r["h"],
             frameless=True, on_top=True, easy_drag=False,
             min_size=(180, 140), background_color="#0e1014")
-        if sys.platform == "win32":
-            self._win_no_activate(self._frame, prev_fg)
-
-    @staticmethod
-    def _win_no_activate(frame, prev_fg: int) -> None:
-        """Windows: interacting with the outline must NOT pull focus off the
-        game — focus loss alt-tabs the player out, and when the outline later
-        goes away Windows activates the next window on the same UI thread: the
-        main app, popping it over the game. WS_EX_NOACTIVATE keeps the outline
-        fully mouse-interactive (drag, grips, buttons) without it ever becoming
-        the foreground window; WS_EX_TOOLWINDOW keeps it out of alt-tab. Styled
-        at before_show (native handle exists, nothing shown yet); the shown
-        hook hands focus straight back in case Form.Show() activated anyway."""
-        def _style(*_a):
-            try:
-                import ctypes
-                user32 = ctypes.windll.user32
-                hwnd = frame.native.Handle.ToInt32()
-                GWL_EXSTYLE = -20
-                ex = user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
-                user32.SetWindowLongW(hwnd, GWL_EXSTYLE,
-                                      ex | 0x08000000 | 0x00000080)  # NOACTIVATE | TOOLWINDOW
-            except Exception:  # noqa: BLE001
-                logger.error("scan frame no-activate failed", exc_info=True)
-
-        def _refocus(*_a):
-            try:
-                import ctypes
-                if prev_fg:
-                    ctypes.windll.user32.SetForegroundWindow(prev_fg)
-            except Exception:  # noqa: BLE001
-                pass
-
-        frame.events.before_show += _style
-        frame.events.shown += _refocus
 
     def toggle_frame(self) -> None:
         """Overlay hotkey: show the positioning outline, or put it away."""
-        if self._frame is not None:
+        if self.frame_visible():
             self.hide_frame()
         else:
             self.show_frame()
@@ -671,6 +672,9 @@ class Scanner:
         """Put the outline away, KEEPING its position — wherever the user left
         the outline is the region they meant, however it gets dismissed
         (Done, overlay hotkey, or a scan hotkey press mid-positioning)."""
+        o, self._overlay = self._overlay, None
+        if o is not None:
+            o.close()  # WM_CLOSE commits the exact physical rect before dying
         w, self._frame = self._frame, None
         if w is None:
             return

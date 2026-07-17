@@ -368,7 +368,7 @@ function wlExportLines() {
     const stats = (w.stats || '').trim();
     const planets = (w.planets || []).map(scanPlanetToken).join(' ');
     if (!name || !klass) { missing.push(w); continue; }
-    const body = `${name} , ${klass}, ${stats}`;
+    const body = `${name}, ${klass}, ${stats}`;
     ready.push(planets ? `${planets}, ${body}` : body);
   }
   return { ready, missing };

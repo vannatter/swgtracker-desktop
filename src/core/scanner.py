@@ -51,20 +51,69 @@ _FRAME_HTML = """<!doctype html><html><head><meta charset="utf-8"><style>
            background:#20222f; border:1px solid #2a2f38; border-radius:6px; }
   button:hover { border-color:#e24350; color:#fff; }
   button.primary { background:#e24350; border-color:#e24350; color:#fff; font-weight:600; }
+  /* Resize grips. Frameless windows get no native resize borders on Windows
+     (FormBorderStyle.None strips them), so the edges/corners are DOM handles
+     that drive shell-side resize calls. */
+  .grip { position:fixed; z-index:10; }
+  .grip[data-edge="n"]  { top:0; left:16px; right:16px; height:7px; cursor:ns-resize; }
+  .grip[data-edge="s"]  { bottom:0; left:16px; right:16px; height:7px; cursor:ns-resize; }
+  .grip[data-edge="e"]  { right:0; top:16px; bottom:16px; width:7px; cursor:ew-resize; }
+  .grip[data-edge="w"]  { left:0; top:16px; bottom:16px; width:7px; cursor:ew-resize; }
+  .grip[data-edge="nw"] { top:0; left:0; width:16px; height:16px; cursor:nwse-resize; }
+  .grip[data-edge="ne"] { top:0; right:0; width:16px; height:16px; cursor:nesw-resize; }
+  .grip[data-edge="sw"] { bottom:0; left:0; width:16px; height:16px; cursor:nesw-resize; }
+  .grip[data-edge="se"] { bottom:0; right:0; width:16px; height:16px; cursor:nwse-resize; }
 </style></head><body>
   <div class="drag pywebview-drag-region">
     <h1>Scan area</h1>
     <p>Everything inside this outline is what gets scanned.</p>
     <p>Drag this frame over the game's <b>Examine</b> window — or move the game's
-       window into it. Resize from the edges to fit snugly around the stats.</p>
-    <p>Then press <b>Save</b>. The hotkey scans this exact spot from then on,
-       even with the game focused.</p>
+       window into it. Drag any edge or corner to resize.</p>
+    <p>The fit is saved when you put the outline away — <b>Done</b> or the
+       overlay hotkey. <b>Test scan</b> captures right now so you can check it.</p>
   </div>
   <div class="btns">
     <button onclick="pywebview.api.frame_test()">Test scan</button>
-    <button class="primary" onclick="pywebview.api.frame_save()">Save</button>
-    <button onclick="pywebview.api.frame_close()">Close</button>
+    <button class="primary" onclick="pywebview.api.frame_save()">Done</button>
   </div>
+  <div class="grip" data-edge="n"></div><div class="grip" data-edge="s"></div>
+  <div class="grip" data-edge="e"></div><div class="grip" data-edge="w"></div>
+  <div class="grip" data-edge="nw"></div><div class="grip" data-edge="ne"></div>
+  <div class="grip" data-edge="sw"></div><div class="grip" data-edge="se"></div>
+  <script>
+  // Edge/corner resize. Total pointer deltas go to the shell, which resizes
+  // with the opposite edge pinned. One bridge call in flight at a time and
+  // only the latest delta is kept, so a fast drag never queues stale steps.
+  (function () {
+    var armed = false, inflight = false, pending = null;
+    function push(edge, dx, dy) {
+      pending = [edge, dx, dy];
+      if (inflight || !armed) return;
+      var p = pending; pending = null; inflight = true;
+      pywebview.api.frame_grip(p[0], p[1], p[2]).catch(function () {}).then(function () {
+        inflight = false;
+        if (pending !== null) { var q = pending; pending = null; push(q[0], q[1], q[2]); }
+      });
+    }
+    document.querySelectorAll('.grip').forEach(function (g) {
+      g.addEventListener('pointerdown', function (ev) {
+        ev.preventDefault(); ev.stopPropagation();
+        g.setPointerCapture(ev.pointerId);
+        armed = false;
+        var sx = ev.screenX, sy = ev.screenY, edge = g.dataset.edge;
+        pywebview.api.frame_grip_begin().then(function () { armed = true; });
+        function mv(e) { push(edge, e.screenX - sx, e.screenY - sy); }
+        function up() {
+          armed = false;
+          g.removeEventListener('pointermove', mv);
+          g.removeEventListener('pointerup', up);
+        }
+        g.addEventListener('pointermove', mv);
+        g.addEventListener('pointerup', up);
+      });
+    });
+  })();
+  </script>
 </body></html>"""
 
 
@@ -77,6 +126,24 @@ SCAN_SOUNDS = {
     "hero":  ("/System/Library/Sounds/Hero.aiff",  r"C:\Windows\Media\tada.wav"),
 }
 DEFAULT_SOUND = "ping"
+
+
+def _windows_dpi_scale() -> float:
+    """Logical→physical pixel factor for the primary display (1.25 at 125%).
+    GetDpiForSystem needs Win10 1607+; older machines fall back to GDI."""
+    import ctypes
+    user32 = ctypes.windll.user32
+    try:
+        return user32.GetDpiForSystem() / 96.0
+    except Exception:  # noqa: BLE001
+        try:
+            dc = user32.GetDC(0)
+            try:
+                return ctypes.windll.gdi32.GetDeviceCaps(dc, 88) / 96.0  # LOGPIXELSX
+            finally:
+                user32.ReleaseDC(0, dc)
+        except Exception:  # noqa: BLE001
+            return 1.0
 
 
 def _play_sound(name: str, fail: bool = False) -> None:
@@ -288,17 +355,42 @@ class _FrameApi:
 
     def __init__(self, scanner: "Scanner"):
         self._s = scanner
+        self._grip_size = None  # (w, h) at resize-drag start
 
     def frame_save(self):
-        self._s._frame_commit(close=True)
+        self._s.hide_frame()  # hiding commits the position
 
     def frame_test(self):
-        # Save first so the test scans exactly what Save would keep.
-        self._s._frame_commit(close=False)
+        # Commit first so the test scans exactly what dismissing would keep.
+        self._s._frame_commit()
         threading.Thread(target=self._s.capture_and_queue, daemon=True).start()
 
     def frame_close(self):
         self._s.hide_frame()
+
+    def frame_grip_begin(self):
+        w = self._s._frame
+        if w is not None:
+            self._grip_size = (w.width, w.height)
+
+    def frame_grip(self, edge, dx, dy):
+        """One resize step: dx/dy are the TOTAL pointer delta since
+        frame_grip_begin, applied to the starting size with the opposite
+        edge/corner pinned — no drift from accumulating increments."""
+        w = self._s._frame
+        if w is None or self._grip_size is None:
+            return
+        from webview.window import FixPoint
+        edge, dx, dy = str(edge), int(dx), int(dy)
+        w0, h0 = self._grip_size
+        nw = w0 - dx if "w" in edge else w0 + dx if "e" in edge else w0
+        nh = h0 - dy if "n" in edge else h0 + dy if "s" in edge else h0
+        fix = (FixPoint.EAST if "w" in edge else FixPoint.WEST) | \
+              (FixPoint.SOUTH if "n" in edge else FixPoint.NORTH)
+        try:
+            w.resize(max(180, nw), max(140, nh), fix)
+        except Exception:  # noqa: BLE001 — a single resize step is best-effort
+            pass
 
 
 class Scanner:
@@ -420,11 +512,11 @@ class Scanner:
     def capture(self):
         """Grab the saved region → PIL image, or None.
 
-        DPI self-calibration: grab the WHOLE primary screen (physical pixels),
-        measure its width against the logical screen width pywebview reports,
-        and scale the logical region into physical pixels. Works the same on
-        retina macs (2x) and scaled Windows displays (125%/150%) with zero
-        platform branches. Primary display only for now.
+        The saved region is in pywebview's logical pixels; the grab is physical
+        pixels. macOS: physical grab width ÷ logical screen width gives the
+        retina factor. Windows: that division reads 1.0 (screens are physical
+        there too — see below), so the factor comes from the system DPI.
+        Primary display only for now.
         """
         try:
             import sys
@@ -433,8 +525,16 @@ class Scanner:
             import webview
             from PIL import ImageGrab
             shot = ImageGrab.grab()
-            logical_w = webview.screens[0].width if webview.screens else shot.width
-            scale = shot.width / max(1, logical_w)
+            if sys.platform == "win32":
+                # pywebview runs system-DPI-aware on Windows, so BOTH the grab
+                # and webview.screens report PHYSICAL pixels — dividing them
+                # reads 1.0 while the saved region (pywebview window geometry)
+                # is LOGICAL pixels. At 125%/150% scaling that crops up-left of
+                # the outline. Ask the OS for the real factor instead.
+                scale = _windows_dpi_scale()
+            else:
+                logical_w = webview.screens[0].width if webview.screens else shot.width
+                scale = shot.width / max(1, logical_w)
             r = self.get_region()
             box = (int(r["x"] * scale), int(r["y"] * scale),
                    int((r["x"] + r["w"]) * scale), int((r["y"] + r["h"]) * scale))
@@ -451,9 +551,11 @@ class Scanner:
         """Hotkey path: capture → OCR → queue. Returns the queue item."""
         was_visible = self._frame is not None
         if was_visible:
-            self.hide_frame()
+            self.hide_frame()  # commits the outline's position as the region
             time.sleep(0.25)  # let the compositor actually remove it
         image = self.capture()
+        if was_visible:
+            self.show_frame()  # bring the outline back — the user was mid-fit
         if image is None:
             self._play(False)
             import sys
@@ -507,13 +609,56 @@ class Scanner:
         """Show the positioning outline at the saved region."""
         if self._frame is not None:
             return
+        import sys
         import webview
         r = self.get_region()
+        prev_fg = 0
+        if sys.platform == "win32":
+            try:
+                import ctypes
+                prev_fg = ctypes.windll.user32.GetForegroundWindow()
+            except Exception:  # noqa: BLE001
+                pass
         self._frame = webview.create_window(
             "Scan area", html=_FRAME_HTML, js_api=_FrameApi(self),
             x=r["x"], y=r["y"], width=r["w"], height=r["h"],
             frameless=True, on_top=True, easy_drag=False,
             min_size=(180, 140), background_color="#0e1014")
+        if sys.platform == "win32":
+            self._win_no_activate(self._frame, prev_fg)
+
+    @staticmethod
+    def _win_no_activate(frame, prev_fg: int) -> None:
+        """Windows: interacting with the outline must NOT pull focus off the
+        game — focus loss alt-tabs the player out, and when the outline later
+        goes away Windows activates the next window on the same UI thread: the
+        main app, popping it over the game. WS_EX_NOACTIVATE keeps the outline
+        fully mouse-interactive (drag, grips, buttons) without it ever becoming
+        the foreground window; WS_EX_TOOLWINDOW keeps it out of alt-tab. Styled
+        at before_show (native handle exists, nothing shown yet); the shown
+        hook hands focus straight back in case Form.Show() activated anyway."""
+        def _style(*_a):
+            try:
+                import ctypes
+                user32 = ctypes.windll.user32
+                hwnd = frame.native.Handle.ToInt32()
+                GWL_EXSTYLE = -20
+                ex = user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
+                user32.SetWindowLongW(hwnd, GWL_EXSTYLE,
+                                      ex | 0x08000000 | 0x00000080)  # NOACTIVATE | TOOLWINDOW
+            except Exception:  # noqa: BLE001
+                logger.error("scan frame no-activate failed", exc_info=True)
+
+        def _refocus(*_a):
+            try:
+                import ctypes
+                if prev_fg:
+                    ctypes.windll.user32.SetForegroundWindow(prev_fg)
+            except Exception:  # noqa: BLE001
+                pass
+
+        frame.events.before_show += _style
+        frame.events.shown += _refocus
 
     def toggle_frame(self) -> None:
         """Overlay hotkey: show the positioning outline, or put it away."""
@@ -523,14 +668,22 @@ class Scanner:
             self.show_frame()
 
     def hide_frame(self) -> None:
+        """Put the outline away, KEEPING its position — wherever the user left
+        the outline is the region they meant, however it gets dismissed
+        (Done, overlay hotkey, or a scan hotkey press mid-positioning)."""
         w, self._frame = self._frame, None
-        if w is not None:
-            try:
-                w.destroy()
-            except Exception:  # noqa: BLE001
-                pass
+        if w is None:
+            return
+        try:
+            self.set_region(w.x, w.y, w.width, w.height)
+        except Exception:  # noqa: BLE001 — geometry read can fail mid-teardown
+            logger.error("saving scan region on hide failed", exc_info=True)
+        try:
+            w.destroy()
+        except Exception:  # noqa: BLE001
+            pass
 
-    def _frame_commit(self, close: bool) -> None:
+    def _frame_commit(self) -> None:
         w = self._frame
         if w is None:
             return
@@ -538,8 +691,6 @@ class Scanner:
             self.set_region(w.x, w.y, w.width, w.height)
         except Exception:  # noqa: BLE001
             logger.error("saving scan region failed", exc_info=True)
-        if close:
-            self.hide_frame()
 
     def shutdown(self) -> None:
         self.stop_hotkey()

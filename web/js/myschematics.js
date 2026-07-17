@@ -587,7 +587,9 @@ async function mysdOpenPicker(ingId) {
   if (!r) return;
   const code = r.resource_type;
   const modal = $('#mysd-picker-modal');
-  mysdState.picker = { ingId, code, query: '', current: r.resource_name || '' };
+  mysdState.picker = { ingId, code, query: '', current: r.resource_name || '',
+                       activeOnly: localStorage.getItem('mysd_picker_active') === '1' };
+  $('#mysd-picker-active').checked = mysdState.picker.activeOnly;
 
   $('#mysd-picker-title').innerHTML =
     `${escapeHtml(r.resource_label || 'Slot')} <span class="mys-type">${escapeHtml(r.type_name || '')}</span>`;
@@ -623,6 +625,7 @@ function mysdRenderPicker() {
   let rows = pool.map((res) => ({ res, q: mysWeightedQuality(res, mysdState.weightsList || [], caps) || 0 }));
   if (q) rows = rows.filter((x) => String(x.res.name).toLowerCase().includes(q));
   else if (p.stockOnly) rows = rows.filter((x) => stkState && stkState.resourceIds && stkState.resourceIds.has(String(x.res.id)));
+  if (p.activeOnly) rows = rows.filter((x) => x.res.status === 1); // in-spawn toggle — requested by Pufhead
   rows.sort((a, b) => b.q - a.q);
   rows = rows.slice(0, q ? 40 : 60);
 
@@ -636,7 +639,10 @@ function mysdRenderPicker() {
 
   const body = $('#mysd-picker-body');
   if (!rows.length) {
-    body.innerHTML = `<tr><td colspan="14" class="stat_off lab-pool-empty">${q ? 'No matches in this class.' : 'Class pool is empty.'}</td></tr>`;
+    body.innerHTML = `<tr><td colspan="14" class="stat_off lab-pool-empty">${
+      q ? 'No matches in this class.'
+        : p.activeOnly ? 'Nothing in this class is in spawn right now — untick In spawn to see past resources.'
+        : 'Class pool is empty.'}</td></tr>`;
     return;
   }
   body.innerHTML = rows.map(({ res, q: rate }) => {
@@ -987,6 +993,12 @@ function initMySchematics() {
       const v = $('#mysd-picker-search').value.trim();
       if (v) { const p = mysdState.picker; mysdClosePicker(); mysdSaveUsing(p.ingId, v); }
     }
+  });
+  $('#mysd-picker-active').addEventListener('change', (e) => {
+    if (!mysdState.picker) return;
+    mysdState.picker.activeOnly = e.target.checked;
+    localStorage.setItem('mysd_picker_active', e.target.checked ? '1' : '0'); // sticky preference
+    mysdRenderPicker();
   });
   $('#mysd-picker-stock').addEventListener('change', () => {
     const v = $('#mysd-picker-stock').value;

@@ -1717,7 +1717,8 @@ tr.row-detail > td { background: var(--bg-tertiary); padding: 0; }
 .mysd-picker-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
 .mysd-picker-head h2 { margin: 0; }
 .mysd-picker-head .btn-icon { margin-left: auto; }
-.mysd-picker-controls { display: flex; gap: 10px; margin-bottom: 10px; }
+.mysd-picker-controls { display: flex; gap: 10px; margin-bottom: 10px; align-items: center; }
+.mysd-picker-controls .pin-toggle { flex: none; white-space: nowrap; }
 .mysd-picker-controls .filter-select { flex: 0 0 220px; width: 220px; }
 .mysd-picker-controls .filter-input { flex: 1 1 auto; max-width: none; }
 .mysd-picker-wrap { overflow-y: auto; overflow-x: hidden; flex: 1 1 auto; }

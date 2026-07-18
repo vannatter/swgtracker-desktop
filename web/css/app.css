@@ -1523,6 +1523,9 @@ tr.row-detail > td { background: var(--bg-tertiary); padding: 0; }
 .scan-wl-statwrap { position: relative; }
 .scan-wl-order { position: absolute; top: 100%; left: 2px; margin-top: 3px;
                  font-size: 10px; color: var(--text-muted); letter-spacing: .06em; }
+/* the worklist button carries .head-right (margin-left:auto); when it's hidden
+   the next button must inherit the right-docking or the group hugs the title */
+#scan-wl-open[hidden] + #scan-now { margin-left: auto; }
 .scan-shot { cursor: zoom-in; }
 .scan-zoom { position: fixed; inset: 0; z-index: 500; background: rgba(0, 0, 0, .78);
              display: flex; align-items: center; justify-content: center; cursor: zoom-out; }
@@ -1824,7 +1827,7 @@ tr.row-detail > td { background: var(--bg-tertiary); padding: 0; }
    same "top section locked" behaviour as the My Sales grid. */
 #ins-content:not([hidden]) { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
 .ins-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 2px; }
-.ins-kpis { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 14px; flex-shrink: 0; }
+.ins-kpis { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 6px; flex-shrink: 0; }
 @media (max-width: 1200px) { .ins-kpis { grid-template-columns: repeat(3, 1fr); } }
 .ins-kpi { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
   padding: 12px 14px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
@@ -1841,6 +1844,106 @@ tr.row-detail > td { background: var(--bg-tertiary); padding: 0; }
 
 .ins-trend-wrap { position: relative; }
 #ins-trend-chart { width: 100%; height: 190px; display: block; }
+#ins-price-chart { width: 100%; height: 220px; display: block; }
+.ins-tabs { margin: 5px 0 2px; flex-shrink: 0; } /* + .ins-kpis' 6px = 11px gap to the cards */
+.ins-up { color: #45e97e; }
+.ins-down { color: var(--accent); }
+.ins-tablewrap { max-height: calc(100vh - 380px); overflow-y: auto; }
+.ins-tablewrap .data-grid tbody tr[data-insjump] { cursor: pointer; }
+/* the new tab panels put CONTROLS in their heads — baseline alignment (right
+   for text-only heads on Overview) misaligns them; center on the midline. They
+   also aren't collapsible, so no pointer cursor. */
+#ins-content [data-inspane]:not([data-inspane="overview"]) .ins-panel-head {
+  align-items: center; cursor: default;
+}
+.ins-price-combo { flex: 1 1 auto; max-width: 640px; }
+/* customer loyalty tiers + scorecard dialog */
+.ins-tier { display: inline-block; min-width: 30px; text-align: center; padding: 1px 6px;
+            border-radius: 4px; font-weight: 700; font-size: 12px; }
+.ins-tier-vip { background: rgba(69, 233, 126, .16); color: #45e97e; }
+.ins-tier-reg { background: rgba(226, 67, 80, .18); color: var(--accent-hover); }
+.ins-tier-ret { background: rgba(255, 255, 255, .09); color: var(--text-hover); }
+.ins-tier-one { background: rgba(255, 255, 255, .05); color: var(--text-muted); }
+.key-gate-card.ins-cust-card {
+  max-width: none; width: min(1400px, 95vw); max-height: 92vh;
+  display: flex; flex-direction: column; text-align: left; padding: 16px 24px 20px;
+}
+.ins-cust-head { display: flex; justify-content: flex-end; margin-bottom: 7px; }
+/* column design: the gauge IS the main weight, name + tier + summary under
+   it; the KPI cards shrink and wrap in the right column */
+.ins-cust-top { display: flex; gap: 26px; margin-bottom: 16px; }
+.ins-cust-colL { flex: 0 0 240px; display: flex; flex-direction: column;
+                 align-items: center; text-align: center; gap: 5px; }
+.ins-cust-card .ins-cust-colL h2 { font-size: 20px; margin: 0; text-align: center; }
+.ins-cust-score { font-size: 13px; color: var(--text-primary); }
+.ins-cust-colR { flex: 1 1 auto; min-width: 0; display: flex;
+                 flex-direction: column; gap: 12px; }
+/* one calm row of five — the wide dialog gives them the room */
+.ins-cust-tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+                  gap: 10px; }
+/* the dialog itself is --bg-secondary, which is a hair away from --bg-card —
+   inside it, blocks sit a half-step darker (between card and page bg) so every
+   section reads as its own inset without going full-dark */
+.ins-cust-card .ins-kpi, .ins-cust-insight, .ins-cust-msgs, .ins-cust-chart {
+  background: #1a1c25;
+}
+.ins-cust-tiles .ins-kpi { padding: 10px 14px; }
+.ins-cust-tiles .ins-kpi-val { font-size: 16px; }
+/* insight callout — explains the stats in a sentence, lightbulb up front */
+.ins-cust-insight { display: flex; gap: 12px; align-items: flex-start;
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
+  padding: 12px 14px; font-size: 12.5px; color: var(--text-primary); line-height: 1.55; }
+.ins-cust-insight i { color: #e2b843; font-size: 15px; margin-top: 2px; }
+.ins-cust-insight b { color: var(--text-hover); }
+/* quick messages — a one-line labeled strip, collapsible via the caret */
+.ins-cust-msgs { background: var(--bg-card); border: 1px solid var(--border);
+                 border-radius: 8px; padding: 8px 12px; }
+.ins-cust-msghead { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ins-msgedit .ins-cust-msghead { margin-bottom: 6px; }
+.ins-cust-msgtoggle { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+.ins-cust-msgs .ins-caret { font-size: 10px; color: var(--text-muted); transition: transform .15s; }
+.ins-cust-msgs.collapsed .ins-caret { transform: rotate(-90deg); }
+.ins-cust-msgs.collapsed .ins-cust-msgbtns,
+.ins-cust-msgs.collapsed .ins-msg-seg,
+.ins-cust-msgs.collapsed [data-msgedit] { display: none; }
+.ins-cust-msgtitle { font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
+                     color: var(--text-muted); font-weight: 600; }
+.ins-msg-seg { margin-left: auto; align-self: center; }
+.ins-msg-seg button { font-size: 12px; padding: 0 14px; height: 30px; } /* = .btn-sm height inside the 2px track */
+.ins-cust-msgbtns { display: flex; gap: 8px; flex-wrap: wrap; }
+.ins-cust-charts { display: grid; grid-template-columns: 1.1fr 1.3fr 1fr; gap: 12px; margin-bottom: 14px; }
+.ins-cust-chart { background: var(--bg-card); border: 1px solid var(--border);
+                  border-radius: 8px; padding: 10px 12px; min-width: 0; }
+.ins-cust-charttitle { font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
+                       color: var(--text-muted); font-weight: 600; margin-bottom: 8px; }
+.ins-cust-chart .ins-dow.ins-ctl { height: 118px; gap: 4px; }
+.ins-cust-chart .ins-dow-label { font-size: 9px; }
+.ins-cust-chart .ins-dow-val { font-size: 9px; }
+.ins-cust-chart .ins-heat-cell { height: 10px; }
+.ins-cust-chart .ins-lead { font-size: 12px; }
+.ins-cust-purchhead { display: flex; align-items: center; gap: 10px;
+  font-size: 13px; font-weight: 600; color: var(--text-hover); margin-bottom: 6px; }
+.ins-cust-purchwrap { flex: 1; min-height: 0; overflow-y: auto; }
+.ins-copied { border-color: #45e97e !important; color: #45e97e !important; }
+.ins-cust-gauge { width: 210px; }
+.ins-gauge { width: 100%; display: block; }
+.ins-gauge-track { fill: none; stroke: var(--border); stroke-width: 9; stroke-linecap: round; }
+.ins-gauge-fill { fill: none; stroke: var(--text-muted); stroke-width: 9; stroke-linecap: round;
+                  transition: stroke-dashoffset .7s cubic-bezier(.22, .8, .35, 1); }
+.ins-gauge.g-vip .ins-gauge-fill { stroke: #45e97e; }
+.ins-gauge.g-reg .ins-gauge-fill { stroke: var(--accent); }
+.ins-gauge.g-ret .ins-gauge-fill { stroke: rgba(255, 255, 255, .65); }
+.ins-gauge-num { fill: var(--text-hover); font: 700 19px system-ui, sans-serif; }
+.ins-msg-seg { flex: none; }
+.ins-msgedit { flex: 1 1 100%; display: flex; flex-direction: column; gap: 6px; }
+.ins-msgedit-row { display: grid; grid-template-columns: 180px 1fr 32px; gap: 6px; align-items: center; }
+.ins-msgedit-row .filter-input { max-width: none; width: 100%; }
+.ins-msgedit-actions { display: flex; gap: 8px; margin-top: 2px; }
+.ins-tab-filter { margin-left: auto; align-self: center; max-width: 300px; }
+.ins-price-menu .cselect-input { width: 100%; max-width: none; }
+.ins-price-opt { display: flex; justify-content: space-between; gap: 12px; }
+.ins-price-opt-rev { color: var(--text-muted); font-size: 12px; flex: none; }
+.ins-price-facts { padding: 10px 4px 2px; font-size: 12.5px; color: var(--text-primary); }
 .ins-trend-tip { position: absolute; top: -2px; transform: translateX(-50%); pointer-events: none;
   background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 5px;
   padding: 4px 8px; font-size: 12px; color: var(--text-primary); white-space: nowrap; z-index: 3; }

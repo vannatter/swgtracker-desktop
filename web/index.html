@@ -427,7 +427,15 @@
         <div id="ins-content" hidden>
           <div class="ins-kpis" id="ins-kpis"></div>
 
-          <div class="ins-scroll">
+          <ul class="scd-tabs ins-tabs" id="ins-tabs">
+            <li><button type="button" class="scd-tab active" data-instab="overview">Overview</button></li>
+            <li><button type="button" class="scd-tab" data-instab="items">Items</button></li>
+            <li><button type="button" class="scd-tab" data-instab="customers">Customers</button></li>
+            <li><button type="button" class="scd-tab" data-instab="vendors">Vendors</button></li>
+            <li><button type="button" class="scd-tab" data-instab="pricing">Pricing</button></li>
+          </ul>
+
+          <div class="ins-scroll" data-inspane="overview">
             <div class="ins-panel" data-panel="trend">
               <div class="ins-panel-head">
                 <i class="ins-caret fa-solid fa-chevron-down"></i>
@@ -465,6 +473,76 @@
               <div class="ins-panel" data-panel="items"><div class="ins-panel-head"><i class="ins-caret fa-solid fa-chevron-down"></i><h2>Top items</h2></div><div class="ins-panel-body"><div id="ins-items" class="ins-leaders"></div></div></div>
               <div class="ins-panel" data-panel="buyers"><div class="ins-panel-head"><i class="ins-caret fa-solid fa-chevron-down"></i><h2>Top customers</h2></div><div class="ins-panel-body"><div id="ins-buyers" class="ins-leaders"></div></div></div>
               <div class="ins-panel" data-panel="vendors"><div class="ins-panel-head"><i class="ins-caret fa-solid fa-chevron-down"></i><h2>Top vendors</h2></div><div class="ins-panel-body"><div id="ins-vendors" class="ins-leaders"></div></div></div>
+            </div>
+          </div>
+
+          <div class="ins-scroll" data-inspane="items" hidden>
+            <div class="ins-panel">
+              <div class="ins-panel-head"><h2>Item performance</h2><span id="ins-itemperf-sub" class="ins-sub"></span>
+                <input id="ins-itemperf-filter" type="text" class="form-control filter-input ins-tab-filter"
+                       placeholder="Filter items…" autocomplete="off" spellcheck="false"></div>
+              <div class="ins-panel-body">
+                <div class="table-wrap ins-tablewrap">
+                  <table class="data-grid"><thead><tr id="ins-itemperf-head"></tr></thead>
+                    <tbody id="ins-itemperf-body"></tbody></table>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="ins-scroll" data-inspane="customers" hidden>
+            <div class="ins-panel">
+              <div class="ins-panel-head"><h2>Customer loyalty</h2><span id="ins-custperf-sub" class="ins-sub"></span>
+                <input id="ins-custperf-filter" type="text" class="form-control filter-input ins-tab-filter"
+                       placeholder="Filter customers…" autocomplete="off" spellcheck="false"></div>
+              <div class="ins-panel-body">
+                <div class="table-wrap ins-tablewrap">
+                  <table class="data-grid"><thead><tr id="ins-custperf-head"></tr></thead>
+                    <tbody id="ins-custperf-body"></tbody></table>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="ins-scroll" data-inspane="vendors" hidden>
+            <div class="ins-panel">
+              <div class="ins-panel-head"><h2>Vendor performance</h2><span id="ins-vendorperf-sub" class="ins-sub"></span>
+                <input id="ins-vendorperf-filter" type="text" class="form-control filter-input ins-tab-filter"
+                       placeholder="Filter vendors…" autocomplete="off" spellcheck="false"></div>
+              <div class="ins-panel-body">
+                <div class="table-wrap ins-tablewrap">
+                  <table class="data-grid"><thead><tr id="ins-vendorperf-head"></tr></thead>
+                    <tbody id="ins-vendorperf-body"></tbody></table>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="ins-scroll" data-inspane="pricing" hidden>
+            <div class="ins-panel">
+              <div class="ins-panel-head">
+                <h2>Price history</h2>
+                <div class="cselect ins-price-combo" id="ins-price-combo">
+                  <button type="button" class="cselect-btn" id="ins-price-btn">
+                    <span id="ins-price-current">Pick an item…</span><i class="fa-solid fa-caret-down"></i>
+                  </button>
+                  <div class="cselect-menu ins-price-menu" hidden>
+                    <div class="cselect-search">
+                      <input id="ins-price-filter" type="text" class="form-control filter-input cselect-input"
+                             placeholder="Type to filter your items…" autocomplete="off" spellcheck="false">
+                    </div>
+                    <div id="ins-price-opts"></div>
+                  </div>
+                </div>
+                <span id="ins-price-sub" class="ins-sub"></span>
+              </div>
+              <div class="ins-panel-body">
+                <div class="ins-trend-wrap">
+                  <canvas id="ins-price-chart"></canvas>
+                  <div id="ins-price-tip" class="ins-trend-tip" hidden></div>
+                </div>
+                <div id="ins-price-facts" class="ins-price-facts"></div>
+              </div>
             </div>
           </div>
         </div>
@@ -784,6 +862,61 @@
         </div>
         <div id="scan-zoom" class="scan-zoom" hidden><img id="scan-zoom-img" alt="Scan capture"></div>
       </section>
+
+      <!-- Customer scorecard dialog (opened from Sales Insights → Customers) -->
+      <div id="ins-cust-modal" class="key-gate" hidden>
+        <div class="key-gate-card ins-cust-card">
+          <div class="ins-cust-head">
+            <div class="scan-wl-actions">
+              <select id="ins-cust-range" class="form-select filter-select" title="Range for this customer's numbers, charts and purchases">
+                <option value="7">Last 7 days</option>
+                <option value="30">Last 30 days</option>
+                <option value="90">Last 90 days</option>
+                <option value="180">Last 180 days</option>
+                <option value="0" selected>All time</option>
+              </select>
+              <button id="ins-cust-copy" class="btn btn-sm btn-outline-secondary" title="Copy the customer's name">
+                <i class="fa-solid fa-copy"></i> Copy name</button>
+              <button id="ins-cust-sales" class="btn btn-sm btn-outline-secondary" title="Open My Sales filtered to this customer">
+                <i class="fa-solid fa-tags"></i> My Sales</button>
+              <button id="ins-cust-close" class="btn btn-icon" title="Close"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+          </div>
+          <div class="ins-cust-top">
+            <div class="ins-cust-colL">
+              <span id="ins-cust-gauge" class="ins-cust-gauge" title="Loyalty score, 0–100"></span>
+              <h2 id="ins-cust-name">Customer</h2>
+              <span id="ins-cust-score" class="ins-cust-score"></span>
+            </div>
+            <div class="ins-cust-colR">
+              <div id="ins-cust-tiles" class="ins-cust-tiles"></div>
+              <div id="ins-cust-scoreline" class="ins-cust-insight"></div>
+              <div class="ins-cust-msgs" id="ins-cust-msgs"></div>
+            </div>
+          </div>
+          <div class="ins-cust-charts">
+            <div class="ins-cust-chart">
+              <div class="ins-cust-charttitle">Spending timeline</div>
+              <div id="ins-cust-timeline"></div>
+            </div>
+            <div class="ins-cust-chart">
+              <div class="ins-cust-charttitle">When they shop</div>
+              <div id="ins-cust-heat"></div>
+            </div>
+            <div class="ins-cust-chart">
+              <div class="ins-cust-charttitle">Where they shop</div>
+              <div id="ins-cust-vendors"></div>
+            </div>
+          </div>
+          <div class="ins-cust-purchhead">Purchases <span id="ins-cust-purchsub" class="ins-sub"></span>
+            <input id="ins-cust-purchfilter" type="text" class="form-control filter-input ins-tab-filter"
+                   placeholder="Filter purchases…" autocomplete="off" spellcheck="false"></div>
+          <div class="table-wrap ins-cust-purchwrap">
+            <table class="data-grid"><thead><tr id="ins-cust-purchcols"></tr></thead>
+              <tbody id="ins-cust-purchases"></tbody></table>
+          </div>
+        </div>
+      </div>
 
       <section id="page-settings" class="page">
         <div class="page-head"><h1>Settings</h1></div>

@@ -1868,7 +1868,12 @@ tr.row-detail > td { background: var(--bg-tertiary); padding: 0; }
   max-width: none; width: min(1400px, 95vw); max-height: 92vh;
   display: flex; flex-direction: column; text-align: left; padding: 16px 24px 20px;
 }
-.ins-cust-head { display: flex; justify-content: flex-end; margin-bottom: 7px; }
+.ins-cust-head { display: flex; justify-content: flex-end; margin-bottom: 7px; min-width: 0; }
+/* the action row must never push the close button past the card edge — it can
+   shrink and wrap instead (overflow here half-clipped the X at some widths) */
+.ins-cust-head .scan-wl-actions { flex: 1 1 auto; min-width: 0; flex-wrap: wrap;
+                                  justify-content: flex-end; row-gap: 6px; }
+#ins-cust-range { flex: 0 1 150px; min-width: 110px; }
 /* column design: the gauge IS the main weight, name + tier + summary under
    it; the KPI cards shrink and wrap in the right column */
 .ins-cust-top { display: flex; gap: 26px; margin-bottom: 16px; }

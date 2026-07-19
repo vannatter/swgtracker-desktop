@@ -29,7 +29,7 @@ from src.core.alert_poller import AlertPoller
 from src.core.bundle_manager import BundleManager
 from src.web_api import WebApi
 
-APP_VERSION = "0.12.0"  # keep in sync with pyproject.toml — bump with every change batch
+APP_VERSION = "0.12.1"  # keep in sync with pyproject.toml — bump with every change batch
 
 logging.basicConfig(
     level=logging.INFO,
@@ -68,7 +68,10 @@ def _set_mac_dock_icon():
 def main():
     _set_mac_dock_icon()
     config = ConfigManager(str(DATA_DIR / "config.json"))
-    api_client = SWGTrackerAPI(config.get("api_key", "") or "", app_version=APP_VERSION)
+    # dev version mimicry (Settings → Developer) survives restarts on purpose —
+    # gate testing needs the fake version announced from the very first call
+    fake_ver = str(config.get("dev_fake_version") or "").strip()
+    api_client = SWGTrackerAPI(config.get("api_key", "") or "", app_version=fake_ver or APP_VERSION)
     local_db = LocalDB(str(DATA_DIR / "swgtracker_local.db"))
 
     # thin client: the web UI can ship as a server-hosted bundle; the packaged

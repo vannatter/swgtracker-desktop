@@ -142,6 +142,66 @@ function showPage(key, opts = {}) {
   }
 }
 
+// ---- Minimum supported shell ----
+// The bundle only stays compatible with old shell bridges so far. Shells below
+// this floor get a BLOCKING update gate — the UI is closed until they update,
+// while the shell's mail monitor keeps uploading underneath, so nobody loses
+// data by procrastinating. Raise the floor with a normal bundle ship.
+const MIN_SUPPORTED_SHELL = '0.11.28';
+
+function verCmp(a, b) {
+  const pa = String(a).split('.').map((n) => parseInt(n, 10) || 0);
+  const pb = String(b).split('.').map((n) => parseInt(n, 10) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) - (pb[i] || 0);
+  }
+  return 0;
+}
+
+async function enforceMinShell() {
+  let ver = null;
+  let realVer = null;
+  try {
+    const r = await api().app_info();
+    ver = r.ok ? r.data?.version : null;
+    realVer = r.ok ? r.data?.real_version : null;
+  } catch (_) { return; } // bridge too old to even ask — the gate can't reach it
+  if (!ver || verCmp(ver, MIN_SUPPORTED_SHELL) >= 0) return;
+  // dev-mode version mimicry must not lock the tester out of their own gate —
+  // a REAL old shell reports no differing real_version, so this can't be spoofed
+  const mimicking = realVer && realVer !== ver;
+  let url = 'https://swgtracker.com/download.php';
+  try {
+    const u = await api().check_update();
+    if (u.ok && u.data?.url) url = u.data.url;
+  } catch (_) { /* keep the default link */ }
+  const gate = document.createElement('div');
+  gate.className = 'key-gate'; // full-screen, no dismiss path on purpose
+  gate.innerHTML = `<div class="key-gate-card">
+    <div class="key-gate-icon"><i class="fa-solid fa-circle-up"></i></div>
+    <h2>Update required</h2>
+    <p>This app version (v${escapeHtml(ver)}) is no longer supported — the new
+       features need the latest app to work right.</p>
+    <p>Mail monitoring keeps running in the background; only the interface is
+       waiting on the update.</p>
+    <button class="btn btn-accent" id="update-gate-btn" style="margin-top:8px">
+      <i class="fa-solid fa-download"></i> Download the update</button>
+    ${mimicking ? `<p style="margin-top:14px"><a role="button" id="update-gate-unmimic" class="settings-sub"
+      style="cursor:pointer; text-decoration:underline">Dev: mimicking v${escapeHtml(ver)}
+      (really v${escapeHtml(realVer)}) — stop mimicking</a></p>` : ''}
+  </div>`;
+  document.body.appendChild(gate);
+  gate.querySelector('#update-gate-btn').addEventListener('click', () => {
+    try { api().open_external(url); } catch (_) { /* nothing else to do */ }
+  });
+  if (mimicking) {
+    gate.querySelector('#update-gate-unmimic').addEventListener('click', async () => {
+      try { await api().set_config('dev_fake_version', ''); } catch (_) { return; }
+      location.reload(); // gate re-evaluates against the real version
+    });
+  }
+}
+
 // ---- App updates ----
 // Checks swgtracker.com/app/version.json once per launch; a chip appears in
 // the header when a newer version is published.
@@ -692,6 +752,7 @@ function startData() {
   setInterval(fetchPulse, 3 * 60 * 1000); // every 3 min, matching the Tk app
   showBuildId();
   checkForUpdate();
+  enforceMinShell();
 }
 
 async function boot() {

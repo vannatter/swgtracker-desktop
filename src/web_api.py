@@ -156,8 +156,12 @@ class WebApi:
     # --- App updates ---
 
     def app_info(self):
-        """Running version/build — shown in the header, no network needed."""
-        return _ok({"version": self.app_version})
+        """Running version/build — shown in the header, no network needed.
+        Dev mode can MIMIC another version (dev_fake_version) so the update
+        gates — the bundle's blocking screen and the API's 426 — are testable
+        without installing an actual old build."""
+        fake = str(self.config.get("dev_fake_version") or "").strip()
+        return _ok({"version": fake or self.app_version, "real_version": self.app_version})
 
     def check_update(self):
         """Compare the running version against swgtracker.com/app/version.json.
@@ -1063,6 +1067,11 @@ class WebApi:
             if key == "api_key":
                 self.api.api_key = value
                 self.api.session.headers["X-API-Key"] = value
+            # Dev version mimicry: swap the announced version live so the
+            # server-side gate reacts on the very next API call.
+            if key == "dev_fake_version":
+                v = str(value or "").strip()
+                self.api.session.headers["X-App-Version"] = v or self.app_version
             return _ok(True)
         except Exception as e:
             return _err(e)

@@ -1038,6 +1038,13 @@
             <input class="form-check-input" type="checkbox" id="set-ds-simulate">
             <label class="form-check-label" for="set-ds-simulate">Simulate offline <span class="settings-sub">(testing — fails all live API calls until unchecked or restart)</span></label>
           </div>
+          <div class="settings-row" style="margin-top: 10px">
+            <label class="settings-sub" for="set-ds-fakever">Mimic app version</label>
+            <input id="set-ds-fakever" type="text" class="form-control filter-input" style="max-width: 140px"
+                   placeholder="e.g. 0.11.27" autocomplete="off" spellcheck="false">
+            <span class="settings-sub">announced to the update gates and the API — blank = real version;
+              the API sees it instantly, the in-app update gate on next launch</span>
+          </div>
           <div id="set-deploy-row" hidden>
             <div class="settings-hint" style="margin: 10px 0 6px">Ship the current web/ as a live UI bundle — all clients pick it up</div>
             <div class="settings-row">

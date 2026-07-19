@@ -81,6 +81,7 @@ async function loadSettings() {
   }
 
   const cfg = res.data;
+  $('#set-ds-fakever').value = cfg.dev_fake_version || '';
   $('#set-apikey').value = cfg.api_key || '';
   $('#set-apikey-hint').textContent = cfg.has_api_key
     ? '✓ Key saved — edit above to replace it.'
@@ -343,6 +344,15 @@ function initSettings() {
   });
 
   // Session-only testing switch — flips the whole app into "network down"
+  $('#set-ds-fakever').addEventListener('change', async (e) => {
+    const v = e.target.value.trim();
+    if (v && !/^\d+\.\d+\.\d+$/.test(v)) { toast(`"${v}" isn't X.Y.Z`, false); return; }
+    try {
+      await api().set_config('dev_fake_version', v);
+      toast(v ? `Mimicking v${v} — API sees it now; relaunch to test the update gate`
+              : 'Back to the real version');
+    } catch (_) { toast('Shell too old for version mimicry', false); }
+  });
   $('#set-ds-simulate').addEventListener('change', async (e) => {
     try { await api().set_simulate_offline(e.target.checked); } catch (_) { /* leave as-is */ }
     fetchPulse(); // banner + pulse react immediately instead of on the next poll

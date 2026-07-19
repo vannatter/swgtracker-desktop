@@ -91,9 +91,30 @@ function scanQty(raw) {
   return n > 0 && n <= 100000000 ? n : null;
 }
 
+// Narrow examine windows (smaller UI scale) wrap values under their labels,
+// so OCR emits "Resource Quantity:" and "406960/1000000" as SEPARATE lines —
+// the bare label can't parse and the bare value poisons the name fallback.
+// Rejoin: a line ending in ':' adopts the next line when that line isn't
+// itself a labeled one.
+function scanJoinSplitLines(texts) {
+  const out = [];
+  for (let i = 0; i < texts.length; i++) {
+    const t = texts[i];
+    const next = texts[i + 1];
+    if (/[:;=]\s*$/.test(t) && next && !/[:;=]/.test(next)) {
+      out.push(`${t} ${next}`);
+      i++;
+      continue;
+    }
+    out.push(t);
+  }
+  return out;
+}
+
 // Raw OCR lines -> {name, klass, stats:{oq:...}, unparsed:[...]}
 function parseScan(lines) {
-  const texts = lines.map((l) => String(l.text || '').trim()).filter(Boolean);
+  const texts = scanJoinSplitLines(
+    lines.map((l) => String(l.text || '').trim()).filter(Boolean));
   // statsOrder keeps the stats in the order the game DISPLAYED them (top to
   // bottom) — that's the order SWGAide's submit file expects them in.
   const out = { name: '', klass: '', qty: null, stats: {}, statsOrder: [], unparsed: [] };
@@ -105,8 +126,10 @@ function parseScan(lines) {
     if (!kv) {
       if (i === klassAt + 1 && out.klass && /^[A-Za-z][A-Za-z ]{2,30}$/.test(t)) {
         out.klass += ` ${t}`; // "Green Diamond Cryst" + "Gemstone"
-      } else if (!out.name && !/unrefined|natural resource|examine|standard|this container/i.test(t)) {
-        // free-line fallback: the window title — 'Standard' is the tab label
+      } else if (!out.name && !/unrefined|natural resource|examine|standard|this container/i.test(t)
+                 && !/^[\d\s.,/|]+$/.test(t)) {
+        // free-line fallback: the window title — 'Standard' is the tab label,
+        // and a numbers-only line is a strayed VALUE, never a name
         out.name = t;
       }
       continue;
@@ -466,7 +489,17 @@ function initScanner() {
   $('#scan-sound-preview').addEventListener('click', () => {
     try { api().scan_play_sound({ sound: $('#scan-sound').value }); } catch (_) {}
   });
-  $('#scan-frame').addEventListener('click', () => { try { api().scan_show_frame(); } catch (_) {} });
+  $('#scan-frame').addEventListener('click', async () => {
+    // Positioning the outline IS the intent to scan — quietly flip the enable
+    // toggle so the hotkey arms too. Users kept positioning, then wondering
+    // why the hotkey was dead (the toggle lives two pages away in Settings).
+    if (scanState.cfg && scanState.cfg.available !== false && !scanState.cfg.enabled) {
+      await scanPushConfig({ enabled: true });
+      const hk = (scanState.cfg && scanState.cfg.hotkey) || 'the scan hotkey';
+      toast(`Scanning enabled — ${hk} is now armed`);
+    }
+    try { api().scan_show_frame(); } catch (_) { /* shell too old */ }
+  });
   $('#scan-now').addEventListener('click', async () => {
     try { await api().scan_capture_now(); } catch (_) {}
     refreshScanQueue();

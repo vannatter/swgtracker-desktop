@@ -968,6 +968,12 @@ td.lab-dim { opacity: .45; }
   gap: 10px; color: var(--text-hover); font-weight: 600; background: rgba(20,22,29,.6);
 }
 .grid-empty { color: var(--text-muted); font-weight: 400; }
+/* Insights' empty/loading sit OUTSIDE any .table-wrap — as bare page content
+   the absolute inset-0 veil above would blanket the entire app and eat every
+   click (hit users with zero sales; reported by Phlan). Render them inline. */
+#page-insights > .grid-loading, #page-insights > .grid-empty {
+  position: static; background: none; padding: 48px 0;
+}
 .spinner {
   width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--accent);
   border-radius: 50%; display: inline-block; animation: spin .8s linear infinite;
@@ -1459,8 +1465,8 @@ tr.row-detail > td { background: var(--bg-tertiary); padding: 0; }
 .form-check-input:checked { background-color: var(--accent-dark); border-color: var(--accent-dark); }
 .form-check-input:focus { box-shadow: none; border-color: var(--accent-dark); }
 
-/* ---- Scanner (dev-only): in-game OCR review queue; config lives in the
-   dev-only Settings section (#set-scan-section) ---- */
+/* ---- Scanner: in-game OCR review queue; config lives in the Settings
+   section (#set-scan-section) ---- */
 #scan-controls .filter-input { width: 180px; font-family: monospace; font-size: 12px; }
 #scan-controls .settings-row { margin: 6px 0 10px; }
 /* fixed label column so the hotkey inputs and sound select line up */

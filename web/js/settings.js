@@ -48,7 +48,7 @@ function mailPathEntryHtml(entry, idx) {
              placeholder="C:\\SWG Restoration III\\profiles\\…\\mail_CharacterName"
              value="${escapeHtml(entry.path || '')}">
       <button class="btn btn-sm btn-outline-secondary mail-browse" data-browse="${idx}" title="Choose folder"><i class="fa-solid fa-folder-open"></i></button>
-      ${idx > 0 ? `<button class="btn btn-sm btn-outline-secondary mail-remove" data-remove="${idx}" title="Remove">&times;</button>` : ''}
+      <button class="btn btn-sm btn-outline-secondary mail-remove" data-remove="${idx}" title="Remove">&times;</button>
     </div>
     ${!names.length ? '<div class="settings-sub">Add your toons on the <a role="button" data-goto="characters">Characters page</a> first — each folder needs one.</div>' : ''}
   </div>`;

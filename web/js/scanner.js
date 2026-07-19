@@ -376,8 +376,8 @@ function wlExportLines() {
 
 // ---- config row -----------------------------------------------------------
 
-/* Config lives in a dev-only Settings section (#set-scan-section); the
-   Scanner page keeps only the queue + action buttons. */
+/* Config lives in its Settings section (#set-scan-section); the Scanner page
+   keeps only the queue + action buttons. */
 function renderScanConfig() {
   const c = scanState.cfg || {};
   const off = c.available === false;

@@ -124,16 +124,24 @@ def main() -> int:
                     help="skip pushing the v* release tag (no shell installer build)")
     ap.add_argument("--no-announce", action="store_true",
                     help="don't post the release notes to the Discord webhook")
+    ap.add_argument("--version", metavar="X.Y.Z",
+                    help="set the shell to this exact version instead of bumping the patch "
+                         "(minor/major releases, e.g. 0.12.0)")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
+    if args.version and not re.fullmatch(r"\d+\.\d+\.\d+", args.version):
+        print(f"--version {args.version!r} isn't X.Y.Z")
+        return 1
 
     files = changed_files()
     if not files:
         print("nothing to ship — working tree is clean")
         return 0
     ui, shell = classify(files)
+    if args.version:
+        shell = True  # an explicit version IS a shell release, whatever changed
     version = current_version()
-    new_version = bump_patch(version) if shell else version
+    new_version = (args.version or bump_patch(version)) if shell else version
 
     print(f"changes: {len(files)} files  (ui={ui} shell={shell})")
     print(f"shell:   v{version}" + (f" -> v{new_version}" if shell else "  (unchanged)"))

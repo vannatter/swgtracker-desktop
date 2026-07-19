@@ -49,8 +49,7 @@
         <li class="nav-item" data-page="alerts"><i class="fa-solid fa-bell"></i> Spawn Alerts</li>
         <li class="nav-item" data-page="monitor"><i class="fa-solid fa-envelope"></i> Mail</li>
         <li class="nav-item" data-page="lab"><i class="fa-solid fa-flask"></i> Laboratory</li>
-        <!-- dev-only while the scanner bakes: shell + OCR ship dark, UI hidden -->
-        <li class="nav-item dev-only" data-page="scanner"><i class="fa-solid fa-expand"></i> Scanner</li>
+        <li class="nav-item" data-page="scanner"><i class="fa-solid fa-expand"></i> Scanner</li>
         <li class="nav-item" data-page="settings"><i class="fa-solid fa-gear"></i> Settings</li>
         <li class="nav-item" data-page="about"><i class="fa-solid fa-circle-info"></i> About</li>
       </ul>
@@ -825,7 +824,7 @@
         </div>
       </section>
 
-      <!-- Scanner (dev-only): review queue for in-game OCR captures -->
+      <!-- Scanner: review queue for in-game OCR captures -->
       <section id="page-scanner" class="page">
         <div class="page-head">
           <h1>Scanner</h1>
@@ -999,8 +998,7 @@
           <button id="set-ds-sync" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-rotate"></i> Sync now</button>
         </div>
 
-        <!-- dev-only while the scanner bakes, like the Scanner page itself -->
-        <div class="settings-section dev-only" id="set-scan-section">
+        <div class="settings-section" id="set-scan-section">
           <h2>Scanner <i class="fa-solid fa-circle-question info-tip" data-help="scanner"></i>
             <span class="settings-sub">In-game resource scanning — hotkey &amp; scan feedback</span></h2>
           <div id="scan-controls" hidden>

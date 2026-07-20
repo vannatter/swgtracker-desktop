@@ -1498,6 +1498,7 @@ tr.row-detail > td { background: var(--bg-tertiary); padding: 0; }
 .scan-stat { background: var(--bg-input); border-radius: 4px; padding: 2px 8px; font-size: 12px; color: var(--text-primary); }
 .scan-stat-ok { color: var(--q-good); }        /* agrees with the picked match */
 .scan-stat-bad { color: var(--accent); }       /* disagrees — probably OCR or wrong match */
+.scan-stat-fuzzy { color: #e2b843; }           /* 5↔8 font ambiguity, match's value shown */
 .scan-warn { font-size: 12px; color: var(--accent-hover); }
 .scan-qty-ask { font-size: 12px; color: var(--text-muted); align-self: center; }
 .scan-qty { border: 1px solid var(--accent); }

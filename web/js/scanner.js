@@ -53,6 +53,23 @@ function scanNumber(raw) {
   return n >= 1 && n <= 1000 ? n : null; // stats are 1..1000 in game
 }
 
+// The game font's 8 sometimes OCRs as the letter S, which the confusable map
+// reads as 5 — so 814 can arrive as a plausible-looking 514. A parsed number
+// and a candidate's number are "compatible" when they differ only by 5↔8 at
+// single positions; the rest of the stat fingerprint (plus name and class)
+// carries the proof, and the chip explains the substitution instead of
+// flagging a false mismatch.
+function scanStatCompatible(parsed, cand) {
+  if (parsed === cand) return true;
+  const a = String(parsed), b = String(cand);
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] === b[i]) continue;
+    if (!((a[i] === '5' && b[i] === '8') || (a[i] === '8' && b[i] === '5'))) return false;
+  }
+  return true;
+}
+
 function scanLevenshtein(a, b) {
   a = a.toLowerCase(); b = b.toLowerCase();
   const m = a.length, n = b.length;
@@ -199,33 +216,39 @@ function parseScan(lines) {
 async function scanFindMatches(parsed) {
   const fields = ['id', 'name', 'type_name', 'status', ...SCAN_MATCH_STATS];
   const seen = new Map();
-  // search by name — and ALSO by resource class (the mirror search matches
-  // type_name too), so a mangled/missing name still finds the right pool and
-  // the stat fingerprint does the identifying
-  const tries = [parsed.name, parsed.name.slice(0, 5), parsed.name.slice(0, 3),
-                 parsed.klass, (parsed.klass || '').slice(0, 12)]
+  // CLASS searches first — the mirror search matches type_name, so the parsed
+  // class defines the right candidate pool even when the name is mangled, and
+  // the stat fingerprint identifies the exact resource within it. Name tries
+  // come after; the desperate 3-char slice runs LAST so it can't flood the
+  // pool and starve the class query (it once buried the real match under
+  // thirty name-lookalikes from the wrong class).
+  const tries = [parsed.klass, (parsed.klass || '').slice(0, 12),
+                 parsed.name, parsed.name.slice(0, 5), parsed.name.slice(0, 3)]
     .map((s) => (s || '').trim()).filter((s) => s.length >= 3);
   for (const search of [...new Set(tries)]) {
     try {
       const res = await api().ds_resources_query({ search, status: '', limit: 40, fields });
       for (const r of (res.ok && res.data) || []) seen.set(r.id, r);
     } catch (_) { /* mirror missing — handled below */ }
-    if (seen.size >= 25) break;
+    if (seen.size >= 60) break;
   }
   const parsedStats = Object.entries(parsed.stats)
     .filter(([k]) => SCAN_MATCH_STATS.includes(k));
   const scored = [...seen.values()].map((r) => {
     let statHits = 0;
-    for (const [k, v] of parsedStats) if (Number(r[k]) === v) statHits++;
+    for (const [k, v] of parsedStats) if (scanStatCompatible(v, Number(r[k]))) statHits++;
     const sim = scanNameSim(parsed.name, r.name || '');
     const kSim = parsed.klass ? scanNameSim(parsed.klass, r.type_name || '') : 0;
-    return { ...r, statHits, statTotal: parsedStats.length, sim,
+    return { ...r, statHits, statTotal: parsedStats.length, sim, kSim,
              score: statHits * 2 + sim * 3 + kSim * 2 };
-  }).filter((r) =>
-    // a candidate matching ZERO of 4+ parsed stats is NOT this resource —
-    // stat tuples are fingerprints; name-lookalike garbage stops here
-    !(r.statTotal >= 4 && r.statHits === 0))
-    .sort((a, b) => b.score - a.score);
+  }).filter((r) => {
+    // stat tuples are fingerprints — don't SUGGEST things that don't fit:
+    // zero hits on a 4+-stat scan is disqualifying, and one coincidental hit
+    // can't carry a candidate whose name AND class both look nothing like it
+    if (r.statTotal >= 4 && r.statHits === 0) return false;
+    if (r.statTotal >= 3 && r.statHits <= 1 && r.kSim < 0.5 && r.sim < 0.6) return false;
+    return true;
+  }).sort((a, b) => b.score - a.score);
   return scored.slice(0, 5);
 }
 
@@ -235,9 +258,18 @@ function scanStatChips(parsed, cand) {
   return SCAN_MATCH_STATS.map((k) => {
     const v = parsed.stats[k];
     if (v == null) return '';
-    const ok = cand ? Number(cand[k]) === v : null;
-    return `<span class="scan-stat ${ok === null ? '' : ok ? 'scan-stat-ok' : 'scan-stat-bad'}"
-              title="${k.toUpperCase()}${ok === false ? ` — match has ${cand[k] ?? '—'}` : ''}">
+    const cv = cand ? Number(cand[k]) : null;
+    const exact = cand ? cv === v : null;
+    const fuzzy = cand && !exact && scanStatCompatible(v, cv);
+    if (fuzzy) {
+      // 5↔8 font ambiguity, resolved by the rest of the fingerprint — show
+      // the MATCH's number, since that's what the resource really has
+      return `<span class="scan-stat scan-stat-fuzzy"
+        title="${k.toUpperCase()} — OCR read ${v}, but 5 and 8 look alike in the game font; the match has ${cv}">
+        ${k.toUpperCase()} ${cv}*</span>`;
+    }
+    return `<span class="scan-stat ${exact === null ? '' : exact ? 'scan-stat-ok' : 'scan-stat-bad'}"
+              title="${k.toUpperCase()}${exact === false ? ` — match has ${cand[k] ?? '—'}` : ''}">
               ${k.toUpperCase()} ${v}</span>`;
   }).join('');
 }

@@ -621,7 +621,7 @@ class Scanner:
             else:
                 self.notify("Scan failed", "Couldn't capture the scan area.")
             return None
-        lines = ocr_engine.read_text(image)
+        lines, alt_lines = ocr_engine.read_text_dual(image)
         if not lines:
             self._play(False)
             self.notify("Scan failed", "No text found in the scan area — "
@@ -635,6 +635,9 @@ class Scanner:
                 "id": self._next_id,
                 "ts": int(time.time()),
                 "lines": lines,
+                # second OCR pass (different preprocessing) — the UI reconciles
+                # the two readings; absent on machines where the pass failed
+                "alt_lines": alt_lines,
                 "image": "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode(),
             }
             self._next_id += 1

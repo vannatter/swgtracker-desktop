@@ -15,10 +15,32 @@ const SCAN_MATCH_STATS = ['oq', 'cd', 'cr', 'dr', 'hr', 'ma', 'sr', 'ut', 'fl', 
 const scanState = { cfg: null, queue: [], matches: {}, pendingQty: {},
                     edits: {}, editing: null, worklist: [], timer: null };
 
+// Newer shells OCR every capture TWICE with different preprocessing — the
+// passes misread different glyphs. Merge: gaps fill from the alt pass, and a
+// digit the passes disagree on becomes an explicit ALTERNATE (altStats) that
+// matching may accept — the resource fingerprint settles which reading is
+// real, instead of us guessing.
+function scanMergeParses(a, b) {
+  if (!b) return a;
+  const out = { ...a, altStats: {}, altName: '' };
+  if (!out.name && b.name) out.name = b.name;
+  else if (b.name && b.name !== a.name) out.altName = b.name;
+  if (!out.klass && b.klass) out.klass = b.klass;
+  if (out.qty == null && b.qty != null) out.qty = b.qty;
+  for (const [k, v] of Object.entries(b.stats)) {
+    if (a.stats[k] == null) { out.stats[k] = v; out.statsOrder.push([k, v]); }
+    else if (a.stats[k] !== v) out.altStats[k] = v;
+  }
+  // one pass reading a line cleanly is enough — warn on the better of the two
+  if (b.unparsed.length < a.unparsed.length) out.unparsed = b.unparsed;
+  return out;
+}
+
 // User corrections layered over the OCR parse — when the engine misreads a
 // name or digit, fix it on the card instead of rescanning.
 function scanParsed(item) {
-  const parsed = parseScan(item.lines);
+  const parsed = scanMergeParses(parseScan(item.lines),
+    Array.isArray(item.alt_lines) && item.alt_lines.length ? parseScan(item.alt_lines) : null);
   const e = scanState.edits[item.id];
   if (!e) return parsed;
   if (e.name !== undefined) parsed.name = e.name;
@@ -236,8 +258,13 @@ async function scanFindMatches(parsed) {
     .filter(([k]) => SCAN_MATCH_STATS.includes(k));
   const scored = [...seen.values()].map((r) => {
     let statHits = 0;
-    for (const [k, v] of parsedStats) if (scanStatCompatible(v, Number(r[k]))) statHits++;
-    const sim = scanNameSim(parsed.name, r.name || '');
+    for (const [k, v] of parsedStats) {
+      const cv = Number(r[k]);
+      const alt = parsed.altStats ? parsed.altStats[k] : null;
+      if (cv === v || (alt != null && cv === alt) || scanStatCompatible(v, cv)) statHits++;
+    }
+    const sim = Math.max(scanNameSim(parsed.name, r.name || ''),
+                         parsed.altName ? scanNameSim(parsed.altName, r.name || '') : 0);
     const kSim = parsed.klass ? scanNameSim(parsed.klass, r.type_name || '') : 0;
     return { ...r, statHits, statTotal: parsedStats.length, sim, kSim,
              score: statHits * 2 + sim * 3 + kSim * 2 };
@@ -260,6 +287,13 @@ function scanStatChips(parsed, cand) {
     if (v == null) return '';
     const cv = cand ? Number(cand[k]) : null;
     const exact = cand ? cv === v : null;
+    const alt = parsed.altStats ? parsed.altStats[k] : null;
+    if (cand && !exact && alt != null && cv === alt) {
+      // the two OCR passes disagreed and the MATCH confirms the alt reading
+      return `<span class="scan-stat scan-stat-fuzzy"
+        title="${k.toUpperCase()} — the two OCR passes read ${v} and ${alt}; the match confirms ${cv}">
+        ${k.toUpperCase()} ${cv}*</span>`;
+    }
     const fuzzy = cand && !exact && scanStatCompatible(v, cv);
     if (fuzzy) {
       // 5↔8 font ambiguity, resolved by the rest of the fingerprint — show

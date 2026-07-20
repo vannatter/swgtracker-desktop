@@ -44,14 +44,37 @@ def _prepare(image):
     return image.convert("RGB")
 
 
+def _prepare_alt(image):
+    """Second, DIFFERENT preparation: red-channel isolation (soft, no
+    thresholding — binarizing broke Apple Vision entirely).
+
+    The game UI ships in a handful of selectable tints, so no fixed channel is
+    safe — instead we use whichever channel spreads text from background the
+    hardest (highest stddev) in THIS capture. On the default teal that's the
+    red channel, which read a test capture PERFECTLY where the standard pass
+    misread three digits; on other tints the best channel wins automatically.
+    It stays the ALT pass (not primary): plain RGB works on any palette, and
+    where the two passes disagree the capture carries both readings for the
+    resource-matcher to settle."""
+    from PIL import Image, ImageStat
+    w, h = image.size
+    scale = min(_UPSCALE, max(1, _MAX_SIDE // max(w, h, 1)))
+    channels = image.convert("RGB").split()
+    spread = [ImageStat.Stat(c).stddev[0] for c in channels]
+    best = channels[spread.index(max(spread))]
+    if scale > 1:
+        best = best.resize((w * scale, h * scale), Image.LANCZOS)
+    return best.convert("RGB")
+
+
 # ---------------------------------------------------------------- macOS
 
-def _read_text_macos(image) -> list[dict]:
+def _read_text_macos(prepared) -> list[dict]:
     import Vision
     from Foundation import NSData
 
     buf = io.BytesIO()
-    _prepare(image).save(buf, format="PNG")
+    prepared.save(buf, format="PNG")
     data = NSData.dataWithBytes_length_(buf.getvalue(), len(buf.getvalue()))
 
     handler = Vision.VNImageRequestHandler.alloc().initWithData_options_(data, None)
@@ -81,7 +104,7 @@ def _read_text_macos(image) -> list[dict]:
 
 # ---------------------------------------------------------------- Windows
 
-def _read_text_windows(image) -> list[dict]:
+def _read_text_windows(prepared) -> list[dict]:
     import asyncio
 
     from winsdk.windows.graphics.imaging import (BitmapPixelFormat,
@@ -89,7 +112,7 @@ def _read_text_windows(image) -> list[dict]:
     from winsdk.windows.media.ocr import OcrEngine
     from winsdk.windows.security.cryptography import CryptographicBuffer
 
-    prepared = _prepare(image).convert("RGBA")
+    prepared = prepared.convert("RGBA")
     w, h = prepared.size
     ibuf = CryptographicBuffer.create_from_byte_array(bytearray(prepared.tobytes()))
     bitmap = SoftwareBitmap.create_copy_from_buffer(ibuf, BitmapPixelFormat.RGBA8, w, h)
@@ -138,6 +161,14 @@ def available() -> bool:
     return _available
 
 
+def _read_prepared(prepared) -> list[dict]:
+    if sys.platform == "darwin":
+        return _read_text_macos(prepared)
+    if sys.platform == "win32":
+        return _read_text_windows(prepared)
+    return []
+
+
 def read_text(image) -> list[dict]:
     """OCR a PIL image → [{"text": str, "conf": float|None}], top-to-bottom.
 
@@ -147,11 +178,26 @@ def read_text(image) -> list[dict]:
     if not available():
         return []
     try:
-        if sys.platform == "darwin":
-            return _read_text_macos(image)
-        if sys.platform == "win32":
-            return _read_text_windows(image)
-        return []
+        return _read_prepared(_prepare(image))
     except Exception:  # noqa: BLE001
         logger.error("OCR failed", exc_info=True)
         return []
+
+
+def read_text_dual(image) -> tuple[list[dict], list[dict]]:
+    """Both readings of one capture: (standard, red-channel-binarized).
+
+    The two pipelines misread DIFFERENT glyphs, so the UI can trust digits
+    they agree on and let the resource-matcher settle the ones they don't.
+    Either list may be empty; the alt pass is strictly best-effort."""
+    primary = read_text(image)
+    alt: list[dict] = []
+    if available():
+        try:
+            alt = _read_prepared(_prepare_alt(image))
+        except Exception:  # noqa: BLE001
+            logger.error("alt OCR pass failed", exc_info=True)
+    # a rare standard-pass whiff shouldn't kill the scan if the alt pass read fine
+    if not primary and alt:
+        primary, alt = alt, []
+    return primary, alt

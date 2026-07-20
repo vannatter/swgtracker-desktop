@@ -167,6 +167,25 @@ function labCheckedWeights() {
     .filter(Boolean);
 }
 
+// Checked lines in the ORDER they were checked — that order IS the priority
+// (a JS Set iterates in insertion order, and saved experiments round-trip it).
+// When the pool can't cap everything, line #1 gets capped first, then #2 does
+// the best it can without hurting #1, and so on — requested by Phlan.
+function labCheckedOrdered() {
+  return [...labState.checked]
+    .map((fid) => labState.formulas.find((f) => String(f.formulaId) === fid))
+    .filter((f) => f && f.weights);
+}
+
+function labRenderPriorities() {
+  const order = [...labState.checked];
+  const many = order.length > 1; // one line has nothing to prioritize
+  document.querySelectorAll('#lab-formulas [data-labprio]').forEach((el) => {
+    const i = order.indexOf(el.dataset.labprio);
+    el.textContent = many && i >= 0 ? String(i + 1) : '';
+  });
+}
+
 function labBoostTotal() {
   return labState.boosts.reduce((sum, b) => sum + (b.on ? safeInt(b.value) : 0), 0);
 }
@@ -527,31 +546,74 @@ function labAutoPick(mode) {
   if (!ws.length) { toast('Select at least one experiment line', false); return; }
   labState.wasComplete = false; // auto-fills re-run the ceremony too
 
-  if (mode === 'best') {
-    let empty = 0;
-    for (const slot of labState.slots) {
-      const live = slot.pool.filter((r) => r.status === 1 && !labIsBanned(r));
-      // nothing of this class in spawn = nothing to buy at the vendor — leave it open
-      if (!live.length) { empty++; slot.pick = null; slot.collapsed = false; continue; }
-      slot.pick = live.reduce((best, r) => (!best || labAvgQ(r, slot) > labAvgQ(best, slot) ? r : best), null);
-      slot.collapsed = true;
-    }
-    if (empty) toast(`${empty} slot${empty > 1 ? 's have' : ' has'} nothing in spawn right now`, false);
-    labRenderAll();
-    return;
-  }
+  if (mode === 'best' || mode === 'stock') {
+    // Per-slot sources, hoisted — the cascade below rescans them many times.
+    const srcBySlot = labState.slots.map((slot) => (mode === 'best'
+      ? slot.pool.filter((r) => r.status === 1 && !labIsBanned(r))
+      : slot.pool.filter((r) => stkState.resourceIds.has(String(r.id)) && !labIsBanned(r))));
 
-  if (mode === 'stock') {
+    // Start from best-average picks — when every line can cap, this is already
+    // the answer and the cascade below changes nothing.
     let empty = 0;
-    for (const slot of labState.slots) {
-      const stocked = slot.pool.filter((r) => stkState.resourceIds.has(String(r.id)) && !labIsBanned(r));
-      if (!stocked.length) { empty++; slot.pick = null; slot.collapsed = false; continue; }
-      slot.pick = stocked.reduce((best, r) => (!best || labAvgQ(r, slot) > labAvgQ(best, slot) ? r : best), null);
+    labState.slots.forEach((slot, i) => {
+      const source = srcBySlot[i];
+      if (!source.length) { empty++; slot.pick = null; slot.collapsed = false; return; }
+      slot.pick = source.reduce((best, r) => (!best || labAvgQ(r, slot) > labAvgQ(best, slot) ? r : best), null);
       slot.collapsed = true;
+    });
+
+    // Priority cascade: raise each line IN CHECK ORDER via single-slot swaps,
+    // never letting an already-processed line fall below what it achieved
+    // (capped lines only have to STAY capped — surplus above the cap may be
+    // traded away to help the lines after them).
+    const lines = labCheckedOrdered();
+    const lineVal = (f) => {
+      const picked = labState.slots.filter((s) => s.pick);
+      return picked.length ? labLineValue(f.weights, picked) + labBoostTotal() : 0;
+    };
+    const floors = [];
+    for (const f of lines) {
+      let guard = 300;
+      while (lineVal(f) < labState.threshold && guard-- > 0) {
+        let bestSwap = null;
+        for (let i = 0; i < labState.slots.length; i++) {
+          const slot = labState.slots[i];
+          if (!slot.pick) continue;
+          const orig = slot.pick;
+          const cur = lineVal(f);
+          for (const r of srcBySlot[i]) {
+            if (r.id === orig.id) continue;
+            slot.pick = r;
+            const v = lineVal(f);
+            if (v > cur + 0.01 && (!bestSwap || v > bestSwap.v)
+                && floors.every((fl) => lineVal(fl.f) >= fl.floor - 0.01)) {
+              bestSwap = { slot, r, v };
+            }
+          }
+          slot.pick = orig;
+        }
+        if (!bestSwap) break; // this line is as high as it goes
+        bestSwap.slot.pick = bestSwap.r;
+      }
+      floors.push({ f, floor: Math.min(lineVal(f), labState.threshold) });
     }
-    const next = labState.slots.find((s) => !s.pick);
-    if (next) next.collapsed = false;
-    if (empty) toast(`${empty} slot${empty > 1 ? 's have' : ' has'} nothing usable in your stockpile`, false);
+
+    if (lines.length > 1) {
+      const capped = floors.filter((fl) => lineVal(fl.f) >= labState.threshold).length;
+      const firstMiss = floors.find((fl) => lineVal(fl.f) < labState.threshold);
+      toast(capped === lines.length
+        ? `All ${lines.length} lines cap`
+        : `${capped} of ${lines.length} line${lines.length === 1 ? '' : 's'} cap in priority order`
+          + (firstMiss ? ` — ${labFormulaShort(firstMiss.f)} misses by ${(labState.threshold - lineVal(firstMiss.f)).toFixed(1)}` : ''));
+    }
+    if (mode === 'stock') {
+      const next = labState.slots.find((s) => !s.pick);
+      if (next) next.collapsed = false;
+    }
+    if (empty) {
+      toast(`${empty} slot${empty > 1 ? 's have' : ' has'} `
+        + (mode === 'best' ? 'nothing in spawn right now' : 'nothing usable in your stockpile'), false);
+    }
     labRenderAll();
     return;
   }
@@ -578,10 +640,17 @@ function labAutoPick(mode) {
     toast(`${n} slot${n > 1 ? 's have' : ' has'} nothing in your stockpile — filled the rest`, false);
   }
 
+  // deficit over the ACTIVE lines only — when capping everything turns out to
+  // be impossible, lines get sacrificed from the BOTTOM of the priority order
+  // (check order) instead of leaving an arbitrary half-done spread.
+  const order = labCheckedOrdered();
+  const active = new Set(order.map((f) => String(f.formulaId)));
   const deficit = () => labBench().byFormula.reduce((sum, l) =>
-    sum + (l.composite == null ? 1e9 : Math.max(0, labState.threshold - l.composite)), 0);
+    sum + (!active.has(String(l.formula.formulaId)) ? 0
+      : l.composite == null ? 1e9 : Math.max(0, labState.threshold - l.composite)), 0);
 
   let guard = 200;
+  const dropped = [];
   while (deficit() > 0 && guard-- > 0) {
     let best = null;
     for (let i = 0; i < labState.slots.length; i++) {
@@ -601,10 +670,24 @@ function labAutoPick(mode) {
       }
       slot.pick = current;
     }
-    if (!best) break; // capping unreachable with known resources
-    labState.slots[best.i].pick = best.r;
+    if (!best) {
+      // stuck — give up on the lowest-priority line still missing its cap
+      const bench = labBench().byFormula;
+      const victim = [...order].reverse().find((f) => active.has(String(f.formulaId))
+        && ((bench.find((l) => String(l.formula.formulaId) === String(f.formulaId)) || {}).composite ?? -1) < labState.threshold);
+      if (!victim || active.size <= 1) break;
+      active.delete(String(victim.formulaId));
+      dropped.push(victim);
+    } else {
+      labState.slots[best.i].pick = best.r;
+    }
   }
-  if (deficit() > 0) toast('Capping unreachable with known spawns — showing the closest cheap setup', false);
+  if (dropped.length) {
+    toast(`Couldn't cap everything — kept the higher-priority lines and let `
+      + `${dropped.map((f) => labFormulaShort(f)).join(', ')} go`, false);
+  } else if (deficit() > 0) {
+    toast('Capping unreachable with known spawns — showing the closest cheap setup', false);
+  }
   labState.slots.forEach((s) => { s.collapsed = !!s.pick; });
   labRenderAll();
 }
@@ -636,11 +719,13 @@ async function labLoadSchematic(id, name) {
     .map((f) => ({ ...f, weights: mysParseWeights(f.formulaDescription) }));
   labState.checked = new Set(labState.formulas.map((f) => String(f.formulaId)));
   $('#lab-formulas').innerHTML = labState.formulas.map((f) => `
-    <label class="sp-formula">
+    <label class="sp-formula" title="Check order sets priority — line #1 gets capped first when everything can't cap; uncheck and recheck to reorder">
       <input type="checkbox" data-labfid="${escapeHtml(String(f.formulaId))}" checked>
       <span class="sp-formula-box"><i class="fa-solid fa-check"></i></span>
+      <span class="lab-prio" data-labprio="${escapeHtml(String(f.formulaId))}"></span>
       <span>${escapeHtml(f.formulaDescription || '')}</span>
     </label>`).join('');
+  labRenderPriorities();
 
   // stockpile FIRST — the pools always include your stocked resources, even
   // ones a size-capped best-first query would drop
@@ -878,10 +963,11 @@ async function labLoadExperiment(e) {
   labRenderBoosts();
   await labLoadSchematic(e.schematic_id, e.schematic_name);
   if (e.formula_ids?.length) {
-    labState.checked = new Set(e.formula_ids.map(String));
+    labState.checked = new Set(e.formula_ids.map(String)); // array order = saved priority
     document.querySelectorAll('#lab-formulas [data-labfid]').forEach((box) => {
       box.checked = labState.checked.has(box.dataset.labfid);
     });
+    labRenderPriorities();
   }
   for (const p of e.picks || []) {
     const slot = labState.slots.find((s) => s.code === String(p.code));
@@ -1009,6 +1095,7 @@ function initLab() {
     if (!box) return;
     if (box.checked) labState.checked.add(box.dataset.labfid);
     else labState.checked.delete(box.dataset.labfid);
+    labRenderPriorities();
     labRenderAll();
   });
 

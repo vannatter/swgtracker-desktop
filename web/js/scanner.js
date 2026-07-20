@@ -13,7 +13,27 @@ const SCAN_STATS = {
 const SCAN_MATCH_STATS = ['oq', 'cd', 'cr', 'dr', 'hr', 'ma', 'sr', 'ut', 'fl', 'pe'];
 
 const scanState = { cfg: null, queue: [], matches: {}, pendingQty: {},
-                    worklist: [], timer: null };
+                    edits: {}, editing: null, worklist: [], timer: null };
+
+// User corrections layered over the OCR parse — when the engine misreads a
+// name or digit, fix it on the card instead of rescanning.
+function scanParsed(item) {
+  const parsed = parseScan(item.lines);
+  const e = scanState.edits[item.id];
+  if (!e) return parsed;
+  if (e.name !== undefined) parsed.name = e.name;
+  if (e.qty !== undefined) parsed.qty = e.qty;
+  for (const [k, v] of Object.entries(e.stats || {})) {
+    if (v === null) { delete parsed.stats[k]; }
+    else {
+      parsed.stats[k] = v;
+      const at = parsed.statsOrder.findIndex(([sk]) => sk === k);
+      if (at >= 0) parsed.statsOrder[at] = [k, v];
+      else parsed.statsOrder.push([k, v]);
+    }
+  }
+  return parsed;
+}
 
 // ---- parsing --------------------------------------------------------------
 
@@ -111,6 +131,22 @@ function scanJoinSplitLines(texts) {
   return out;
 }
 
+// OCR sometimes eats the colon entirely ("Resource Type Ismesrith") — try to
+// recover a LABEL + VALUE split by testing the first 1–3 words against the
+// known labels. Free prose never matches (all labels are ≥4-char names with
+// fuzzy distance ≤3), so real sentences fall through untouched.
+function scanLostSeparator(t) {
+  const words = t.split(/\s+/);
+  for (const n of [3, 2, 1]) {
+    if (words.length <= n) continue;
+    const label = words.slice(0, n).join(' ');
+    if (scanNearestLabel(label, SCAN_META) !== null || scanStatKey(label) !== null) {
+      return [label, words.slice(n).join(' ')];
+    }
+  }
+  return null;
+}
+
 // Raw OCR lines -> {name, klass, stats:{oq:...}, unparsed:[...]}
 function parseScan(lines) {
   const texts = scanJoinSplitLines(
@@ -123,18 +159,23 @@ function parseScan(lines) {
     const t = texts[i];
     // ':' examine window, '=' vet-reward crate dialog, ';' OCR's take on either
     const kv = t.match(/^(.+?)\s*[:;=]\s*(.*)$/);
-    if (!kv) {
+    let label, value;
+    if (kv) { [, label, value] = kv; }
+    else {
+      const rec = scanLostSeparator(t);
+      if (rec) [label, value] = rec;
+    }
+    if (label === undefined) {
       if (i === klassAt + 1 && out.klass && /^[A-Za-z][A-Za-z ]{2,30}$/.test(t)) {
         out.klass += ` ${t}`; // "Green Diamond Cryst" + "Gemstone"
       } else if (!out.name && !/unrefined|natural resource|examine|standard|this container/i.test(t)
-                 && !/^[\d\s.,/|]+$/.test(t)) {
-        // free-line fallback: the window title — 'Standard' is the tab label,
-        // and a numbers-only line is a strayed VALUE, never a name
+                 && !/^[\d\s.,/|]+$/.test(t) && !/^[A-Z\s]+$/.test(t)) {
+        // free-line fallback — but never a numbers-only strayed value, and
+        // never the ALL-CAPS window title (that's the class, not the name)
         out.name = t;
       }
       continue;
     }
-    const [, label, value] = kv;
     const meta = scanNearestLabel(label, SCAN_META);
     if (meta === 'name') { out.name = value.trim() || out.name; continue; }
     if (meta === 'klass') { out.klass = value.trim(); klassAt = i; continue; }
@@ -158,14 +199,18 @@ function parseScan(lines) {
 async function scanFindMatches(parsed) {
   const fields = ['id', 'name', 'type_name', 'status', ...SCAN_MATCH_STATS];
   const seen = new Map();
-  const tries = [parsed.name, parsed.name.slice(0, 5), parsed.name.slice(0, 3)]
+  // search by name — and ALSO by resource class (the mirror search matches
+  // type_name too), so a mangled/missing name still finds the right pool and
+  // the stat fingerprint does the identifying
+  const tries = [parsed.name, parsed.name.slice(0, 5), parsed.name.slice(0, 3),
+                 parsed.klass, (parsed.klass || '').slice(0, 12)]
     .map((s) => (s || '').trim()).filter((s) => s.length >= 3);
-  for (const search of tries) {
+  for (const search of [...new Set(tries)]) {
     try {
       const res = await api().ds_resources_query({ search, status: '', limit: 40, fields });
       for (const r of (res.ok && res.data) || []) seen.set(r.id, r);
     } catch (_) { /* mirror missing — handled below */ }
-    if (seen.size >= 5) break;
+    if (seen.size >= 25) break;
   }
   const parsedStats = Object.entries(parsed.stats)
     .filter(([k]) => SCAN_MATCH_STATS.includes(k));
@@ -173,9 +218,14 @@ async function scanFindMatches(parsed) {
     let statHits = 0;
     for (const [k, v] of parsedStats) if (Number(r[k]) === v) statHits++;
     const sim = scanNameSim(parsed.name, r.name || '');
+    const kSim = parsed.klass ? scanNameSim(parsed.klass, r.type_name || '') : 0;
     return { ...r, statHits, statTotal: parsedStats.length, sim,
-             score: statHits * 2 + sim * 3 };
-  }).sort((a, b) => b.score - a.score);
+             score: statHits * 2 + sim * 3 + kSim * 2 };
+  }).filter((r) =>
+    // a candidate matching ZERO of 4+ parsed stats is NOT this resource —
+    // stat tuples are fingerprints; name-lookalike garbage stops here
+    !(r.statTotal >= 4 && r.statHits === 0))
+    .sort((a, b) => b.score - a.score);
   return scored.slice(0, 5);
 }
 
@@ -193,6 +243,29 @@ function scanStatChips(parsed, cand) {
 }
 
 function scanItemHtml(item, parsed, matches) {
+  if (scanState.editing === item.id) {
+    // edit mode: every OCR'd value is overridable before approving
+    return `<div class="scan-item" data-scanid="${item.id}">
+      <img class="scan-shot" src="${item.image}" alt="capture" title="What the scanner saw">
+      <div class="scan-body">
+        <div class="scan-editrow">
+          <input class="form-control filter-input" data-scanedit="name" value="${escapeHtml(parsed.name || '')}"
+                 placeholder="Resource name" spellcheck="false">
+          <input class="form-control filter-input scan-editqty" data-scanedit="qty"
+                 value="${parsed.qty || ''}" placeholder="Qty" spellcheck="false">
+        </div>
+        <div class="scan-editstats">
+          ${SCAN_MATCH_STATS.map((k) => `<label class="scan-editstat">${k.toUpperCase()}
+            <input class="form-control filter-input" data-scaneditstat="${k}"
+                   value="${parsed.stats[k] ?? ''}" spellcheck="false"></label>`).join('')}
+        </div>
+        <div class="scan-actions">
+          <button class="btn btn-sm btn-accent" data-editapply="${item.id}"><i class="fa-solid fa-check"></i> Apply</button>
+          <button class="btn btn-sm btn-outline-secondary" data-editcancel="${item.id}">Cancel</button>
+        </div>
+      </div>
+    </div>`;
+  }
   const picked = matches[0];
   const options = matches.map((m, i) =>
     `<option value="${i}">${escapeHtml(m.name)} — ${escapeHtml(m.type_name || '')}
@@ -218,6 +291,9 @@ function scanItemHtml(item, parsed, matches) {
         <button class="btn btn-sm btn-outline-secondary" data-newspawn="${item.id}"
           title="Not in the system yet (a fresh spawn)? Queue it for an SWGAide submit — the worklist below">
           <i class="fa-solid fa-seedling"></i> New spawn</button>
+        <button class="btn btn-sm btn-outline-secondary" data-editcap="${item.id}"
+          title="OCR misread something? Correct the name, stats or quantity by hand">
+          <i class="fa-solid fa-pen"></i> Edit</button>
         <button class="btn btn-sm btn-outline-secondary" data-discard="${item.id}">Discard</button>
       </div>
     </div>
@@ -243,7 +319,7 @@ async function renderScanQueue() {
   }
   const parts = [];
   for (const item of scanState.queue) {
-    const parsed = parseScan(item.lines);
+    const parsed = scanParsed(item);
     if (!scanState.matches[item.id]) {
       scanState.matches[item.id] = await scanFindMatches(parsed);
     }
@@ -510,6 +586,8 @@ function initScanner() {
     scanState.queue = scanState.queue.filter((q) => q.id !== id);
     delete scanState.matches[id];
     delete scanState.pendingQty[id];
+    delete scanState.edits[id];
+    if (scanState.editing === id) scanState.editing = null;
     renderScanQueue();
   };
 
@@ -521,7 +599,7 @@ function initScanner() {
       const match = (scanState.matches[id] || [])[safeInt(sel ? sel.value : 0)];
       if (!match) return;
       const item = scanState.queue.find((q) => q.id === id);
-      const parsed = item ? parseScan(item.lines) : { qty: null };
+      const parsed = item ? scanParsed(item) : { qty: null };
       // Already stockpiled? Adding again is a QUANTITY decision, not an add —
       // ask inline whether to add the scanned amount to what's tracked.
       const stk = (typeof stkState !== 'undefined')
@@ -582,7 +660,7 @@ function initScanner() {
         toast('Worklist is full (30) — copy the SWGAide lines and clear it first', false);
         return;
       }
-      const parsed = parseScan(item.lines);
+      const parsed = scanParsed(item);
       // The capture IMAGE moves onto the worklist row (zoomable there), so
       // the scan isn't lost when the queue card resolves.
       scanState.worklist.push({
@@ -596,6 +674,37 @@ function initScanner() {
       renderWorklist();
       toast(`${parsed.name || 'Capture'} queued — open the New spawn worklist (top right) to finish it`);
       finishScan(id);
+      return;
+    }
+    const editBtn = e.target.closest('[data-editcap]');
+    if (editBtn) {
+      scanState.editing = safeInt(editBtn.dataset.editcap);
+      renderScanQueue();
+      return;
+    }
+    const applyBtn = e.target.closest('[data-editapply]');
+    if (applyBtn) {
+      const id = safeInt(applyBtn.dataset.editapply);
+      const card = applyBtn.closest('.scan-item');
+      const edit = { stats: {} };
+      edit.name = card.querySelector('[data-scanedit="name"]').value.trim();
+      const qraw = card.querySelector('[data-scanedit="qty"]').value.trim();
+      edit.qty = qraw === '' ? null : Math.round(parseAmount(qraw)) || null;
+      card.querySelectorAll('[data-scaneditstat]').forEach((inp) => {
+        const v = inp.value.trim();
+        edit.stats[inp.dataset.scaneditstat] = v === '' ? null
+          : Math.max(1, Math.min(1000, safeInt(v)));
+      });
+      scanState.edits[id] = edit;
+      delete scanState.matches[id]; // re-match with the corrected values
+      scanState.editing = null;
+      renderScanQueue();
+      return;
+    }
+    const cancelBtn = e.target.closest('[data-editcancel]');
+    if (cancelBtn) {
+      scanState.editing = null;
+      renderScanQueue();
       return;
     }
     const disc = e.target.closest('[data-discard]');

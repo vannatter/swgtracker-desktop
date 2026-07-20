@@ -57,10 +57,17 @@ function saleRowHtml(sale) {
   const f = (v, cls = 'col-text') => v
     ? `<td class="${cls} sales-cell" data-filter="${escapeHtml(v)}" title="Filter sales to “${escapeHtml(v)}”">${escapeHtml(v)}</td>`
     : `<td class="${cls}"></td>`;
+  // buyer cell: name click filters (like the others), the card icon opens the
+  // customer scorecard from Sales Insights
+  const buyerCell = sale.buyer
+    ? `<td class="col-text sales-cell" data-filter="${escapeHtml(sale.buyer)}" title="Filter sales to “${escapeHtml(sale.buyer)}”">${escapeHtml(sale.buyer)}
+        <i class="fa-solid fa-address-card sales-scorecard" data-scorecard="${escapeHtml(sale.buyer)}"
+           title="Open ${escapeHtml(sale.buyer)}'s customer scorecard"></i></td>`
+    : '<td class="col-text"></td>';
   return `<tr>
     ${f(sale.item || '', 'col-name res-name')}
     <td>${escapeHtml(typeText)}</td>
-    ${f(sale.buyer || '')}
+    ${buyerCell}
     ${f(sale.vendor || '')}
     ${f(sale.location || '')}
     <td class="col-num sale-amount">${fmtNum(sale.sale_amount)}</td>
@@ -142,7 +149,9 @@ function renderCustomers() {
          <th class="col-num" data-csort="total">Total${arrow('total')}</th>
          <th data-csort="last_purchase">Last${arrow('last_purchase')}</th>
        </tr></thead><tbody>${rows.map((r) => `<tr>
-         <td>${escapeHtml(r.buyer)}</td>
+         <td>${escapeHtml(r.buyer)}
+           <i class="fa-solid fa-address-card sales-scorecard" data-scorecard="${escapeHtml(r.buyer)}"
+              title="Open ${escapeHtml(r.buyer)}'s customer scorecard"></i></td>
          <td class="col-num">${fmtNum(r.purchases)}</td>
          <td class="col-num sale-amount">${fmtNum(r.total)} cr</td>
          <td>${fmtAgoTip(r.last_purchase)}</td>
@@ -166,6 +175,8 @@ function initSales() {
   buildSalesHeader();
 
   $('#sales-body').addEventListener('click', (e) => {
+    const card = e.target.closest('[data-scorecard]');
+    if (card) { insOpenScorecard(card.dataset.scorecard); return; }
     const cell = e.target.closest('[data-filter]');
     if (!cell) return;
     $('#sales-search').value = cell.dataset.filter;
@@ -191,6 +202,8 @@ function initSales() {
   $('#cust-days').addEventListener('change', loadCustomers);
   $('#cust-min').addEventListener('input', renderCustomers);
   $('#cust-body').addEventListener('click', (e) => {
+    const card = e.target.closest('[data-scorecard]');
+    if (card) { insOpenScorecard(card.dataset.scorecard); return; }
     const th = e.target.closest('[data-csort]');
     if (!th) return;
     const f = th.dataset.csort;

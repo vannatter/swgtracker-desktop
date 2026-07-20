@@ -1951,6 +1951,9 @@ tr.row-detail > td { background: var(--bg-tertiary); padding: 0; }
   font-size: 13px; font-weight: 600; color: var(--text-hover); margin-bottom: 6px; }
 .ins-cust-purchwrap { flex: 1; min-height: 0; overflow-y: auto; }
 .ins-copied { border-color: #45e97e !important; color: #45e97e !important; }
+/* scorecard launcher on My Sales buyer cells */
+.sales-scorecard { margin-left: 5px; color: var(--text-muted); cursor: pointer; font-size: 12px; }
+.sales-scorecard:hover { color: var(--accent); }
 .ins-cust-gauge { width: 210px; }
 .ins-gauge { width: 100%; display: block; }
 .ins-gauge-track { fill: none; stroke: var(--border); stroke-width: 9; stroke-linecap: round; }

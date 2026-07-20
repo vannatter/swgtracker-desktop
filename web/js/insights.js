@@ -210,6 +210,26 @@ function renderInsCustMsgs(b, editing = false) {
   </div>`;
 }
 
+// Open a customer's scorecard from ANYWHERE (e.g. the My Sales buyer cells).
+// The scored list only exists after an Insights load, so fetch it on demand.
+async function insOpenScorecard(name) {
+  if (!(insState.custScored || []).some((b) => b.name === name)) {
+    try {
+      const res = await apiFetch('GET', 'api/sales.php',
+        { params: { action: 'stats', days: insState.days } });
+      if (res.ok && res.data) {
+        insState.data = res.data;
+        insState.custScored = insScoreBuyers(res.data.buyers || [], safeInt(res.data.since));
+      }
+    } catch (_) { /* offline — the check below reports it */ }
+  }
+  if ((insState.custScored || []).some((b) => b.name === name)) {
+    openInsCustCard(name);
+  } else {
+    toast(`No scorecard for ${name} in the current Insights window — try a wider range on Sales Insights`, false);
+  }
+}
+
 // Half-moon 0–100 gauge — a "gas tank" fill for the loyalty score. The fill is
 // the FULL half-arc masked by stroke-dashoffset, then transitioned to the
 // score on the next frame — an animated fill-up with no chart library.

@@ -186,12 +186,13 @@ function facGridHtml(items) {
       <td>${dur ? facFmtDur(dur) : '—'}</td>
       <td>${f.started_at ? facEta(f) : '—'}</td>
       <td class="fac-remaining">${st === 'done' ? 'Done' : f.started_at ? facFmtDur(facDue(f) - facNow()) : '—'}</td>
-      <td>${f.started_at
-        ? `<button class="btn btn-sm btn-outline-secondary" data-facdone="${f.id}"><i class="fa-solid fa-xmark"></i> Done</button>
-           ${st === 'done' ? '' : f.paused_at
-             ? `<button class="btn btn-sm btn-outline-secondary" data-facresume="${f.id}">Resume</button>`
-             : `<button class="btn btn-sm btn-outline-secondary" data-facpause="${f.id}">Pause</button>`}`
-        : `<button class="btn btn-sm btn-accent" data-facstart="${f.id}">Start</button>`}</td>
+      <td class="col-actions">${f.started_at
+        ? `${st === 'done' ? '' : f.paused_at
+             ? `<button class="btn btn-icon" data-facresume="${f.id}" title="Resume the run"><i class="fa-solid fa-play"></i></button>`
+             : `<button class="btn btn-icon" data-facpause="${f.id}" title="Pause — freeze the countdown"><i class="fa-solid fa-pause"></i></button>`}
+           <button class="btn btn-icon" data-facdone="${f.id}" title="Done — end this run"><i class="fa-solid fa-xmark"></i></button>`
+        : `<button class="btn btn-icon" data-facstart="${f.id}" title="Start the run"><i class="fa-solid fa-play"></i></button>`}
+        <button class="btn btn-icon" data-facremove="${f.id}" title="Remove factory"><i class="fa-solid fa-trash-can"></i></button></td>
     </tr>`;
   };
   const sections = grpSections(facState.groups, items, (f) => f.group_id);
@@ -241,7 +242,7 @@ function facRefreshHistMenu() {
 function facUpdateViewToggle() {
   const btn = $('#fac-viewtoggle');
   const grid = facState.view === 'grid';
-  btn.innerHTML = `<i class="fa-solid ${grid ? 'fa-rectangle-list' : 'fa-table-cells-large'}"></i>`;
+  btn.innerHTML = `<i class="fa-solid ${grid ? 'fa-grip-vertical' : 'fa-table-cells-large'}"></i>`; // same pair as Lab
   btn.title = grid ? 'Switch to card view' : 'Switch to grid view';
 }
 
@@ -381,7 +382,9 @@ function facNotifySweep() {
   const now = facNow();
   for (const f of cache) {
     const key = `${f.id}:${f.started_at}`; // a restarted run notifies again
-    if (now >= f.due && !fired[key]) {
+    // freshness window: localStorage can reset with the shell, so the fired-set
+    // alone can't stop a relaunch from re-announcing a long-done run
+    if (now >= f.due && now - f.due < 600 && !fired[key]) {
       fired[key] = 1;
       try {
         api().notify(`Factory ${f.name} is done`,
@@ -585,8 +588,11 @@ function initFactories() {
     const done = e.target.closest('[data-facdone]');
     const reset = e.target.closest('[data-facreset]');
     if (done || reset) {
-      // both end the run — arm first so a stray click never kills a countdown
-      if (done && !confirmArmLabeled(done, 'End run?')) return;
+      // both end the run — arm first so a stray click never kills a countdown.
+      // Cards swap in a text label; grid rows just pulse (no room for text)
+      if (done && !(done.closest('tr')
+        ? confirmArm(done, 'Click again to end this run')
+        : confirmArmLabeled(done, 'End run?'))) return;
       if (reset && !confirmArmLabeled(reset, 'Reset run?')) return;
       const id = safeInt((done || reset).dataset.facdone || (done || reset).dataset.facreset);
       const res = await facPost({ action: 'stop', id });
@@ -597,7 +603,9 @@ function initFactories() {
       return;
     }
     const rm = e.target.closest('[data-facremove]');
-    if (rm && confirmArmLabeled(rm, 'Remove?')) {
+    if (rm && (rm.closest('tr')
+      ? confirmArm(rm, 'Click again to remove this factory')
+      : confirmArmLabeled(rm, 'Remove?'))) {
       const res = await facPost({ action: 'remove', id: safeInt(rm.dataset.facremove) });
       if (res.ok) loadFactories();
     }

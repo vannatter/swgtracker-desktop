@@ -1036,6 +1036,12 @@ tr.grp-row td { background: var(--bg-secondary); font-size: 13px; font-weight: 6
                 color: var(--text-hover); padding: 8px 12px;
                 box-shadow: inset 3px 0 0 var(--accent-dark); }
 tr.grp-row .grp-count { margin-left: 10px; }
+/* grid-view row actions hug the right edge on both pages */
+#harv-list td.col-actions, #fac-list td.col-actions { white-space: nowrap; text-align: right; }
+#fac-list td.col-actions .btn-icon[data-facstart] { color: #45e97e; }   /* play = go */
+#fac-list td.col-actions .btn-icon[data-facresume] { color: #e2b843; }  /* resume = paused amber */
+#fac-list td.col-actions .btn-icon[data-facdone]:hover,
+#fac-list td.col-actions .btn-icon[data-facremove]:hover { color: var(--accent); }
 /* tag cloud filter above the list */
 .fac-tagbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 12px; }
 .fac-tagbar-label { font-size: 11px; color: var(--text-muted); margin-right: 2px; }

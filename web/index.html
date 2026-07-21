@@ -46,6 +46,7 @@
         <li class="nav-item" data-page="inventory"><i class="fa-solid fa-warehouse"></i> My Inventory</li>
         <li class="nav-item" data-page="characters"><i class="fa-solid fa-user-group"></i> Characters</li>
         <li class="nav-item" data-page="harvesters"><i class="fa-solid fa-tractor"></i> Harvesters</li>
+        <li class="nav-item" data-page="factories"><i class="fa-solid fa-industry"></i> Factories</li>
         <li class="nav-item" data-page="alerts"><i class="fa-solid fa-bell"></i> Spawn Alerts</li>
         <li class="nav-item" data-page="monitor"><i class="fa-solid fa-envelope"></i> Mail</li>
         <li class="nav-item" data-page="lab"><i class="fa-solid fa-flask"></i> Laboratory</li>
@@ -570,6 +571,23 @@
         </div>
       </section>
 
+      <section id="page-factories" class="page">
+        <div class="page-head">
+          <h1>Factories</h1>
+          <i class="fa-solid fa-circle-info info-tip"
+             title="Track factory runs — yours or anyone's whose factory you're using. Start a run and the app tells you when it's ready to collect; email alerts are per factory."></i>
+          <button id="fac-newgroup" class="btn btn-sm btn-outline-secondary head-right"><i class="fa-solid fa-folder-plus"></i> New Group</button>
+          <button id="fac-add" class="btn btn-sm btn-accent"><i class="fa-solid fa-plus"></i> Add Factory</button>
+          <button id="fac-viewtoggle" class="btn btn-icon" title="Switch to grid view"><i class="fa-solid fa-table-cells-large"></i></button>
+          <button class="btn btn-icon" data-refresh="factories" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
+        </div>
+        <div id="fac-loading" class="grid-loading" hidden><span class="spinner"></span> Loading…</div>
+        <div id="fac-empty" class="al-empty" hidden>No factories yet — click <b>Add Factory</b> and start timing your runs.
+          Factories aren't tied to a character, so friends' factories you're borrowing fit right in.</div>
+        <div id="fac-tagbar" class="fac-tagbar" hidden></div>
+        <div id="fac-list" class="fac-list"></div>
+      </section>
+
       <section id="page-harvesters" class="page">
         <div class="page-head">
           <h1>Harvesters</h1>
@@ -580,6 +598,7 @@
                  title="Searches nickname, type, resource, planet, and character" autocomplete="off">
           <button id="harv-emptyall" class="btn btn-sm btn-outline-secondary" title="Mark every hopper in view emptied — the pulled units get offered to your stockpile"><i class="fa-solid fa-box-open"></i> Empty All</button>
           <button id="harv-packall" class="btn btn-sm btn-outline-secondary" title="Pack up (redeed) every harvester in view — hopper contents offered to your stockpile first"><i class="fa-solid fa-box-archive"></i> Pack All</button>
+          <button id="harv-newgroup" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-folder-plus"></i> New Group</button>
           <button id="harv-add" class="btn btn-sm btn-accent"><i class="fa-solid fa-plus"></i> Add Harvester</button>
           <button id="harv-viewtoggle" class="btn btn-icon" title="Switch to grid view"><i class="fa-solid fa-table-cells-large"></i></button>
           <button class="btn btn-icon" data-refresh="harvesters" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
@@ -1240,6 +1259,10 @@
           <label class="sp-field-label">Nickname <span class="settings-sub">blank = named from your picks</span></label>
           <input id="harv-f-name" type="text" class="form-control filter-input harv-wide" autocomplete="off">
         </div>
+        <div class="inv-add-field harv-grow">
+          <label class="sp-field-label">Group <span class="settings-sub">optional — create groups on the page</span></label>
+          <select id="harv-f-group" class="form-select filter-select harv-wide"></select>
+        </div>
       </div>
 
 
@@ -1519,6 +1542,7 @@
   <script src="js/insights.js"></script>
   <script src="js/purchases.js"></script>
   <script src="js/harvesters.js"></script>
+  <script src="js/factories.js"></script>
   <script src="js/characters.js"></script>
   <script src="js/settings.js"></script>
   <script src="js/alerts.js"></script>\n  <script src="js/lab.js"></script>

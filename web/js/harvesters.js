@@ -168,6 +168,8 @@ const harvState = {
   expanded: new Set(),   // harvester ids with the event log open
   events: {},            // id -> events array (fetched on expand)
   timer: null,           // re-render tick so countdowns move
+  groups: [],            // api/groups.php folders (kind=harvester)
+  grpCollapsed: new Set(), // collapsed section keys, session-only
 };
 
 // the header toggle: icon shows the view you'd SWITCH TO
@@ -325,7 +327,7 @@ function harvCardHtml(h) {
   const loc = [h.planet, (h.x != null && h.y != null) ? `(${h.x}, ${h.y})` : ''].filter(Boolean).join(' ');
   const open = harvState.expanded.has(String(h.id));
 
-  return `<div class="harv-card ${gone ? 'harv-gone' : ''}" data-hid="${h.id}">${goneBanner}
+  return `<div class="harv-card ${gone ? 'harv-gone' : ''}" data-hid="${h.id}" draggable="true">${goneBanner}
     <div class="harv-hd">
       <div class="harv-title">
         <span class="harv-name">${escapeHtml(h.name || h.harvester_type)}</span>
@@ -369,7 +371,7 @@ function harvLogHtml(hid) {
 // because the dispatcher listens on #harv-list either way
 function harvGridHtml(items) {
   const now = harvNow();
-  const rows = items.map((h) => {
+  const rowFor = (h) => {
     const power = harvDrain(h.power_amount, h.power_rate, h.power_set_at);
     const maint = harvDrain(h.maint_amount, harvEffMaintRate(h), h.maint_set_at);
     const hopper = harvHopper(h);
@@ -377,7 +379,7 @@ function harvGridHtml(items) {
     const hopCls = hopper ? (hopFull ? 'warn' : (hopper.stalled || hopper.frozen) ? 'bad' : '') : '';
     const powOut = power && power.remaining <= 0;
     const mntOut = maint && maint.remaining <= 0;
-    return `<tr>
+    return `<tr data-hid="${h.id}" draggable="true">
       <td class="col-name" title="${escapeHtml(h.harvester_type)}${h.ber ? ` · BER ${h.ber}` : ''}">${escapeHtml(h.name || h.harvester_type)}</td>
       <td class="col-text">${h.character_name ? escapeHtml(h.character_name) : '<span class="stat_off">—</span>'}</td>
       <td class="col-text">${h.resource_name ? `<b class="harv-reslink" data-res="${escapeHtml(h.resource_name)}">${escapeHtml(h.resource_name)}</b>${h.concentration ? ` @ ${h.concentration}%` : ''}${harvResGone(h) ? ' <span class="harv-gone-tag">despawned</span>' : ''}` : '<span class="stat_off">—</span>'}</td>
@@ -397,7 +399,13 @@ function harvGridHtml(items) {
         <button class="btn btn-icon" data-hact="del" data-hid="${h.id}" title="Remove"><i class="fa-solid fa-trash-can"></i></button>
       </td>
     </tr>`;
-  }).join('');
+  };
+  // grouped: a slim section row splits the table; ungrouped-only = no dividers
+  const sections = grpSections(harvState.groups, items, (h) => h.group_id);
+  const rows = sections.map((s) =>
+    ((s.key !== 'un' || sections.length > 1)
+      ? `<tr class="grp-row" data-grpkey="${s.key}"><td colspan="7">${escapeHtml(s.name)} <span class="grp-count">${s.items.length}</span></td></tr>` : '')
+    + s.items.map(rowFor).join('')).join('');
   return `<div class="table-wrap"><table class="data-grid"><thead><tr>
       <th class="col-name">Name</th><th class="col-text">Character</th><th class="col-text">Resource</th>
       <th class="col-text">Hopper</th><th class="col-text">Power</th><th class="col-text">Maint</th><th class="col-actions"></th>
@@ -411,7 +419,8 @@ function harvFilteredItems() {
   if (harvState.charFilter) items = items.filter((h) => String(h.character_id) === harvState.charFilter);
   const q = (harvState.query || '').toLowerCase();
   if (q) {
-    items = items.filter((h) => [h.name, h.harvester_type, h.resource_name, h.planet, h.character_name]
+    items = items.filter((h) => [h.name, h.harvester_type, h.resource_name, h.planet, h.character_name,
+      harvState.groups.find((g) => g.id === Number(h.group_id))?.name]
       .some((v) => String(v || '').toLowerCase().includes(q)));
   }
   return items;
@@ -423,7 +432,17 @@ function renderHarvesters() {
 
   $('#harv-empty').hidden = items.length > 0;
   wrap.classList.toggle('harv-list-grid', harvState.view === 'grid');
-  wrap.innerHTML = harvState.view === 'grid' ? harvGridHtml(items) : items.map(harvCardHtml).join('');
+  wrap.classList.toggle('harv-list-grouped', harvState.view !== 'grid');
+  const sections = grpSections(harvState.groups, items, (h) => h.group_id);
+  wrap.innerHTML = harvState.view === 'grid'
+    ? harvGridHtml(items)
+    : sections.map((s) => {
+        const collapsed = harvState.grpCollapsed.has(s.key);
+        const body = `<div class="grp-cards" data-hgroup="${s.key}"${collapsed ? ' hidden' : ''}>${s.items.map(harvCardHtml).join('')}</div>`;
+        return (s.key !== 'un' || sections.length > 1)
+          ? `<div class="grp-sec">${grpHeaderHtml(s.key, s.name, s.items.length, collapsed, 'harvesters')}${body}</div>`
+          : body;
+      }).join('');
 
   // a card left expanded across a reload must fetch its events, not sit on
   // "Loading…" forever (loadHarvesters wipes the cache after every action)
@@ -490,13 +509,15 @@ function renderHarvSuggestions() {
 async function loadHarvesters() {
   showGridLoading('#harv-loading');
   $('#harv-empty').hidden = true;
-  let hv, ch;
+  let hv, ch, groups;
   try {
-    [hv, ch] = await Promise.all([
+    [hv, ch, groups] = await Promise.all([
       apiFetch('GET', 'api/harvesters.php'),
       apiFetch('GET', 'api/characters.php'),
+      grpList('harvester'),
     ]);
   } catch (e) { hv = { ok: false, error: String(e) }; }
+  harvState.groups = groups || [];
   $('#harv-loading').hidden = true;
   if (!hv.ok || !hv.data) {
     $('#harv-list').innerHTML = '';
@@ -524,7 +545,10 @@ async function loadHarvesters() {
 
   clearInterval(harvState.timer); // countdowns tick — client-side math, no network
   harvState.timer = setInterval(() => {
-    if (document.getElementById('page-harvesters').classList.contains('active')) renderHarvesters();
+    if (!document.getElementById('page-harvesters').classList.contains('active')) return;
+    // never re-render out from under a group rename or a card mid-drag
+    if (document.querySelector('#harv-list .grp-rename-input') || document.querySelector('.harv-dragging')) return;
+    renderHarvesters();
   }, 15000);
 
   // the fun part: hopper unit counters tick UP every second, in place — no
@@ -798,6 +822,7 @@ async function harvClone(h) {
   const fields = {
     harvester_type: h.harvester_type,
     name: harvCloneName(h.name || h.harvester_type),
+    group_id: h.group_id || null,
     character_id: h.character_id || null,
     planet: h.planet || '',
     x: '',
@@ -842,6 +867,10 @@ function harvOpenForm(h = null) {
   $('#harv-form-title').textContent = h ? `Edit ${h.name || h.harvester_type}` : 'Add Harvester';
   $('#harv-f-type').value = h ? (h.harvester_type || '') : '';
   $('#harv-f-name').value = h ? (h.name || '') : '';
+  $('#harv-f-group').innerHTML = '<option value="">—</option>'
+    + [...harvState.groups].sort((a, b) => (a.sort_order - b.sort_order) || a.name.localeCompare(b.name))
+      .map((g) => `<option value="${g.id}">${escapeHtml(g.name)}</option>`).join('');
+  $('#harv-f-group').value = h && h.group_id ? String(h.group_id) : '';
   $('#harv-f-planet').value = h ? (h.planet || '') : '';
   $('#harv-f-x').value = h && h.x != null ? h.x : '';
   $('#harv-f-y').value = h && h.y != null ? h.y : '';
@@ -928,6 +957,7 @@ async function harvSubmitForm() {
   const fields = {
     harvester_type: type,
     name: $('#harv-f-name').value.trim() || harvNickText(),
+    group_id: $('#harv-f-group').value ? Number($('#harv-f-group').value) : null,
     character_id: charId || null,
     planet: $('#harv-f-planet').value.trim(),
     x: $('#harv-f-x').value.trim(),
@@ -1172,7 +1202,90 @@ function initHarvesters() {
     }
   });
 
-  $('#harv-list').addEventListener('click', (e) => {
+  $('#harv-newgroup').addEventListener('click', async () => {
+    const res = await grpApi({ action: 'create', kind: 'harvester' });
+    if (!res.ok || !res.data) { toast(res.error || 'Could not create group — site update pending?', false); return; }
+    harvState.groups.push({ id: res.data.id, name: res.data.name, sort_order: res.data.sort_order });
+    renderHarvesters();
+    grpBeginRename('#harv-list', String(res.data.id),
+      harvState.groups[harvState.groups.length - 1], renderHarvesters);
+  });
+
+  // drag a card (or a grid row) into another section — body or header — to file it
+  $('#harv-list').addEventListener('dragstart', (e) => {
+    const el = e.target.closest('.harv-card, tr[data-hid]');
+    if (el) el.classList.add('harv-dragging');
+  });
+  $('#harv-list').addEventListener('dragover', (e) => {
+    const dragging = document.querySelector('.harv-dragging');
+    if (!dragging) return;
+    e.preventDefault();
+    const hd = e.target.closest('[data-grpkey]');
+    if (hd && hd.tagName === 'TR') {  // grid view divider row → land right under it
+      hd.parentNode.insertBefore(dragging, hd.nextSibling);
+      return;
+    }
+    if (dragging.tagName === 'TR') {  // grid view: slot between rows
+      const over = e.target.closest('tr[data-hid]');
+      if (over && over !== dragging) {
+        const rect = over.getBoundingClientRect();
+        over.parentNode.insertBefore(dragging, e.clientY < rect.top + rect.height / 2 ? over : over.nextSibling);
+      }
+      return;
+    }
+    const cont = hd
+      ? document.querySelector(`#harv-list [data-hgroup="${hd.dataset.grpkey}"]`)
+      : e.target.closest('[data-hgroup]');
+    if (cont && dragging.parentNode !== cont) cont.appendChild(dragging);
+  });
+  $('#harv-list').addEventListener('dragend', async () => {
+    const dragging = document.querySelector('.harv-dragging');
+    if (!dragging) return;
+    dragging.classList.remove('harv-dragging');
+    const h = harvState.items.find((x) => String(x.id) === dragging.dataset.hid);
+    const cont = dragging.closest('[data-hgroup]');
+    let key = cont ? cont.dataset.hgroup : null;
+    if (!key && dragging.tagName === 'TR') {  // grid view: section = nearest divider above
+      let p = dragging.previousElementSibling;
+      while (p && !p.classList.contains('grp-row')) p = p.previousElementSibling;
+      key = p ? p.dataset.grpkey : 'un';
+    }
+    if (h && key) {
+      const gid = key === 'un' ? null : safeInt(key);
+      if ((h.group_id || null) !== gid) {
+        h.group_id = gid;
+        await apiFetch('PUT', 'api/harvesters.php', { data: { id: h.id, group_id: gid } });
+      }
+    }
+    renderHarvesters();
+  });
+
+  $('#harv-list').addEventListener('click', async (e) => {
+    const tog = e.target.closest('[data-grptoggle]');
+    if (tog) {
+      const k = tog.dataset.grptoggle;
+      harvState.grpCollapsed.has(k) ? harvState.grpCollapsed.delete(k) : harvState.grpCollapsed.add(k);
+      renderHarvesters();
+      return;
+    }
+    const ren = e.target.closest('[data-grprename]');
+    if (ren) {
+      grpBeginRename('#harv-list', ren.dataset.grprename,
+        harvState.groups.find((g) => String(g.id) === ren.dataset.grprename), renderHarvesters);
+      return;
+    }
+    const gdel = e.target.closest('[data-grpdel]');
+    if (gdel) {
+      if (!confirmArmLabeled(gdel, 'Delete group?')) return;
+      const gid = safeInt(gdel.dataset.grpdel);
+      const res = await grpApi({ action: 'remove', id: gid });
+      if (res.ok) {
+        harvState.groups = harvState.groups.filter((g) => g.id !== gid);
+        harvState.items.forEach((h) => { if (Number(h.group_id) === gid) h.group_id = null; });
+        renderHarvesters();
+      }
+      return;
+    }
     const resLink = e.target.closest('.harv-reslink');
     if (resLink) { openResourcePage(resLink.dataset.res); return; }
     const btn = e.target.closest('[data-hact]');

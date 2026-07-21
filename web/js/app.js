@@ -14,6 +14,7 @@ const PAGE_LOADERS = {
   purchases: () => loadPurchases(),
   characters: () => loadCharactersPage(),
   harvesters: () => loadHarvesters(),
+  factories: () => loadFactories(),
   inventory: () => loadInventory(),
   alerts: () => loadAlerts(),
   lab: () => loadLab(),
@@ -775,6 +776,7 @@ async function boot() {
   initLab();
   initMail();
   initScanner();
+  initFactories();
   initDevMode();
   initAbout();
   refreshMonitorState(); // header button reflects auto-started monitoring

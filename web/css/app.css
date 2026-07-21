@@ -32,6 +32,16 @@
   --row-pinned: #2c3144;
 }
 
+/* native checks/radios everywhere pick up the accent — no per-widget rules */
+input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
+
+/* disabled fields stay on-theme — WebKit's default washes them out white */
+.filter-input:disabled, .filter-select:disabled, .form-control:disabled, .form-select:disabled {
+  background: var(--bg-card); color: var(--text-muted);
+  -webkit-text-fill-color: var(--text-muted); opacity: 1;
+}
+
+
 * { box-sizing: border-box; }
 
 html, body {
@@ -183,8 +193,8 @@ body.offline .app-body { height: calc(100vh - 76px); }
   border-radius: 9px; padding: 1px 6px; vertical-align: 1px; }
 
 .nav-item {
-  padding: 8px 18px;
-  font-size: 13px;
+  padding: 6px 18px; /* tightened: the nav is 17 items deep now */
+  font-size: 12.5px;
   color: var(--text-primary);
   cursor: pointer;
   border-left: 2px solid transparent;
@@ -345,6 +355,10 @@ body.offline .app-body { height: calc(100vh - 76px); }
   display: inline-flex; align-items: center; justify-content: center; padding: 0; /* glyph dead-center at any size */
 }
 .btn-icon:hover { color: var(--text-hover); }
+/* armed confirm state must escape the fixed 34px square or the label is clipped —
+   confirmArmLabeled measures offsetWidth AFTER adding .confirming, so this rule
+   is what makes that measurement honest */
+.btn-icon.confirming { width: auto; padding: 0 10px; font-size: 12px; }
 /* row-action icons live bare in a table cell — no button chrome, just the glyph */
 td.col-actions .btn-icon { background: transparent; color: var(--text-muted); width: 28px; height: 28px; }
 td.col-actions .btn-icon:hover { background: transparent; color: var(--text-hover); }
@@ -977,9 +991,137 @@ td.lab-dim { opacity: .45; }
 /* Insights' empty/loading sit OUTSIDE any .table-wrap — as bare page content
    the absolute inset-0 veil above would blanket the entire app and eat every
    click (hit users with zero sales; reported by Phlan). Render them inline. */
-#page-insights > .grid-loading, #page-insights > .grid-empty {
+#page-insights > .grid-loading, #page-insights > .grid-empty,
+#page-factories > .grid-loading {
   position: static; background: none; padding: 48px 0;
 }
+
+/* ---- Factories: timed runs, cards in the prototype's image ---- */
+.fac-list { display: flex; flex-direction: column; gap: 10px; max-width: 1400px; }
+/* two-up card grid inside each group section; collapses to one column when narrow */
+/* items stretch to the row height — side-by-side cards always match, with the
+   footer pinned to the bottom (card is a flex column, body flexes) */
+.fac-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(440px, 1fr));
+             gap: 12px; }
+/* group section headers — shared by Factories and Harvesters, styled to match
+   the stockpile folder bars: accent stripe, caret, name, count, trash far right */
+.grp-hd { display: flex; align-items: center; background: var(--bg-secondary);
+          padding: 9px 14px; box-shadow: inset 3px 0 0 var(--accent-dark); }
+/* each group is a contained panel: the header caps the box, members live
+   inside it — border only, no fill, so cards keep their contrast */
+.grp-sec { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.grp-sec .fac-cards, .grp-sec .grp-cards { padding: 12px; }
+/* an empty (or emptied) group invites the drop */
+.grp-sec .fac-cards:empty::after, .grp-sec .grp-cards:empty::after {
+  content: 'Drag cards here to file them'; font-size: 12px; color: var(--text-muted);
+  padding: 6px 2px; display: block;
+}
+.grp-caret { width: 14px; color: var(--text-muted); margin-right: 8px; cursor: pointer; font-size: 14px; }
+.grp-name { font-size: 15px; font-weight: 600; color: var(--text-hover); cursor: pointer; }
+.grp-name:not(.grp-name-unfiled):hover { color: var(--accent); text-decoration: underline; }
+.grp-name-unfiled { color: var(--text-muted); cursor: default; }
+.grp-count { font-size: 11px; color: var(--text-muted); font-weight: 400; margin-left: 12px; }
+.grp-del { margin-left: auto; border: 0; background: transparent; color: var(--text-muted);
+           cursor: pointer; font-size: 13px; padding: 2px 4px; }
+.grp-del:hover, .grp-del.confirming { color: var(--accent); }
+.grp-rename-input { max-width: 260px; height: 26px; font-size: 13px; }
+.harv-card.harv-dragging { opacity: .5; }
+tr.harv-dragging td, tr.fac-dragging td { opacity: .5; }
+/* grouped harvester card view: the wrap becomes a column of sections, each
+   section reusing the same auto-fill card grid the flat list had */
+.harv-list.harv-list-grouped { display: flex; flex-direction: column; gap: 10px; }
+.grp-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(430px, 1fr)); gap: 12px; }
+/* group divider row inside a grid-view table — same bar, table flavored */
+tr.grp-row td { background: var(--bg-secondary); font-size: 13px; font-weight: 600;
+                color: var(--text-hover); padding: 8px 12px;
+                box-shadow: inset 3px 0 0 var(--accent-dark); }
+tr.grp-row .grp-count { margin-left: 10px; }
+/* tag cloud filter above the list */
+.fac-tagbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 12px; }
+.fac-tagbar-label { font-size: 11px; color: var(--text-muted); margin-right: 2px; }
+.fac-tag { font-size: 11px; padding: 3px 10px; border-radius: 999px; cursor: pointer;
+           border: 1px solid var(--border); background: var(--bg-card); color: var(--text-muted); }
+.fac-tag:hover { color: var(--text-hover); }
+.fac-tag.active { border-color: var(--accent); color: var(--accent-hover); background: rgba(226, 67, 80, .08); }
+/* the collapsed-by-default details editor: 3 across, tags spans two cells on
+   the second row so both rows run edge to edge */
+.fac-meta { grid-template-columns: repeat(3, 1fr);
+            background: var(--bg-primary); border-radius: 6px; padding: 10px; }
+.fac-field-tags { grid-column: span 2; }
+/* sectional card, same recipe as harvesters: dark header strip / padded body /
+   dark footer strip */
+.fac-card { background: var(--bg-secondary); border-radius: 8px; padding: 0; overflow: hidden;
+            display: flex; flex-direction: column; }
+.fac-card.fac-done { box-shadow: inset 0 0 0 1px #45e97e; }
+.fac-card.fac-dragging { opacity: .5; }
+.fac-hd { padding: 9px 14px 8px; background: rgba(0, 0, 0, .16); border-bottom: 1px solid var(--border); }
+.fac-title { display: flex; align-items: center; gap: 10px; }
+/* header icons go chromeless + compact — keeps the strip as tight as the
+   harvester card header, which is text-only */
+.fac-title .btn-icon { width: 26px; height: 26px; background: transparent;
+                       color: var(--text-muted); font-size: 12px; }
+.fac-title .btn-icon:hover { background: transparent; color: var(--text-hover); }
+.fac-title .btn-icon[data-facremove]:hover { color: var(--accent); }
+/* pills ride inline right after the name; badge + icons stay pinned right.
+   Never wrap — overflow clips so the title row keeps one fixed height */
+.fac-sub { display: inline-flex; align-items: center; gap: 5px; flex-wrap: nowrap;
+           min-width: 0; overflow: hidden; }
+.fac-sub .fac-pill { flex: none; }
+.fac-title .fac-name { flex: 0 1 auto; width: 170px; min-width: 90px; }
+.fac-title .fac-badge { margin-left: auto; }
+/* same chip recipe as the resources-page filter pills, sized down */
+.fac-pill { font-size: 10.5px; padding: 1px 8px; border-radius: 10px; background: var(--bg-input);
+            color: var(--text-primary); display: inline-flex; align-items: center; gap: 4px; }
+.fac-pill i { font-size: 9px; color: var(--text-muted); }
+.fac-pill-tag { color: var(--text-muted); }
+.fac-body { padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; flex: 1 1 auto; }
+.fac-foot { display: flex; align-items: center; gap: 10px; padding: 9px 14px;
+            background: rgba(0, 0, 0, .16); border-top: 1px solid var(--border); }
+.fac-foot .fac-notify:first-of-type { margin-left: auto; }
+.fac-details.open { color: var(--accent); }
+.fac-name { background: transparent; border: 0; color: var(--text-hover); font-size: 15px;
+            font-weight: 700; flex: 1 1 auto; min-width: 0; }
+.fac-name:focus { outline: 1px solid var(--border); border-radius: 4px; }
+.fac-badge { font-size: 10px; font-weight: 700; letter-spacing: .08em; padding: 2px 8px;
+             border: 1px solid var(--border); border-radius: 4px; color: var(--text-muted); }
+.fac-done .fac-badge { color: #45e97e; border-color: #45e97e; }
+.fac-running .fac-badge { color: #45e97e; border-color: rgba(69, 233, 126, .45); }
+.fac-paused .fac-badge { color: #e2b843; border-color: rgba(226, 184, 67, .5); }
+.fac-histrow { display: flex; align-items: center; gap: 10px; }
+/* history combobox: floating panel with type chips + pick/tag/delete rows */
+.fac-histbox { position: relative; flex: 1 1 auto; max-width: 520px; }
+.fac-histbox .filter-input { max-width: none; width: 100%; }
+.fac-hist-menu { position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 30;
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 8px;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, .5); max-height: 280px; overflow-y: auto; }
+.fac-hist-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+.fac-hist-item { display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 6px;
+  cursor: pointer; font-size: 12px; }
+.fac-hist-item:hover { background: var(--bg-input); }
+.fac-hist-prod { color: var(--text-hover); font-weight: 600; flex: 1 1 auto; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fac-hist-sub { color: var(--text-muted); flex: none; }
+.fac-hist-type { flex: none; width: 96px; height: 24px; font-size: 11px; padding: 0 4px; }
+.fac-hist-del { flex: none; border: 0; background: transparent; color: var(--text-muted);
+  cursor: pointer; font-size: 12px; padding: 2px 4px; }
+.fac-hist-del:hover { color: var(--accent); }
+.fac-hist-empty { color: var(--text-muted); font-size: 12px; padding: 6px; }
+.fac-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 10px; }
+.fac-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.fac-field .filter-input, .fac-field .filter-select { max-width: none; width: 100%; }
+.fac-label { font-size: 10px; text-transform: uppercase; letter-spacing: .06em;
+             color: var(--text-muted); font-weight: 600; }
+.fac-outputs .fac-out { background: var(--bg-input); border-radius: 6px; padding: 8px 12px;
+                        display: flex; flex-direction: column; gap: 3px; }
+.fac-out b { font-size: 16px; color: var(--text-hover); }
+.fac-done .fac-out .fac-remaining { color: #45e97e; }
+.fac-progressrow { display: flex; align-items: center; gap: 12px;
+                   font-size: 11px; color: var(--text-muted); }
+.fac-track { flex: 1 1 auto; height: 5px; background: var(--bg-input); border-radius: 3px; overflow: hidden; }
+.fac-fill { height: 100%; background: #45e97e; border-radius: 3px; transition: width .5s linear; }
+.fac-notify { margin-left: 4px; }
+.fac-banner { border: 1px solid #45e97e; border-radius: 6px; padding: 8px 12px;
+              color: #45e97e; font-size: 13px; background: rgba(69, 233, 126, .07); }
 .spinner {
   width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--accent);
   border-radius: 50%; display: inline-block; animation: spin .8s linear infinite;
@@ -1343,7 +1485,7 @@ body.dev-mode .dev-pill { display: inline-flex; }
 
 /* ---- Stockpile folders/buckets ---- */
 .stk-sel-cell { width: 30px; text-align: center; padding: 0; }
-.stk-sel-cell input { cursor: pointer; accent-color: var(--accent); }
+.stk-sel-cell input { cursor: pointer; }
 #stk-body tr.stk-row[draggable="true"] { cursor: grab; user-select: none; }
 #stk-body tr.stk-row[draggable="true"]:active { cursor: grabbing; }
 /* selected = a solid off-blue lift (solid so it's uniform across cells) + red left edge */
@@ -1530,7 +1672,6 @@ tr.row-detail > td { background: var(--bg-tertiary); padding: 0; }
 .scan-wl-pl-opt { display: flex; align-items: center; gap: 8px; padding: 5px 12px;
                   font-size: 13px; cursor: pointer; }
 .scan-wl-pl-opt:hover { background: var(--border); }
-.scan-wl-pl-opt input { accent-color: var(--accent); }
 /* the scanned-order label floats BELOW the input (absolute, zero height in the
    grid) so the stats box stays vertically aligned with the row's other inputs */
 .scan-wl-statwrap { position: relative; }
@@ -1791,7 +1932,7 @@ tr.row-detail > td { background: var(--bg-tertiary); padding: 0; }
 .set-disp-opt { display: flex; align-items: center; gap: 7px; font-size: 13px; cursor: pointer;
   white-space: nowrap; /* "Move it to <path>" stays one line — the path chip ellipsizes instead */
   min-height: 34px; } /* uniform row height — tall enough for the Move row's standard browse button */
-.set-disp-opt input[type="radio"] { accent-color: var(--accent); flex-shrink: 0; }
+.set-disp-opt input[type="radio"] { flex-shrink: 0; }
 .set-disp-opt:has(input:disabled) { color: var(--text-muted); }
 .set-movedir { font-size: 11px; background: var(--bg-primary); border-radius: 4px; color: var(--text-muted);
   padding: 2px 7px; flex: 0 1 auto; min-width: 0; max-width: 420px;
@@ -1800,7 +1941,6 @@ tr.row-detail > td { background: var(--bg-tertiary); padding: 0; }
 /* add/edit harvester form */
 .harv-wp-opt { display: flex; align-items: center; gap: 8px; margin-top: 12px;
   font-size: 13px; cursor: pointer; }
-.harv-wp-opt input[type="checkbox"] { accent-color: var(--accent); }
 .harv-wp-opt:has(input:disabled) { color: var(--text-muted); cursor: default; }
 /* a filled pill in the actions row so it reads as an option, not stray text */
 .harv-wp-inline { margin: 0 6px 0 0; height: 34px; padding: 0 12px; border-radius: 6px;

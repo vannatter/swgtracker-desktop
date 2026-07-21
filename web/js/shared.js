@@ -627,6 +627,71 @@ function confirmArmLabeled(btn, label = 'Confirm remove?') {
   return false;
 }
 
+// ---- list groups (stockpile-style folders, api/groups.php) -----------------
+// Generic folders shared by Harvesters and Factories: real server rows, so a
+// group exists while empty, renames in one place, and members carry group_id.
+
+const grpApi = (body) => apiFetch('POST', 'api/groups.php', { data: body });
+
+async function grpList(kind) {
+  try {
+    const r = await apiFetch('GET', 'api/groups.php', { params: { kind } });
+    return (r.ok && r.data && r.data.groups) || [];
+  } catch (_) { return []; }  // older site deploy — pages just render flat
+}
+
+// section header bar, styled to match My Stockpile's folder rows: accent
+// stripe, caret collapses, name renames inline, trash (far right) deletes —
+// members fall back to Unfiled. key 'un' = the fixed Unfiled section.
+function grpHeaderHtml(key, name, count, collapsed, noun = 'items') {
+  return `<div class="grp-hd" data-grpkey="${key}">
+    <i class="fa-solid ${collapsed ? 'fa-caret-right' : 'fa-caret-down'} grp-caret" data-grptoggle="${key}" title="${collapsed ? 'Expand' : 'Collapse'}"></i>
+    ${key === 'un'
+      ? `<span class="grp-name grp-name-unfiled">${escapeHtml(name)}</span>`
+      : `<span class="grp-name" data-grprename="${key}" title="Click to rename">${escapeHtml(name)}</span>`}
+    <span class="grp-count">${count} item${count === 1 ? '' : 's'}</span>
+    ${key === 'un' ? ''
+      : `<button class="grp-del" data-grpdel="${key}" title="Delete group — its ${noun} become Unfiled"><i class="fa-solid fa-trash-can"></i></button>`}
+  </div>`;
+}
+
+// swap a header's name span for an input; commit on blur/Enter, cancel on Esc
+function grpBeginRename(listSel, key, g, rerender) {
+  const span = $(`${listSel} [data-grprename="${key}"]`);
+  if (!span || !g) return;
+  span.outerHTML = `<input type="text" class="form-control filter-input grp-rename-input"
+    data-grprenamein="${key}" value="${escapeHtml(g.name)}" maxlength="64" spellcheck="false">`;
+  const input = $(`${listSel} [data-grprenamein="${key}"]`);
+  input.focus();
+  input.select();
+  input.addEventListener('blur', async () => {
+    const name = input.value.trim();
+    if (name && name !== g.name) {
+      g.name = name; // optimistic
+      await grpApi({ action: 'rename', id: g.id, name });
+    }
+    rerender();
+  });
+  input.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter') input.blur();
+    if (ev.key === 'Escape') { input.value = g.name; input.blur(); }
+  });
+}
+
+// split items into ordered sections: one per group (sort_order), Ungrouped
+// last. Ungrouped also swallows members whose group vanished. getGid reads the
+// member's group id. The 'un' section only appears when it has members or is
+// the only section.
+function grpSections(groups, items, getGid) {
+  const ordered = [...groups].sort((a, b) => (a.sort_order - b.sort_order) || a.name.localeCompare(b.name));
+  const live = new Set(ordered.map((g) => String(g.id)));
+  const sections = ordered.map((g) => ({ key: String(g.id), g, name: g.name,
+    items: items.filter((it) => String(getGid(it) || '') === String(g.id)) }));
+  const unfiled = items.filter((it) => !getGid(it) || !live.has(String(getGid(it))));
+  if (unfiled.length || !sections.length) sections.push({ key: 'un', g: null, name: 'Unfiled', items: unfiled });
+  return sections;
+}
+
 // Relative "time ago" from a unix timestamp or "YYYY-MM-DD HH:MM:SS" string.
 function fmtAgo(dt) {
   if (!dt) return '';

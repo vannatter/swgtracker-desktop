@@ -486,6 +486,22 @@ function renderWorklist() {
     </div>`).join('');
 }
 
+// Snap OCR class text to the official tree entry — exact (case-insensitive)
+// first, then best fuzzy, so a clean scan preselects the class and an OCR
+// wrap/typo still lands on the right node instead of forcing a manual pick.
+function scanCanonicalClass(text) {
+  if (!text || !scanState.classNodes) return null;
+  const t = String(text).trim().toLowerCase();
+  const exact = scanState.classNodes.find((n) => n.desc.toLowerCase() === t);
+  if (exact) return exact.desc;
+  let best = null, bestSim = 0;
+  for (const n of scanState.classNodes) {
+    const s = scanNameSim(t, n.desc.toLowerCase());
+    if (s > bestSim) { bestSim = s; best = n.desc; }
+  }
+  return bestSim >= 0.72 ? best : null;
+}
+
 // Options for one row's class menu, filtered. Depth-indented like the site's
 // dropdown when unfiltered; flat matches when a query narrows it.
 function wlRenderClassOpts(optsHost, query = '') {
@@ -731,7 +747,8 @@ function initScanner() {
       // the scan isn't lost when the queue card resolves.
       scanState.worklist.push({
         id: Date.now(),
-        name: parsed.name, klass: parsed.klass, planets: [],
+        // scanned class snaps to the official tree entry when it resolves
+        name: parsed.name, klass: scanCanonicalClass(parsed.klass) || parsed.klass, planets: [],
         stats: parsed.statsOrder.map(([, v]) => v).join(' '),
         order: parsed.statsOrder.map(([k]) => k.toUpperCase()).join(' '),
         image: item.image,
@@ -836,10 +853,12 @@ function initScanner() {
       if (!wasHidden) return;
       if (btn.parentElement.hasAttribute('data-wlcls')) {
         const filter = menu.querySelector('[data-wlclsfilter]');
-        filter.value = '';
-        wlRenderClassOpts(menu.querySelector('[data-wlclsopts]'));
+        const w = wlRowOf(btn);
+        filter.value = (w && w.klass) || ''; // open narrowed to the scanned class
+        wlRenderClassOpts(menu.querySelector('[data-wlclsopts]'), filter.value);
         wlAnchorMenu(btn, menu);
         filter.focus();
+        filter.select(); // typing immediately replaces the prefill
       } else {
         wlAnchorMenu(btn, menu);
       }

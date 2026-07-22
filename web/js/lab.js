@@ -841,6 +841,7 @@ function labHomeGridHtml(list) {
     <td class="col-text">${fmtAgoTip(e.created)}</td>
     <td class="col-actions">
       <button class="btn btn-icon" data-load="${e.id}" title="Open on bench"><i class="fa-solid fa-flask"></i></button>
+      <button class="btn btn-icon" data-savemys="${e.id}" title="Save as a draft My Schematics entry"><i class="fa-solid fa-scroll"></i></button>
       <button class="btn btn-icon" data-delexp="${e.id}" title="Delete"><i class="fa-solid fa-trash-can"></i></button>
     </td>
   </tr>`).join('');
@@ -897,11 +898,43 @@ function labRenderHome() {
       <div class="lab-exp-foot">
         <span>
           <button class="btn btn-sm btn-outline-secondary" data-load="${e.id}"><i class="fa-solid fa-flask"></i> Open on bench</button>
+          <button class="btn btn-sm btn-outline-secondary" data-savemys="${e.id}"
+                  title="Save as a draft My Schematics entry — lines + picked resources carry over"><i class="fa-solid fa-scroll"></i> My Schematic</button>
           <button class="btn btn-icon al-rule-btn" data-delexp="${e.id}" title="Delete"><i class="fa-solid fa-trash-can"></i></button>
         </span>
         <span class="lab-exp-when">${fmtNum(e.cost)} cr · ${fmtAgoTip(e.created)} · ${escapeHtml(e.schematic_name)}</span>
       </div>
     </div>`).join('');
+}
+
+// promote an experiment to a My Schematics entry: same schematic + tracked
+// lines, with every picked resource assigned — a draft you can craft from
+async function labSaveAsMySchematic(exp, btn) {
+  if (btn) btn.disabled = true;
+  const body = {
+    schematic_id: exp.schematic_id,
+    formulas: (exp.formula_ids || []).join(','),
+    custom_name: (exp.name && exp.name !== exp.schematic_name) ? exp.name : 'Lab draft',
+    resources: (exp.picks || []).map((p) => ({
+      resource_type: p.code, resource_label: p.slot, resource_name: p.name })),
+  };
+  let res;
+  try { res = await apiFetch('POST', 'api/my_schematics.php', { data: body }); }
+  catch (e) { res = { ok: false, error: String(e) }; }
+  if (btn) btn.disabled = false;
+  if (res.ok) {
+    // experiment notes ride along as the schematic's notes
+    if (exp.notes && res.data && res.data.user_schematic_id) {
+      apiFetch('PUT', 'api/my_schematics.php', {
+        data: { user_schematic_id: res.data.user_schematic_id, notes: exp.notes },
+      }).catch(() => {});
+    }
+    toast(`Saved to My Schematics — ${body.custom_name}`);
+  } else if (String(res.error || '').toLowerCase().includes('already')) {
+    toast('Already in My Schematics (same schematic + lines)', false);
+  } else {
+    toast(res.error || 'Save to My Schematics failed', false);
+  }
 }
 
 // pull the saved experiments back from config and re-render (header refresh button)
@@ -1244,6 +1277,12 @@ function initLab() {
     if (load) {
       const exp = labState.experiments.find((x) => x.id === load.dataset.load);
       if (exp) labLoadExperiment(exp);
+      return;
+    }
+    const mys = e.target.closest('[data-savemys]');
+    if (mys) {
+      const exp = labState.experiments.find((x) => x.id === mys.dataset.savemys);
+      if (exp) labSaveAsMySchematic(exp, mys);
       return;
     }
     const del = e.target.closest('[data-delexp]');

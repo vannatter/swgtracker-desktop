@@ -18,7 +18,8 @@ const MYS_COLUMNS = [
 ];
 
 function buildMysHeader() {
-  $('#mys-head').innerHTML = sortableHeaderHtml(MYS_COLUMNS, mysState.sortField, mysState.sortOrder);
+  $('#mys-head').innerHTML = sortableHeaderHtml(MYS_COLUMNS, mysState.sortField, mysState.sortOrder)
+    + '<th class="pin-cell"></th>'; // notes
 }
 
 // NB: distinct from mysStatusHtml(r, a) below, which renders detail-page rows
@@ -63,6 +64,9 @@ function renderMysList() {
       <td class="col-text">${mysFormulaCell(s)}</td>
       <td class="stat">${(s.resources || []).length}</td>
       <td class="col-text" data-rowstatus>${mysListStatusHtml(s)}</td>
+      <td class="pin-cell note-cell" data-mysnote="${idx}"
+          title="${s.notes && String(s.notes).trim() ? escapeHtml(s.notes) : 'Add notes'}"><i
+          class="fa-${s.notes && String(s.notes).trim() ? 'solid' : 'regular'} fa-note-sticky${s.notes && String(s.notes).trim() ? ' has-notes' : ''}"></i></td>
     </tr>`).join('');
 
   const empty = $('#mys-empty');
@@ -76,6 +80,34 @@ function renderMysList() {
   $('#mys-status').textContent = mysState.items.length
     ? `${visible.length}${visible.length === mysState.items.length ? '' : ` of ${mysState.items.length}`} schematics in your crafting list — click one to manage its resources` : '';
 }
+// ---- notes dialog (hover the icon to preview, click to edit) ---------------
+let mysNoteFor = null;
+
+function mysOpenNoteDialog(item) {
+  if (!item) return;
+  mysNoteFor = String(item.user_schematic_id);
+  $('#mys-note-title').textContent = item.custom_name ? `${item.name} · ${item.custom_name}` : (item.name || 'Notes');
+  $('#mys-note-text').value = item.notes || '';
+  $('#mys-note-modal').hidden = false;
+  $('#mys-note-text').focus();
+}
+
+async function mysSaveNoteDialog() {
+  const item = mysState.items.find((s) => String(s.user_schematic_id) === mysNoteFor);
+  $('#mys-note-modal').hidden = true;
+  if (!item) return;
+  const notes = $('#mys-note-text').value.trim();
+  if ((item.notes || '') === notes) return;
+  item.notes = notes; // optimistic
+  renderMysList();
+  try {
+    const res = await apiFetch('PUT', 'api/my_schematics.php', {
+      data: { user_schematic_id: safeInt(mysNoteFor), notes },
+    });
+    if (!res.ok) toast(res.error || 'Failed to save notes — is the site update deployed?', false);
+  } catch (e) { toast(String(e), false); }
+}
+
 const mysdState = { item: null, analysis: null };
 const mysDetailCache = new Map();   // schematic_id -> {dtoByCode} | null
 const mysResourceCache = new Map(); // resource name -> full record | null
@@ -1123,8 +1155,15 @@ function initMySchematics() {
 
   // list rows open the detail page
   $('#mys-body').addEventListener('click', (e) => {
+    const note = e.target.closest('[data-mysnote]');
+    if (note) { mysOpenNoteDialog(mysState.items[safeInt(note.dataset.mysnote)]); return; }
     const row = e.target.closest('tr[data-idx]');
     if (row) openMySchematicPage(mysState.items[safeInt(row.dataset.idx)]);
+  });
+  $('#mys-note-save').addEventListener('click', () => mysSaveNoteDialog());
+  $('#mys-note-cancel').addEventListener('click', () => { $('#mys-note-modal').hidden = true; });
+  $('#mys-note-modal').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) e.currentTarget.hidden = true;
   });
 
   // detail page interactions

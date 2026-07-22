@@ -412,6 +412,19 @@ const SCAN_PLANETS = ['Corellia', 'Dantooine', 'Dathomir', 'Endor', 'Kashyyyk',
 const SCAN_PLANET_TOKENS = { 'Yavin IV': 'yavin4' };
 const scanPlanetToken = (p) => SCAN_PLANET_TOKENS[p] || p.toLowerCase();
 
+// planetary classes name their world in the first word ("Rori Berry Fruit",
+// "Corellian Wild Wheat") — that decides the spawn's planet with no clicking
+const SCAN_CLASS_PLANET = {
+  corellian: 'Corellia', dantooine: 'Dantooine', dathomirian: 'Dathomir',
+  endorian: 'Endor', kashyyykian: 'Kashyyyk', lokian: 'Lok',
+  mustafarian: 'Mustafar', nabooian: 'Naboo', rori: 'Rori',
+  talusian: 'Talus', tatooinian: 'Tatooine', yavinian: 'Yavin IV',
+};
+function scanClassPlanet(klass) {
+  const first = String(klass || '').trim().split(/\s+/)[0].toLowerCase();
+  return SCAN_CLASS_PLANET[first] || null;
+}
+
 async function wlLoad() {
   try {
     const res = await api().get_config();
@@ -745,10 +758,13 @@ function initScanner() {
       const parsed = scanParsed(item);
       // The capture IMAGE moves onto the worklist row (zoomable there), so
       // the scan isn't lost when the queue card resolves.
+      // scanned class snaps to the official tree entry when it resolves, and a
+      // planetary class (Corellian/Rori/...) preselects its planet
+      const klass = scanCanonicalClass(parsed.klass) || parsed.klass;
+      const impliedPlanet = scanClassPlanet(klass);
       scanState.worklist.push({
         id: Date.now(),
-        // scanned class snaps to the official tree entry when it resolves
-        name: parsed.name, klass: scanCanonicalClass(parsed.klass) || parsed.klass, planets: [],
+        name: parsed.name, klass, planets: impliedPlanet ? [impliedPlanet] : [],
         stats: parsed.statsOrder.map(([, v]) => v).join(' '),
         order: parsed.statsOrder.map(([k]) => k.toUpperCase()).join(' '),
         image: item.image,

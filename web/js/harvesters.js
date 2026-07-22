@@ -866,6 +866,11 @@ function harvOpenForm(h = null) {
   harvState.editRates = h ? { maint: h.maint_rate, power: h.power_rate } : null;
   $('#harv-form-title').textContent = h ? `Edit ${h.name || h.harvester_type}` : 'Add Harvester';
   $('#harv-f-type').value = h ? (h.harvester_type || '') : '';
+  // despawned-resource helper: offer a one-click swap instead of hand-clearing
+  harvState.editOrigRes = h ? (h.resource_name || '') : null;
+  const goneNow = h && harvResGone(h);
+  $('#harv-f-gone').hidden = !goneNow;
+  if (goneNow) $('#harv-f-gone-name').textContent = h.resource_name;
   $('#harv-f-name').value = h ? (h.name || '') : '';
   $('#harv-f-group').innerHTML = '<option value="">—</option>'
     + [...harvState.groups].sort((a, b) => (a.sort_order - b.sort_order) || a.name.localeCompare(b.name))
@@ -994,9 +999,20 @@ async function harvSubmitForm() {
   fields.extraction_rate = rate ? rate.toFixed(2) : '';
 
   const editing = m.dataset.editing;
+  // swapped to a different resource (despawn retarget or otherwise): the new
+  // pull starts a fresh fill clock, and the change lands in the event log
+  const resSwapped = editing && harvState.editOrigRes !== null
+    && fields.resource_name && fields.resource_name !== harvState.editOrigRes;
+  if (resSwapped) fields.hopper_emptied_at = harvNow();
   let res;
   if (editing) {
     res = await apiFetch('PUT', 'api/harvesters.php', { data: { id: editing, ...fields } });
+    if (res.ok && resSwapped) {
+      apiFetch('POST', 'api/harvesters.php', { params: { action: 'event' }, data: {
+        harvester_id: editing, kind: 'note',
+        detail: `Resource changed: ${harvState.editOrigRes || '—'} → ${fields.resource_name}`,
+      } }).catch(() => {});
+    }
   } else {
     if ($('#harv-f-power').value.trim()) fields.power_amount = Math.round(parseAmount($('#harv-f-power').value));
     if ($('#harv-f-maint').value.trim()) fields.maint_amount = Math.round(parseAmount($('#harv-f-maint').value));
@@ -1077,6 +1093,17 @@ function initHarvesters() {
   // pick re-prices maintenance (Master Merchant discount)
   $('#harv-f-char').addEventListener('change', harvSyncFormMode);
   $('#harv-f-planet').addEventListener('change', harvSyncFormMode);
+  // despawn banner: clear the dead resource and drop straight into picking a new one
+  $('#harv-f-retarget').addEventListener('click', () => {
+    $('#harv-f-resource').value = '';
+    $('#harv-f-conc').value = '';
+    delete $('#harv-f-resource').dataset.code;
+    $('#harv-f-resinfo').hidden = true;
+    $('#harv-f-reslist').hidden = true;
+    harvSetTypeOptions(null);
+    $('#harv-f-gone').hidden = true;
+    $('#harv-f-resource').focus();
+  });
   ['#harv-f-x', '#harv-f-y'].forEach((sel) => $(sel).addEventListener('input', harvSyncFormMode));
 
   // leaving a field with garbage in it gets called out immediately, not at save

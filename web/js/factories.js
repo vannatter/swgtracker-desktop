@@ -11,7 +11,8 @@ const facState = { items: [], history: [], timer: null, saveTimers: {}, dragId: 
                    groups: [],                         // api/groups.php folders (kind=factory)
                    collapsed: new Set(),               // collapsed section keys, session-only
                    detailsOpen: new Set(),             // cards with the details editor open
-                   histOpen: null, histQuery: '', histType: '' }; // history combobox state
+                   histOpen: null, histQuery: '', histType: '',  // history combobox state
+                   gridEdit: null };                   // factory id open in the grid-view edit dialog
 
 // run-type tags for remembered runs — powers the history dropdown's filter chips
 const FAC_RUN_TYPES = ['Armor', 'Clothing', 'Weapon', 'Architect', 'Droid', 'Food', 'Medicine', 'Other'];
@@ -63,7 +64,7 @@ function facStatus(f) {
 
 // ---- rendering ------------------------------------------------------------
 
-function facCardHtml(f) {
+function facCardHtml(f, embed = false) {
   const st = facStatus(f);
   const dur = facDuration(f);
   const running = st === 'running', done = st === 'done';
@@ -77,7 +78,7 @@ function facCardHtml(f) {
     f.owner ? `<span class="fac-pill"><i class="fa-solid fa-user"></i>${escapeHtml(f.owner)}</span>` : '',
     ...tags.map((t) => `<span class="fac-pill fac-pill-tag">${escapeHtml(t)}</span>`),
   ].filter(Boolean).join('');
-  return `<div class="fac-card fac-${st}" data-facid="${f.id}" data-facstate="${st}" draggable="true">
+  return `<div class="fac-card fac-${st}" data-facid="${f.id}" data-facstate="${st}"${embed ? '' : ' draggable="true"'}>
     <div class="fac-hd">
       <div class="fac-title">
         <input class="fac-name" data-facfield="name" value="${escapeHtml(f.name)}" spellcheck="false" maxlength="64">
@@ -192,6 +193,7 @@ function facGridHtml(items) {
              : `<button class="btn btn-icon" data-facpause="${f.id}" title="Pause — freeze the countdown"><i class="fa-solid fa-pause"></i></button>`}
            <button class="btn btn-icon" data-facdone="${f.id}" title="Done — end this run"><i class="fa-solid fa-xmark"></i></button>`
         : `<button class="btn btn-icon" data-facstart="${f.id}" title="Start the run"><i class="fa-solid fa-play"></i></button>`}
+        <button class="btn btn-icon${facState.gridEdit === String(f.id) ? ' open' : ''}" data-facedit="${f.id}" title="Edit"><i class="fa-solid fa-pen"></i></button>
         <button class="btn btn-icon" data-facremove="${f.id}" title="Remove factory"><i class="fa-solid fa-trash-can"></i></button></td>
     </tr>`;
   };
@@ -266,11 +268,20 @@ function renderFactories() {
   const sections = grpSections(facState.groups, items, (f) => f.group_id);
 
   if (facState.view === 'grid') {
-    $('#fac-list').innerHTML = facGridHtml(items);
+    // the edit dialog hosts the regular card and lives INSIDE #fac-list so
+    // every delegated card handler (fields, history, actions) works unchanged
+    const ef = facState.gridEdit && facState.items.find((x) => String(x.id) === facState.gridEdit);
+    if (facState.gridEdit && !ef) facState.gridEdit = null; // factory got removed
+    $('#fac-list').innerHTML = facGridHtml(items) + (ef ? `
+      <div class="key-gate fac-editdlg" data-faceditbg>
+        <div class="fac-editdlg-card">${facCardHtml(ef, true)}
+          <div class="fac-editdlg-foot"><button class="btn btn-sm btn-outline-secondary" data-faceditclose>Close</button></div>
+        </div>
+      </div>` : '');
   } else {
     $('#fac-list').innerHTML = sections.map((s) => {
       const collapsed = facState.collapsed.has(s.key);
-      const body = `<div class="fac-cards" data-facgroup="${s.key}"${collapsed ? ' hidden' : ''}>${s.items.map(facCardHtml).join('')}</div>`;
+      const body = `<div class="fac-cards" data-facgroup="${s.key}"${collapsed ? ' hidden' : ''}>${s.items.map((f) => facCardHtml(f)).join('')}</div>`;
       // groups render as contained panels (header caps the box); a lone
       // Unfiled section stays chromeless — same as before groups existed
       return (s.key !== 'un' || sections.length > 1)
@@ -288,27 +299,30 @@ function facTick() {
   if (!$('#page-factories').classList.contains('active')) return;
   let needsFull = false;
   for (const f of facState.items) {
-    const card = document.querySelector(`#fac-list [data-facid="${f.id}"]`);
-    if (!card || !f.started_at) continue;
+    // a grid row and its inline edit card both carry the id — tick them all
+    const els = document.querySelectorAll(`#fac-list [data-facid="${f.id}"]`);
+    if (!els.length || !f.started_at) continue;
     const st = facStatus(f);
-    if (card.dataset.facstate !== st) { needsFull = true; continue; } // crossed the finish line
-    const dur = facDuration(f);
-    const rem = card.querySelector('.fac-remaining');
-    if (rem && st === 'running') rem.textContent = facFmtDur(facDue(f) - facNow());
-    // while paused only the ETA moves (the finish line slides out as you wait)
-    const eta = card.querySelector('.fac-eta');
-    if (eta && st === 'paused') eta.textContent = facEta(f);
-    const fill = card.querySelector('.fac-fill');
-    if (fill) fill.style.width = `${Math.min(100, facElapsed(f) / Math.max(1, dur) * 100).toFixed(1)}%`;
-    const pct = card.querySelector('.fac-pct');
-    if (pct) pct.textContent = `${Math.min(100, Math.round(facElapsed(f) / Math.max(1, dur) * 100))}%`;
-    const el = card.querySelector('.fac-elapsed');
-    if (el) el.textContent = `Elapsed: ${facFmtDur(facElapsed(f))}${f.paused_at ? ' · paused' : ''}`;
-    const un = card.querySelector('.fac-units');
-    if (un) {
-      un.textContent = card.tagName === 'TR'
-        ? fmtNum(facUnitsDone(f))
-        : `${fmtNum(facUnitsDone(f))} / ${fmtNum(f.quantity)}`;
+    for (const card of els) {
+      if (card.dataset.facstate !== st) { needsFull = true; continue; } // crossed the finish line
+      const dur = facDuration(f);
+      const rem = card.querySelector('.fac-remaining');
+      if (rem && st === 'running') rem.textContent = facFmtDur(facDue(f) - facNow());
+      // while paused only the ETA moves (the finish line slides out as you wait)
+      const eta = card.querySelector('.fac-eta');
+      if (eta && st === 'paused') eta.textContent = facEta(f);
+      const fill = card.querySelector('.fac-fill');
+      if (fill) fill.style.width = `${Math.min(100, facElapsed(f) / Math.max(1, dur) * 100).toFixed(1)}%`;
+      const pct = card.querySelector('.fac-pct');
+      if (pct) pct.textContent = `${Math.min(100, Math.round(facElapsed(f) / Math.max(1, dur) * 100))}%`;
+      const el = card.querySelector('.fac-elapsed');
+      if (el) el.textContent = `Elapsed: ${facFmtDur(facElapsed(f))}${f.paused_at ? ' · paused' : ''}`;
+      const un = card.querySelector('.fac-units');
+      if (un) {
+        un.textContent = card.tagName === 'TR'
+          ? fmtNum(facUnitsDone(f))
+          : `${fmtNum(facUnitsDone(f))} / ${fmtNum(f.quantity)}`;
+      }
     }
   }
   if (needsFull) renderFactories();
@@ -399,6 +413,12 @@ function facNotifySweep() {
 
 function initFactories() {
   setInterval(facNotifySweep, 30000); // app-wide: fires even off-page
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && facState.gridEdit) {
+      facState.gridEdit = null;
+      renderFactories();
+    }
+  });
   $('[data-refresh="factories"]').addEventListener('click', loadFactories);
 
   $('#fac-viewtoggle').addEventListener('click', () => {
@@ -527,6 +547,18 @@ function initFactories() {
         facState.histOpen = null;
         facPost({ action: 'save', factory: f }).then(() => renderFactories());
       }
+      return;
+    }
+    const ged = e.target.closest('[data-facedit]');
+    if (ged) {
+      facState.gridEdit = facState.gridEdit === ged.dataset.facedit ? null : ged.dataset.facedit;
+      renderFactories();
+      return;
+    }
+    // dialog close: backdrop click (the overlay itself, not its contents) or the button
+    if (e.target.hasAttribute('data-faceditbg') || e.target.closest('[data-faceditclose]')) {
+      facState.gridEdit = null;
+      renderFactories();
       return;
     }
     const det = e.target.closest('[data-facdetails]');
@@ -659,7 +691,9 @@ function initFactories() {
         }
       }
     }
-    const ids = [...document.querySelectorAll('#fac-list [data-facid]')].map((c) => safeInt(c.dataset.facid));
+    const ids = [...document.querySelectorAll('#fac-list [data-facid]')]
+      .filter((c) => !c.closest('.fac-editdlg'))  // the dialog's card duplicates the id
+      .map((c) => safeInt(c.dataset.facid));
     facState.items.sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
     await facPost({ action: 'reorder', ids });
     renderFactories(); // snap into the (possibly new) section cleanly

@@ -17,9 +17,10 @@ const STK_COLUMNS = [
   ['PE', 'pe', 'stat'],
   ['Amount', 'stock', 'stat', 'Click a value to edit — supports shorthand like 300k / 4.5m'],
   ['My CPU', 'my_cpu', 'stat', 'Your cost per unit — what you paid (0 = mined it yourself). Click to edit; the Lab uses this for cost math.'],
+  ['Schem', 'schem_count', 'stat', 'How many of your crafting-list schematics use this resource — hover a count for the names'],
   ['Added', 'date_added', 'col-text', 'When you stockpiled it — click the header to sort newest first'],
 ];
-const STK_NUMERIC = new Set([...STAT_FIELDS, 'stock', 'score', 'my_cpu']);
+const STK_NUMERIC = new Set([...STAT_FIELDS, 'stock', 'score', 'my_cpu', 'schem_count']);
 
 // resourceIds: resource ids currently stocked — drives the ✓ marks in other grids
 const stkState = {
@@ -29,10 +30,13 @@ const stkState = {
   selection: new Set(),  // selected stockpile_ids (strings)
   lastSid: null,         // anchor row for shift-range select
   dragBucket: null,      // bucket key being dragged to reorder (null = dragging items)
-  expanded: new Set(),   // stockpile_ids with their notes/schematics detail open
-  mySchems: null,        // the user's My Schematics list (lazy-loaded once, for the detail panel)
+  tagFilter: null,       // active tag-cloud filter (session-only)
+  noteFor: null,         // stockpile_id open in the notes/tags dialog
+  mySchems: null,        // the user's My Schematics list (lazy-loaded once, for the Schem counts)
   _mySchemsPromise: null,
 };
+
+const stkTags = (item) => String(item.tags || '').split(',').map((t) => t.trim()).filter(Boolean);
 
 const stkHasBuckets = () => stkState.buckets.length > 0;
 const UNFILED = 'unfiled';
@@ -54,7 +58,16 @@ function buildStkHeader() {
 
 function stkRowHtml(item, idx) {
   const cells = STK_COLUMNS.map(([, field]) => {
-    if (field === 'name') return `<td class="col-name res-name">${escapeHtml(item.name || '')}</td>`;
+    if (field === 'name') {
+      const tagged = stkTags(item).length > 0;
+      // indicator pins to the cell's right edge — it can never wrap the name line
+      return `<td class="col-name res-name${tagged ? ' stk-hastag' : ''}">${escapeHtml(item.name || '')}${tagged
+        ? `<i class="fa-solid fa-tag stk-tagind" data-taghover="${idx}"></i>` : ''}</td>`;
+    }
+    if (field === 'schem_count') {
+      const n = safeInt(item.schem_count);
+      return `<td class="stat ${n ? 'stk-schem-count' : 'stat_off'}"${n ? ` data-schemhover="${idx}"` : ''}>${n || '—'}</td>`;
+    }
     if (field === 'type_name') return `<td class="col-text res-type">${escapeHtml(item.type_name || '')}</td>`;
     if (field === 'stock') return `<td class="stat stk-stock" data-stock="${idx}">${fmtNum(item.stock)}</td>`;
     if (field === 'date_added') return `<td class="col-text">${fmtAgoTip(item.date_added)}</td>`;
@@ -77,42 +90,16 @@ function stkRowHtml(item, idx) {
     : '';
   const group = item.bucket_id != null ? String(item.bucket_id) : UNFILED;
   const hasNotes = item.notes && String(item.notes).trim();
-  const open = stkState.expanded.has(sid);
-  const noteCell = `<td class="pin-cell note-cell${open ? ' open' : ''}" data-notes="${idx}" title="${hasNotes ? 'Notes + linked schematics' : 'Notes / linked schematics'}"><i class="fa-${hasNotes ? 'solid' : 'regular'} fa-note-sticky${hasNotes ? ' has-notes' : ''}"></i></td>`;
-  return `<tr data-idx="${idx}" data-sid="${sid}"${buckets ? ` data-group="${group}" draggable="true"` : ''} class="stk-row${selected ? ' stk-selected' : ''}${open ? ' row-open' : ''}">
+  // hover previews the note text; clicking opens the notes/tags dialog
+  const noteCell = `<td class="pin-cell note-cell" data-notes="${idx}" title="${hasNotes ? escapeHtml(item.notes) : 'Add notes / tags'}"><i class="fa-${hasNotes ? 'solid' : 'regular'} fa-note-sticky${hasNotes ? ' has-notes' : ''}"></i></td>`;
+  return `<tr data-idx="${idx}" data-sid="${sid}"${buckets ? ` data-group="${group}" draggable="true"` : ''} class="stk-row${selected ? ' stk-selected' : ''}">
     ${selCell}${cells}
     ${noteCell}
     <td class="pin-cell" data-remove="${idx}" title="Remove from stockpile"><i class="fa-solid fa-trash-can"></i></td>
   </tr>`;
 }
 
-// item row + (when expanded) its notes/schematics detail row
-function stkRowsHtml(item, idx) {
-  let html = stkRowHtml(item, idx);
-  if (stkState.expanded.has(String(item.stockpile_id))) html += stkDetailRowHtml(item);
-  return html;
-}
-
-function stkDetailRowHtml(item) {
-  const sid = String(item.stockpile_id);
-  return `<tr class="row-detail" data-detailfor="${sid}">
-    <td colspan="${stkColCount()}">
-      <div class="stk-detail-panel">
-        <div class="stk-detail-col stk-detail-notes">
-          <div class="detail-label"><i class="fa-solid fa-pen"></i> Notes</div>
-          <textarea class="notes-input" data-notesfor="${sid}" rows="3"
-            placeholder="Notes for ${escapeHtml(item.name)}…">${escapeHtml(item.notes || '')}</textarea>
-        </div>
-        <div class="stk-detail-col stk-detail-schems">
-          <div class="detail-label"><i class="fa-solid fa-scroll"></i> Your schematics using this</div>
-          <div class="stk-schem-list" data-schemfor="${item.id}" data-resname="${escapeHtml(item.name)}">
-            <span class="stat_off">Loading…</span>
-          </div>
-        </div>
-      </div>
-    </td>
-  </tr>`;
-}
+const stkRowsHtml = (item, idx) => stkRowHtml(item, idx);
 
 // the user's crafting-list schematics (loaded once) so the detail panel can show
 // which of THEIR schematics a resource is assigned to
@@ -140,34 +127,82 @@ async function stkGetMySchems() {
 }
 
 // show the user's schematics where this resource is the assigned pick for an ingredient
-async function stkLoadSchems(el) {
-  const resId = String(el.dataset.schemfor);
-  const resName = el.dataset.resname;
-  let mine;
-  try { mine = await stkGetMySchems(); }
-  catch (_) { el.innerHTML = '<span class="stat_off">Couldn’t load your schematics.</span>'; return; }
-  const using = (mine || []).filter((s) => (s.resources || []).some((r) =>
-    (r.resource && String(r.resource.id) === resId) || (r.resource_name && r.resource_name === resName)));
-  if (!using.length) { el.innerHTML = '<span class="stat_off">—</span>'; return; }
-  el.innerHTML = using.map((s) => {
-    const label = s.custom_name ? `${s.name} · ${s.custom_name}` : (s.name || '');
-    return `<span class="stk-schem-chip" data-usid="${escapeHtml(String(s.user_schematic_id))}">${escapeHtml(label)}</span>`;
-  }).join('');
+// per-row "how many of my schematics use this" — computed once the My
+// Schematics list is in, then rendered as a sortable column with hover names
+function stkApplySchemCounts() {
+  const mine = stkState.mySchems || [];
+  for (const item of stkState.items) {
+    const using = mine.filter((s) => (s.resources || []).some((r) =>
+      (r.resource && String(r.resource.id) === String(item.id))
+      || (r.resource_name && r.resource_name === item.name)));
+    item.schem_count = using.length;
+    item.schem_using = using.map((s) => ({
+      usid: String(s.user_schematic_id),
+      label: s.custom_name ? `${s.name} · ${s.custom_name}` : (s.name || ''),
+    }));
+  }
 }
 
-async function stkSaveNotes(sid, value) {
-  const item = stkState.items.find((i) => String(i.stockpile_id) === String(sid));
+// hover popover for the Schem count: the schematic names as LINKS that jump
+// straight to their My Schematics page
+let stkPopHide = null;
+function stkShowSchemPop(cell, item) {
+  clearTimeout(stkPopHide);
+  const pop = $('#stk-schem-pop');
+  pop.innerHTML = item.schem_using.map((u) =>
+    `<span class="stk-schem-chip" data-usid="${escapeHtml(u.usid)}">${escapeHtml(u.label)}</span>`).join('');
+  const r = cell.getBoundingClientRect();
+  pop.hidden = false;
+  const w = Math.min(320, Math.max(180, pop.offsetWidth));
+  pop.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - w - 8))}px`;
+  pop.style.top = r.bottom + pop.offsetHeight + 8 < window.innerHeight
+    ? `${r.bottom + 4}px` : `${r.top - pop.offsetHeight - 4}px`;
+}
+function stkScheduleSchemPopHide() {
+  clearTimeout(stkPopHide);
+  stkPopHide = setTimeout(() => { $('#stk-schem-pop').hidden = true; }, 250);
+}
+
+// tag-indicator popover: the item's tags as chips — click one to filter by it
+function stkShowTagPop(anchor, item) {
+  clearTimeout(stkPopHide);
+  const pop = $('#stk-schem-pop');
+  pop.innerHTML = `<div class="fac-tagbar" style="margin:0">${stkTags(item).map((t) =>
+    `<span class="fac-tag${stkState.tagFilter === t ? ' active' : ''}" data-stktag="${escapeHtml(t)}">${escapeHtml(t)}</span>`).join('')}</div>`;
+  const r = anchor.getBoundingClientRect();
+  pop.hidden = false;
+  pop.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 328))}px`;
+  pop.style.top = r.bottom + pop.offsetHeight + 8 < window.innerHeight
+    ? `${r.bottom + 4}px` : `${r.top - pop.offsetHeight - 4}px`;
+}
+
+// ---- notes/tags dialog ----------------------------------------------------
+
+function stkOpenNoteDialog(item) {
+  stkState.noteFor = String(item.stockpile_id);
+  $('#stk-note-title').textContent = item.name || 'Notes';
+  $('#stk-note-text').value = item.notes || '';
+  $('#stk-note-tags').value = item.tags || '';
+  $('#stk-note-modal').hidden = false;
+  $('#stk-note-text').focus();
+}
+
+async function stkSaveNoteDialog() {
+  const item = stkState.items.find((i) => String(i.stockpile_id) === stkState.noteFor);
+  $('#stk-note-modal').hidden = true;
   if (!item) return;
-  const v = (value || '').trim();
-  if ((item.notes || '') === v) return; // unchanged
-  item.notes = v; // optimistic
-  // flip the note icon indicator in place (avoid a re-render that would drop focus)
-  const ico = $(`#stk-body tr[data-sid="${sid}"] .note-cell i`);
-  if (ico) ico.className = v ? 'fa-solid fa-note-sticky has-notes' : 'fa-regular fa-note-sticky';
+  const notes = $('#stk-note-text').value.trim();
+  const tags = $('#stk-note-tags').value.trim();
+  if ((item.notes || '') === notes && (item.tags || '') === tags) return;
+  item.notes = notes; // optimistic
+  item.tags = tags;
+  renderStockpile();
   try {
-    const res = await api().update_stockpile_notes(item.stockpile_id, v);
-    $('#stk-status').textContent = res.ok ? `Notes saved — ${item.name}` : `Failed to save notes: ${res.error || 'server error'}`;
-  } catch (e) { $('#stk-status').textContent = `Failed to save notes: ${e}`; }
+    const res = await apiFetch('PUT', 'api/stockpile.php', {
+      data: { stockpile_id: safeInt(stkState.noteFor), notes, tags },
+    });
+    $('#stk-status').textContent = res.ok ? `Saved — ${item.name}` : `Save failed: ${res.error || 'server error'}`;
+  } catch (e) { $('#stk-status').textContent = `Save failed: ${e}`; }
 }
 
 function stkGroupHeaderHtml(key, name, count, deletable) {
@@ -214,10 +249,12 @@ async function stkReorderBucket(dragKey, targetKey) {
 function stkVisibleItems() {
   const q = $('#stk-search').value.trim().toLowerCase();
   let items = stkState.items;
+  if (stkState.tagFilter) items = items.filter((i) => stkTags(i).includes(stkState.tagFilter));
   if (q) {
     items = items.filter((i) =>
       String(i.name || '').toLowerCase().includes(q) ||
-      String(i.type_name || '').toLowerCase().includes(q));
+      String(i.type_name || '').toLowerCase().includes(q) ||
+      String(i.tags || '').toLowerCase().includes(q));
   }
   const { sortField, sortOrder } = stkState;
   const dir = sortOrder === 'DESC' ? -1 : 1;
@@ -265,7 +302,16 @@ function renderStockpile(statusMsg) {
   }
   $('#stk-body').innerHTML = rowsHtml;
   // fill any open detail panels with their linked schematics (cached after first load)
-  $('#stk-body').querySelectorAll('.stk-schem-list').forEach((el) => stkLoadSchems(el));
+  // tag cloud built from every item so an active filter can always be unclicked
+  const allTags = [...new Set(stkState.items.flatMap(stkTags))];
+  if (stkState.tagFilter && !allTags.includes(stkState.tagFilter)) stkState.tagFilter = null;
+  const tagbar = $('#stk-tagbar');
+  tagbar.hidden = !allTags.length;
+  tagbar.innerHTML = allTags.length
+    ? '<span class="fac-tagbar-label"><i class="fa-solid fa-tags"></i></span>'
+      + allTags.map((t) => `<span class="fac-tag${stkState.tagFilter === t ? ' active' : ''}"
+          data-stktag="${escapeHtml(t)}">${escapeHtml(t)}</span>`).join('')
+    : '';
 
   const empty = $('#stk-empty');
   if (!items.length && !stkHasBuckets()) {
@@ -317,7 +363,9 @@ async function syncStockpile() {
   const liveKeys = new Set(stkState.buckets.map((b) => String(b.id)).concat(UNFILED));
   [...stkState.collapsed].forEach((k) => { if (!liveKeys.has(k)) stkState.collapsed.delete(k); });
   stkState.selection.clear();
-  stkState.mySchems = null; stkState._mySchemsPromise = null; // refresh the detail-panel schematics too
+  stkState.mySchems = null; stkState._mySchemsPromise = null; // refresh the Schem counts too
+  // Schem column fills in as soon as the (cached) My Schematics list arrives
+  stkGetMySchems().then(() => { stkApplySchemCounts(); renderStockpile(); }).catch(() => {});
 
   $('#stk-loading').hidden = true;
 
@@ -585,21 +633,11 @@ function initStockpile() {
       return;
     }
 
-    // notes/schematics detail toggle + clicking a linked-schematic chip
+    // note icon: hover previews, click opens the notes/tags dialog
     const noteCell = e.target.closest('[data-notes]');
     if (noteCell) {
       const item = stkState.items[safeInt(noteCell.dataset.notes)];
-      if (item) {
-        const sid = String(item.stockpile_id);
-        if (stkState.expanded.has(sid)) stkState.expanded.delete(sid); else stkState.expanded.add(sid);
-        renderStockpile();
-      }
-      return;
-    }
-    const chip = e.target.closest('.stk-schem-chip');
-    if (chip && chip.dataset.usid) {
-      const item = (stkState.mySchems || []).find((s) => String(s.user_schematic_id) === String(chip.dataset.usid));
-      if (item) openMySchematicPage(item);
+      if (item) stkOpenNoteDialog(item);
       return;
     }
 
@@ -618,12 +656,58 @@ function initStockpile() {
     if (nameCell) openResourcePage(nameCell.textContent);
   });
 
-  // Rename commit on blur / Enter / Escape; notes save on blur
+  // Rename commit on blur / Enter / Escape
   $('#stk-body').addEventListener('focusout', (e) => {
     const inp = e.target.closest('[data-renamein]');
-    if (inp) { stkCommitRename(inp.dataset.renamein, inp.value); return; }
-    const notes = e.target.closest('[data-notesfor]');
-    if (notes) stkSaveNotes(notes.dataset.notesfor, notes.value);
+    if (inp) stkCommitRename(inp.dataset.renamein, inp.value);
+  });
+
+  // hover popovers: Schem count → schematic links; tag icon → clickable tag chips
+  $('#stk-body').addEventListener('mouseover', (e) => {
+    const cell = e.target.closest('[data-schemhover]');
+    if (cell) {
+      const item = stkState.items[safeInt(cell.dataset.schemhover)];
+      if (item && item.schem_using && item.schem_using.length) stkShowSchemPop(cell, item);
+      return;
+    }
+    const tag = e.target.closest('[data-taghover]');
+    if (tag) {
+      const item = stkState.items[safeInt(tag.dataset.taghover)];
+      if (item) stkShowTagPop(tag, item);
+    }
+  });
+  $('#stk-body').addEventListener('mouseout', (e) => {
+    if (e.target.closest('[data-schemhover],[data-taghover]')) stkScheduleSchemPopHide();
+  });
+  $('#stk-schem-pop').addEventListener('mouseenter', () => clearTimeout(stkPopHide));
+  $('#stk-schem-pop').addEventListener('mouseleave', () => stkScheduleSchemPopHide());
+  $('#stk-schem-pop').addEventListener('click', (e) => {
+    const chip = e.target.closest('.stk-schem-chip');
+    if (chip) {
+      const s = (stkState.mySchems || []).find((x) => String(x.user_schematic_id) === chip.dataset.usid);
+      $('#stk-schem-pop').hidden = true;
+      if (s) openMySchematicPage(s);
+      return;
+    }
+    const t = e.target.closest('[data-stktag]');
+    if (t) {
+      $('#stk-schem-pop').hidden = true;
+      stkState.tagFilter = stkState.tagFilter === t.dataset.stktag ? null : t.dataset.stktag;
+      renderStockpile();
+    }
+  });
+
+  // tag cloud filter + notes/tags dialog
+  $('#stk-tagbar').addEventListener('click', (e) => {
+    const t = e.target.closest('[data-stktag]');
+    if (!t) return;
+    stkState.tagFilter = stkState.tagFilter === t.dataset.stktag ? null : t.dataset.stktag;
+    renderStockpile();
+  });
+  $('#stk-note-save').addEventListener('click', () => stkSaveNoteDialog());
+  $('#stk-note-cancel').addEventListener('click', () => { $('#stk-note-modal').hidden = true; });
+  $('#stk-note-modal').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) e.currentTarget.hidden = true;
   });
   $('#stk-body').addEventListener('keydown', (e) => {
     const inp = e.target.closest('[data-renamein]');

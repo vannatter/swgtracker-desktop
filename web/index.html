@@ -252,6 +252,8 @@
           <button class="btn btn-icon" data-refresh="stockpile" title="Sync with server"><i class="fa-solid fa-rotate-right"></i></button>
         </div>
 
+        <div id="stk-tagbar" class="fac-tagbar" hidden></div>
+
         <div class="table-wrap">
           <table class="data-grid" id="stk-grid">
             <thead><tr id="stk-head"></tr></thead>
@@ -264,6 +266,7 @@
         <div class="pager">
           <span id="stk-status" class="pager-status"></span>
         </div>
+        <div id="stk-schem-pop" class="stk-schem-pop" hidden></div>
       </section>
 
       <!-- My Schematics page (crafting list; write ops pending API deploy) -->
@@ -1204,6 +1207,11 @@
   <div id="harv-modal" class="key-gate" hidden>
     <div class="key-gate-card sp-card harv-form-card">
       <h2 id="harv-form-title">Add Harvester</h2>
+      <div id="harv-f-gone" class="harv-gone-banner harv-f-gone" hidden>
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <span><b id="harv-f-gone-name"></b> has despawned — the harvester can stay right where it is.</span>
+        <button id="harv-f-retarget" class="btn btn-sm btn-accent"><i class="fa-solid fa-rotate"></i> Swap resource</button>
+      </div>
 
       <div class="inv-add-row" id="harv-f-pull">
         <div class="inv-add-field harv-grow harv-resfind">
@@ -1330,6 +1338,33 @@
       <div class="inv-add-actions">
         <button id="char-modal-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
         <button id="char-modal-confirm" class="btn btn-sm btn-accent"></button>
+      </div>
+    </div>
+  </div>
+
+  <div id="mys-note-modal" class="key-gate" hidden>
+    <div class="key-gate-card sp-card stk-note-card">
+      <h2 id="mys-note-title">Notes</h2>
+      <textarea id="mys-note-text" class="notes-input stk-note-text" rows="5"
+                placeholder="Draft ideas, target stats, who it's for…"></textarea>
+      <div class="stk-note-actions">
+        <button id="mys-note-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
+        <button id="mys-note-save" class="btn btn-sm btn-accent"><i class="fa-solid fa-check"></i> Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="stk-note-modal" class="key-gate" hidden>
+    <div class="key-gate-card sp-card stk-note-card">
+      <h2 id="stk-note-title">Notes</h2>
+      <textarea id="stk-note-text" class="notes-input stk-note-text" rows="5"
+                placeholder="Recipes, buyers, reminders…"></textarea>
+      <label class="fac-label stk-note-tagslabel">Tags</label>
+      <input id="stk-note-tags" type="text" class="form-control filter-input stk-note-tagsin"
+             placeholder="comma, separated" maxlength="255" spellcheck="false">
+      <div class="stk-note-actions">
+        <button id="stk-note-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
+        <button id="stk-note-save" class="btn btn-sm btn-accent"><i class="fa-solid fa-check"></i> Save</button>
       </div>
     </div>
   </div>

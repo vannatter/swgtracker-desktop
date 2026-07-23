@@ -508,6 +508,9 @@ function initFactories() {
     if (field === 'notify_desktop') facCacheForNotify();
   });
 
+  $('#fac-list').addEventListener('mousedown', (e) => {
+    facState._bgDown = e.target.hasAttribute && e.target.hasAttribute('data-faceditbg');
+  });
   $('#fac-list').addEventListener('click', async (e) => {
     const wpc = e.target.closest('[data-facwpcopy]');
     if (wpc) {
@@ -555,8 +558,11 @@ function initFactories() {
       renderFactories();
       return;
     }
-    // dialog close: backdrop click (the overlay itself, not its contents) or the button
-    if (e.target.hasAttribute('data-faceditbg') || e.target.closest('[data-faceditclose]')) {
+    // dialog close: backdrop click or the Close button. Backdrop only counts
+    // when the press STARTED there — a text-selection swipe ending on the
+    // overlay must not close the dialog (see bindBackdropClose in shared.js;
+    // this dialog re-renders, so it tracks mousedown via delegation instead)
+    if ((e.target.hasAttribute('data-faceditbg') && facState._bgDown) || e.target.closest('[data-faceditclose]')) {
       facState.gridEdit = null;
       renderFactories();
       return;

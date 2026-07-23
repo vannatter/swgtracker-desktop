@@ -1051,9 +1051,7 @@ function initInsights() {
   });
   const custClose = () => { $('#ins-cust-modal').hidden = true; insState.custOpen = null; };
   $('#ins-cust-close').addEventListener('click', custClose);
-  $('#ins-cust-modal').addEventListener('click', (e) => {
-    if (e.target === e.currentTarget) custClose();
-  });
+  bindBackdropClose($('#ins-cust-modal'), custClose);
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !$('#ins-cust-modal').hidden) custClose();
   });

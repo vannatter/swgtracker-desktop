@@ -627,6 +627,18 @@ function confirmArmLabeled(btn, label = 'Confirm remove?') {
   return false;
 }
 
+// Close a modal on a TRUE backdrop click. A text-selection swipe that ends over
+// the backdrop fires a click whose target is the backdrop — so require the
+// press to have started there too, or selecting text in a field closes the dialog.
+function bindBackdropClose(modal, close) {
+  let armed = false;
+  modal.addEventListener('mousedown', (e) => { armed = e.target === modal; });
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal && armed) close(e);
+    armed = false;
+  });
+}
+
 // ---- list groups (stockpile-style folders, api/groups.php) -----------------
 // Generic folders shared by Harvesters and Factories: real server rows, so a
 // group exists while empty, renames in one place, and members carry group_id.

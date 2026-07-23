@@ -98,6 +98,31 @@ function harvFamilyFor(typeCode) {
   return HARV_FAMILY_BY_CLASS[node.level2] || '';
 }
 
+// the REVERSE of the resource→type narrowing: with a Type already chosen, which
+// resources may the finder offer? A Solar Generator only pulls solar energy, a
+// gas processor only gas, etc. Returns a predicate over a resource row, or
+// null = no narrowing (no type chosen / tree not loaded / geothermal, whose
+// site-restricted energy isn't in the tree).
+function harvTypeAccepts(type) {
+  if (!type || !harvState.treeByCode) return null;
+  const nodeOf = (r) => harvState.treeByCode[String(r.type_code || '')];
+  if (harvIsGenerator(type)) {
+    const want = /^Wind/.test(type) ? 'weg' : /^Solar/.test(type) ? 'seg'
+      : /^Fusion/.test(type) ? 'rad' : null;
+    if (!want) return null;
+    return (r) => {
+      const n = nodeOf(r);
+      return !!n && [n.code, n.level1, n.level2, n.level3, n.level4, n.level5, n.level6].includes(want);
+    };
+  }
+  const fam = Object.keys(HARV_TYPE_GROUPS).find((g) => HARV_TYPE_GROUPS[g].includes(type));
+  if (!fam || fam === 'Power Generators') return null;
+  return (r) => {
+    const n = nodeOf(r);
+    return !!n && HARV_FAMILY_BY_CLASS[n.level2] === fam;
+  };
+}
+
 // "Heavy Natural Gas Processor" → "Heavy Gas"; generators keep their name short
 function harvShortType(type) {
   if (!type) return '';
@@ -823,6 +848,7 @@ async function harvClone(h) {
     harvester_type: h.harvester_type,
     name: harvCloneName(h.name || h.harvester_type),
     group_id: h.group_id || null,
+    notify_email: Number(h.notify_email) || 0,
     character_id: h.character_id || null,
     planet: h.planet || '',
     x: '',
@@ -876,6 +902,7 @@ function harvOpenForm(h = null) {
     + [...harvState.groups].sort((a, b) => (a.sort_order - b.sort_order) || a.name.localeCompare(b.name))
       .map((g) => `<option value="${g.id}">${escapeHtml(g.name)}</option>`).join('');
   $('#harv-f-group').value = h && h.group_id ? String(h.group_id) : '';
+  $('#harv-f-email').checked = !!(h && Number(h.notify_email));
   $('#harv-f-planet').value = h ? (h.planet || '') : '';
   $('#harv-f-x').value = h && h.x != null ? h.x : '';
   $('#harv-f-y').value = h && h.y != null ? h.y : '';
@@ -963,6 +990,7 @@ async function harvSubmitForm() {
     harvester_type: type,
     name: $('#harv-f-name').value.trim() || harvNickText(),
     group_id: $('#harv-f-group').value ? Number($('#harv-f-group').value) : null,
+    notify_email: $('#harv-f-email').checked ? 1 : 0,
     character_id: charId || null,
     planet: $('#harv-f-planet').value.trim(),
     x: $('#harv-f-x').value.trim(),
@@ -1154,8 +1182,10 @@ function initHarvesters() {
       } catch (_) { harvState.hotList = []; }
     }
     if ($('#harv-f-resource').value.trim().length >= 2) return; // they typed meanwhile
-    // filter at render time — the class tree may have loaded after the cache
-    const hot = harvState.hotList.filter(harvHarvestable).slice(0, 8);
+    // filter at render time — the class tree may have loaded after the cache.
+    // A chosen Type narrows further: solar gens see solar energy, gas rigs gas...
+    const acc = harvTypeAccepts($('#harv-f-type').value);
+    const hot = harvState.hotList.filter(harvHarvestable).filter((r) => !acc || acc(r)).slice(0, 8);
     if (!hot.length) { list.hidden = true; return; }
     list.innerHTML = '<div class="harv-res-head">Hottest current spawns</div>'
       + hot.map(harvResRow).join('');
@@ -1175,14 +1205,16 @@ function initHarvesters() {
     if (q.length < 2) { harvShowHotList(); return; }
     harvResTimer = setTimeout(async () => {
       let rows = [];
+      const acc = harvTypeAccepts($('#harv-f-type').value);
       try {
         const res = await api().search_resources({ search: q, status: 'active', page: 1 });
-        rows = ((res.ok && res.data && res.data.results) || []).filter(harvHarvestable).slice(0, 8);
+        rows = ((res.ok && res.data && res.data.results) || [])
+          .filter(harvHarvestable).filter((r) => !acc || acc(r)).slice(0, 8);
       } catch (_) { /* finder just stays quiet */ }
       if ($('#harv-f-resource').value.trim() !== q) return; // stale response
       list.innerHTML = rows.length
         ? rows.map(harvResRow).join('')
-        : '<div class="harv-res-opt harv-res-none">No active resource matches</div>';
+        : `<div class="harv-res-opt harv-res-none">No active resource matches${acc ? ` this ${escapeHtml(harvShortType($('#harv-f-type').value))} can pull` : ''}</div>`;
       list.hidden = false;
     }, 250);
   });
@@ -1206,9 +1238,7 @@ function initHarvesters() {
 
   $('#harv-cancel').addEventListener('click', () => { $('#harv-modal').hidden = true; });
   $('#harv-save').addEventListener('click', () => harvSubmitForm());
-  $('#harv-modal').addEventListener('click', (e) => {
-    if (e.target === $('#harv-modal')) $('#harv-modal').hidden = true;
-  });
+  bindBackdropClose($('#harv-modal'), () => { $('#harv-modal').hidden = true; });
 
   $('#harv-suggest').addEventListener('click', (e) => {
     const add = e.target.closest('[data-sugadd]');

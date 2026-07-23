@@ -887,9 +887,7 @@ function initScanner() {
   // ---- worklist dialog open/close
   $('#scan-wl-open').addEventListener('click', () => { $('#scan-wl-modal').hidden = false; });
   $('#scan-wl-close').addEventListener('click', () => { wlCloseMenus(); $('#scan-wl-modal').hidden = true; });
-  $('#scan-wl-modal').addEventListener('click', (e) => {
-    if (e.target === e.currentTarget) { wlCloseMenus(); e.currentTarget.hidden = true; }
-  });
+  bindBackdropClose($('#scan-wl-modal'), () => { wlCloseMenus(); $('#scan-wl-modal').hidden = true; });
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     if (!$('#scan-zoom').hidden) $('#scan-zoom').hidden = true;

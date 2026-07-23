@@ -1162,9 +1162,7 @@ function initMySchematics() {
   });
   $('#mys-note-save').addEventListener('click', () => mysSaveNoteDialog());
   $('#mys-note-cancel').addEventListener('click', () => { $('#mys-note-modal').hidden = true; });
-  $('#mys-note-modal').addEventListener('click', (e) => {
-    if (e.target === e.currentTarget) e.currentTarget.hidden = true;
-  });
+  bindBackdropClose($('#mys-note-modal'), () => { $('#mys-note-modal').hidden = true; });
 
   // detail page interactions
   $('#mysd-crumbs').addEventListener('click', (e) => {

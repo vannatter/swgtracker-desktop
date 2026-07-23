@@ -706,9 +706,7 @@ function initStockpile() {
   });
   $('#stk-note-save').addEventListener('click', () => stkSaveNoteDialog());
   $('#stk-note-cancel').addEventListener('click', () => { $('#stk-note-modal').hidden = true; });
-  $('#stk-note-modal').addEventListener('click', (e) => {
-    if (e.target === e.currentTarget) e.currentTarget.hidden = true;
-  });
+  bindBackdropClose($('#stk-note-modal'), () => { $('#stk-note-modal').hidden = true; });
   $('#stk-body').addEventListener('keydown', (e) => {
     const inp = e.target.closest('[data-renamein]');
     if (inp && (e.key === 'Enter' || e.key === 'Escape')) {

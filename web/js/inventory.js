@@ -15,7 +15,8 @@ const INV_COLUMNS = [
 // so it survives the re-render after a save. Notes is deliberately NOT in
 // INV_COLUMNS — the list is server-sorted and api/inventory.php's sort allowlist
 // has no `notes`, so a sortable notes header would silently sort by item_name.
-const invState = { page: 1, perPage: 100, hasNext: false, sortField: 'item_name', sortOrder: 'ASC', items: [], expanded: new Set() };
+const invState = { page: 1, perPage: 100, hasNext: false, sortField: 'item_name', sortOrder: 'ASC', items: [],
+                   noteFor: null };  // inventory id open in the notes dialog
 
 const invColCount = () => INV_COLUMNS.length + 1; // + the actions cell
 
@@ -52,9 +53,9 @@ function invRowHtml(item, idx) {
   const threshold = safeInt(item.threshold);
   const stockCls = stocked < 0 ? 'inv-neg' : stocked <= threshold ? 'inv-low' : '';
   const iid = String(item.id);
-  const hasNotes = item.notes && String(item.notes).trim();
-  const open = invState.expanded.has(iid);
-  return `<tr data-idx="${idx}" data-iid="${iid}"${open ? ' class="row-open"' : ''}>
+  const notePreview = labNotesText(item.notes);   // rich notes -> plain text for the tooltip
+  const hasNotes = !!notePreview;
+  return `<tr data-idx="${idx}" data-iid="${iid}">
     <td class="stat inv-edit ${stockCls}" data-edit="stocked" data-idx="${idx}" title="Click to edit">${fmtNum(stocked)}</td>
     <td class="col-name res-name">${escapeHtml(item.item_name || '')}</td>
     <td class="stat inv-edit" data-edit="threshold" data-idx="${idx}" title="Click to edit">${fmtNum(threshold)}</td>
@@ -63,56 +64,43 @@ function invRowHtml(item, idx) {
     <td class="stat ${safeInt(item.sales_count) ? 'inv-sales' : ''}" ${safeInt(item.sales_count) ? `data-sales="${idx}" title="Click to see the matched sales"` : ''}>${safeInt(item.sales_count) ? fmtNum(item.sales_count) : '<span class="stat_off">—</span>'}</td>
     <td class="col-text res-type">${fmtAgoTip(item.last_updated)}</td>
     <td class="col-actions">
-      <button class="btn btn-icon${open ? ' open' : ''}" data-notes="${idx}" title="${hasNotes ? 'Notes' : 'Add notes'}"><i class="fa-${hasNotes ? 'solid' : 'regular'} fa-note-sticky${hasNotes ? ' has-notes' : ''}"></i></button>
+      <button class="btn btn-icon" data-notes="${idx}" title="${hasNotes ? escapeHtml(notePreview) : 'Add notes'}"><i class="fa-${hasNotes ? 'solid' : 'regular'} fa-note-sticky${hasNotes ? ' has-notes' : ''}"></i></button>
+      <button class="btn btn-icon" data-iclone="${idx}" title="Clone — same numbers, tweak the name"><i class="fa-solid fa-clone"></i></button>
       <button class="btn btn-icon" data-iedit="${idx}" title="Edit vendor / stock"><i class="fa-solid fa-pen"></i></button>
       <button class="btn btn-icon" data-iremove="${idx}" title="Remove item"><i class="fa-solid fa-trash-can"></i></button>
     </td>
   </tr>`;
 }
 
-// item row + (when expanded) its notes detail row
-function invRowsHtml(item, idx) {
-  let html = invRowHtml(item, idx);
-  if (invState.expanded.has(String(item.id))) html += invDetailRowHtml(item);
-  return html;
-}
+const invRowsHtml = (item, idx) => invRowHtml(item, idx);
 
-// Re-render from state — no refetch. Toggling a notes row uses this.
+// Re-render from state — no refetch.
 function renderInvRows() {
   $('#inv-body').innerHTML = invState.items.map(invRowsHtml).join('');
 }
 
-function invDetailRowHtml(item) {
-  const iid = String(item.id);
-  return `<tr class="row-detail" data-detailfor="${iid}">
-    <td colspan="${invColCount()}">
-      <div class="inv-detail-panel">
-        <div class="detail-label"><i class="fa-solid fa-pen"></i> Notes</div>
-        <textarea class="notes-input" data-notesfor="${iid}" rows="3"
-          placeholder="Notes for ${escapeHtml(item.item_name || 'this item')}…">${escapeHtml(item.notes || '')}</textarea>
-      </div>
-    </td>
-  </tr>`;
+// ---- notes dialog: hover the icon to preview, click to edit (matches the
+// stockpile / My Schematics pattern — the old inline expander row is gone) ----
+
+function invOpenNoteDialog(item) {
+  invState.noteFor = String(item.id);
+  $('#inv-note-title').textContent = item.item_name || 'Notes';
+  $('#inv-note-text').innerHTML = labNotesHtml(item.notes);  // rich (lab WYSIWYG)
+  $('#inv-note-modal').hidden = false;
+  $('#inv-note-text').focus();
 }
 
-/* Saved on blur — Enter has to stay a newline in a textarea. Mirrors
-   stkSaveNotes: skip if unchanged, update optimistically, and mutate the icon in
-   place rather than re-rendering (a re-render would rip out the focused
-   textarea mid-edit). */
-async function invSaveNotes(iid, value) {
-  const item = invState.items.find((i) => String(i.id) === String(iid));
+async function invSaveNoteDialog() {
+  const item = invState.items.find((i) => String(i.id) === invState.noteFor);
+  $('#inv-note-modal').hidden = true;
   if (!item) return;
-  const v = (value || '').trim();
+  const v = richNotesValue($('#inv-note-text'));
   if ((item.notes || '') === v) return; // unchanged
   item.notes = v; // optimistic
-  const btn = $(`#inv-body tr[data-iid="${iid}"] [data-notes]`);
-  if (btn) {
-    btn.title = v ? 'Notes' : 'Add notes';
-    btn.querySelector('i').className = v ? 'fa-solid fa-note-sticky has-notes' : 'fa-regular fa-note-sticky';
-  }
+  renderInvRows();
   try {
     // apiFetch, not the shell bridge — this ships as a UI bundle with no client download
-    const res = await apiFetch('PUT', 'api/inventory.php', { data: { inventory_id: safeInt(iid), notes: v } });
+    const res = await apiFetch('PUT', 'api/inventory.php', { data: { inventory_id: safeInt(invState.noteFor), notes: v } });
     $('#inv-status').textContent = res.ok
       ? `Notes saved — ${item.item_name}`
       : `Failed to save notes: ${res.error || 'server error'}`;
@@ -267,13 +255,14 @@ async function addInvItem() {
 }
 
 // open the shared dialog: no item = add mode, item = edit mode (name locked,
-// since a rename would orphan the sales that match on it)
-function openInvDialog(item = null) {
+// since a rename would orphan the sales that match on it), item + clone =
+// add mode prefilled from the row — name selected for a quick "Style 2" tweak
+function openInvDialog(item = null, clone = false) {
   invLoadVendorSuggestions();
   const modal = $('#inv-add-modal');
   const nameInput = $('#inv-new-name');
   nameInput.readOnly = false;
-  if (item) {
+  if (item && !clone) {
     modal.dataset.editId = String(item.id);
     $('#inv-modal-title').textContent = 'Edit Inventory Item';
     $('#inv-add').innerHTML = '<i class="fa-solid fa-check"></i> Save';
@@ -283,15 +272,16 @@ function openInvDialog(item = null) {
     $('#inv-new-threshold').value = String(safeInt(item.threshold));
   } else {
     delete modal.dataset.editId;
-    $('#inv-modal-title').textContent = 'Add Inventory Item';
+    $('#inv-modal-title').textContent = clone ? 'Clone Inventory Item' : 'Add Inventory Item';
     $('#inv-add').innerHTML = '<i class="fa-solid fa-plus"></i> Add Item';
-    nameInput.value = '';
-    $('#inv-new-vendor').value = '';
-    $('#inv-new-stocked').value = '10';
-    $('#inv-new-threshold').value = '1';
+    nameInput.value = clone && item ? (item.item_name || '') : '';
+    $('#inv-new-vendor').value = clone && item ? (item.vendor || '') : '';
+    $('#inv-new-stocked').value = clone && item ? String(safeInt(item.stocked)) : '10';
+    $('#inv-new-threshold').value = clone && item ? String(safeInt(item.threshold)) : '1';
   }
   modal.hidden = false;
-  (item ? $('#inv-new-vendor') : nameInput).focus();
+  ((item && !clone) ? $('#inv-new-vendor') : nameInput).focus();
+  if (clone) nameInput.select();
 }
 
 function initInventory() {
@@ -328,34 +318,21 @@ function initInventory() {
     $('#inv-vendor-sug').hidden = true;
   });
   $('#inv-add-cancel').addEventListener('click', () => { $('#inv-add-modal').hidden = true; });
-  $('#inv-add-modal').addEventListener('click', (e) => {
-    if (e.target === $('#inv-add-modal')) $('#inv-add-modal').hidden = true;
-  });
+  bindBackdropClose($('#inv-add-modal'), () => { $('#inv-add-modal').hidden = true; });
   // Sales expander: one open at a time, click the count again to close
   $('#inv-sales-close').addEventListener('click', () => { $('#inv-sales-modal').hidden = true; });
-  $('#inv-sales-modal').addEventListener('click', (e) => {
-    if (e.target === $('#inv-sales-modal')) $('#inv-sales-modal').hidden = true;
-  });
-  // Notes: toggle the detail row open/shut, then focus the textarea so it's
-  // typeable straight away.
+  bindBackdropClose($('#inv-sales-modal'), () => { $('#inv-sales-modal').hidden = true; });
+  // Notes: hover the icon previews, click opens the dialog
   $('#inv-body').addEventListener('click', (e) => {
     const noteCell = e.target.closest('[data-notes]');
     if (!noteCell) return;
     const item = invState.items[safeInt(noteCell.dataset.notes)];
-    if (!item) return;
-    const iid = String(item.id);
-    if (invState.expanded.has(iid)) invState.expanded.delete(iid);
-    else invState.expanded.add(iid);
-    renderInvRows();
-    const ta = $(`#inv-body [data-notesfor="${iid}"]`);
-    if (ta) ta.focus();
+    if (item) invOpenNoteDialog(item);
   });
-
-  // Blur commits — Enter has to stay a newline inside the textarea.
-  $('#inv-body').addEventListener('focusout', (e) => {
-    const notes = e.target.closest('[data-notesfor]');
-    if (notes) invSaveNotes(notes.dataset.notesfor, notes.value);
-  });
+  $('#inv-note-save').addEventListener('click', () => invSaveNoteDialog());
+  $('#inv-note-cancel').addEventListener('click', () => { $('#inv-note-modal').hidden = true; });
+  wireRichToolbar($('#inv-note-modal'));
+  bindBackdropClose($('#inv-note-modal'), () => { $('#inv-note-modal').hidden = true; });
 
   $('#inv-body').addEventListener('click', async (e) => {
     const cell = e.target.closest('[data-sales]');
@@ -405,6 +382,8 @@ function initInventory() {
   $('#inv-body').addEventListener('click', (e) => {
     const editRow = e.target.closest('[data-iedit]');
     if (editRow) { openInvDialog(invState.items[safeInt(editRow.dataset.iedit)]); return; }
+    const cloneRow = e.target.closest('[data-iclone]');
+    if (cloneRow) { openInvDialog(invState.items[safeInt(cloneRow.dataset.iclone)], true); return; }
     const editCell = e.target.closest('[data-edit]');
     if (editCell) { openInvEditor(editCell); return; }
     const removeCell = e.target.closest('[data-iremove]');

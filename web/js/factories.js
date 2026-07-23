@@ -249,6 +249,11 @@ function facUpdateViewToggle() {
 }
 
 function renderFactories() {
+  // never re-render mid-press: clicking Start right after typing a value fires
+  // blur → change → render, which destroyed the button under the cursor and
+  // swallowed the click ("you have to press Start twice"). Defer instead; the
+  // pointerup/dragend listeners in initFactories flush the queued render.
+  if (facState._press) { facState._renderQueued = true; return; }
   $('#fac-empty').hidden = !!facState.items.length;
 
   // tag cloud builds from EVERY factory (not the filtered set — else you
@@ -413,6 +418,22 @@ function facNotifySweep() {
 
 function initFactories() {
   setInterval(facNotifySweep, 30000); // app-wide: fires even off-page
+
+  // press tracking for the deferred-render guard in renderFactories(). The
+  // flush runs a tick later so the click dispatches against the OLD dom first;
+  // dragend/pointercancel also clear it (a native drag eats the pointerup).
+  const facEndPress = () => {
+    facState._press = false;
+    if (facState._renderQueued) {
+      facState._renderQueued = false;
+      setTimeout(renderFactories, 0);
+    }
+  };
+  document.addEventListener('pointerdown', () => { facState._press = true; }, true);
+  document.addEventListener('pointerup', facEndPress, true);
+  document.addEventListener('pointercancel', facEndPress, true);
+  document.addEventListener('dragend', facEndPress, true);
+
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && facState.gridEdit) {
       facState.gridEdit = null;

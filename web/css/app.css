@@ -1033,6 +1033,10 @@ tr.harv-dragging td, tr.fac-dragging td { opacity: .5; }
 .fac-editdlg-foot { display: flex; justify-content: flex-end; padding: 10px 14px;
                     background: var(--bg-secondary); border-top: 1px solid var(--border);
                     border-radius: 0 0 10px 10px; }
+/* Type-column sort-mode toggle (taxonomy tree vs A-Z), planet-filter style */
+.stk-typesort-ico { margin-left: 5px; font-size: 10px; color: var(--text-muted); cursor: pointer; }
+.stk-typesort-ico:hover { color: var(--text-hover); }
+.stk-typesort-ico.active { color: var(--accent); }
 /* stockpile: Schem-count hover popover — schematic names as clickable chips */
 .stk-schem-count { cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
 .stk-schem-pop { position: fixed; z-index: 320; display: flex; flex-direction: column; gap: 4px;
@@ -1139,12 +1143,14 @@ tr.grp-row .grp-count { margin-left: 10px; }
   cursor: pointer; font-size: 12px; padding: 2px 4px; }
 .fac-hist-del:hover { color: var(--accent); }
 .fac-hist-empty { color: var(--text-muted); font-size: 12px; padding: 6px; }
-.fac-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 10px; }
+/* auto-fit: on narrow cards whole fields wrap to a second row instead of
+   squeezing until "Seconds" clips to "Secor" */
+.fac-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; }
 .fac-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .fac-field .filter-input, .fac-field .filter-select { max-width: none; width: 100%; }
 .fac-label { font-size: 10px; text-transform: uppercase; letter-spacing: .06em;
              color: var(--text-muted); font-weight: 600; }
-.fac-outputs { grid-template-columns: repeat(4, 1fr); } /* equal cells — the 2fr product column is for the form row */
+.fac-outputs { grid-template-columns: repeat(auto-fit, minmax(112px, 1fr)); } /* 2×2 on narrow, one row when it fits */
 .fac-outputs .fac-out { background: var(--bg-input); border-radius: 6px; padding: 8px 12px;
                         display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .fac-out b { font-size: 14px; color: var(--text-hover); white-space: nowrap; }

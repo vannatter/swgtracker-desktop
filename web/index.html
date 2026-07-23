@@ -1348,11 +1348,37 @@
     </div>
   </div>
 
+  <div id="inv-note-modal" class="key-gate" hidden>
+    <div class="key-gate-card sp-card stk-note-card">
+      <h2 id="inv-note-title">Notes</h2>
+      <div class="lab-notes-toolbar">
+        <button type="button" data-cmd="bold" title="Bold"><i class="fa-solid fa-bold"></i></button>
+        <button type="button" data-cmd="italic" title="Italic"><i class="fa-solid fa-italic"></i></button>
+        <button type="button" data-cmd="underline" title="Underline"><i class="fa-solid fa-underline"></i></button>
+        <button type="button" data-cmd="insertUnorderedList" title="Bullet list"><i class="fa-solid fa-list-ul"></i></button>
+        <button type="button" data-cmd="insertOrderedList" title="Numbered list"><i class="fa-solid fa-list-ol"></i></button>
+      </div>
+      <div id="inv-note-text" class="lab-notes-editor stk-note-text" contenteditable="true"
+           data-placeholder="A recipe, a buyer, a reminder…"></div>
+      <div class="stk-note-actions">
+        <button id="inv-note-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
+        <button id="inv-note-save" class="btn btn-sm btn-accent"><i class="fa-solid fa-check"></i> Save</button>
+      </div>
+    </div>
+  </div>
+
   <div id="mys-note-modal" class="key-gate" hidden>
     <div class="key-gate-card sp-card stk-note-card">
       <h2 id="mys-note-title">Notes</h2>
-      <textarea id="mys-note-text" class="notes-input stk-note-text" rows="5"
-                placeholder="Draft ideas, target stats, who it's for…"></textarea>
+      <div class="lab-notes-toolbar">
+        <button type="button" data-cmd="bold" title="Bold"><i class="fa-solid fa-bold"></i></button>
+        <button type="button" data-cmd="italic" title="Italic"><i class="fa-solid fa-italic"></i></button>
+        <button type="button" data-cmd="underline" title="Underline"><i class="fa-solid fa-underline"></i></button>
+        <button type="button" data-cmd="insertUnorderedList" title="Bullet list"><i class="fa-solid fa-list-ul"></i></button>
+        <button type="button" data-cmd="insertOrderedList" title="Numbered list"><i class="fa-solid fa-list-ol"></i></button>
+      </div>
+      <div id="mys-note-text" class="lab-notes-editor stk-note-text" contenteditable="true"
+           data-placeholder="Draft ideas, target stats, who it's for…"></div>
       <div class="stk-note-actions">
         <button id="mys-note-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
         <button id="mys-note-save" class="btn btn-sm btn-accent"><i class="fa-solid fa-check"></i> Save</button>
@@ -1363,8 +1389,15 @@
   <div id="stk-note-modal" class="key-gate" hidden>
     <div class="key-gate-card sp-card stk-note-card">
       <h2 id="stk-note-title">Notes</h2>
-      <textarea id="stk-note-text" class="notes-input stk-note-text" rows="5"
-                placeholder="Recipes, buyers, reminders…"></textarea>
+      <div class="lab-notes-toolbar">
+        <button type="button" data-cmd="bold" title="Bold"><i class="fa-solid fa-bold"></i></button>
+        <button type="button" data-cmd="italic" title="Italic"><i class="fa-solid fa-italic"></i></button>
+        <button type="button" data-cmd="underline" title="Underline"><i class="fa-solid fa-underline"></i></button>
+        <button type="button" data-cmd="insertUnorderedList" title="Bullet list"><i class="fa-solid fa-list-ul"></i></button>
+        <button type="button" data-cmd="insertOrderedList" title="Numbered list"><i class="fa-solid fa-list-ol"></i></button>
+      </div>
+      <div id="stk-note-text" class="lab-notes-editor stk-note-text" contenteditable="true"
+           data-placeholder="Recipes, buyers, reminders…"></div>
       <label class="fac-label stk-note-tagslabel">Tags</label>
       <input id="stk-note-tags" type="text" class="form-control filter-input stk-note-tagsin"
              placeholder="comma, separated" maxlength="255" spellcheck="false">

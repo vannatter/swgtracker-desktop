@@ -65,8 +65,8 @@ function renderMysList() {
       <td class="stat">${(s.resources || []).length}</td>
       <td class="col-text" data-rowstatus>${mysListStatusHtml(s)}</td>
       <td class="pin-cell note-cell" data-mysnote="${idx}"
-          title="${s.notes && String(s.notes).trim() ? escapeHtml(s.notes) : 'Add notes'}"><i
-          class="fa-${s.notes && String(s.notes).trim() ? 'solid' : 'regular'} fa-note-sticky${s.notes && String(s.notes).trim() ? ' has-notes' : ''}"></i></td>
+          title="${labNotesText(s.notes) ? escapeHtml(labNotesText(s.notes)) : 'Add notes'}"><i
+          class="fa-${labNotesText(s.notes) ? 'solid' : 'regular'} fa-note-sticky${labNotesText(s.notes) ? ' has-notes' : ''}"></i></td>
     </tr>`).join('');
 
   const empty = $('#mys-empty');
@@ -87,7 +87,7 @@ function mysOpenNoteDialog(item) {
   if (!item) return;
   mysNoteFor = String(item.user_schematic_id);
   $('#mys-note-title').textContent = item.custom_name ? `${item.name} · ${item.custom_name}` : (item.name || 'Notes');
-  $('#mys-note-text').value = item.notes || '';
+  $('#mys-note-text').innerHTML = labNotesHtml(item.notes);  // rich (lab WYSIWYG)
   $('#mys-note-modal').hidden = false;
   $('#mys-note-text').focus();
 }
@@ -96,7 +96,7 @@ async function mysSaveNoteDialog() {
   const item = mysState.items.find((s) => String(s.user_schematic_id) === mysNoteFor);
   $('#mys-note-modal').hidden = true;
   if (!item) return;
-  const notes = $('#mys-note-text').value.trim();
+  const notes = richNotesValue($('#mys-note-text'));
   if ((item.notes || '') === notes) return;
   item.notes = notes; // optimistic
   renderMysList();
@@ -1013,7 +1013,7 @@ function initMySchematics() {
 
   // Lab-style resource picker modal wiring
   $('#mysd-picker-close').addEventListener('click', mysdClosePicker);
-  $('#mysd-picker-modal').addEventListener('click', (e) => { if (e.target === $('#mysd-picker-modal')) mysdClosePicker(); });
+  bindBackdropClose($('#mysd-picker-modal'), () => mysdClosePicker());
   $('#mysd-picker-search').addEventListener('input', () => {
     if (!mysdState.picker) return;
     mysdState.picker.query = $('#mysd-picker-search').value;
@@ -1162,6 +1162,7 @@ function initMySchematics() {
   });
   $('#mys-note-save').addEventListener('click', () => mysSaveNoteDialog());
   $('#mys-note-cancel').addEventListener('click', () => { $('#mys-note-modal').hidden = true; });
+  wireRichToolbar($('#mys-note-modal'));
   bindBackdropClose($('#mys-note-modal'), () => { $('#mys-note-modal').hidden = true; });
 
   // detail page interactions

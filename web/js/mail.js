@@ -180,9 +180,7 @@ function initMail() {
   $('#mm-next').addEventListener('click', () => { mmState.page++; loadMail(); });
   // start/stop lives in the header (Start Mail Monitor) — no duplicate here
   $('#mm-raw-close').addEventListener('click', () => { $('#mm-raw-modal').hidden = true; });
-  $('#mm-raw-modal').addEventListener('click', (e) => {
-    if (e.target === $('#mm-raw-modal')) $('#mm-raw-modal').hidden = true;
-  });
+  bindBackdropClose($('#mm-raw-modal'), () => { $('#mm-raw-modal').hidden = true; });
   $('#mm-mktest')?.addEventListener('click', async () => {
     try {
       const res = await api().dev_make_test_mail();

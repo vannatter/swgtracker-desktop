@@ -216,9 +216,7 @@ function initSales() {
     renderCustomers();
   });
   $('#cust-close').addEventListener('click', () => { $('#cust-modal').hidden = true; });
-  $('#cust-modal').addEventListener('click', (e) => {
-    if (e.target === $('#cust-modal')) $('#cust-modal').hidden = true;
-  });
+  bindBackdropClose($('#cust-modal'), () => { $('#cust-modal').hidden = true; });
   $('#cust-copy').addEventListener('click', async () => {
     // in-game mail addresses by FIRST name only (unique per server) — and
     // "; " is the To-field separator

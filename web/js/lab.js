@@ -1248,13 +1248,11 @@ function initLab() {
     labPersistSettings(); // sticky across sessions
   });
 
-  // bench notes: WYSIWYG contenteditable + mini toolbar; saves on blur
-  document.querySelectorAll('.lab-notes-toolbar [data-cmd]').forEach((btn) => {
-    btn.addEventListener('mousedown', (e) => {
-      e.preventDefault(); // keep the editor's selection/focus
-      document.execCommand(btn.dataset.cmd, false, null);
-    });
-  });
+  // bench notes: WYSIWYG contenteditable + mini toolbar; saves on blur.
+  // SCOPED to the lab page — the notes dialogs elsewhere wire their own
+  // toolbars, and a document-wide sweep here double-bound them (every command
+  // ran twice: bold on, bold instantly off — buttons looked dead)
+  wireRichToolbar($('#page-lab'));
   $('#lab-notes-editor').addEventListener('blur', () => {
     labSaveNotes(labSanitizeHtml($('#lab-notes-editor').innerHTML));
   });

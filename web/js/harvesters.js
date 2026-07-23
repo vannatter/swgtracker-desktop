@@ -108,7 +108,7 @@ function harvTypeAccepts(type) {
   const nodeOf = (r) => harvState.treeByCode[String(r.type_code || '')];
   if (harvIsGenerator(type)) {
     const want = /^Wind/.test(type) ? 'weg' : /^Solar/.test(type) ? 'seg'
-      : /^Fusion/.test(type) ? 'rad' : null;
+      : /^Geothermal/.test(type) ? 'geg' : /^Fusion/.test(type) ? 'rad' : null;
     if (!want) return null;
     return (r) => {
       const n = nodeOf(r);

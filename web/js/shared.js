@@ -627,6 +627,28 @@ function confirmArmLabeled(btn, label = 'Confirm remove?') {
   return false;
 }
 
+// ---- rich notes (the Lab's mini-WYSIWYG, shared by every notes dialog) ----
+// contenteditable + a bold/italic/underline/lists toolbar. Values are
+// serialized sanitized HTML; labNotesHtml/labSanitizeHtml/labNotesText
+// (lab.js, loaded app-wide) handle rendering, sanitizing and text previews.
+
+function wireRichToolbar(scopeEl) {
+  scopeEl.querySelectorAll('.lab-notes-toolbar [data-cmd]').forEach((btn) => {
+    btn.addEventListener('mousedown', (e) => {
+      e.preventDefault(); // keep the editor's selection/focus
+      document.execCommand(btn.dataset.cmd, false, null);
+    });
+  });
+}
+
+// editor -> storable value: sanitized HTML, or '' when it only LOOKS empty
+function richNotesValue(editor) {
+  const html = labSanitizeHtml(editor.innerHTML);
+  const d = document.createElement('div');
+  d.innerHTML = html;
+  return d.textContent.trim() ? html : '';
+}
+
 // Close a modal on a TRUE backdrop click. A text-selection swipe that ends over
 // the backdrop fires a click whose target is the backdrop — so require the
 // press to have started there too, or selecting text in a field closes the dialog.

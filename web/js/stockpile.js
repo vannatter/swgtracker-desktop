@@ -32,11 +32,30 @@ const stkState = {
   dragBucket: null,      // bucket key being dragged to reorder (null = dragging items)
   tagFilter: null,       // active tag-cloud filter (session-only)
   noteFor: null,         // stockpile_id open in the notes/tags dialog
+  treeOrder: null,       // type_code -> taxonomy position (stkLoadTreeOrder)
+  typeSort: 'tree',      // 'tree' (taxonomy groups) | 'alpha' — sticky via config stk_typesort
   mySchems: null,        // the user's My Schematics list (lazy-loaded once, for the Schem counts)
   _mySchemsPromise: null,
 };
 
 const stkTags = (item) => String(item.tags || '').split(',').map((t) => t.trim()).filter(Boolean);
+
+// type_code -> position in the resource tree's depth-first order, so sorting
+// by Type clusters taxonomy groups (irons together, meats together) instead of
+// scattering them alphabetically — same ordering the Resources page uses
+async function stkLoadTreeOrder() {
+  if (stkState.treeOrder) return;
+  try {
+    const res = await apiFetch('GET', 'api/categories.php');
+    const flat = (res.ok && res.data && res.data.resource_tree_flat) || [];
+    if (flat.length) {
+      const m = {};
+      flat.forEach((t, i) => { m[t.code] = i; });
+      stkState.treeOrder = m;
+      if (stkState.sortField === 'type_name') renderStockpile();
+    }
+  } catch (_) { /* alphabetical fallback offline */ }
+}
 
 const stkHasBuckets = () => stkState.buckets.length > 0;
 const UNFILED = 'unfiled';
@@ -54,6 +73,15 @@ function buildStkHeader() {
   $('#stk-head').innerHTML = sel + sortableHeaderHtml(
     STK_COLUMNS, stkState.sortField, stkState.sortOrder)
     + '<th class="pin-cell"></th><th class="pin-cell"></th>'; // notes + remove
+  // Type column carries its sort-mode toggle (like the planet filter icon):
+  // taxonomy groups vs plain A-Z
+  const typeTh = $('#stk-head th[data-sort="type_name"]');
+  if (typeTh) {
+    const tree = stkState.typeSort === 'tree';
+    typeTh.insertAdjacentHTML('beforeend',
+      ` <i class="fa-solid ${tree ? 'fa-folder-tree' : 'fa-arrow-down-a-z'} stk-typesort-ico${tree ? ' active' : ''}"
+          data-stktypesort title="Type order: ${tree ? 'taxonomy groups — click for A-Z' : 'A-Z — click for taxonomy groups'}"></i>`);
+  }
 }
 
 function stkRowHtml(item, idx) {
@@ -89,9 +117,10 @@ function stkRowHtml(item, idx) {
     ? `<td class="stk-sel-cell"><input type="checkbox" class="stk-sel" data-sid="${sid}"${selected ? ' checked' : ''}></td>`
     : '';
   const group = item.bucket_id != null ? String(item.bucket_id) : UNFILED;
-  const hasNotes = item.notes && String(item.notes).trim();
+  const notePreview = labNotesText(item.notes);   // rich notes -> plain text for the tooltip
+  const hasNotes = !!notePreview;
   // hover previews the note text; clicking opens the notes/tags dialog
-  const noteCell = `<td class="pin-cell note-cell" data-notes="${idx}" title="${hasNotes ? escapeHtml(item.notes) : 'Add notes / tags'}"><i class="fa-${hasNotes ? 'solid' : 'regular'} fa-note-sticky${hasNotes ? ' has-notes' : ''}"></i></td>`;
+  const noteCell = `<td class="pin-cell note-cell" data-notes="${idx}" title="${hasNotes ? escapeHtml(notePreview) : 'Add notes / tags'}"><i class="fa-${hasNotes ? 'solid' : 'regular'} fa-note-sticky${hasNotes ? ' has-notes' : ''}"></i></td>`;
   return `<tr data-idx="${idx}" data-sid="${sid}"${buckets ? ` data-group="${group}" draggable="true"` : ''} class="stk-row${selected ? ' stk-selected' : ''}">
     ${selCell}${cells}
     ${noteCell}
@@ -181,7 +210,7 @@ function stkShowTagPop(anchor, item) {
 function stkOpenNoteDialog(item) {
   stkState.noteFor = String(item.stockpile_id);
   $('#stk-note-title').textContent = item.name || 'Notes';
-  $('#stk-note-text').value = item.notes || '';
+  $('#stk-note-text').innerHTML = labNotesHtml(item.notes);  // rich (lab WYSIWYG)
   $('#stk-note-tags').value = item.tags || '';
   $('#stk-note-modal').hidden = false;
   $('#stk-note-text').focus();
@@ -191,7 +220,7 @@ async function stkSaveNoteDialog() {
   const item = stkState.items.find((i) => String(i.stockpile_id) === stkState.noteFor);
   $('#stk-note-modal').hidden = true;
   if (!item) return;
-  const notes = $('#stk-note-text').value.trim();
+  const notes = richNotesValue($('#stk-note-text'));
   const tags = $('#stk-note-tags').value.trim();
   if ((item.notes || '') === notes && (item.tags || '') === tags) return;
   item.notes = notes; // optimistic
@@ -262,6 +291,11 @@ function stkVisibleItems() {
     // added-order lives in the auto-increment id — also right for rows
     // stockpiled before date_added existed
     if (sortField === 'date_added') return dir * (safeInt(a.stockpile_id) - safeInt(b.stockpile_id));
+    if (sortField === 'type_name' && stkState.typeSort === 'tree' && stkState.treeOrder) {
+      const pos = (x) => stkState.treeOrder[x.type_code] ?? 1e9;
+      return dir * ((pos(a) - pos(b))
+        || String(a.type_name || '').localeCompare(String(b.type_name || '')));
+    }
     if (STK_NUMERIC.has(sortField)) return dir * (safeInt(a[sortField]) - safeInt(b[sortField]));
     return dir * String(a[sortField] ?? '').toLowerCase().localeCompare(String(b[sortField] ?? '').toLowerCase());
   });
@@ -364,6 +398,15 @@ async function syncStockpile() {
   [...stkState.collapsed].forEach((k) => { if (!liveKeys.has(k)) stkState.collapsed.delete(k); });
   stkState.selection.clear();
   stkState.mySchems = null; stkState._mySchemsPromise = null; // refresh the Schem counts too
+  stkLoadTreeOrder(); // taxonomy order for the Type sort (no-op once cached)
+  // sticky Type-sort mode
+  api().get_config().then((cfg) => {
+    const v = cfg.ok && cfg.data && cfg.data.stk_typesort;
+    if ((v === 'alpha' || v === 'tree') && v !== stkState.typeSort) {
+      stkState.typeSort = v;
+      renderStockpile(); // repaints the header icon + reorders if sorted by type
+    }
+  }).catch(() => {});
   // Schem column fills in as soon as the (cached) My Schematics list arrives
   stkGetMySchems().then(() => { stkApplySchemCounts(); renderStockpile(); }).catch(() => {});
 
@@ -704,8 +747,17 @@ function initStockpile() {
     stkState.tagFilter = stkState.tagFilter === t.dataset.stktag ? null : t.dataset.stktag;
     renderStockpile();
   });
+  $('#stk-head').addEventListener('click', (e) => {
+    const tog = e.target.closest('[data-stktypesort]');
+    if (!tog) return;
+    e.stopPropagation(); // the toggle must not also fire the column sort
+    stkState.typeSort = stkState.typeSort === 'tree' ? 'alpha' : 'tree';
+    try { api().set_config('stk_typesort', stkState.typeSort); } catch (_) {}
+    renderStockpile();
+  }, true); // capture: beats the column-sort click handler
   $('#stk-note-save').addEventListener('click', () => stkSaveNoteDialog());
   $('#stk-note-cancel').addEventListener('click', () => { $('#stk-note-modal').hidden = true; });
+  wireRichToolbar($('#stk-note-modal'));
   bindBackdropClose($('#stk-note-modal'), () => { $('#stk-note-modal').hidden = true; });
   $('#stk-body').addEventListener('keydown', (e) => {
     const inp = e.target.closest('[data-renamein]');

@@ -52,13 +52,16 @@ def deploy_call(action: str, *, data=None, files=None):
         print("no deploy_token in config.json — add one (and bundle_deploy_token "
               "in the site's config.php)", file=sys.stderr)
         return None
+    # swgt_ok cookie: the site's anti-scraper gate 418s cookie-less non-browser
+    # requests to .php paths — this tool is one of them
+    gate = {"swgt_ok": "1"}
     try:
         if action == "list":
             resp = requests.get(url, params={"action": "list"},
-                                headers={"X-Deploy-Token": token}, timeout=30)
+                                headers={"X-Deploy-Token": token}, cookies=gate, timeout=30)
         else:
             resp = requests.post(url, params={"action": action}, data=data or {},
-                                 files=files, headers={"X-Deploy-Token": token}, timeout=60)
+                                 files=files, headers={"X-Deploy-Token": token}, cookies=gate, timeout=60)
         body = resp.json()
         if resp.status_code != 200:
             print(f"deploy error {resp.status_code}: {body.get('error')}", file=sys.stderr)

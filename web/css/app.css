@@ -1033,6 +1033,23 @@ tr.harv-dragging td, tr.fac-dragging td { opacity: .5; }
 .fac-editdlg-foot { display: flex; justify-content: flex-end; padding: 10px 14px;
                     background: var(--bg-secondary); border-top: 1px solid var(--border);
                     border-radius: 0 0 10px 10px; }
+/* SWGAide stat-less file (scanner power-user flow) */
+.scan-aide-card { max-width: 760px; width: calc(100vw - 80px); text-align: left; }
+.scan-aide-input { width: 100%; font-family: ui-monospace, monospace; font-size: 12px; }
+.scan-aide-progressrow { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.scan-aide-progressrow b { color: var(--text-hover); font-size: 14px; }
+.scan-aide-actions { margin-left: auto; display: flex; gap: 6px; }
+.scan-aide-rows { max-height: 55vh; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+.scan-aide-row { display: flex; align-items: center; gap: 10px; padding: 5px 8px;
+                 background: var(--bg-input); border-radius: 6px; font-size: 12.5px; }
+.scan-aide-row.scan-aide-done { opacity: .75; }
+.scan-aide-st { color: var(--text-muted); width: 14px; }
+.scan-aide-done .scan-aide-st { color: #45e97e; }
+.scan-aide-name { font-weight: 700; color: var(--text-hover); flex: 0 0 150px;
+                  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scan-aide-cls { color: var(--text-muted); flex: 0 0 210px;
+                 overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scan-aide-stats { flex: 1 1 auto; max-width: none; height: 26px; font-size: 12px; }
 /* Type-column sort-mode toggle (taxonomy tree vs A-Z), planet-filter style */
 .stk-typesort-ico { margin-left: 5px; font-size: 10px; color: var(--text-muted); cursor: pointer; }
 .stk-typesort-ico:hover { color: var(--text-hover); }

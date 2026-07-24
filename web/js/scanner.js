@@ -13,7 +13,9 @@ const SCAN_STATS = {
 const SCAN_MATCH_STATS = ['oq', 'cd', 'cr', 'dr', 'hr', 'ma', 'sr', 'ut', 'fl', 'pe'];
 
 const scanState = { cfg: null, queue: [], matches: {}, pendingQty: {},
-                    edits: {}, editing: null, worklist: [], timer: null };
+                    edits: {}, editing: null, worklist: [], timer: null,
+                    aide: null,           // {lines:[...], rows:[{li,name,klass,stats,order,filled}]}
+                    aideHandled: new Set() };  // capture ids the aide auto-fill already resolved
 
 // Newer shells OCR every capture TWICE with different preprocessing — the
 // passes misread different glyphs. Merge: gaps fill from the alt pass, and a
@@ -443,6 +445,107 @@ async function wlSave() {
   try { await api().set_config('scan_worklist', scanState.worklist); } catch (_) {}
 }
 
+// ---- SWGAide stat-less file (the power-user flow) --------------------------
+// Paste the file SWGAide printed (resources missing stats at swgaide.com),
+// crate-select each one in game and hotkey-scan the confirmation dialog: rows
+// fill themselves by name match. Copy the completed file back out at the end.
+// Strictly additive — captures that DON'T match a pending row take the normal
+// review-queue path (stockpile / new-spawn worklist / edit) untouched.
+
+async function aideLoad() {
+  try {
+    const res = await api().get_config();
+    scanState.aide = (res.ok && res.data.scan_aide && Array.isArray(res.data.scan_aide.rows))
+      ? res.data.scan_aide : null;
+  } catch (_) { scanState.aide = null; }
+}
+
+async function aideSave() {
+  try { await api().set_config('scan_aide', scanState.aide); } catch (_) {}
+}
+
+// file text -> {lines, rows}. Comments/blank/unrecognized lines are preserved
+// verbatim; a data line is "Name , Resource Class[, stats...]".
+function aideParse(text) {
+  const lines = String(text).replace(/\r/g, '').split('\n');
+  const rows = [];
+  lines.forEach((line, li) => {
+    const t = line.trim();
+    if (!t || t.startsWith('#') || /^depl\s*,/i.test(t)) return;
+    const parts = t.split(',').map((p) => p.trim());
+    if (parts.length < 2 || !parts[0] || !parts[1]) return;
+    if (!/^[A-Za-z][A-Za-z ]{2,40}$/.test(parts[1])) return; // second field must look like a class
+    const stats = parts.slice(2).join(' ').trim();
+    rows.push({ li, name: parts[0], klass: parts[1], stats, order: '', filled: !!stats });
+  });
+  return rows.length ? { lines, rows } : null;
+}
+
+// completed file text: original lines with filled rows swapped in
+function aideExport() {
+  const a = scanState.aide;
+  if (!a) return '';
+  const byLine = new Map(a.rows.map((r) => [r.li, r]));
+  return a.lines.map((line, li) => {
+    const r = byLine.get(li);
+    return r && r.filled ? `${r.name} , ${r.klass}, ${r.stats}` : line;
+  }).join('\n');
+}
+
+function aidePending() {
+  return scanState.aide ? scanState.aide.rows.filter((r) => !r.filled) : [];
+}
+
+function renderAide() {
+  const a = scanState.aide;
+  const btnCount = $('#scan-aide-count');
+  if (a) {
+    const done = a.rows.filter((r) => r.filled).length;
+    btnCount.textContent = `${done}/${a.rows.length}`;
+    $('#scan-aide-progress').textContent = `${done} of ${a.rows.length} filled`;
+    $('#scan-aide-rows').innerHTML = a.rows.map((r) => `
+      <div class="scan-aide-row ${r.filled ? 'scan-aide-done' : ''}">
+        <i class="fa-solid ${r.filled ? 'fa-circle-check' : 'fa-circle-notch'} scan-aide-st"></i>
+        <span class="scan-aide-name">${escapeHtml(r.name)}</span>
+        <span class="scan-aide-cls">${escapeHtml(r.klass)}</span>
+        <input class="form-control filter-input scan-aide-stats" data-aidestats="${r.li}"
+               value="${escapeHtml(r.stats)}" placeholder="stats" spellcheck="false"
+               title="${r.order ? `Scanned order: ${escapeHtml(r.order)}` : 'Scan the crate dialog in game, or type the stats'}">
+        <button class="fac-hist-del" data-aidedel="${r.li}" title="Drop this row (its original line stays in the file)"><i class="fa-solid fa-xmark"></i></button>
+      </div>`).join('');
+  } else {
+    btnCount.textContent = '';
+  }
+  $('#scan-aide-paste').hidden = !!a;
+  $('#scan-aide-list').hidden = !a;
+}
+
+// the auto-fill: a capture whose OCR name confidently matches ONE pending row
+// fills it and resolves the capture without any clicking
+function aideTryAutoFill(item) {
+  const pending = aidePending();
+  if (!pending.length || scanState.aideHandled.has(item.id)) return false;
+  const parsed = scanParsed(item);
+  if (!parsed.name || parsed.statsOrder.length < 2) return false;
+  const scored = pending
+    .map((r) => ({ r, sim: scanNameSim(parsed.name, r.name) }))
+    .sort((x, y) => y.sim - x.sim);
+  const best = scored[0];
+  const second = scored[1];
+  if (best.sim < 0.82) return false;
+  if (second && best.sim - second.sim < 0.08 && second.sim >= 0.82) return false; // ambiguous — leave for the human
+  best.r.stats = parsed.statsOrder.map(([, v]) => v).join(' ');
+  best.r.order = parsed.statsOrder.map(([k]) => k.toUpperCase()).join(' ');
+  best.r.filled = true;
+  scanState.aideHandled.add(item.id);
+  aideSave();
+  renderAide();
+  const done = scanState.aide.rows.filter((r) => r.filled).length;
+  toast(`Aide list: ${best.r.name} filled — ${done}/${scanState.aide.rows.length}`);
+  finishScan(item.id);
+  return true;
+}
+
 function wlPlanetLabel(w) {
   if (!w.planets.length) return 'Pick planet(s)…';
   return w.planets.map((p) => p === 'Yavin IV' ? 'Yavin' : p).join(', ');
@@ -617,7 +720,9 @@ async function loadScanConfig() {
 async function loadScanner() {
   await loadScanConfig();
   await wlLoad();
+  await aideLoad();
   renderWorklist();
+  renderAide();
   if (!scanState.classNodes) {
     // full class tree down to exact types — the worklist's class picker
     fetchCategoryNodes(true).then((nodes) => { if (nodes) scanState.classNodes = nodes; });
@@ -630,12 +735,29 @@ async function loadScanner() {
   }, 3000);
 }
 
+// module-scope: the queue click handlers AND the aide auto-fill both resolve
+// captures through here
+async function finishScan(id) {
+  try { await api().scan_queue_remove(id); } catch (_) {}
+  scanState.queue = scanState.queue.filter((q) => q.id !== id);
+  delete scanState.matches[id];
+  delete scanState.pendingQty[id];
+  delete scanState.edits[id];
+  if (scanState.editing === id) scanState.editing = null;
+  renderScanQueue();
+}
+
 async function refreshScanQueue(force = false) {
   try {
     const res = await api().scan_queue();
     if (!res.ok) return;
     const had = scanState.queue.map((q) => q.id).join(',');
     scanState.queue = res.data || [];
+    // aide auto-fill first: matched captures resolve without ever rendering a
+    // card; everything else takes the normal review-queue path
+    for (const item of [...scanState.queue]) {
+      try { aideTryAutoFill(item); } catch (_) { /* never block the queue */ }
+    }
     // force covers first paint: an empty queue "hasn't changed" but the empty
     // state still needs to render — a blank page reads as broken.
     if (force || scanState.queue.map((q) => q.id).join(',') !== had) await renderScanQueue();
@@ -675,16 +797,6 @@ function initScanner() {
     try { await api().scan_capture_now(); } catch (_) {}
     refreshScanQueue();
   });
-
-  const finishScan = async (id) => {
-    try { await api().scan_queue_remove(id); } catch (_) {}
-    scanState.queue = scanState.queue.filter((q) => q.id !== id);
-    delete scanState.matches[id];
-    delete scanState.pendingQty[id];
-    delete scanState.edits[id];
-    if (scanState.editing === id) scanState.editing = null;
-    renderScanQueue();
-  };
 
   $('#scan-queue').addEventListener('click', async (e) => {
     const appr = e.target.closest('[data-approve]');
@@ -882,6 +994,66 @@ function initScanner() {
   });
   document.addEventListener('click', (e) => {
     if (!e.target.closest('.scan-wl-combo')) wlCloseMenus();
+  });
+
+  // ---- SWGAide file dialog
+  $('#scan-aide-open').addEventListener('click', () => {
+    renderAide();
+    $('#scan-aide-modal').hidden = false;
+    if (!scanState.aide) $('#scan-aide-input').focus();
+  });
+  $('#scan-aide-cancel').addEventListener('click', () => { $('#scan-aide-modal').hidden = true; });
+  $('#scan-aide-close').addEventListener('click', () => { $('#scan-aide-modal').hidden = true; });
+  bindBackdropClose($('#scan-aide-modal'), () => { $('#scan-aide-modal').hidden = true; });
+  $('#scan-aide-load').addEventListener('click', () => {
+    const parsed = aideParse($('#scan-aide-input').value);
+    if (!parsed) { toast('No data lines found — expected "Name , Resource Class" per line', false); return; }
+    scanState.aide = parsed;
+    scanState.aideHandled.clear();
+    aideSave();
+    renderAide();
+    const pending = aidePending().length;
+    toast(`Loaded ${parsed.rows.length} resources — ${pending} need stats. Crate-scan away.`);
+  });
+  $('#scan-aide-new').addEventListener('click', () => {
+    $('#scan-aide-input').value = '';
+    $('#scan-aide-paste').hidden = false;
+    $('#scan-aide-list').hidden = true;
+    $('#scan-aide-input').focus();
+  });
+  $('#scan-aide-clear').addEventListener('click', (e) => {
+    if (!confirmArmLabeled(e.currentTarget, 'Clear the list?')) return;
+    scanState.aide = null;
+    aideSave();
+    renderAide();
+  });
+  $('#scan-aide-copy').addEventListener('click', async () => {
+    const text = aideExport();
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text + '\n');
+      const done = scanState.aide.rows.filter((r) => r.filled).length;
+      toast(`Completed file copied — ${done}/${scanState.aide.rows.length} rows filled`);
+    } catch (_) { toast('Clipboard copy failed', false); }
+  });
+  $('#scan-aide-rows').addEventListener('change', (e) => {
+    const inp = e.target.closest('[data-aidestats]');
+    if (!inp || !scanState.aide) return;
+    const row = scanState.aide.rows.find((r) => String(r.li) === inp.dataset.aidestats);
+    if (!row) return;
+    row.stats = inp.value.trim();
+    row.filled = !!row.stats;
+    if (!row.filled) row.order = '';
+    aideSave();
+    renderAide();
+  });
+  $('#scan-aide-rows').addEventListener('click', (e) => {
+    const del = e.target.closest('[data-aidedel]');
+    if (!del || !scanState.aide) return;
+    scanState.aide.rows = scanState.aide.rows.filter((r) => String(r.li) !== del.dataset.aidedel);
+    if (!scanState.aide.rows.length) scanState.aide = null;
+    aideSave();
+    renderAide();
   });
 
   // ---- worklist dialog open/close

@@ -851,7 +851,10 @@
         <div class="page-head">
           <h1>Scanner</h1>
           <i class="fa-solid fa-circle-question info-tip" data-help="scanner"></i>
-          <button id="scan-wl-open" class="btn btn-sm btn-outline-secondary head-right" hidden>
+          <button id="scan-aide-open" class="btn btn-sm btn-outline-secondary head-right"
+                  title="Paste a stat-less SWGAide file, crate-scan each resource in game, and the stats fill themselves">
+            <i class="fa-solid fa-file-lines"></i> Aide file <span id="scan-aide-count"></span></button>
+          <button id="scan-wl-open" class="btn btn-sm btn-outline-secondary" hidden>
             <i class="fa-solid fa-seedling"></i> New spawn worklist <span id="scan-wl-count"></span></button>
           <button id="scan-now" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-camera"></i> Scan now</button>
           <button id="scan-frame" class="btn btn-sm btn-accent"><i class="fa-solid fa-expand"></i> Position scan area</button>
@@ -861,6 +864,34 @@
           and a newer app version than this one.
         </div>
         <div id="scan-queue" class="scan-queue"></div>
+        <div id="scan-aide-modal" class="key-gate" hidden>
+          <div class="key-gate-card sp-card scan-aide-card">
+            <h2>SWGAide stat-less file</h2>
+            <div id="scan-aide-paste">
+              <p class="settings-hint">Paste the file SWGAide printed (name, resource class, missing stats).
+                Comment lines are kept as-is. Then crate-select each resource in game and hotkey-scan the
+                confirmation window — matching rows fill themselves.</p>
+              <textarea id="scan-aide-input" class="notes-input scan-aide-input" rows="10"
+                        placeholder="# SWGAide : submit resources to: …&#10;Spipalvef , Corellian Wild Corn&#10;Aciglew , Tatooinian Wild Corn"></textarea>
+              <div class="stk-note-actions">
+                <button id="scan-aide-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
+                <button id="scan-aide-load" class="btn btn-sm btn-accent"><i class="fa-solid fa-file-import"></i> Load list</button>
+              </div>
+            </div>
+            <div id="scan-aide-list" hidden>
+              <div class="scan-aide-progressrow">
+                <b id="scan-aide-progress"></b>
+                <span class="scan-aide-actions">
+                  <button id="scan-aide-copy" class="btn btn-sm btn-accent"><i class="fa-solid fa-copy"></i> Copy completed file</button>
+                  <button id="scan-aide-new" class="btn btn-sm btn-outline-secondary" title="Paste a different file">New file</button>
+                  <button id="scan-aide-clear" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-trash-can"></i> Clear</button>
+                  <button id="scan-aide-close" class="btn btn-sm btn-outline-secondary">Close</button>
+                </span>
+              </div>
+              <div id="scan-aide-rows" class="scan-aide-rows"></div>
+            </div>
+          </div>
+        </div>
         <div id="scan-wl-modal" class="key-gate" hidden>
           <div class="key-gate-card scan-wl-card">
             <div class="scan-wl-dlg-head">

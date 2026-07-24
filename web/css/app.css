@@ -1054,7 +1054,9 @@ tr.harv-dragging td, tr.fac-dragging td { opacity: .5; }
 .stk-note-tagslabel { display: block; margin: 12px 0 4px; }
 .stk-note-tagsin { max-width: none; width: 100%; }
 .stk-note-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
-.harv-f-emailrow { font-size: 13px; color: var(--text-primary); }
+.harv-f-emailrow { font-size: 13px; color: var(--text-primary);
+                   display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.harv-f-pct { width: 54px; max-width: 54px; text-align: center; }
 /* despawn banner inside the edit dialog — swap button rides the right edge */
 .harv-f-gone { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
 .harv-f-gone .btn { margin-left: auto; white-space: nowrap; }

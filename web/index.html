@@ -1276,7 +1276,10 @@
       <div class="inv-add-row">
         <label class="pin-toggle harv-f-emailrow" title="Needs your swgtracker.com account email">
           <input type="checkbox" id="harv-f-email">
-          Email me when the hopper fills, power runs out, or maintenance goes unpaid</label>
+          Email me when the hopper hits
+          <input id="harv-f-alertpct" type="text" inputmode="numeric" class="form-control filter-input harv-f-pct"
+                 maxlength="3" title="Hopper %% full that triggers the email — remembered as the default for new harvesters">%,
+          power or maintenance runs out, or the resource despawns</label>
       </div>
 
 

@@ -392,6 +392,63 @@ function harvLogHtml(hid) {
   </div>`).join('');
 }
 
+// ---- local notifications (bell + native), mirroring the factory sweep ------
+// Alert-enabled harvesters (the same per-harvester checkbox that opts into
+// email) get their upcoming moments PRECOMPUTED and cached, so the 30s sweep
+// fires bell/desktop alerts app-wide — even with the Harvesters page closed.
+function harvCacheForNotify() {
+  const now = harvNow();
+  const events = [];
+  for (const h of harvState.items) {
+    if (!Number(h.notify_email)) continue;
+    const name = h.name || h.harvester_type;
+    const power = harvDrain(h.power_amount, h.power_rate, h.power_set_at);
+    const maint = harvDrain(h.maint_amount, harvEffMaintRate(h), h.maint_set_at);
+    const gone = harvResGone(h);
+    if (gone) {
+      events.push({ key: `h:${h.id}:gone:${h.resource_name}`, at: now, name,
+        msg: `resource ${h.resource_name} despawned — extraction stopped` });
+    }
+    const rate = Number(h.extraction_rate), size = Number(h.hopper_size), since = Number(h.hopper_emptied_at);
+    if (rate > 0 && size > 0 && since && !gone) {
+      const pct = Math.max(1, Math.min(100, Number(h.alert_pct) || 100));
+      const at = since + ((size * pct / 100) / rate) * 3600;
+      // only a threshold the hopper can actually reach (power death stops the fill)
+      if (!(power && power.depletesAt && power.depletesAt < at)) {
+        events.push({ key: `h:${h.id}:hopper:${since}:${pct}`, at: Math.round(at), name,
+          msg: pct >= 100 ? 'hopper FULL — extraction has stopped' : `hopper ${pct}% full` });
+      }
+    }
+    if (power && power.depletesAt) {
+      events.push({ key: `h:${h.id}:power:${h.power_set_at}:${h.power_amount}`, at: Math.round(power.depletesAt), name,
+        msg: 'out of power' });
+    }
+    if (maint && maint.depletesAt) {
+      events.push({ key: `h:${h.id}:maint:${h.maint_set_at}:${h.maint_amount}`, at: Math.round(maint.depletesAt), name,
+        msg: 'maintenance EMPTY — the structure is decaying' });
+    }
+  }
+  try { localStorage.setItem('harv_notify_cache', JSON.stringify(events)); } catch (_) {}
+}
+
+function harvNotifySweep() {
+  let cache = [];
+  try { cache = JSON.parse(localStorage.getItem('harv_notify_cache') || '[]'); } catch (_) {}
+  if (!cache.length) return;
+  let fired = {};
+  try { fired = JSON.parse(localStorage.getItem('harv_notify_fired') || '{}'); } catch (_) {}
+  const now = harvNow();
+  for (const ev of cache) {
+    // freshness window: a relaunch (localStorage can reset with the shell)
+    // must never re-announce something that happened long ago
+    if (now >= ev.at && now - ev.at < 600 && !fired[ev.key]) {
+      fired[ev.key] = 1;
+      appLocalAlert(`Harvester ${ev.name}`, ev.msg);
+    }
+  }
+  try { localStorage.setItem('harv_notify_fired', JSON.stringify(fired)); } catch (_) {}
+}
+
 // one grid row = the card's numbers flattened; the same data-hact icons work
 // because the dispatcher listens on #harv-list either way
 function harvGridHtml(items) {
@@ -458,6 +515,7 @@ function renderHarvesters() {
   $('#harv-empty').hidden = items.length > 0;
   wrap.classList.toggle('harv-list-grid', harvState.view === 'grid');
   wrap.classList.toggle('harv-list-grouped', harvState.view !== 'grid');
+  harvCacheForNotify(); // sweep math stays current with every repaint
   const sections = grpSections(harvState.groups, items, (h) => h.group_id);
   wrap.innerHTML = harvState.view === 'grid'
     ? harvGridHtml(items)
@@ -559,6 +617,8 @@ async function loadHarvesters() {
   try {
     const cfg = await api().get_config();
     harvState.dismissed = new Set((cfg.ok && cfg.data && cfg.data.harv_dismissed_mails) || []);
+    const rememberedPct = safeInt(cfg.ok && cfg.data && cfg.data.harv_alert_pct);
+    if (rememberedPct >= 1 && rememberedPct <= 100) harvState.defaultAlertPct = rememberedPct;
     if (cfg.ok && cfg.data && (cfg.data.harv_view === 'grid' || cfg.data.harv_view === 'cards')) {
       harvState.view = cfg.data.harv_view;
       harvPaintViewToggle();
@@ -849,6 +909,7 @@ async function harvClone(h) {
     name: harvCloneName(h.name || h.harvester_type),
     group_id: h.group_id || null,
     notify_email: Number(h.notify_email) || 0,
+    alert_pct: Number(h.alert_pct) || 100,
     character_id: h.character_id || null,
     planet: h.planet || '',
     x: '',
@@ -903,6 +964,10 @@ function harvOpenForm(h = null) {
       .map((g) => `<option value="${g.id}">${escapeHtml(g.name)}</option>`).join('');
   $('#harv-f-group').value = h && h.group_id ? String(h.group_id) : '';
   $('#harv-f-email').checked = !!(h && Number(h.notify_email));
+  // hopper alert %: existing harvesters keep theirs; new ones start from the
+  // last value you set anywhere (sticky via config harv_alert_pct)
+  $('#harv-f-alertpct').value = String(h && Number(h.alert_pct)
+    ? Number(h.alert_pct) : (harvState.defaultAlertPct || 90));
   $('#harv-f-planet').value = h ? (h.planet || '') : '';
   $('#harv-f-x').value = h && h.x != null ? h.x : '';
   $('#harv-f-y').value = h && h.y != null ? h.y : '';
@@ -991,6 +1056,7 @@ async function harvSubmitForm() {
     name: $('#harv-f-name').value.trim() || harvNickText(),
     group_id: $('#harv-f-group').value ? Number($('#harv-f-group').value) : null,
     notify_email: $('#harv-f-email').checked ? 1 : 0,
+    alert_pct: Math.max(1, Math.min(100, safeInt($('#harv-f-alertpct').value) || harvState.defaultAlertPct || 90)),
     character_id: charId || null,
     planet: $('#harv-f-planet').value.trim(),
     x: $('#harv-f-x').value.trim(),
@@ -1049,6 +1115,11 @@ async function harvSubmitForm() {
   if (!res.ok) { toast(res.error || 'Save failed', false); return; }
   m.hidden = true;
   harvState.events = {};
+  // the alert % you just set becomes the default for future harvesters
+  if (fields.alert_pct !== harvState.defaultAlertPct) {
+    harvState.defaultAlertPct = fields.alert_pct;
+    try { api().set_config('harv_alert_pct', fields.alert_pct); } catch (_) {}
+  }
   toast(editing ? 'Harvester updated' : 'Harvester added');
 
   // optional community waypoint for this spot (checkbox unlocks only when
@@ -1070,6 +1141,7 @@ async function harvSubmitForm() {
 }
 
 function initHarvesters() {
+  setInterval(harvNotifySweep, 30000); // app-wide: fires even off-page
   harvSetTypeOptions(null);
   // no player structures on Mustafar/Kashyyyk — they're not placement options
   $('#harv-f-planet').innerHTML = '<option value="">—</option>'

@@ -405,10 +405,8 @@ function facNotifySweep() {
     // alone can't stop a relaunch from re-announcing a long-done run
     if (now >= f.due && now - f.due < 600 && !fired[key]) {
       fired[key] = 1;
-      try {
-        api().notify(`Factory ${f.name} is done`,
-          `${fmtNum(f.quantity)} × ${f.product || 'items'} ready to collect`);
-      } catch (_) { /* shell too old */ }
+      appLocalAlert(`Factory ${f.name} is done`,
+        `${fmtNum(f.quantity)} × ${f.product || 'items'} ready to collect`);
     }
   }
   try { localStorage.setItem('fac_notify_fired', JSON.stringify(fired)); } catch (_) {}

@@ -479,6 +479,22 @@ function showBroadcasts(list) {
   if (added) { saveBroadcastInbox(inbox); renderBroadcastUI(); }
 }
 
+// App-generated events (factory done, harvester full/out/despawned) share the
+// broadcast plumbing: native notification + bottom banner + a bell inbox entry
+// that sticks until deleted.
+function appLocalAlert(title, message) {
+  const inbox = loadBroadcastInbox();
+  inbox.push({
+    id: Date.now() * 10 + Math.floor(Math.random() * 10), // numeric, delete-compatible
+    message: `${title} — ${message}`,
+    ts: Math.floor(Date.now() / 1000),
+    dismissed: false,
+  });
+  saveBroadcastInbox(inbox);
+  try { api().notify(title, message); } catch (_) { /* shell too old */ }
+  renderBroadcastUI();
+}
+
 function renderBroadcastUI() {
   const inbox = loadBroadcastInbox();
   const open = inbox.filter((i) => !i.dismissed);

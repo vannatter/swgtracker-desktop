@@ -474,7 +474,9 @@ function aideParse(text) {
     if (!t || t.startsWith('#') || /^depl\s*,/i.test(t)) return;
     const parts = t.split(',').map((p) => p.trim());
     if (parts.length < 2 || !parts[0] || !parts[1]) return;
-    if (!/^[A-Za-z][A-Za-z ]{2,40}$/.test(parts[1])) return; // second field must look like a class
+    // second field must look like a class — letters, digits ("Class 1 Solid
+    // Petro Fuel"), spaces and hyphens ("Non-Ferrous")
+    if (!/^[A-Za-z][A-Za-z0-9 -]{2,40}$/.test(parts[1])) return;
     const stats = parts.slice(2).join(' ').trim();
     rows.push({ li, name: parts[0], klass: parts[1], stats, order: '', filled: !!stats });
   });
@@ -520,28 +522,31 @@ function renderAide() {
   $('#scan-aide-list').hidden = !a;
 }
 
-// the auto-fill: a capture whose OCR name confidently matches ONE pending row
-// fills it and resolves the capture without any clicking
+// the auto-fill: a capture whose OCR name confidently matches ONE aide row
+// fills it and resolves the capture without any clicking. Matching includes
+// FILLED rows on purpose — a re-scan of the same resource updates the row (or
+// just resolves as a duplicate) instead of stranding a card in the queue.
 function aideTryAutoFill(item) {
-  const pending = aidePending();
-  if (!pending.length || scanState.aideHandled.has(item.id)) return false;
+  const rows = scanState.aide ? scanState.aide.rows : [];
+  if (!rows.length || scanState.aideHandled.has(item.id)) return false;
   const parsed = scanParsed(item);
   if (!parsed.name || parsed.statsOrder.length < 2) return false;
-  const scored = pending
+  const scored = rows
     .map((r) => ({ r, sim: scanNameSim(parsed.name, r.name) }))
     .sort((x, y) => y.sim - x.sim);
   const best = scored[0];
   const second = scored[1];
   if (best.sim < 0.82) return false;
   if (second && best.sim - second.sim < 0.08 && second.sim >= 0.82) return false; // ambiguous — leave for the human
+  const rescan = best.r.filled;
   best.r.stats = parsed.statsOrder.map(([, v]) => v).join(' ');
   best.r.order = parsed.statsOrder.map(([k]) => k.toUpperCase()).join(' ');
   best.r.filled = true;
   scanState.aideHandled.add(item.id);
   aideSave();
   renderAide();
-  const done = scanState.aide.rows.filter((r) => r.filled).length;
-  toast(`Aide list: ${best.r.name} filled — ${done}/${scanState.aide.rows.length}`);
+  const done = rows.filter((r) => r.filled).length;
+  toast(`Aide list: ${best.r.name} ${rescan ? 're-scanned' : 'filled'} — ${done}/${rows.length}`);
   finishScan(item.id);
   return true;
 }

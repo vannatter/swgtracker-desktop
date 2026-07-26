@@ -19,7 +19,7 @@ const MYS_COLUMNS = [
 
 function buildMysHeader() {
   $('#mys-head').innerHTML = sortableHeaderHtml(MYS_COLUMNS, mysState.sortField, mysState.sortOrder)
-    + '<th class="pin-cell"></th>'; // notes
+    + '<th class="pin-cell"></th><th class="pin-cell"></th>'; // upgrade alerts + notes
 }
 
 // NB: distinct from mysStatusHtml(r, a) below, which renders detail-page rows
@@ -64,6 +64,9 @@ function renderMysList() {
       <td class="col-text">${mysFormulaCell(s)}</td>
       <td class="stat">${(s.resources || []).length}</td>
       <td class="col-text" data-rowstatus>${mysListStatusHtml(s)}</td>
+      <td class="pin-cell" data-mysalert="${idx}"
+          title="${Number(s.notify_email) ? 'Emailing you when an upgrade spawns for this schematic — click to stop' : 'Email me when a better resource spawns for one of this schematic’s slots'}"><i
+          class="fa-${Number(s.notify_email) ? 'solid' : 'regular'} fa-envelope${Number(s.notify_email) ? ' mys-alert-on' : ''}"></i></td>
       <td class="pin-cell note-cell" data-mysnote="${idx}"
           title="${labNotesText(s.notes) ? escapeHtml(labNotesText(s.notes)) : 'Add notes'}"><i
           class="fa-${labNotesText(s.notes) ? 'solid' : 'regular'} fa-note-sticky${labNotesText(s.notes) ? ' has-notes' : ''}"></i></td>
@@ -243,17 +246,20 @@ async function analyzeMySchematic(s) {
       else assignedQ = mysWeightedQuality(await mysGetResource(r.resource_name), weightsList, classCaps(r.resource_type));
     }
 
-    // dedup spawn candidates by id, best quality first (for the Using editor)
-    const seen = new Set();
-    const options = [];
+    // dedup spawn candidates by id, best quality first (for the Using editor).
+    // A resource in BOTH lists keeps the active copy — first-wins used to let a
+    // stale serverBest duplicate hide that a candidate is in spawn.
+    const seen = new Map();
     for (const sp of lists) {
+      if (!sp.resourceName) continue;
       const k = String(sp.resourceId);
-      if (seen.has(k) || !sp.resourceName) continue;
-      seen.add(k);
-      options.push({ name: sp.resourceName, q: Number(sp.resourceQuality) || 0, active: mysSpawnActive(sp),
-        type: sp.resourceTypeName || '', ts: sp.timestamp });
+      const prev = seen.get(k);
+      if (!prev || (mysSpawnActive(sp) && !prev.active)) {
+        seen.set(k, { name: sp.resourceName, q: Number(sp.resourceQuality) || 0, active: mysSpawnActive(sp),
+          type: sp.resourceTypeName || '', ts: sp.timestamp });
+      }
     }
-    options.sort((a, b) => b.q - a.q);
+    const options = [...seen.values()].sort((a, b) => b.q - a.q);
 
     const entry = {
       best, bestQ, bestActive: mysSpawnActive(best), assignedQ, delta: null, options,
@@ -266,8 +272,13 @@ async function analyzeMySchematic(s) {
       entry.delta = bestQ - assignedQ;
       if (entry.delta > 1) {
         if (entry.accepted) {
-          // accepted: only a LIVE spawn beating the accepted resource re-raises it
-          const live = options.find((o) => o.active && o.q > assignedQ + 1);
+          // accepted: only a LIVE spawn beating what was around AT ACCEPT TIME
+          // re-raises it (accepted_q) — else the very upgrade being dismissed
+          // undid the accept instantly
+          // +1 on the watermark too: list vs detail can weight quality a hair
+          // differently, and jitter must not re-raise an accepted slot
+          const floor = Math.max(assignedQ + 1, (Number(r.accepted_q) || 0) + 1);
+          const live = options.find((o) => o.active && o.q > floor);
           if (live) { entry.liveUpgrade = live; upgrades++; }
           else { entry.acceptedMuted = true; acceptedCount++; }
         } else {
@@ -538,9 +549,20 @@ async function mysdSetAccept(ingId, accepted) {
   const item = mysdState.item;
   const r = (item?.resources || []).find((x) => String(x.id) === String(ingId));
   if (!r) return;
+  // record the best LIVE candidate's quality at accept time — the nag only
+  // re-raises when something beats THAT (accepting used to be undone
+  // instantly by the very upgrade being dismissed)
+  const entry = mysdState.analysis && mysdState.analysis.perIng
+    ? mysdState.analysis.perIng.get(String(r.id)) : null;
+  const liveBest = entry
+    ? Math.max(0, ...(entry.options || []).filter((o) => o.active).map((o) => o.q)) : 0;
   let res;
-  try { res = await api().accept_my_schematic_resource({ id: r.id, accepted }); }
-  catch (e) { res = { ok: false, error: String(e) }; }
+  try {
+    // apiFetch, not the shell bridge — the bridge predates accepted_q
+    res = await apiFetch('PUT', 'api/my_schematics.php', {
+      data: { resource_row_id: safeInt(r.id), accepted: accepted ? 1 : 0, accepted_q: liveBest },
+    });
+  } catch (e) { res = { ok: false, error: String(e) }; }
   if (!res.ok) {
     toast(`Couldn't save: ${res.error || 'server error'}`, false);
     checkAuthError(res.error);
@@ -585,7 +607,7 @@ function mysdPoolOpt(p, code) {
   return {
     name: p.name,
     q: mysWeightedQuality(p, mysdState.weightsList || [], classCaps(String(code))) || 0,
-    active: p.status === 1,
+    active: safeInt(p.status) === 1,
     stocked: !!(typeof stkState !== 'undefined' && stkState.resourceIds && stkState.resourceIds.has(String(p.id))),
     type: p.type_name || '',
     score: p.value_rating != null ? safeInt(p.value_rating) : null,
@@ -878,7 +900,7 @@ async function openAddSetup(schematicId, name) {
       const caps = typeof classCaps === 'function' ? classCaps(String(n.id)) : null;
       stockedBySlot[n.id] = rows
         .filter((p) => stkState && stkState.resourceIds && stkState.resourceIds.has(String(p.id)))
-        .map((p) => ({ name: p.name, q: mysWeightedQuality(p, weightsList, caps) || 0, active: p.status === 1, stocked: true,
+        .map((p) => ({ name: p.name, q: mysWeightedQuality(p, weightsList, caps) || 0, active: safeInt(p.status) === 1, stocked: true,
           type: p.type_name || '', score: p.value_rating != null ? safeInt(p.value_rating) : null, ts: p.timestamp }))
         .sort((a, b) => b.q - a.q)
         .slice(0, 8);
@@ -887,13 +909,25 @@ async function openAddSetup(schematicId, name) {
 
   $('#sp-rows').innerHTML = needed.map((n) => {
     const dto = det?.dtoByCode.get(n.id);
-    const top = (dto?.serverBestResourceList || dto?.currentBestResourceList || []).slice(0, 15)
-      .map((sp) => ({ name: sp.resourceName || '', q: Number(sp.resourceQuality) || 0, active: mysSpawnActive(sp),
-        type: sp.resourceTypeName || '', ts: sp.timestamp }));
+    // BOTH lists: serverBest is all-time (mostly despawned) — the in-spawn
+    // candidates live in currentBest and were missing from the options entirely
+    const merged = [...(dto?.serverBestResourceList || []), ...(dto?.currentBestResourceList || [])];
+    const topSeen = new Map();
+    for (const sp of merged) {
+      const k = String(sp.resourceId || sp.resourceName);
+      const prev = topSeen.get(k);
+      if (!prev || (mysSpawnActive(sp) && !prev.active)) {  // active copy wins a duplicate
+        topSeen.set(k, { name: sp.resourceName || '', q: Number(sp.resourceQuality) || 0,
+          active: mysSpawnActive(sp), type: sp.resourceTypeName || '', ts: sp.timestamp });
+      }
+    }
+    const top = [...topSeen.values()].sort((a, b) => b.q - a.q).slice(0, 15);
     // stocked picks lead; a resource both stocked and a top spawn shows once (stocked)
     const stocked = stockedBySlot[n.id] || [];
     const names = new Set(stocked.map((o) => o.name.toLowerCase()));
     const options = stocked.concat(top.filter((o) => !names.has(o.name.toLowerCase())));
+    spState.optionsBySlot = spState.optionsBySlot || {};
+    spState.optionsBySlot[String(n.id)] = options; // the quick-pick chips read these
     return `<div class="sp-row">
       <span class="sp-label">${escapeHtml(n.desc || '')}
         <div class="mys-type">${escapeHtml(n.resourceName || '')}</div></span>
@@ -931,6 +965,11 @@ function cselectHtml(rowId, options) {
         <input type="text" class="stock-input cselect-input" placeholder="Type any resource name…"
                title="Filter the list, or press Enter to use exactly what you typed">
       </div>
+      ${options.length ? `<div class="cselect-quick">
+        <span class="fac-tag" data-csquick="best" title="Highest quality overall">Best</span>
+        <span class="fac-tag" data-csquick="stock" title="Highest quality already in your stockpile">Best stocked</span>
+        <span class="fac-tag" data-csquick="spawn" title="Highest quality currently in spawn">Best in spawn</span>
+      </div>` : ''}
       <div class="mysd-opt cselect-opt" data-value=""><span class="stat_off">— choose later —</span></div>
       <div class="cselect-opts">${options.map(cselectOptHtml).join('') ||
         '<div class="mysd-opt-none">No recorded spawns for this slot</div>'}</div>
@@ -1099,6 +1138,22 @@ function initMySchematics() {
       }
       return;
     }
+    // quick-pick chips: one click sets the slot to the best overall / best
+    // stocked / best in-spawn candidate — no scrolling or typing
+    const quick = e.target.closest('[data-csquick]');
+    if (quick) {
+      const cs = quick.closest('.cselect');
+      // NB: the render fn's `spState` is a local alias of mysdState._setup —
+      // this handler lives in another scope and must read the real home
+      const options = ((mysdState._setup && mysdState._setup.optionsBySlot) || {})[String(cs.dataset.sp)] || [];
+      const mode = quick.dataset.csquick;
+      const pick = mode === 'stock' ? options.find((o) => o.stocked)
+        : mode === 'spawn' ? [...options].sort((a, b) => b.q - a.q).find((o) => o.active)
+        : [...options].sort((a, b) => b.q - a.q)[0];
+      if (!pick) { toast(mode === 'stock' ? 'Nothing stocked for this slot' : 'Nothing in spawn for this slot', false); return; }
+      cselectPick(cs, pick.name, cselectOptHtml(pick));
+      return;
+    }
     const opt = e.target.closest('.cselect-opt');
     // outerHTML keeps the .mysd-opt flex wrapper — without it the meta span
     // (display:flex → block) stacks under the name and the button grows tall
@@ -1125,7 +1180,7 @@ function initMySchematics() {
         .filter((p) => String(p.name).toLowerCase().includes(q))
         .slice(0, 60)
         .map((p) => ({ name: p.name, q: mysWeightedQuality(p, sp.weightsList || [], caps) || 0,
-          active: p.status === 1, stocked: !!(stkState && stkState.resourceIds && stkState.resourceIds.has(String(p.id))),
+          active: safeInt(p.status) === 1, stocked: !!(stkState && stkState.resourceIds && stkState.resourceIds.has(String(p.id))),
           type: p.type_name || '', score: p.value_rating != null ? safeInt(p.value_rating) : null, ts: p.timestamp }))
         .sort((x, y) => y.q - x.q)
         .slice(0, 20);
@@ -1155,6 +1210,22 @@ function initMySchematics() {
 
   // list rows open the detail page
   $('#mys-body').addEventListener('click', (e) => {
+    const al = e.target.closest('[data-mysalert]');
+    if (al) {
+      const item = mysState.items[safeInt(al.dataset.mysalert)];
+      if (!item) return;
+      item.notify_email = Number(item.notify_email) ? 0 : 1; // optimistic
+      renderMysList();
+      apiFetch('PUT', 'api/my_schematics.php', {
+        data: { user_schematic_id: safeInt(item.user_schematic_id), notify_email: item.notify_email },
+      }).then((res) => {
+        if (!res.ok) toast(res.error || 'Could not save the alert toggle — site update pending?', false);
+        else toast(item.notify_email
+          ? `Upgrade-spawn emails ON — ${item.custom_name || item.name}`
+          : `Upgrade-spawn emails off — ${item.custom_name || item.name}`);
+      }).catch((err) => toast(String(err), false));
+      return;
+    }
     const note = e.target.closest('[data-mysnote]');
     if (note) { mysOpenNoteDialog(mysState.items[safeInt(note.dataset.mysnote)]); return; }
     const row = e.target.closest('tr[data-idx]');

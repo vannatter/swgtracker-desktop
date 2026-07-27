@@ -1071,6 +1071,8 @@ tr.harv-dragging td, tr.fac-dragging td, tr.mys-dragging td, tr.inv-dragging td 
 .stk-tagslot { display: inline-block; width: 22px; flex-shrink: 0; }
 .stk-tagind { color: var(--text-muted); font-size: 10px; cursor: pointer; vertical-align: 1px; }
 .stk-tagind:hover { color: var(--accent-hover); }
+/* resources grid: superscript "top resource for N schematics" count, like the site */
+.res-topcount { color: var(--accent-hover); font-size: 10px; margin-left: 2px; font-weight: 600; }
 .stk-note-card { max-width: 480px; }
 .stk-note-text { width: 100%; }
 .stk-note-tagslabel { display: block; margin: 12px 0 4px; }

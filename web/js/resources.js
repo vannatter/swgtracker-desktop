@@ -206,7 +206,12 @@ function resRowHtml(res) {
   const isActive = String(res.status ?? res.active ?? res.is_active ?? '0') === '1';
 
   const cells = RES_COLUMNS.map(([, field]) => {
-    if (field === 'name') return `<td class="col-name res-name">${escapeHtml(res.name || '')}</td>`;
+    // superscript top-count matches the website: how many schematic formulas
+    // rank this spawn top-5 right now — requested by Philosophy/Eponine.
+    // data-resname carries the clean name: the cell's TEXT now ends with the
+    // count digits, so textContent would navigate to "Aqui13"
+    if (field === 'name') return `<td class="col-name res-name" data-resname="${escapeHtml(res.name || '')}">${escapeHtml(res.name || '')}${safeInt(res.topcount) > 0
+      ? `<sup class="res-topcount" title="Top resource for ${safeInt(res.topcount)} schematic${safeInt(res.topcount) === 1 ? '' : 's'} — see its Top Uses tab">${safeInt(res.topcount)}</sup>` : ''}</td>`;
     if (field === 'status') return `<td class="col-status"><i class="fa-solid fa-circle res-status ${isActive ? 'on' : 'off'}" title="${isActive ? 'Active — in spawn' : 'Inactive — despawned'}"></i></td>`;
     if (field === 'type_name') {
       const name = escapeHtml(res.type_name || '');
@@ -645,7 +650,7 @@ function initResources() {
     const typeLink = e.target.closest('[data-navcat]');
     if (typeLink) { applyCategoryFilter(typeLink.dataset.navcat, typeLink.textContent.trim()); return; }
     const nameCell = e.target.closest('td.res-name');
-    if (nameCell) openResourcePage(nameCell.textContent);
+    if (nameCell) openResourcePage(nameCell.dataset.resname || nameCell.textContent.trim());
   });
 
   initResourcePage();

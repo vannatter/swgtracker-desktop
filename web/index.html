@@ -145,6 +145,7 @@
           <span id="rd-meta" class="rd-scoreline"></span>
           <span id="rd-scoreline" class="rd-scoreline"></span>
           <span class="rd-planets" id="rd-planets"></span>
+          <span class="rd-planets" id="rd-stktags"></span>
         </div>
 
         <!-- Tabs mirror the site's resource page: Top Uses / Other <type> / Related / Used In -->
@@ -277,8 +278,10 @@
              title="Your crafting list — each schematic tracks which resource you're using for every ingredient."></i>
           <span class="mys-badge" id="mys-total-badge" hidden></span>
           <input id="mys-search" type="text" class="form-control filter-input head-search" placeholder="Search schematics...">
+          <button id="mys-newgroup" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-folder-plus"></i> New Group</button>
           <button class="btn btn-icon" data-refresh="myschematics" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
         </div>
+        <div id="mys-tagbar" class="fac-tagbar" hidden></div>
         <div class="table-wrap">
           <table class="data-grid" id="mys-grid">
             <thead><tr id="mys-head"></tr></thead>
@@ -666,9 +669,11 @@
           </select>
           <input id="inv-low" type="number" class="form-control filter-input inv-num" value="5" min="0" title="Low-stock cutoff" hidden>
           <input id="inv-search" type="text" class="form-control filter-input head-search" placeholder="Search item or vendor...">
+          <button id="inv-newgroup" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-folder-plus"></i> New Group</button>
           <button id="inv-add-open" class="btn btn-sm btn-accent"><i class="fa-solid fa-plus"></i> Add Item</button>
           <button class="btn btn-icon" data-refresh="inventory" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
         </div>
+        <div id="inv-tagbar" class="fac-tagbar" hidden></div>
 
         <div class="table-wrap">
           <table class="data-grid" id="inv-grid">
@@ -1043,6 +1048,11 @@
               <option value="intl">International — DD/MM/YY</option>
             </select>
           </div>
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="set-ignoremust">
+            <label class="form-check-label" for="set-ignoremust">Ignore Mustafarian resources
+              <span class="settings-sub">Hides them from schematic upgrade suggestions and spawn alerts — unless a slot or rule asks for a Mustafarian class outright. Synced to your account.</span></label>
+          </div>
         </div>
 
         <div class="settings-section">
@@ -1394,6 +1404,9 @@
       </div>
       <div id="inv-note-text" class="lab-notes-editor stk-note-text" contenteditable="true"
            data-placeholder="A recipe, a buyer, a reminder…"></div>
+      <label class="fac-label stk-note-tagslabel">Tags</label>
+      <input id="inv-note-tags" type="text" class="form-control filter-input stk-note-tagsin"
+             placeholder="comma, separated" maxlength="255" spellcheck="false">
       <div class="stk-note-actions">
         <button id="inv-note-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
         <button id="inv-note-save" class="btn btn-sm btn-accent"><i class="fa-solid fa-check"></i> Save</button>
@@ -1413,6 +1426,9 @@
       </div>
       <div id="mys-note-text" class="lab-notes-editor stk-note-text" contenteditable="true"
            data-placeholder="Draft ideas, target stats, who it's for…"></div>
+      <label class="fac-label stk-note-tagslabel">Tags</label>
+      <input id="mys-note-tags" type="text" class="form-control filter-input stk-note-tagsin"
+             placeholder="comma, separated" maxlength="255" spellcheck="false">
       <div class="stk-note-actions">
         <button id="mys-note-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
         <button id="mys-note-save" class="btn btn-sm btn-accent"><i class="fa-solid fa-check"></i> Save</button>

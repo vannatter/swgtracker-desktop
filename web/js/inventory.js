@@ -16,7 +16,11 @@ const INV_COLUMNS = [
 // INV_COLUMNS — the list is server-sorted and api/inventory.php's sort allowlist
 // has no `notes`, so a sortable notes header would silently sort by item_name.
 const invState = { page: 1, perPage: 100, hasNext: false, sortField: 'item_name', sortOrder: 'ASC', items: [],
-                   noteFor: null };  // inventory id open in the notes dialog
+                   noteFor: null,   // inventory id open in the notes dialog
+                   groups: [], grpCollapsed: new Set(), tagFilter: null };
+
+// tags live as one comma-separated string server-side, like stockpile/factories
+const invTags = (i) => String(i.tags || '').split(',').map((t) => t.trim()).filter(Boolean);
 
 const invColCount = () => INV_COLUMNS.length + 1; // + the actions cell
 
@@ -55,9 +59,11 @@ function invRowHtml(item, idx) {
   const iid = String(item.id);
   const notePreview = labNotesText(item.notes);   // rich notes -> plain text for the tooltip
   const hasNotes = !!notePreview;
-  return `<tr data-idx="${idx}" data-iid="${iid}">
+  const tagged = invTags(item).length > 0;
+  return `<tr data-idx="${idx}" data-iid="${iid}"${invState.groups.length ? ' draggable="true"' : ''}>
     <td class="stat inv-edit ${stockCls}" data-edit="stocked" data-idx="${idx}" title="Click to edit">${fmtNum(stocked)}</td>
-    <td class="col-name res-name">${escapeHtml(item.item_name || '')}</td>
+    <td class="col-name res-name"><span class="stk-tagslot">${tagged
+      ? `<i class="fa-solid fa-tag stk-tagind" data-invtaghover="${idx}"></i>` : ''}</span>${escapeHtml(item.item_name || '')}</td>
     <td class="stat inv-edit" data-edit="threshold" data-idx="${idx}" title="Click to edit">${fmtNum(threshold)}</td>
     <td class="col-text">${escapeHtml(item.vendor || '') || '<span class="stat_off">—</span>'}</td>
     <td class="col-num">${item.match_price != null && item.match_price !== '' ? fmtNum(item.match_price) : '<span class="stat_off">—</span>'}</td>
@@ -74,9 +80,34 @@ function invRowHtml(item, idx) {
 
 const invRowsHtml = (item, idx) => invRowHtml(item, idx);
 
-// Re-render from state — no refetch.
+// Re-render from state — no refetch. Folder rows split the page's rows into
+// sections (rename/collapse/delete inline); ungrouped-only = a flat list.
 function renderInvRows() {
-  $('#inv-body').innerHTML = invState.items.map(invRowsHtml).join('');
+  let pairs = invState.items.map((item, idx) => [item, idx]);
+  if (invState.tagFilter) pairs = pairs.filter(([i]) => invTags(i).includes(invState.tagFilter));
+  const sections = grpSections(invState.groups, pairs, ([i]) => i.group_id);
+  const spacer = `<tr class="stk-group-gap"><td colspan="${invColCount()}"></td></tr>`;
+  const parts = [];
+  sections.forEach((sec) => {
+    const collapsed = invState.grpCollapsed.has(sec.key);
+    if (sec.key !== 'un' || sections.length > 1) {
+      if (parts.length) parts.push(spacer);
+      parts.push(grpTableHeaderHtml(sec.key, sec.name, sec.items.length, collapsed, sec.key !== 'un', invColCount(), 'col-actions'));
+    }
+    if (!collapsed) parts.push(...sec.items.map(([item, idx]) => invRowsHtml(item, idx)));
+  });
+  $('#inv-body').innerHTML = parts.join('');
+
+  // tag cloud from this page's items; an active filter can always be unclicked
+  const allTags = [...new Set(invState.items.flatMap(invTags))];
+  if (invState.tagFilter && !allTags.includes(invState.tagFilter)) invState.tagFilter = null;
+  const tagbar = $('#inv-tagbar');
+  tagbar.hidden = !allTags.length;
+  tagbar.innerHTML = allTags.length
+    ? '<span class="fac-tagbar-label"><i class="fa-solid fa-tags"></i></span>'
+      + allTags.map((t) => `<span class="fac-tag${invState.tagFilter === t ? ' active' : ''}"
+          data-invtag="${escapeHtml(t)}">${escapeHtml(t)}</span>`).join('')
+    : '';
 }
 
 // ---- notes dialog: hover the icon to preview, click to edit (matches the
@@ -86,6 +117,7 @@ function invOpenNoteDialog(item) {
   invState.noteFor = String(item.id);
   $('#inv-note-title').textContent = item.item_name || 'Notes';
   $('#inv-note-text').innerHTML = labNotesHtml(item.notes);  // rich (lab WYSIWYG)
+  $('#inv-note-tags').value = item.tags || '';
   $('#inv-note-modal').hidden = false;
   $('#inv-note-text').focus();
 }
@@ -95,12 +127,14 @@ async function invSaveNoteDialog() {
   $('#inv-note-modal').hidden = true;
   if (!item) return;
   const v = richNotesValue($('#inv-note-text'));
-  if ((item.notes || '') === v) return; // unchanged
+  const tags = $('#inv-note-tags').value.trim();
+  if ((item.notes || '') === v && (item.tags || '') === tags) return; // unchanged
   item.notes = v; // optimistic
+  item.tags = tags;
   renderInvRows();
   try {
     // apiFetch, not the shell bridge — this ships as a UI bundle with no client download
-    const res = await apiFetch('PUT', 'api/inventory.php', { data: { inventory_id: safeInt(invState.noteFor), notes: v } });
+    const res = await apiFetch('PUT', 'api/inventory.php', { data: { inventory_id: safeInt(invState.noteFor), notes: v, tags } });
     $('#inv-status').textContent = res.ok
       ? `Notes saved — ${item.item_name}`
       : `Failed to save notes: ${res.error || 'server error'}`;
@@ -122,9 +156,11 @@ async function loadInventory() {
   if (filter === 'negative_stock') params.inventory_type = 'negative_stock';
   else if (filter === 'low') params.threshold = safeInt($('#inv-low').value);
 
-  let res;
-  try { res = await api().get_inventory(params); }
-  catch (e) { res = { ok: false, error: String(e) }; }
+  let res, groups;
+  try {
+    [res, groups] = await Promise.all([api().get_inventory(params), grpList('inventory')]);
+  } catch (e) { res = { ok: false, error: String(e) }; groups = invState.groups; }
+  invState.groups = groups || [];
 
   $('#inv-loading').hidden = true;
 
@@ -145,10 +181,11 @@ async function loadInventory() {
 
   buildInvHeader();
   if (!rows.length) {
-    $('#inv-body').innerHTML = '';
+    // still render folder rows (if any) so an empty list can be organized
+    renderInvRows();
     const empty = $('#inv-empty');
     empty.textContent = filter || params.search ? 'No matching items.' : 'No items yet — add one above.';
-    empty.hidden = false;
+    empty.hidden = invState.groups.length > 0;
     $('#inv-status').textContent = '';
   } else {
     renderInvRows();
@@ -357,6 +394,112 @@ function initInventory() {
            <td class="col-num sale-amount">${fmtNum(s.sale_amount)} cr</td>
          </tr>`).join('')}</tbody></table>`
       : '<span class="stat_off">No matched sales recorded for this item.</span>';
+  });
+
+  // folders: create, collapse, rename, delete, drag rows in
+  $('#inv-newgroup').addEventListener('click', async () => {
+    const res = await grpApi({ action: 'create', kind: 'inventory' });
+    if (!res.ok || !res.data) { toast(res.error || 'Could not create group — site update pending?', false); return; }
+    invState.groups.push({ id: res.data.id, name: res.data.name, sort_order: res.data.sort_order });
+    renderInvRows();
+    grpBeginRename('#inv-body', String(res.data.id),
+      invState.groups[invState.groups.length - 1], renderInvRows);
+  });
+  $('#inv-tagbar').addEventListener('click', (e) => {
+    const tag = e.target.closest('[data-invtag]');
+    if (!tag) return;
+    invState.tagFilter = invState.tagFilter === tag.dataset.invtag ? null : tag.dataset.invtag;
+    renderInvRows();
+  });
+
+  // tag indicator popover — identical to stockpile's (same popover element +
+  // hide timers); chips filter this list
+  $('#inv-body').addEventListener('mouseover', (e) => {
+    const tag = e.target.closest('[data-invtaghover]');
+    if (!tag) return;
+    const item = invState.items[safeInt(tag.dataset.invtaghover)];
+    if (!item) return;
+    clearTimeout(stkPopHide);
+    const pop = $('#stk-schem-pop');
+    pop.innerHTML = `<div class="fac-tagbar" style="margin:0">${invTags(item).map((t) =>
+      `<span class="fac-tag${invState.tagFilter === t ? ' active' : ''}" data-invtag="${escapeHtml(t)}">${escapeHtml(t)}</span>`).join('')}</div>`;
+    const r = tag.getBoundingClientRect();
+    pop.hidden = false;
+    pop.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 328))}px`;
+    pop.style.top = r.bottom + pop.offsetHeight + 8 < window.innerHeight
+      ? `${r.bottom + 4}px` : `${r.top - pop.offsetHeight - 4}px`;
+  });
+  $('#inv-body').addEventListener('mouseout', (e) => {
+    if (e.target.closest('[data-invtaghover]')) stkScheduleSchemPopHide();
+  });
+  $('#stk-schem-pop').addEventListener('click', (e) => {
+    const t = e.target.closest('[data-invtag]');
+    if (!t) return;
+    $('#stk-schem-pop').hidden = true;
+    invState.tagFilter = invState.tagFilter === t.dataset.invtag ? null : t.dataset.invtag;
+    renderInvRows();
+  });
+  $('#inv-body').addEventListener('click', (e) => {
+    const tog = e.target.closest('[data-grptoggle]');
+    if (tog) {
+      const k = tog.dataset.grptoggle;
+      invState.grpCollapsed.has(k) ? invState.grpCollapsed.delete(k) : invState.grpCollapsed.add(k);
+      renderInvRows();
+      return;
+    }
+    const ren = e.target.closest('[data-grprename]');
+    if (ren) {
+      grpBeginRename('#inv-body', ren.dataset.grprename,
+        invState.groups.find((g) => String(g.id) === ren.dataset.grprename), renderInvRows);
+      return;
+    }
+    const gdel = e.target.closest('[data-grpdel]');
+    if (gdel) {
+      if (!confirmArmLabeled(gdel, 'Delete group?')) return;
+      const gid = safeInt(gdel.dataset.grpdel);
+      grpApi({ action: 'remove', id: gid }).then((res) => {
+        if (!res.ok) return;
+        invState.groups = invState.groups.filter((g) => g.id !== gid);
+        invState.items.forEach((i) => { if (Number(i.group_id) === gid) i.group_id = null; });
+        renderInvRows();
+      });
+    }
+  });
+  // drag a row onto (or under) a folder row to file it
+  $('#inv-body').addEventListener('dragstart', (e) => {
+    const el = e.target.closest('tr[data-iid]');
+    if (el) el.classList.add('inv-dragging');
+  });
+  $('#inv-body').addEventListener('dragover', (e) => {
+    const dragging = document.querySelector('#inv-body tr.inv-dragging');
+    if (!dragging) return;
+    e.preventDefault();
+    const hd = e.target.closest('tr[data-grpkey]');
+    if (hd) { hd.parentNode.insertBefore(dragging, hd.nextSibling); return; }
+    const over = e.target.closest('tr[data-iid]');
+    if (over && over !== dragging) {
+      const rect = over.getBoundingClientRect();
+      over.parentNode.insertBefore(dragging, e.clientY < rect.top + rect.height / 2 ? over : over.nextSibling);
+    }
+  });
+  $('#inv-body').addEventListener('dragend', async () => {
+    const dragging = document.querySelector('#inv-body tr.inv-dragging');
+    if (!dragging) return;
+    dragging.classList.remove('inv-dragging');
+    const item = invState.items[safeInt(dragging.dataset.idx)];
+    let p = dragging.previousElementSibling;         // section = nearest divider above
+    while (p && !p.hasAttribute('data-grpkey')) p = p.previousElementSibling;
+    const key = p ? p.dataset.grpkey : 'un';
+    if (item) {
+      const gid = key === 'un' ? null : safeInt(key);
+      if ((item.group_id || null) !== gid) {
+        item.group_id = gid;
+        const res = await apiFetch('PUT', 'api/inventory.php', {
+          data: { inventory_id: safeInt(item.id), group_id: gid } });
+        if (!res.ok) toast(res.error || 'Could not move — site update pending?', false);
+      }
+    }
+    renderInvRows();
   });
 
   $('#inv-add').addEventListener('click', addInvItem);

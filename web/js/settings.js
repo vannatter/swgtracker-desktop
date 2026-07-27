@@ -114,6 +114,9 @@ async function loadSettings() {
   $('#set-datefmt').value = df;
   setDateFormat(df);
 
+  // account-level prefs (server-side — the email crons honor them too)
+  loadPrefs(true).then((p) => { $('#set-ignoremust').checked = !!p.ignore_mustafar; });
+
   refreshDatasetStatus();
 }
 
@@ -191,6 +194,15 @@ async function saveSettings() {
     for (const [key, value] of entries) {
       const res = await api().set_config(key, value);
       if (!res.ok) throw new Error(res.error || `failed to save ${key}`);
+    }
+
+    // account-level pref rides the same Save button but lives server-side
+    const wantMust = $('#set-ignoremust').checked ? 1 : 0;
+    if (wantMust !== (appPrefs.ignore_mustafar ? 1 : 0)) {
+      const res = await apiFetch('PUT', 'api/prefs.php', { data: { ignore_mustafar: wantMust } });
+      if (!res.ok) throw new Error(res.error || 'Could not save the Mustafarian preference — site update pending?');
+      appPrefs.ignore_mustafar = wantMust;
+      if (typeof loadedPages !== 'undefined') loadedPages.clear(); // suggestions re-filter on next visit
     }
     // a changed date format must invalidate every already-rendered page —
     // cached pages would keep showing dates in the old style until relaunch

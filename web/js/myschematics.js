@@ -8,7 +8,11 @@
 
    PUT contract assumed pending full docs: {"id": <resources[].id>, "resource_name": "..."} */
 
-const mysState = { items: [], schematicIds: new Set(), sortField: '', sortOrder: 'ASC' };
+const mysState = { items: [], schematicIds: new Set(), sortField: '', sortOrder: 'ASC',
+  groups: [], grpCollapsed: new Set(), tagFilter: null };
+
+// tags live as one comma-separated string server-side, like stockpile/factories
+const mysTags = (s) => String(s.tags || '').split(',').map((t) => t.trim()).filter(Boolean);
 
 const MYS_COLUMNS = [
   ['Schematic', 'name', 'col-name'],
@@ -19,7 +23,7 @@ const MYS_COLUMNS = [
 
 function buildMysHeader() {
   $('#mys-head').innerHTML = sortableHeaderHtml(MYS_COLUMNS, mysState.sortField, mysState.sortOrder)
-    + '<th class="pin-cell"></th><th class="pin-cell"></th>'; // upgrade alerts + notes
+    + '<th class="pin-cell"></th><th class="pin-cell"></th><th class="pin-cell"></th>'; // alerts + notes + remove
 }
 
 // NB: distinct from mysStatusHtml(r, a) below, which renders detail-page rows
@@ -39,8 +43,11 @@ function mysVisibleItems() {
   let list = mysState.items.map((s, idx) => [s, idx]);
   if (q) {
     list = list.filter(([s]) =>
-      (s.name || '').toLowerCase().includes(q) || (s.custom_name || '').toLowerCase().includes(q));
+      (s.name || '').toLowerCase().includes(q) || (s.custom_name || '').toLowerCase().includes(q)
+      || String(s.tags || '').toLowerCase().includes(q)
+      || (mysState.groups.find((g) => g.id === Number(s.group_id))?.name || '').toLowerCase().includes(q));
   }
+  if (mysState.tagFilter) list = list.filter(([s]) => mysTags(s).includes(mysState.tagFilter));
   const f = mysState.sortField;
   if (f) {
     const key = (s) =>
@@ -57,9 +64,13 @@ function mysVisibleItems() {
 function renderMysList() {
   buildMysHeader();
   const visible = mysVisibleItems();
-  $('#mys-body').innerHTML = visible.map(([s, idx]) => `
-    <tr data-idx="${idx}" data-usid="${escapeHtml(String(s.user_schematic_id))}">
-      <td class="col-name res-name">${escapeHtml(s.name || '')}${s.custom_name
+  const canDrag = mysState.groups.length > 0;
+  const rowFor = ([s, idx]) => {
+    const tagged = mysTags(s).length > 0;
+    return `
+    <tr data-idx="${idx}" data-usid="${escapeHtml(String(s.user_schematic_id))}"${canDrag ? ' draggable="true"' : ''}>
+      <td class="col-name res-name"><span class="stk-tagslot">${tagged
+        ? `<i class="fa-solid fa-tag stk-tagind" data-mystaghover="${idx}"></i>` : ''}</span>${escapeHtml(s.name || '')}${s.custom_name
         ? `<span class="mys-loadout">${escapeHtml(s.custom_name)}</span>` : ''}</td>
       <td class="col-text">${mysFormulaCell(s)}</td>
       <td class="stat">${(s.resources || []).length}</td>
@@ -68,13 +79,40 @@ function renderMysList() {
           title="${Number(s.notify_email) ? 'Emailing you when an upgrade spawns for this schematic — click to stop' : 'Email me when a better resource spawns for one of this schematic’s slots'}"><i
           class="fa-${Number(s.notify_email) ? 'solid' : 'regular'} fa-envelope${Number(s.notify_email) ? ' mys-alert-on' : ''}"></i></td>
       <td class="pin-cell note-cell" data-mysnote="${idx}"
-          title="${labNotesText(s.notes) ? escapeHtml(labNotesText(s.notes)) : 'Add notes'}"><i
+          title="${labNotesText(s.notes) ? escapeHtml(labNotesText(s.notes)) : 'Add notes / tags'}"><i
           class="fa-${labNotesText(s.notes) ? 'solid' : 'regular'} fa-note-sticky${labNotesText(s.notes) ? ' has-notes' : ''}"></i></td>
-    </tr>`).join('');
+      <td class="pin-cell" data-mysdel="${idx}" title="Remove from My Schematics"><i class="fa-solid fa-trash-can"></i></td>
+    </tr>`;
+  };
+  // grouped: stockpile-style folder rows split the table (rename/collapse/
+  // delete inline, gap between folders); ungrouped-only = a flat list
+  const sections = grpSections(mysState.groups, visible, ([s]) => s.group_id);
+  const spacer = '<tr class="stk-group-gap"><td colspan="7"></td></tr>';
+  const parts = [];
+  sections.forEach((sec) => {
+    const collapsed = mysState.grpCollapsed.has(sec.key);
+    if (sec.key !== 'un' || sections.length > 1) {
+      if (parts.length) parts.push(spacer);
+      parts.push(grpTableHeaderHtml(sec.key, sec.name, sec.items.length, collapsed, sec.key !== 'un', 7));
+    }
+    if (!collapsed) parts.push(...sec.items.map(rowFor));
+  });
+  $('#mys-body').innerHTML = parts.join('');
+
+  // tag cloud built from every item so an active filter can always be unclicked
+  const allTags = [...new Set(mysState.items.flatMap(mysTags))];
+  if (mysState.tagFilter && !allTags.includes(mysState.tagFilter)) mysState.tagFilter = null;
+  const tagbar = $('#mys-tagbar');
+  tagbar.hidden = !allTags.length;
+  tagbar.innerHTML = allTags.length
+    ? '<span class="fac-tagbar-label"><i class="fa-solid fa-tags"></i></span>'
+      + allTags.map((t) => `<span class="fac-tag${mysState.tagFilter === t ? ' active' : ''}"
+          data-mystag="${escapeHtml(t)}">${escapeHtml(t)}</span>`).join('')
+    : '';
 
   const empty = $('#mys-empty');
   empty.hidden = true;
-  if (!visible.length) {
+  if (!visible.length && !mysState.groups.length) {
     empty.textContent = mysState.items.length
       ? 'No schematics match your search.'
       : 'No schematics in your crafting list yet — add them with the wrench icon on the Schematics page.';
@@ -91,6 +129,7 @@ function mysOpenNoteDialog(item) {
   mysNoteFor = String(item.user_schematic_id);
   $('#mys-note-title').textContent = item.custom_name ? `${item.name} · ${item.custom_name}` : (item.name || 'Notes');
   $('#mys-note-text').innerHTML = labNotesHtml(item.notes);  // rich (lab WYSIWYG)
+  $('#mys-note-tags').value = item.tags || '';
   $('#mys-note-modal').hidden = false;
   $('#mys-note-text').focus();
 }
@@ -100,12 +139,14 @@ async function mysSaveNoteDialog() {
   $('#mys-note-modal').hidden = true;
   if (!item) return;
   const notes = richNotesValue($('#mys-note-text'));
-  if ((item.notes || '') === notes) return;
+  const tags = $('#mys-note-tags').value.trim();
+  if ((item.notes || '') === notes && (item.tags || '') === tags) return;
   item.notes = notes; // optimistic
+  item.tags = tags;
   renderMysList();
   try {
     const res = await apiFetch('PUT', 'api/my_schematics.php', {
-      data: { user_schematic_id: safeInt(mysNoteFor), notes },
+      data: { user_schematic_id: safeInt(mysNoteFor), notes, tags },
     });
     if (!res.ok) toast(res.error || 'Failed to save notes — is the site update deployed?', false);
   } catch (e) { toast(String(e), false); }
@@ -222,6 +263,7 @@ const mysSpawnActive = (sp) =>
 // Returns {perIng: Map(ing.id -> {best, bestQ, bestActive, assignedQ, delta,
 // candidates}), upgrades, comparable}
 async function analyzeMySchematic(s) {
+  await loadPrefs(); // Mustafarian-ignore pref gates the candidate lists below
   const det = await mysGetDetail(s.schematic_id, s.formulas || '');
   let weightsList = mysFormulaList(s).map(mysParseWeights).filter(Boolean);
   if (!weightsList.length) weightsList = det?.weights || [];
@@ -230,9 +272,14 @@ async function analyzeMySchematic(s) {
 
   for (const r of (s.resources || [])) {
     const dto = det?.dtoByCode.get(r.resource_type);
-    // best EVER seen — despawned resources can still be bought/traded
-    const lists = [...(dto?.serverBestResourceList || []), ...(dto?.currentBestResourceList || [])];
-    const best = dto?.serverBestResourceList?.[0] || dto?.currentBestResourceList?.[0] || null;
+    // best EVER seen — despawned resources can still be bought/traded.
+    // Mustafarian candidates drop out for users who ignore them (unless the
+    // slot itself wants a Mustafarian class).
+    const mflt = (arr) => (arr || []).filter((sp) => !hideMustafarian(sp.resourceTypeName, r.type_name));
+    const sbl = mflt(dto?.serverBestResourceList);
+    const cbl = mflt(dto?.currentBestResourceList);
+    const lists = [...sbl, ...cbl];
+    const best = sbl[0] || cbl[0] || null;
     const bestQ = best ? Number(best.resourceQuality) || 0 : null;
 
     let assignedQ = null;
@@ -341,9 +388,11 @@ async function loadMySchematics() {
   showGridLoading('#mys-loading');
   $('#mys-empty').hidden = true;
 
-  let res;
-  try { res = await api().get_my_schematics({}); }
-  catch (e) { res = { ok: false, error: String(e) }; }
+  let res, groups;
+  try {
+    [res, groups] = await Promise.all([api().get_my_schematics({}), grpList('myschem'), loadPrefs()]);
+  } catch (e) { res = { ok: false, error: String(e) }; groups = mysState.groups; }
+  mysState.groups = groups || [];
 
   $('#mys-loading').hidden = true;
 
@@ -642,6 +691,7 @@ async function mysdOpenPicker(ingId) {
   const code = r.resource_type;
   const modal = $('#mysd-picker-modal');
   mysdState.picker = { ingId, code, query: '', current: r.resource_name || '',
+                       typeName: r.type_name || '',
                        activeOnly: localStorage.getItem('mysd_picker_active') === '1' };
   $('#mysd-picker-active').checked = mysdState.picker.activeOnly;
 
@@ -679,6 +729,12 @@ function mysdRenderPicker() {
   let rows = pool.map((res) => ({ res, q: mysWeightedQuality(res, mysdState.weightsList || [], caps) || 0 }));
   if (q) rows = rows.filter((x) => String(x.res.name).toLowerCase().includes(q));
   else if (p.stockOnly) rows = rows.filter((x) => stkState && stkState.resourceIds && stkState.resourceIds.has(String(x.res.id)));
+  // ignored Mustafarian classes stay out of the browse list — an explicit name
+  // search or your own stockpiled copies still show
+  if (!q) {
+    rows = rows.filter((x) => !hideMustafarian(x.res.type_name, p.typeName)
+      || (stkState && stkState.resourceIds && stkState.resourceIds.has(String(x.res.id))));
+  }
   if (p.activeOnly) rows = rows.filter((x) => x.res.status === 1); // in-spawn toggle — requested by Pufhead
   rows.sort((a, b) => b.q - a.q);
   rows = rows.slice(0, q ? 40 : 60);
@@ -856,6 +912,7 @@ function updateScdMysButton() {
 // cselects are keyed by resource_type so we can match them to the created rows.
 async function openAddSetup(schematicId, name) {
   const spState = mysdState._setup = { schematicId, name };
+  await loadPrefs(); // Mustafarian-ignore pref gates the slot suggestions
   const det = await mysGetDetail(schematicId);
   let schem = null;
   try {
@@ -910,8 +967,10 @@ async function openAddSetup(schematicId, name) {
   $('#sp-rows').innerHTML = needed.map((n) => {
     const dto = det?.dtoByCode.get(n.id);
     // BOTH lists: serverBest is all-time (mostly despawned) — the in-spawn
-    // candidates live in currentBest and were missing from the options entirely
-    const merged = [...(dto?.serverBestResourceList || []), ...(dto?.currentBestResourceList || [])];
+    // candidates live in currentBest and were missing from the options entirely.
+    // Mustafarian suggestions drop for users who ignore them (own stock still shows).
+    const merged = [...(dto?.serverBestResourceList || []), ...(dto?.currentBestResourceList || [])]
+      .filter((sp) => !hideMustafarian(sp.resourceTypeName, n.resourceName));
     const topSeen = new Map();
     for (const sp of merged) {
       const k = String(sp.resourceId || sp.resourceName);
@@ -1208,8 +1267,116 @@ function initMySchematics() {
   });
   $('#sp-rows').addEventListener('scroll', () => closeCselects());
 
+  // folders: create, collapse, rename, delete, drag rows in
+  $('#mys-newgroup').addEventListener('click', async () => {
+    const res = await grpApi({ action: 'create', kind: 'myschem' });
+    if (!res.ok || !res.data) { toast(res.error || 'Could not create group — site update pending?', false); return; }
+    mysState.groups.push({ id: res.data.id, name: res.data.name, sort_order: res.data.sort_order });
+    renderMysList();
+    grpBeginRename('#mys-body', String(res.data.id),
+      mysState.groups[mysState.groups.length - 1], renderMysList);
+  });
+
+  $('#mys-tagbar').addEventListener('click', (e) => {
+    const tag = e.target.closest('[data-mystag]');
+    if (!tag) return;
+    mysState.tagFilter = mysState.tagFilter === tag.dataset.mystag ? null : tag.dataset.mystag;
+    renderMysList();
+  });
+
+  // tag indicator popover — identical to stockpile's (same popover element,
+  // same show/hide timers); chips filter this list
+  $('#mys-body').addEventListener('mouseover', (e) => {
+    const tag = e.target.closest('[data-mystaghover]');
+    if (!tag) return;
+    const s = mysState.items[safeInt(tag.dataset.mystaghover)];
+    if (!s) return;
+    clearTimeout(stkPopHide);
+    const pop = $('#stk-schem-pop');
+    pop.innerHTML = `<div class="fac-tagbar" style="margin:0">${mysTags(s).map((t) =>
+      `<span class="fac-tag${mysState.tagFilter === t ? ' active' : ''}" data-mystag="${escapeHtml(t)}">${escapeHtml(t)}</span>`).join('')}</div>`;
+    const r = tag.getBoundingClientRect();
+    pop.hidden = false;
+    pop.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 328))}px`;
+    pop.style.top = r.bottom + pop.offsetHeight + 8 < window.innerHeight
+      ? `${r.bottom + 4}px` : `${r.top - pop.offsetHeight - 4}px`;
+  });
+  $('#mys-body').addEventListener('mouseout', (e) => {
+    if (e.target.closest('[data-mystaghover]')) stkScheduleSchemPopHide();
+  });
+  $('#stk-schem-pop').addEventListener('click', (e) => {
+    const t = e.target.closest('[data-mystag]');
+    if (!t) return;
+    $('#stk-schem-pop').hidden = true;
+    mysState.tagFilter = mysState.tagFilter === t.dataset.mystag ? null : t.dataset.mystag;
+    renderMysList();
+  });
+
+  // drag a row onto (or under) a folder row to file it
+  $('#mys-body').addEventListener('dragstart', (e) => {
+    const el = e.target.closest('tr[data-usid]');
+    if (el) el.classList.add('mys-dragging');
+  });
+  $('#mys-body').addEventListener('dragover', (e) => {
+    const dragging = document.querySelector('#mys-body tr.mys-dragging');
+    if (!dragging) return;
+    e.preventDefault();
+    const hd = e.target.closest('tr[data-grpkey]');
+    if (hd) { hd.parentNode.insertBefore(dragging, hd.nextSibling); return; }
+    const over = e.target.closest('tr[data-usid]');
+    if (over && over !== dragging) {
+      const rect = over.getBoundingClientRect();
+      over.parentNode.insertBefore(dragging, e.clientY < rect.top + rect.height / 2 ? over : over.nextSibling);
+    }
+  });
+  $('#mys-body').addEventListener('dragend', async () => {
+    const dragging = document.querySelector('#mys-body tr.mys-dragging');
+    if (!dragging) return;
+    dragging.classList.remove('mys-dragging');
+    const s = mysState.items[safeInt(dragging.dataset.idx)];
+    let p = dragging.previousElementSibling;         // section = nearest divider above
+    while (p && !p.hasAttribute('data-grpkey')) p = p.previousElementSibling;
+    const key = p ? p.dataset.grpkey : 'un';
+    if (s) {
+      const gid = key === 'un' ? null : safeInt(key);
+      if ((s.group_id || null) !== gid) {
+        s.group_id = gid;
+        const res = await apiFetch('PUT', 'api/my_schematics.php', {
+          data: { user_schematic_id: safeInt(s.user_schematic_id), group_id: gid } });
+        if (!res.ok) toast(res.error || 'Could not move — site update pending?', false);
+      }
+    }
+    renderMysList();
+  });
+
   // list rows open the detail page
   $('#mys-body').addEventListener('click', (e) => {
+    const tog = e.target.closest('[data-grptoggle]');
+    if (tog) {
+      const k = tog.dataset.grptoggle;
+      mysState.grpCollapsed.has(k) ? mysState.grpCollapsed.delete(k) : mysState.grpCollapsed.add(k);
+      renderMysList();
+      return;
+    }
+    const ren = e.target.closest('[data-grprename]');
+    if (ren) {
+      grpBeginRename('#mys-body', ren.dataset.grprename,
+        mysState.groups.find((g) => String(g.id) === ren.dataset.grprename), renderMysList);
+      return;
+    }
+    const gdel = e.target.closest('[data-grpdel]');
+    if (gdel) {
+      if (!confirmArmLabeled(gdel, 'Delete group?')) return;
+      const gid = safeInt(gdel.dataset.grpdel);
+      grpApi({ action: 'remove', id: gid }).then((res) => {
+        if (!res.ok) return;
+        mysState.groups = mysState.groups.filter((g) => g.id !== gid);
+        mysState.items.forEach((s) => { if (Number(s.group_id) === gid) s.group_id = null; });
+        renderMysList();
+      });
+      return;
+    }
+    if (e.target.closest('.grp-rename-input') || e.target.closest('tr[data-grpkey]')) return;
     const al = e.target.closest('[data-mysalert]');
     if (al) {
       const item = mysState.items[safeInt(al.dataset.mysalert)];
@@ -1228,6 +1395,13 @@ function initMySchematics() {
     }
     const note = e.target.closest('[data-mysnote]');
     if (note) { mysOpenNoteDialog(mysState.items[safeInt(note.dataset.mysnote)]); return; }
+    const del = e.target.closest('[data-mysdel]');
+    if (del) { // two-step: arm, then confirm within the window
+      if (!confirmArm(del)) return;
+      const item = mysState.items[safeInt(del.dataset.mysdel)];
+      if (item) removeFromMySchematics(item.user_schematic_id, item.custom_name || item.name);
+      return;
+    }
     const row = e.target.closest('tr[data-idx]');
     if (row) openMySchematicPage(mysState.items[safeInt(row.dataset.idx)]);
   });

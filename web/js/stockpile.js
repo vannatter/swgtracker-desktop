@@ -88,9 +88,9 @@ function stkRowHtml(item, idx) {
   const cells = STK_COLUMNS.map(([, field]) => {
     if (field === 'name') {
       const tagged = stkTags(item).length > 0;
-      // indicator pins to the cell's right edge — it can never wrap the name line
-      return `<td class="col-name res-name${tagged ? ' stk-hastag' : ''}">${escapeHtml(item.name || '')}${tagged
-        ? `<i class="fa-solid fa-tag stk-tagind" data-taghover="${idx}"></i>` : ''}</td>`;
+      // fixed-width leading slot: names line up whether or not the row is tagged
+      return `<td class="col-name res-name"><span class="stk-tagslot">${tagged
+        ? `<i class="fa-solid fa-tag stk-tagind" data-taghover="${idx}"></i>` : ''}</span>${escapeHtml(item.name || '')}</td>`;
     }
     if (field === 'schem_count') {
       const n = safeInt(item.schem_count);

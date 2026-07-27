@@ -114,6 +114,10 @@ function renderResourcePage(data) {
   $('#rd-planets').innerHTML = planets.length
     ? `<span class="rd-planets-label">${rdIsActive(r) ? 'Spawning on:' : 'Last seen on:'}</span> ${planets.join('')}` : '';
 
+  // your stockpile tags for this resource — click one to open My Stockpile
+  // filtered to it (stockpile may still be syncing; fills in when it lands)
+  rdRenderStockTags(r.id);
+
   // Bottom tabs: Top Uses / Other <type> / Related (>800) / Used In
   rdState.data = data;
   // land on the first tab that actually has rows (tab order: top, other, related, used)
@@ -124,6 +128,28 @@ function renderResourcePage(data) {
   rdTabState.sortField = ''; // fresh resource, natural order
   renderRdTabs();
   renderRdTable();
+}
+
+// Stockpile tags on the resource page: only when this resource is in YOUR
+// stockpile and tagged. Syncs the stockpile lazily on first need.
+function rdRenderStockTags(resourceId) {
+  const el = $('#rd-stktags');
+  el.innerHTML = '';
+  if (typeof stkState === 'undefined') return;
+  const paint = () => {
+    if (String(rdState.id) !== String(resourceId)) return; // navigated away meanwhile
+    const item = (stkState.items || []).find((i) => String(i.id) === String(resourceId));
+    const tags = item ? stkTags(item) : [];
+    el.innerHTML = tags.length
+      ? `<span class="rd-planets-label"><i class="fa-solid fa-tags"></i> Your tags:</span> `
+        + tags.map((t) => `<span class="fac-tag" data-rdstktag="${escapeHtml(t)}">${escapeHtml(t)}</span>`).join(' ')
+      : '';
+  };
+  if (!stkState.items.length && typeof syncStockpile === 'function') {
+    syncStockpile().then(paint).catch(() => {});
+  } else {
+    paint();
+  }
 }
 
 // ---- Bottom tabs (mirror the site's resource page) ----
@@ -190,7 +216,11 @@ function renderRdTable() {
         <td class="col-text">${escapeHtml(u.formula_description || '')}</td>
         <td class="stat ${rankClass(safeInt(u.rank))}">#${safeInt(u.rank)}</td>
       </tr>`).join('');
-    emptyMsg = 'This resource is not a top-ranked spawn for any schematic formula.';
+    // fresh spawns rank on a rolling rebuild — an in-spawn resource with no
+    // rows yet is almost always "not computed yet", not "ranks nowhere"
+    emptyMsg = rdIsActive(d.resource || {})
+      ? 'No rankings yet — Top Uses for a new spawn can take a few hours to compute. For immediate notices, Spawn Alerts and My Schematics evaluate new spawns the moment they land.'
+      : 'This resource is not a top-ranked spawn for any schematic formula.';
 
   } else if (rdTabState.tab === 'other') {
     // Other spawns of the same resource type (API `similar`)
@@ -280,6 +310,7 @@ async function openResourcePage(name) {
   $('#rd-scoreline').textContent = '';
   $('#rd-cards').innerHTML = `<div class="rd-card"><div class="rd-value">${escapeHtml(name || '')}</div><div class="rd-label">Loading…</div></div>`;
   $('#rd-planets').innerHTML = '';
+  $('#rd-stktags').innerHTML = '';
   $('#rd-tabs').innerHTML = '';
   $('#rd-head').innerHTML = '';
   $('#rd-body').innerHTML = '';
@@ -303,6 +334,15 @@ async function openResourcePage(name) {
 }
 
 function initResourcePage() {
+  // stockpile tag pill → My Stockpile filtered to that tag
+  $('#rd-stktags').addEventListener('click', (e) => {
+    const tag = e.target.closest('[data-rdstktag]');
+    if (!tag || typeof stkState === 'undefined') return;
+    stkState.tagFilter = tag.dataset.rdstktag;
+    showPage('stockpile');
+    if (typeof renderStockpile === 'function' && stkState.items.length) renderStockpile();
+  });
+
   $('#rd-crumbs').addEventListener('click', async (e) => {
     const ext = e.target.closest('[data-ext]');
     if (ext) {

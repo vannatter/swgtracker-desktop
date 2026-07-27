@@ -33,6 +33,26 @@ function escapeHtml(s) {
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+// ---- account-level preferences (api/prefs.php, synced server-side so the
+// email crons honor them too) ----------------------------------------------
+const appPrefs = { ignore_mustafar: 0, _loaded: false };
+
+async function loadPrefs(force = false) {
+  if (appPrefs._loaded && !force) return appPrefs;
+  try {
+    const r = await apiFetch('GET', 'api/prefs.php');
+    if (r.ok && r.data && r.data.prefs) { Object.assign(appPrefs, r.data.prefs); appPrefs._loaded = true; }
+  } catch (_) { /* older site deploy — defaults apply */ }
+  return appPrefs;
+}
+
+// Mustafarian resource classes are named "Mustafarian …" throughout the tree.
+// candidateType = the candidate's class; requiredType = what the slot/rule asks
+// for — when THAT is itself Mustafarian, the user opted in and nothing hides.
+const isMustafarianType = (name) => /^mustafarian/i.test(String(name || '').trim());
+const hideMustafarian = (candidateType, requiredType = '') =>
+  !!appPrefs.ignore_mustafar && isMustafarianType(candidateType) && !isMustafarianType(requiredType);
+
 // planet_* config key -> site CSS class (front.css uses "yavin", not "yavin4")
 const planetClass = (key) => key.replace('planet_', '').replace('yavin4', 'yavin');
 
@@ -710,6 +730,37 @@ function grpBeginRename(listSel, key, g, rerender) {
     if (ev.key === 'Enter') input.blur();
     if (ev.key === 'Escape') { input.value = g.name; input.blur(); }
   });
+}
+
+// stockpile-look folder row for TABLE pages (My Schematics / My Inventory):
+// identical structure and classes to My Stockpile's stk-group rows, with the
+// generic data-grp* hooks the shared handlers use. Trash sits in a trailing
+// pin-cell so it lines up with each grid's per-row action column.
+function grpTableHeaderHtml(key, name, count, collapsed, deletable, colTotal, actionsCls = 'pin-cell') {
+  const nameHtml = deletable
+    ? `<span class="stk-group-name" data-grprename="${key}" title="Click to rename">${escapeHtml(name)}</span>`
+    : `<span class="stk-group-name stk-group-unfiled">${escapeHtml(name)}</span>`;
+  // the trailing cell must MATCH the grid's own last column (pin-cell for
+  // single-icon columns, col-actions for button rows) — a narrow pin-cell
+  // header on a wide actions column squeezes the buttons into a stack. In a
+  // col-actions column the delete is a standard 28px btn-icon and the cell
+  // right-aligns, so it sits exactly over the per-row trash icons.
+  const btnCls = actionsCls === 'col-actions' ? 'btn btn-icon stk-bucket-del' : 'stk-bucket-del';
+  const delCell = deletable
+    ? `<td class="${actionsCls}"><button class="${btnCls}" data-grpdel="${key}" title="Delete group (its items become Unfiled)"><i class="fa-solid fa-trash-can"></i></button></td>`
+    : `<td class="${actionsCls}"></td>`;
+  return `<tr class="stk-group" data-grpkey="${key}">
+    <td colspan="${colTotal - 1}">
+      <div class="stk-group-main">
+        <span class="stk-group-left">
+          <i class="fa-solid ${collapsed ? 'fa-caret-right' : 'fa-caret-down'} stk-caret" data-grptoggle="${key}"></i>
+          ${nameHtml}
+          <span class="stk-group-count">${count} item${count === 1 ? '' : 's'}</span>
+        </span>
+      </div>
+    </td>
+    ${delCell}
+  </tr>`;
 }
 
 // split items into ordered sections: one per group (sort_order), Ungrouped

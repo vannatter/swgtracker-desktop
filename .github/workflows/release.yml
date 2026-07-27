@@ -135,7 +135,10 @@ jobs:
         env: { DEPLOY_TOKEN: "${{ secrets.DEPLOY_TOKEN }}" }
         run: |
           VER="${RELEASE_TAG#v}"
-          curl -sf -X POST "https://swgtracker.com/app/deploy.php?action=shellrelease" \
+          # swgt_ok cookie passes the site's anti-scraper gate (non-browser
+          # clients are 418'd without it — this is what broke the v0.12.3 announce)
+          curl -sf --retry 3 -X POST "https://swgtracker.com/app/deploy.php?action=shellrelease" \
+            -H "Cookie: swgt_ok=1" \
             -H "X-Deploy-Token: ${DEPLOY_TOKEN}" \
             --data-urlencode "version=${VER}" \
             --data-urlencode "url=https://swgtracker.com/download.php" \

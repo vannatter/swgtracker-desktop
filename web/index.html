@@ -703,6 +703,7 @@
           <select id="mm-charfilter" class="form-select filter-select head-filter" title="Filter by character (from each mail folder's character)" hidden></select>
           <select id="mm-category" class="form-select filter-select head-filter"></select>
           <input id="mm-search" type="text" class="form-control filter-input head-search" placeholder="Search..." title="Searches mail subjects">
+          <button id="mm-trash-open" class="btn btn-icon" title="Trash — deleted mail is kept 30 days and can be restored"><i class="fa-solid fa-trash-arrow-up"></i></button>
           <button class="btn btn-icon" data-refresh="monitor" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
           <button id="mm-mktest" class="btn btn-sm btn-outline-secondary dev-only" title="Drop three fake .mail files (vendor sale, vendor purchase, misc 'Other' letter) into your first mail folder — the monitor uploads them like the real thing, exercising Sales, Purchases, and per-category mass-delete"><i class="fa-solid fa-vial"></i> Test mails</button>
         </div>
@@ -1542,6 +1543,30 @@
         <button id="mm-raw-close" class="btn btn-icon" title="Close"><i class="fa-solid fa-xmark"></i></button>
       </div>
       <pre id="mm-raw-body" class="mm-raw-body"></pre>
+    </div>
+  </div>
+
+  <!-- Mail trash: deleted mail parks server-side for 30 days, restorable -->
+  <div id="mm-trash-modal" class="key-gate" hidden>
+    <div class="key-gate-card sp-card mm-raw-card">
+      <div class="mm-raw-head">
+        <h2>Mail Trash</h2>
+        <button id="mm-trash-close" class="btn btn-icon" title="Close"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="settings-hint" id="mm-trash-hint"></div>
+      <div class="table-wrap mm-trash-wrap">
+        <table class="data-grid">
+          <thead><tr>
+            <th class="col-text">Type</th><th class="col-name">Subject</th>
+            <th class="col-text">Deleted</th><th class="stat">Sales</th><th class="col-actions"></th>
+          </tr></thead>
+          <tbody id="mm-trash-body"></tbody>
+        </table>
+        <div id="mm-trash-empty" class="grid-empty" hidden>Trash is empty.</div>
+      </div>
+      <div class="stk-note-actions">
+        <button id="mm-trash-restoreall" class="btn btn-sm btn-outline-secondary" hidden><i class="fa-solid fa-trash-arrow-up"></i> Restore all</button>
+      </div>
     </div>
   </div>
 

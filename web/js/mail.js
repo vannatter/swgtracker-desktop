@@ -174,7 +174,61 @@ async function mmShowRaw(mailId, subject) {
   $('#mm-raw-modal').hidden = false;
 }
 
+// ---- Trash: deleted mail parks server-side for 30 days, restorable ---------
+
+async function mmOpenTrash() {
+  $('#mm-trash-modal').hidden = false;
+  $('#mm-trash-body').innerHTML = '';
+  $('#mm-trash-empty').hidden = true;
+  $('#mm-trash-hint').textContent = 'Loading…';
+  let rows = [], days = 30;
+  try {
+    const res = await apiFetch('GET', 'api/mail.php', { params: { action: 'trash' } });
+    if (res.ok && res.data) { rows = res.data.results || []; days = safeInt(res.data.keep_days) || 30; }
+    else { $('#mm-trash-hint').textContent = res.error || 'Trash unavailable — site update pending?'; return; }
+  } catch (e) { $('#mm-trash-hint').textContent = String(e); return; }
+  $('#mm-trash-hint').textContent =
+    `Deleted mail is kept ${days} days, then purged for good. Restoring returns its sales/purchases and site history — the row won't reappear in this app's upload ledger (the local file is gone).`;
+  $('#mm-trash-empty').hidden = !!rows.length;
+  $('#mm-trash-restoreall').hidden = !rows.length;
+  $('#mm-trash-body').innerHTML = rows.map((r) => `<tr>
+    <td class="col-text">${mmKindPill(String(r.mail_type || '').toLowerCase().includes('sale') ? 'sale'
+      : String(r.mail_type || '').toLowerCase().includes('purchase') ? 'purchase' : 'mail')}</td>
+    <td class="col-name">${escapeHtml(r.mail_subject || r.mail_id)}</td>
+    <td class="col-text">${fmtAgoTip(safeInt(r.deleted_at))}</td>
+    <td class="stat">${safeInt(r.sales_count) || '<span class="stat_off">—</span>'}</td>
+    <td class="col-actions"><button class="btn btn-icon" data-restore="${escapeHtml(r.mail_id)}"
+      title="Restore — sales, purchases and history come back"><i class="fa-solid fa-trash-arrow-up"></i></button></td>
+  </tr>`).join('');
+  mmState.trashIds = rows.map((r) => r.mail_id);
+}
+
+async function mmRestore(mailIds) {
+  try {
+    const res = await apiFetch('POST', 'api/mail.php', { data: { mail_ids: mailIds }, params: { action: 'restore' } });
+    if (res.ok && res.data) {
+      toast(`Restored ${fmtNum(safeInt(res.data.restored))} mail${safeInt(res.data.restored) === 1 ? '' : 's'}`);
+      mmOpenTrash(); // repaint the remaining trash
+      loadMail();
+    } else {
+      toast(res.error || 'Restore failed — site update pending?', false);
+    }
+  } catch (e) { toast(String(e), false); }
+}
+
 function initMail() {
+  $('#mm-trash-open').addEventListener('click', () => mmOpenTrash());
+  $('#mm-trash-close').addEventListener('click', () => { $('#mm-trash-modal').hidden = true; });
+  bindBackdropClose($('#mm-trash-modal'), () => { $('#mm-trash-modal').hidden = true; });
+  $('#mm-trash-body').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-restore]');
+    if (btn) mmRestore([btn.dataset.restore]);
+  });
+  $('#mm-trash-restoreall').addEventListener('click', (e) => {
+    if (!confirmArmLabeled(e.currentTarget, 'Restore all?')) return;
+    if (mmState.trashIds && mmState.trashIds.length) mmRestore(mmState.trashIds);
+  });
+
   $('[data-refresh="monitor"]').addEventListener('click', () => loadMail());
   $('#mm-prev').addEventListener('click', () => { if (mmState.page > 1) { mmState.page--; loadMail(); } });
   $('#mm-next').addEventListener('click', () => { mmState.page++; loadMail(); });

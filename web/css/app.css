@@ -1481,6 +1481,7 @@ body.dev-mode .dev-pill { display: inline-flex; }
 .mm-row-openable { cursor: pointer; }
 .mm-row-openable:hover td { background: var(--bg-secondary); }
 .mm-raw-card { max-width: 640px; }
+.mm-trash-wrap { max-height: 55vh; overflow-y: auto; margin-top: 10px; }
 .mm-raw-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
 .mm-raw-head h2 { font-size: 15px; margin: 0; text-align: left; }
 .mm-raw-body {

@@ -673,7 +673,11 @@
           <button id="inv-add-open" class="btn btn-sm btn-accent"><i class="fa-solid fa-plus"></i> Add Item</button>
           <button class="btn btn-icon" data-refresh="inventory" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
         </div>
-        <div id="inv-tagbar" class="fac-tagbar" hidden></div>
+        <div class="inv-subhead">
+          <div id="inv-tagbar" class="fac-tagbar" hidden></div>
+          <label class="inv-allmail" title="One digest email (at most every 6 hours) when tracked items drop to their threshold or oversell — this switch covers every item; the envelope on each row picks individually">
+            <input type="checkbox" id="inv-alert-all"><i class="fa-solid fa-envelope"></i> Restock alerts: all items</label>
+        </div>
 
         <div class="table-wrap">
           <table class="data-grid" id="inv-grid">

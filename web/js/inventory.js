@@ -22,11 +22,21 @@ const invState = { page: 1, perPage: 100, hasNext: false, sortField: 'item_name'
 // tags live as one comma-separated string server-side, like stockpile/factories
 const invTags = (i) => String(i.tags || '').split(',').map((t) => t.trim()).filter(Boolean);
 
-const invColCount = () => INV_COLUMNS.length + 1; // + the actions cell
+const invColCount = () => INV_COLUMNS.length + 2; // + envelope pin-cell + actions cell
 
 function buildInvHeader() {
   $('#inv-head').innerHTML = sortableHeaderHtml(INV_COLUMNS, invState.sortField, invState.sortOrder) +
-    '<th class="col-actions"></th>';
+    '<th class="pin-cell"></th><th class="col-actions"></th>'; // restock-email envelope + actions
+}
+
+// page-head "Email all" checkbox mirrors the per-row envelopes: checked when
+// every tracked item is opted in, dash (indeterminate) when only some are
+function invSyncAllToggle() {
+  const box = $('#inv-alert-all');
+  if (!box) return;
+  const on = invState.items.filter((i) => Number(i.notify_email)).length;
+  box.checked = invState.items.length > 0 && on === invState.items.length;
+  box.indeterminate = on > 0 && on < invState.items.length;
 }
 
 // your distinct SELL vendors (from api/sales.php) — cached for the styled
@@ -69,6 +79,10 @@ function invRowHtml(item, idx) {
     <td class="col-num">${item.match_price != null && item.match_price !== '' ? fmtNum(item.match_price) : '<span class="stat_off">—</span>'}</td>
     <td class="stat ${safeInt(item.sales_count) ? 'inv-sales' : ''}" ${safeInt(item.sales_count) ? `data-sales="${idx}" title="Click to see the matched sales"` : ''}>${safeInt(item.sales_count) ? fmtNum(item.sales_count) : '<span class="stat_off">—</span>'}</td>
     <td class="col-text res-type">${fmtAgoTip(item.last_updated)}</td>
+    <td class="pin-cell" data-invalert="${idx}" title="${Number(item.notify_email)
+        ? 'Emailing you when this drops to its threshold or oversells — click to stop'
+        : 'Email me when this needs restocking (below threshold or negative)'}"><i
+        class="fa-${Number(item.notify_email) ? 'solid' : 'regular'} fa-envelope${Number(item.notify_email) ? ' mys-alert-on' : ''}"></i></td>
     <td class="col-actions">
       <button class="btn btn-icon" data-notes="${idx}" title="${hasNotes ? escapeHtml(notePreview) : 'Add notes'}"><i class="fa-${hasNotes ? 'solid' : 'regular'} fa-note-sticky${hasNotes ? ' has-notes' : ''}"></i></button>
       <button class="btn btn-icon" data-iclone="${idx}" title="Clone — same numbers, tweak the name"><i class="fa-solid fa-clone"></i></button>
@@ -141,6 +155,45 @@ async function invSaveNoteDialog() {
   } catch (e) { $('#inv-status').textContent = `Failed to save notes: ${e}`; }
 }
 
+// ---- restock alerts (bell + native): EDGE-triggered so they can't spam.
+// A previous-stock map in localStorage detects the actual crossing (above →
+// at/below threshold, or non-negative → negative); an item re-alerts only
+// after recovering, with a 24h per-item floor as a second belt.
+async function invNotifySweep() {
+  let rows = [];
+  try {
+    const res = await api().get_inventory({ perpage: 500 });
+    rows = (res.ok && res.data && res.data.results) || [];
+  } catch (_) { return; }
+  if (!rows.length) return;
+  let prev = {};
+  let fired = {};
+  try { prev = JSON.parse(localStorage.getItem('inv_notify_state') || '{}'); } catch (_) {}
+  try { fired = JSON.parse(localStorage.getItem('inv_notify_fired') || '{}'); } catch (_) {}
+  const now = Math.floor(Date.now() / 1000);
+  const next = {};
+  for (const it of rows) {
+    const id = String(it.id);
+    const s = safeInt(it.stocked), t = safeInt(it.threshold);
+    next[id] = s;
+    if (!(id in prev)) continue;              // first sight — record, never announce
+    const p = safeInt(prev[id]);
+    const crossedNeg = p >= 0 && s < 0;
+    const crossedLow = !crossedNeg && s >= 0 && t > 0 && s <= t && p > t;
+    if (!crossedNeg && !crossedLow) continue;
+    const key = `inv:${id}:${crossedNeg ? 'neg' : 'low'}`;
+    if (fired[key] && now - fired[key] < 86400) continue;
+    fired[key] = now;
+    appLocalAlert(`Restock ${it.item_name}`,
+      crossedNeg ? `oversold — ${s} in stock${it.vendor ? ` at ${it.vendor}` : ''}`
+                 : `${s} left (threshold ${t})${it.vendor ? ` at ${it.vendor}` : ''}`);
+  }
+  try {
+    localStorage.setItem('inv_notify_state', JSON.stringify(next));
+    localStorage.setItem('inv_notify_fired', JSON.stringify(fired));
+  } catch (_) {}
+}
+
 async function loadInventory() {
   showGridLoading('#inv-loading');
   $('#inv-empty').hidden = true;
@@ -180,6 +233,8 @@ async function loadInventory() {
   invState.items = rows;
 
   buildInvHeader();
+  invSyncAllToggle();
+  invNotifySweep(); // manual stock edits + fresh sale matches alert immediately
   if (!rows.length) {
     // still render folder rows (if any) so an empty list can be organized
     renderInvRows();
@@ -323,6 +378,11 @@ function openInvDialog(item = null, clone = false) {
 
 function initInventory() {
   buildInvHeader();
+
+  // restock alerts fire even if the user never opens this page — sales deplete
+  // stock server-side while they play. Delay the first pass so boot stays snappy.
+  setTimeout(invNotifySweep, 20000);
+  setInterval(invNotifySweep, 10 * 60 * 1000);
 
   // Typeahead (server-side search, so debounced) + Enter for the impatient
   let invSearchTimer = null;
@@ -521,8 +581,38 @@ function initInventory() {
     loadInventory();
   });
 
+  // page-head "Email all" checkbox: restock emails for EVERY tracked item
+  $('#inv-alert-all').addEventListener('change', () => {
+    const turnOn = $('#inv-alert-all').checked;
+    apiFetch('PUT', 'api/inventory.php', { data: { notify_email_all: turnOn ? 1 : 0 } }).then((res) => {
+      if (!res.ok) { toast(res.error || 'Could not update — site update pending?', false); invSyncAllToggle(); return; }
+      invState.items.forEach((i) => { i.notify_email = turnOn ? 1 : 0; });
+      invSyncAllToggle();
+      renderInvRows();
+      toast(turnOn ? `Restock emails ON for all ${fmtNum(safeInt(res.data?.changed))} tracked items`
+                   : 'Restock emails off for all items');
+    }).catch((err) => { toast(String(err), false); invSyncAllToggle(); });
+  });
+
   // Inline edits + two-step delete (arm, then confirm within 2.5s)
   $('#inv-body').addEventListener('click', (e) => {
+    const alertBtn = e.target.closest('[data-invalert]');
+    if (alertBtn) {
+      const item = invState.items[safeInt(alertBtn.dataset.invalert)];
+      if (!item) return;
+      item.notify_email = Number(item.notify_email) ? 0 : 1; // optimistic
+      invSyncAllToggle(); // the Email-all checkbox may flip state
+      renderInvRows();
+      apiFetch('PUT', 'api/inventory.php', {
+        data: { inventory_id: safeInt(item.id), notify_email: item.notify_email },
+      }).then((res) => {
+        if (!res.ok) toast(res.error || 'Could not save the alert toggle — site update pending?', false);
+        else toast(item.notify_email
+          ? `Restock emails ON — ${item.item_name}`
+          : `Restock emails off — ${item.item_name}`);
+      }).catch((err) => toast(String(err), false));
+      return;
+    }
     const editRow = e.target.closest('[data-iedit]');
     if (editRow) { openInvDialog(invState.items[safeInt(editRow.dataset.iedit)]); return; }
     const cloneRow = e.target.closest('[data-iclone]');

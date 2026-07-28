@@ -1485,6 +1485,15 @@ body.dev-mode .dev-pill { display: inline-flex; }
 /* archive-selected sits by mass-delete but is a tidy-up, not a destroy — neutral colors */
 .mm-archsel { border-color: var(--border); color: var(--text-primary); }
 .mm-archsel:hover { border-color: var(--accent); color: var(--text-hover); }
+/* My Inventory sub-head row: tag cloud left, "Email all" checkbox right */
+.inv-subhead { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.inv-subhead .fac-tagbar { margin-bottom: 0; flex: 1 1 auto; }
+.inv-subhead .fac-tagbar[hidden] { display: none; }
+.inv-allmail { display: flex; align-items: center; gap: 6px; font-size: 13px; margin-left: auto;
+               color: var(--text-primary); cursor: pointer; white-space: nowrap; }
+.inv-allmail input { cursor: pointer; }
+.inv-allmail i { color: var(--text-muted); font-size: 12px; }
+.inv-allmail:hover, .inv-allmail:hover i { color: var(--text-hover); }
 .mm-raw-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
 .mm-raw-head h2 { font-size: 15px; margin: 0; text-align: left; }
 .mm-raw-body {

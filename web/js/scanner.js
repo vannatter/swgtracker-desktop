@@ -15,7 +15,9 @@ const SCAN_MATCH_STATS = ['oq', 'cd', 'cr', 'dr', 'hr', 'ma', 'sr', 'ut', 'fl', 
 const scanState = { cfg: null, queue: [], matches: {}, pendingQty: {},
                     edits: {}, editing: null, worklist: [], timer: null,
                     aide: null,           // {lines:[...], rows:[{li,name,klass,stats,order,filled}]}
-                    aideHandled: new Set() };  // capture ids the aide auto-fill already resolved
+                    aideHandled: new Set(),   // capture ids the aide auto-fill already resolved
+                    resolved: new Set() };    // ids finished locally — a poll snapshot from
+                                              // BEFORE the server remove landed must not revive them
 
 // Newer shells OCR every capture TWICE with different preprocessing — the
 // passes misread different glyphs. Merge: gaps fill from the alt pass, and a
@@ -743,6 +745,7 @@ async function loadScanner() {
 // module-scope: the queue click handlers AND the aide auto-fill both resolve
 // captures through here
 async function finishScan(id) {
+  scanState.resolved.add(id); // before the await — in-flight polls must skip it
   try { await api().scan_queue_remove(id); } catch (_) {}
   scanState.queue = scanState.queue.filter((q) => q.id !== id);
   delete scanState.matches[id];
@@ -757,7 +760,15 @@ async function refreshScanQueue(force = false) {
     const res = await api().scan_queue();
     if (!res.ok) return;
     const had = scanState.queue.map((q) => q.id).join(',');
-    scanState.queue = res.data || [];
+    // drop captures already finished here: a snapshot fetched before the server
+    // remove landed still contains them, and rendering one strands a stale card
+    // ("the last resource I scanned is still there"). If one persists server-side
+    // the remove itself failed — re-issue it rather than resurrect the card.
+    scanState.queue = (res.data || []).filter((q) => {
+      if (!scanState.resolved.has(q.id)) return true;
+      try { api().scan_queue_remove(q.id); } catch (_) {}
+      return false;
+    });
     // aide auto-fill first: matched captures resolve without ever rendering a
     // card; everything else takes the normal review-queue path
     for (const item of [...scanState.queue]) {

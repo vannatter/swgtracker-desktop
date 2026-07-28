@@ -2,7 +2,8 @@
    Upload + server-side parsing happen in src/core/mail_monitor.py; this page
    just shows the receipts. */
 
-const mmState = { pollTimer: null, page: 1, perPage: 50, category: '', character: '' };
+const mmState = { pollTimer: null, page: 1, perPage: 50, category: '', character: '',
+                  selection: new Set() };  // mail_ids ticked for archive/unarchive
 
 const MM_KIND = {
   sale: { cls: 'mm-sale', icon: 'fa-tags', label: 'sale' },
@@ -28,8 +29,9 @@ const MM_CATS = {
   structure: 'Structure',
   guild: 'Guild',
   other: 'Other',
+  archived: 'Archived',   // pseudo-category: hidden-not-deleted mail (Veizyr)
 };
-const MM_CAT_ORDER = ['sale', 'purchase', 'banktip', 'factory', 'factory-ingredients', 'structure', 'guild', 'other'];
+const MM_CAT_ORDER = ['sale', 'purchase', 'banktip', 'factory', 'factory-ingredients', 'structure', 'guild', 'other', 'archived'];
 
 async function loadMail() {
   let state = null;
@@ -110,11 +112,10 @@ async function loadMail() {
   charSel.innerHTML = [opt.call(null, '', 'All characters', null)]
     .concat(charNames.map((n) => `<option value="${escapeHtml(n)}"${mmState.character === n ? ' selected' : ''}>${escapeHtml(n)} (${fmtNum(chars[n])})</option>`))
     .join('');
-  // mass-delete appears whenever a filter (category or search) narrows the list
-  const filtered = mmState.category || mmState.search || mmState.character;
-  $('#mm-massdel-slot').innerHTML = (filtered && total)
-    ? `<button class="mm-massdel" data-massdel="1"><i class="fa-solid fa-trash"></i> Delete all ${fmtNum(total)} matching</button>`
-    : '';
+  // mass-delete appears whenever a filter (category or search) narrows the list;
+  // archive/unarchive appears whenever rows are ticked (select-all in the header)
+  mmState._total = total;
+  mmRenderActionSlot();
 
   $('#mm-body').innerHTML = rows.map((r) => {
     // sale detail is "ITEM → BUYER — N credits"; the item is what you may
@@ -134,6 +135,7 @@ async function loadMail() {
       : '';
     return `<tr class="${r.has_raw ? 'mm-row-openable' : ''}" data-mailid="${escapeHtml(r.mail_id)}"
         data-hasraw="${r.has_raw ? 1 : 0}" title="${r.has_raw ? 'Click to read the original mail' : ''}">
+      <td class="stk-sel-cell"><input type="checkbox" class="mm-sel" data-msel="${escapeHtml(r.mail_id)}"${mmState.selection.has(r.mail_id) ? ' checked' : ''}></td>
       <td class="col-text">${r.character ? escapeHtml(r.character) : '<span class="stat_off">—</span>'}</td>
       <td class="col-text mm-typecell">${mmKindPill(r.kind, status)}</td>
       <td class="col-text">${fmtAgoTip(r.sent_at || r.uploaded_at)}</td>
@@ -145,7 +147,10 @@ async function loadMail() {
   }).join('');
   const empty = $('#mm-empty');
   empty.hidden = !!rows.length;
-  empty.textContent = 'Nothing uploaded yet — configure a mail folder in Settings, then hit Start Mail Monitor up top.';
+  empty.textContent = mmState.category === 'archived'
+    ? 'Nothing archived — tick mails in any view and hit Archive to tidy them away here.'
+    : 'Nothing uploaded yet — configure a mail folder in Settings, then hit Start Mail Monitor up top.';
+  mmSyncSelAll();
 
   const pages = Math.max(1, Math.ceil(total / mmState.perPage));
   if (mmState.page > pages) mmState.page = pages; // deletions can shrink the tail
@@ -159,6 +164,49 @@ async function loadMail() {
   mmState.pollTimer = setTimeout(() => {
     if ($('#page-monitor').classList.contains('active')) loadMail();
   }, 10000);
+}
+
+// action bar above the grid: archive/unarchive for the ticked rows, mass-delete
+// for the active filter — rebuilt without a refetch so select-all feels instant
+function mmRenderActionSlot() {
+  const filtered = mmState.category || mmState.search || mmState.character;
+  const nSel = mmState.selection.size;
+  const inArchive = mmState.category === 'archived';
+  $('#mm-massdel-slot').innerHTML =
+    (nSel ? `<button class="mm-massdel mm-archsel" data-archsel="1"><i class="fa-solid fa-box-archive"></i>
+        ${inArchive ? 'Unarchive' : 'Archive'} ${fmtNum(nSel)} selected</button>` : '')
+    + ((filtered && mmState._total && !inArchive)
+      ? `<button class="mm-massdel" data-massdel="1"><i class="fa-solid fa-trash"></i> Delete all ${fmtNum(mmState._total)} matching</button>`
+      : '');
+}
+
+function mmSyncSelAll() {
+  const boxes = [...document.querySelectorAll('#mm-body .mm-sel')];
+  const sel = boxes.filter((b) => mmState.selection.has(b.dataset.msel)).length;
+  const all = $('#mm-selall');
+  all.checked = boxes.length > 0 && sel === boxes.length;
+  all.indeterminate = sel > 0 && sel < boxes.length;
+}
+
+async function mmArchiveSelected() {
+  if (!mmState.selection.size) return;
+  if (typeof api().mail_archive !== 'function') {
+    toast('Archiving needs the latest app version — update from swgtracker.com', false);
+    return;
+  }
+  const unarchive = mmState.category === 'archived';
+  try {
+    const res = await api().mail_archive([...mmState.selection], !unarchive);
+    if (res.ok) {
+      const n = safeInt(res.data?.changed);
+      toast(unarchive ? `Unarchived ${fmtNum(n)} mail${n === 1 ? '' : 's'}`
+                      : `Archived ${fmtNum(n)} mail${n === 1 ? '' : 's'} — find them under the Archived category`);
+      mmState.selection.clear();
+      loadMail();
+    } else {
+      toast(res.error || 'Archive failed', false);
+    }
+  } catch (e) { toast(String(e), false); }
 }
 
 async function mmShowRaw(mailId, subject) {
@@ -262,6 +310,8 @@ function initMail() {
     }, 300);
   });
   $('#mm-massdel-slot').addEventListener('click', async (e) => {
+    const archsel = e.target.closest('[data-archsel]');
+    if (archsel) { mmArchiveSelected(); return; }
     const massdel = e.target.closest('[data-massdel]');
     if (!massdel) return;
     if (!confirmArm(massdel, 'Click again to delete ALL matching')) return;
@@ -281,7 +331,26 @@ function initMail() {
     } catch (err) { toast(String(err), false); massdel.disabled = false; massdel.innerHTML = orig; }
   });
 
+  // select-all ticks/unticks every row on the current page
+  $('#mm-selall').addEventListener('change', () => {
+    const on = $('#mm-selall').checked;
+    document.querySelectorAll('#mm-body .mm-sel').forEach((b) => {
+      b.checked = on;
+      if (on) mmState.selection.add(b.dataset.msel);
+      else mmState.selection.delete(b.dataset.msel);
+    });
+    mmRenderActionSlot();
+  });
+
   $('#mm-body').addEventListener('click', async (e) => {
+    const sel = e.target.closest('.mm-sel');
+    if (sel) {  // checkbox toggles selection — never opens the raw viewer
+      if (sel.checked) mmState.selection.add(sel.dataset.msel);
+      else mmState.selection.delete(sel.dataset.msel);
+      mmSyncSelAll();
+      mmRenderActionSlot();
+      return;
+    }
     const delBtn = e.target.closest('.mm-del');
     if (delBtn) {
       if (!confirmArm(delBtn, 'Click again to delete everywhere')) return;
@@ -304,7 +373,7 @@ function initMail() {
     if (!btn) {
       const tr = e.target.closest('tr[data-mailid]');
       if (tr && tr.dataset.hasraw === '1') {
-        mmShowRaw(tr.dataset.mailid, tr.children[3]?.textContent);
+        mmShowRaw(tr.dataset.mailid, tr.children[4]?.textContent); // [4] = Subject (checkbox col leads)
       }
       return;
     }

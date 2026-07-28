@@ -161,7 +161,8 @@ class LocalDB:
                           ("category", "TEXT DEFAULT 'other'"),
                           ("character", "TEXT DEFAULT ''"),
                           ("tip_out", "INTEGER DEFAULT 0"), ("tip_in", "INTEGER DEFAULT 0"),
-                          ("tip_fee", "INTEGER DEFAULT 0")):
+                          ("tip_fee", "INTEGER DEFAULT 0"),
+                          ("archived", "INTEGER DEFAULT 0")):
             try:
                 self._conn.execute(f"ALTER TABLE mail_ledger ADD COLUMN {col} {decl}")
             except sqlite3.OperationalError:
@@ -436,11 +437,17 @@ class LocalDB:
 
     @staticmethod
     def _mail_where(category: str, search: str, character: str = "") -> tuple[str, list]:
-        """Shared WHERE for category/character + subject/detail search across the mail views."""
+        """Shared WHERE for category/character + subject/detail search across the mail views.
+        Archived mail lives behind the pseudo-category 'archived' (Veizyr's
+        cleaner-mailbox request) — every other view excludes it."""
         clauses, params = [], []
-        if category:
-            clauses.append("category = ?")
-            params.append(str(category))
+        if category == "archived":
+            clauses.append("archived = 1")
+        else:
+            clauses.append("COALESCE(archived, 0) = 0")
+            if category:
+                clauses.append("category = ?")
+                params.append(str(category))
         if character:
             clauses.append("character = ?")
             params.append(str(character))
@@ -470,9 +477,29 @@ class LocalDB:
             "SELECT COUNT(*) AS n FROM mail_ledger" + where, params).fetchone()["n"]
 
     def mail_category_counts(self) -> dict:
+        # archived mail is its own bucket, not double-counted in its category
         rows = self._conn.execute(
-            "SELECT category, COUNT(*) AS n FROM mail_ledger GROUP BY category").fetchall()
-        return {(r["category"] or "other"): r["n"] for r in rows}
+            "SELECT category, COUNT(*) AS n FROM mail_ledger"
+            " WHERE COALESCE(archived, 0) = 0 GROUP BY category").fetchall()
+        counts = {(r["category"] or "other"): r["n"] for r in rows}
+        n_arch = self._conn.execute(
+            "SELECT COUNT(*) AS n FROM mail_ledger WHERE archived = 1").fetchone()["n"]
+        if n_arch:
+            counts["archived"] = n_arch
+        return counts
+
+    def mail_set_archived(self, mail_ids: list[str], archived: bool) -> int:
+        """Archive/unarchive mails — hidden from the default views, all data kept."""
+        n = 0
+        flag = 1 if archived else 0
+        for chunk_start in range(0, len(mail_ids), 500):
+            chunk = [str(m) for m in mail_ids[chunk_start:chunk_start + 500]]
+            cur = self._conn.execute(
+                f"UPDATE mail_ledger SET archived = ? WHERE mail_id IN ({','.join('?' * len(chunk))})",
+                [flag] + chunk)
+            n += cur.rowcount
+        self._conn.commit()
+        return n
 
     def mail_ids_filtered(self, category: str = "", search: str = "", character: str = "") -> list[str]:
         where, params = self._mail_where(category, search, character)
@@ -483,7 +510,8 @@ class LocalDB:
     def mail_character_counts(self) -> dict:
         rows = self._conn.execute(
             "SELECT character, COUNT(*) AS n FROM mail_ledger"
-            " WHERE COALESCE(character, '') != '' GROUP BY character").fetchall()
+            " WHERE COALESCE(character, '') != '' AND COALESCE(archived, 0) = 0"
+            " GROUP BY character").fetchall()
         return {r["character"]: r["n"] for r in rows}
 
     def mail_rename_character(self, old: str, new: str) -> int:

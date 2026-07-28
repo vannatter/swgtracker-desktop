@@ -1201,6 +1201,18 @@ class WebApi:
         except Exception as e:
             return _err(e)
 
+    def mail_archive(self, mail_ids, archived=True):
+        """Archive/unarchive ledger mails — they leave the default views but keep
+        every byte of data (unlike delete). Veizyr's cleaner-mailbox request."""
+        try:
+            ids = [str(m).strip() for m in (mail_ids or []) if str(m).strip()]
+            if not ids:
+                return _err("no mail ids")
+            n = self.local_db.mail_set_archived(ids, bool(archived))
+            return _ok({"changed": n, "archived": bool(archived)})
+        except Exception as e:
+            return _err(e)
+
     def _delete_one_mail(self, mail_id):
         """Remove a mail everywhere: server rows (incoming_mail/sales/purchases,
         restocking any depleted inventory), the local ledger row, and the .mail

@@ -158,11 +158,11 @@ function facCardHtml(f, embed = false) {
     </div>
     <div class="fac-foot">
       ${f.started_at
-        ? `<button class="btn btn-sm ${done ? 'btn-accent' : 'btn-outline-secondary'}" data-facdone="${f.id}"><i class="fa-solid fa-xmark"></i> Done</button>
+        ? `<button class="btn btn-sm ${done ? 'btn-accent' : 'btn-outline-secondary'}" data-facdone="${f.id}" title="End this run — collected, cleared"><i class="fa-solid fa-xmark"></i> Done</button>
            ${done ? '' : f.paused_at
              ? `<button class="btn btn-sm btn-outline-secondary" data-facresume="${f.id}"><i class="fa-solid fa-play"></i> Resume</button>`
              : `<button class="btn btn-sm btn-outline-secondary" data-facpause="${f.id}" title="Freeze the countdown without ending the run"><i class="fa-solid fa-pause"></i> Pause</button>`}
-           <button class="btn btn-sm btn-outline-secondary" data-facreset="${f.id}"><i class="fa-solid fa-rotate-left"></i> Reset</button>`
+           <button class="btn btn-sm btn-outline-secondary" data-facreset="${f.id}" title="Start this exact run over from the top — same product, time and quantity"><i class="fa-solid fa-rotate-left"></i> Restart</button>`
         : `<button class="btn btn-sm btn-accent" data-facstart="${f.id}">Start</button>`}
       <label class="pin-toggle fac-notify" title="Desktop notification when this run finishes">
         <input type="checkbox" data-facfield="notify_desktop" ${f.notify_desktop ? 'checked' : ''}> Notify</label>
@@ -645,16 +645,24 @@ function initFactories() {
     const done = e.target.closest('[data-facdone]');
     const reset = e.target.closest('[data-facreset]');
     if (done || reset) {
-      // both end the run — arm first so a stray click never kills a countdown.
-      // Cards swap in a text label; grid rows just pulse (no room for text)
+      // Done ENDS the run (collect & clear); Reset ends it and immediately
+      // starts a fresh identical one (same product/time/quantity) — they used
+      // to both just stop, which read as two buttons doing one thing
+      // (Philosophy's question). Armed first so a stray click never kills a
+      // countdown. Cards swap in a text label; grid rows just pulse.
       if (done && !(done.closest('tr')
         ? confirmArm(done, 'Click again to end this run')
         : confirmArmLabeled(done, 'End run?'))) return;
-      if (reset && !confirmArmLabeled(reset, 'Reset run?')) return;
+      if (reset && !confirmArmLabeled(reset, 'Restart run?')) return;
       const id = safeInt((done || reset).dataset.facdone || (done || reset).dataset.facreset);
       const res = await facPost({ action: 'stop', id });
       if (res.ok) {
-        if (done) toast('Nice haul — run cleared');
+        if (reset) {
+          const r2 = await facPost({ action: 'start', id });
+          toast(r2.ok ? 'Run restarted from the top' : (r2.error || 'Stopped, but the restart failed'), r2.ok);
+        } else {
+          toast('Nice haul — run cleared');
+        }
         loadFactories();
       }
       return;

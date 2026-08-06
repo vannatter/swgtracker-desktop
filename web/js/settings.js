@@ -11,6 +11,18 @@ function mailDisposition() {
   return v === 'move' && !setState.moveDir ? 'keep' : v; // move needs a destination
 }
 
+// The zip modifier composes with Keep and Move; with Delete there's nothing
+// left to compress, so it greys out (the saved flags survive for switching
+// back). The remove sub-flag only means something while zipping is on.
+function syncZipToggle() {
+  const del = document.querySelector('input[name="set-maildisp"]:checked')?.value === 'delete';
+  $('#set-mailzip').disabled = del;
+  $('.set-mailzip-row').classList.toggle('set-disp-off', del);
+  const rmOff = del || !$('#set-mailzip').checked;
+  $('#set-mailzip-rm').disabled = rmOff;
+  $('.set-mailzip-rm-row').classList.toggle('set-disp-off', rmOff);
+}
+
 // "Move it to <folder>" is only selectable once a destination exists
 function renderMoveDir() {
   const label = $('#set-movedir');
@@ -109,7 +121,10 @@ async function loadSettings() {
     : (cfg.delete_mail_after_upload ? 'delete' : 'keep');
   const radio = document.querySelector(`input[name="set-maildisp"][value="${disp}"]`);
   if (radio) radio.checked = true;
+  $('#set-mailzip').checked = !!cfg.mail_zip;
+  $('#set-mailzip-rm').checked = !!cfg.mail_zip_remove;
   renderMoveDir();
+  syncZipToggle();
   const df = cfg.date_format === 'intl' ? 'intl' : (cfg.date_format === 'us' ? 'us' : (localStorage.getItem('dateFormat') || 'us'));
   $('#set-datefmt').value = df;
   setDateFormat(df);
@@ -186,6 +201,8 @@ async function saveSettings() {
       ['date_format', $('#set-datefmt').value],
       ['mail_disposition', mailDisposition()],
       ['mail_move_dir', setState.moveDir || ''],
+      ['mail_zip', $('#set-mailzip').checked],
+      ['mail_zip_remove', $('#set-mailzip-rm').checked],
       // legacy key kept in sync so an older shell still honors "delete"
       ['delete_mail_after_upload', mailDisposition() === 'delete'],
       ['api_key', newKey], // always saved — a blank field clears the key
@@ -266,6 +283,14 @@ async function loadCharacters() {
 }
 
 function initSettings() {
+  document.querySelectorAll('input[name="set-maildisp"]').forEach((r) =>
+    r.addEventListener('change', syncZipToggle));
+  $('#set-mailzip').addEventListener('change', syncZipToggle);
+  // the example archive name shows the real current month
+  const now = new Date();
+  $('#set-mailzip-eg').textContent =
+    `swgt_mail_archive_${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}.zip`;
+
   $('#set-movedir-browse').addEventListener('click', async () => {
     let res;
     try { res = await api().pick_folder(); } catch (_) { return; }

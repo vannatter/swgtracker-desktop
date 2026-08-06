@@ -723,6 +723,73 @@ function initKeyGate() {
   $('#gate-site').addEventListener('click', () => {
     api().open_external('https://swgtracker.com/portal').catch?.(() => {});
   });
+
+  // three faces of one card: paste a key / create an account / recover by email
+  const gateMode = (m) => {
+    $('#gate-mode-key').hidden = m !== 'key';
+    $('#gate-mode-register').hidden = m !== 'register';
+    $('#gate-mode-recover').hidden = m !== 'recover';
+  };
+  $('#gate-to-register').addEventListener('click', () => { gateMode('register'); $('#gate-reg-name').focus(); });
+  $('#gate-to-recover').addEventListener('click', () => { gateMode('recover'); $('#gate-rec-email').focus(); });
+  $('#gate-reg-back').addEventListener('click', () => { gateMode('key'); $('#gate-key').focus(); });
+  $('#gate-rec-back').addEventListener('click', () => { gateMode('key'); $('#gate-key').focus(); });
+
+  // in-app registration: the account is created with ToS accepted (the form's
+  // own checkbox), the fresh key lands straight in config — zero copy-paste
+  $('#gate-reg-agree').addEventListener('change', (e) => {
+    $('#gate-reg-create').disabled = !e.target.checked;
+  });
+  [$('#gate-reg-name'), $('#gate-reg-email')].forEach((el) =>
+    el.addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#gate-reg-create').click(); }));
+  $('#gate-reg-create').addEventListener('click', async () => {
+    const name = $('#gate-reg-name').value.trim();
+    const email = $('#gate-reg-email').value.trim();
+    const st = $('#gate-reg-status');
+    if (!name || !email) { st.textContent = 'Enter a profile name and your email address.'; return; }
+    const btn = $('#gate-reg-create');
+    btn.disabled = true;
+    st.textContent = 'Creating your account…';
+    let res;
+    try { res = await apiFetch('POST', 'api/app_key.php', { data: { action: 'register', name, email, agree: 1 } }); }
+    catch (e) { res = { ok: false, error: String(e) }; }
+    if (res.ok && res.data && res.data.key) {
+      try { await api().set_config('api_key', res.data.key); } catch (_) { /* verified below */ }
+      st.textContent = '';
+      hideKeyGate();
+      gateMode('key');
+      toast('Account created — your key is saved (see it any time in Settings)');
+      startData(); // ToS accepted at registration, no second gate
+      if (loadedPages.has('settings')) loadSettings();
+    } else {
+      st.textContent = res.error || 'Could not create the account — please try again.';
+      btn.disabled = !$('#gate-reg-agree').checked;
+    }
+  });
+
+  // key recovery: the server re-keys the account and emails the new one —
+  // the key itself never comes back over this call
+  $('#gate-rec-email').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#gate-rec-send').click(); });
+  $('#gate-rec-send').addEventListener('click', async () => {
+    const email = $('#gate-rec-email').value.trim();
+    const st = $('#gate-rec-status');
+    if (!email) { st.textContent = 'Enter your account email address.'; return; }
+    const btn = $('#gate-rec-send');
+    btn.disabled = true;
+    st.textContent = 'Sending…';
+    let res;
+    try { res = await apiFetch('POST', 'api/app_key.php', { data: { action: 'recover', email } }); }
+    catch (e) { res = { ok: false, error: String(e) }; }
+    btn.disabled = false;
+    if (res.ok) {
+      gateMode('key');
+      $('#gate-rec-status').textContent = '';
+      $('#gate-status').textContent = 'New key emailed — paste it above once it arrives.';
+      $('#gate-key').focus();
+    } else {
+      st.textContent = res.error || 'Could not send the email — please try again.';
+    }
+  });
   $('#gate-key').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#gate-save').click(); });
   $('#gate-save').addEventListener('click', async () => {
     const key = $('#gate-key').value.trim();
@@ -767,7 +834,8 @@ async function startAfterAuth() {
 
 function initTermsGate() {
   const gate = $('#terms-gate');
-  gate.addEventListener('click', (e) => {
+  // document-level: .terms-link also appears in the key gate's register form
+  document.addEventListener('click', (e) => {
     const a = e.target.closest('.terms-link');
     if (!a) return;
     e.preventDefault();

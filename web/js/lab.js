@@ -374,25 +374,33 @@ function labStatCellHtml(res, stat, relevant) {
 }
 
 function labSlotVisibleRows(slot) {
-  const rated = slot.pool.map((r) => ({ r, q: labAvgQ(r, slot) }));
+  let rated = slot.pool.map((r) => ({ r, q: labAvgQ(r, slot) }));
+  // in-spawn lens: the pool narrows to what's harvestable right now
+  if (slot.spawnOnly) rated = rated.filter((x) => safeInt(x.r.status) === 1);
   const query = (slot.query || '').trim().toLowerCase();
   if (query) {
-    // search the FULL class pool (banned included, so they can be un-banned) —
+    // search the class pool (banned included, so they can be un-banned) —
     // this is also how you bench a deliberately shitty resource
     return rated.filter((x) => (x.r.name || '').toLowerCase().includes(query))
       .sort((a, b) => b.q - a.q).slice(0, 30);
   }
   const usable = rated.filter((x) => !labIsBanned(x.r)); // hidden never suggested
-  const byRate = [...usable].sort((a, b) => b.q - a.q);
   const show = new Map();
-  byRate.slice(0, 10).forEach((x) => show.set(x.r.id, x));
-  [...usable].sort((a, b) => labEcpu(a.r) - labEcpu(b.r))
-    .slice(0, 5).forEach((x) => show.set(x.r.id, x));
-  usable.filter((x) => stkState.resourceIds.has(String(x.r.id))).forEach((x) => show.set(x.r.id, x));
+  if (slot.spawnOnly) {
+    // the in-spawn slice is small — show all of it, best first
+    [...usable].sort((a, b) => b.q - a.q).slice(0, 30).forEach((x) => show.set(x.r.id, x));
+  } else {
+    const byRate = [...usable].sort((a, b) => b.q - a.q);
+    byRate.slice(0, 10).forEach((x) => show.set(x.r.id, x));
+    [...usable].sort((a, b) => labEcpu(a.r) - labEcpu(b.r))
+      .slice(0, 5).forEach((x) => show.set(x.r.id, x));
+    usable.filter((x) => stkState.resourceIds.has(String(x.r.id))).forEach((x) => show.set(x.r.id, x));
+  }
   if (slot.showBanned) rated.filter((x) => labIsBanned(x.r)).forEach((x) => show.set(x.r.id, x));
   if (slot.pick) {
-    const px = rated.find((x) => x.r.id === slot.pick.id);
-    if (px) show.set(px.r.id, px);
+    // pin from the FULL pool: a despawned pick must stay visible in spawn view
+    const pr = slot.pool.find((r) => r.id === slot.pick.id);
+    if (pr) show.set(pr.id, { r: pr, q: labAvgQ(pr, slot) });
   }
   // best first — stockpiled rows are highlighted in place, not floated
   // (floating them read as "these are the best", which they usually aren't)
@@ -480,6 +488,12 @@ function labRenderSlots() {
               `<option value="${x.r.id}" ${slot.pick && String(slot.pick.id) === String(x.r.id) ? 'selected' : ''}>${escapeHtml(x.r.name)} \u2014 ${x.q.toFixed(1)}</option>`).join('');
           })()}
         </select>
+        ${(() => {
+          const n = slot.pool.filter((r) => safeInt(r.status) === 1).length;
+          return `<button type="button" class="lab-hidden-chip lab-spawn-chip ${slot.spawnOnly ? 'on' : ''}" data-spawnonly="${si}"
+            title="${slot.spawnOnly ? 'Back to the full pool (top rated + cheapest + your stockpile)' : 'Only show resources currently in spawn'}">
+            <span class="lab-live"></span> ${n} in spawn</button>`;
+        })()}
         <input type="text" class="form-control filter-input lab-slot-search" data-slotsearch="${si}"
           placeholder="Search any ${escapeHtml(slot.className)}\u2026" value="${escapeHtml(slot.query || '')}" autocomplete="off">
         ${(() => {
@@ -1171,6 +1185,12 @@ function initLab() {
     if (reveal) {
       const slot = labState.slots[safeInt(reveal.dataset.showbanned)];
       if (slot) { slot.showBanned = !slot.showBanned; labRenderSlots(); }
+      return;
+    }
+    const spawn = e.target.closest('[data-spawnonly]');
+    if (spawn) {
+      const slot = labState.slots[safeInt(spawn.dataset.spawnonly)];
+      if (slot) { slot.spawnOnly = !slot.spawnOnly; labRenderSlots(); }
       return;
     }
     const banCell = e.target.closest('[data-ban]');

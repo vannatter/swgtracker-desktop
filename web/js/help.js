@@ -126,6 +126,20 @@ this only decides what happens to the local file \`/mailsave\` wrote.
   deleting, but the originals stay on disk. You have to pick the destination
   folder before this option can be selected.
 
+The **compress it into a monthly zip** switch adds a copy of the file to
+\`swgt_mail_archive_<year>-<month>.zip\` wherever the file ends up — the
+watched mail folder for *Keep*, your chosen folder for *Move*. Each mail goes
+into the archive for **its own month** (by the file's date, not today's), so
+leftover files from earlier months settle into their proper archives on any
+later sweep — the rotation tidies itself. Inside the zip, mails are grouped by
+their source folder, so characters sharing a destination never clash.
+
+On its own the zip is a backup — the loose file stays put. Tick **then remove
+the original** to also drop the loose file, but only once it's verifiably in
+the archive: every mail kept, at a small fraction of the disk space. Neither
+switch applies to *Delete*, and both need app version 0.12.6 or newer — on
+older shells the files are simply kept.
+
 Uploads happen first either way, so a failed upload never loses a file.
 `,
   },

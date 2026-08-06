@@ -1022,6 +1022,12 @@
             <label class="set-disp-opt"><input type="radio" name="set-maildisp" value="move" id="set-disp-move">
               Move it to <code id="set-movedir" class="set-movedir">no folder chosen</code>
               <button type="button" id="set-movedir-browse" class="btn btn-sm btn-outline-secondary" title="Choose the processed-mail folder"><i class="fa-solid fa-folder-open"></i></button></label>
+            <label class="set-disp-opt set-mailzip-row"><input type="checkbox" id="set-mailzip">
+              <span>…and compress it into a monthly zip there
+                <span class="settings-sub">(<code id="set-mailzip-eg">swgt_mail_archive_2026-08.zip</code> — each mail files into its own month's archive, so stragglers tidy themselves)</span></span></label>
+            <label class="set-disp-opt set-mailzip-row set-mailzip-rm-row"><input type="checkbox" id="set-mailzip-rm">
+              <span>…then remove the original once it's safely zipped
+                <span class="settings-sub">(unchecked, the zip is just a backup copy and the file stays put)</span></span></label>
           </div>
         </div>
 
@@ -1691,14 +1697,46 @@
   <div id="key-gate" class="key-gate" hidden>
     <div class="key-gate-card">
       <i class="fa-solid fa-key key-gate-icon"></i>
-      <h2>API Key Required</h2>
-      <p>SWG Tracker Desktop needs your swgtracker.com API key to load resources, schematics, and your stockpile.</p>
-      <p class="key-gate-hint">Find your key in your account at <a role="button" id="gate-site">swgtracker.com</a>.</p>
-      <div class="key-gate-row">
-        <input id="gate-key" type="password" class="form-control filter-input" placeholder="Paste your API key" autocomplete="off">
-        <button id="gate-save" class="btn btn-accent">Save &amp; Verify</button>
+      <h2>Connect to SWGTracker.com</h2>
+
+      <div id="gate-mode-key">
+        <p>SWG Tracker Desktop needs your swgtracker.com key to load resources, schematics, and your stockpile.</p>
+        <div class="key-gate-row">
+          <input id="gate-key" type="password" class="form-control filter-input" placeholder="Paste your key" autocomplete="off">
+          <button id="gate-save" class="btn btn-accent">Save &amp; Verify</button>
+        </div>
+        <div id="gate-status" class="key-gate-status"></div>
+        <p class="key-gate-hint">New here? <a role="button" id="gate-to-register">Create a free account right in the app</a></p>
+        <p class="key-gate-hint">Have an account but lost the key? <a role="button" id="gate-to-recover">Email me a new key</a>
+          &nbsp;·&nbsp; <a role="button" id="gate-site">Open swgtracker.com</a></p>
       </div>
-      <div id="gate-status" class="key-gate-status"></div>
+
+      <div id="gate-mode-register" hidden>
+        <p>Free account — your key is created instantly and saved into the app for you.</p>
+        <div class="key-gate-stack">
+          <input id="gate-reg-name" type="text" class="form-control filter-input" placeholder="Profile name (e.g. your main character)" autocomplete="off">
+          <input id="gate-reg-email" type="email" class="form-control filter-input" placeholder="Email" autocomplete="off">
+        </div>
+        <label class="terms-gate-check">
+          <input id="gate-reg-agree" type="checkbox">
+          <span>I agree to the <a role="button" class="terms-link" data-terms-url="https://swgtracker.com/terms.php">Terms of Service</a> and
+            <a role="button" class="terms-link" data-terms-url="https://swgtracker.com/privacy.php">Privacy Policy</a>, and I understand
+            SWG Tracker is an unofficial fan site not affiliated with any Star Wars rights holder.</span>
+        </label>
+        <button id="gate-reg-create" class="btn btn-accent" disabled>Create my account</button>
+        <div id="gate-reg-status" class="key-gate-status"></div>
+        <p class="key-gate-hint"><a role="button" id="gate-reg-back">&larr; I already have a key</a></p>
+      </div>
+
+      <div id="gate-mode-recover" hidden>
+        <p>Enter the email you registered with — we&rsquo;ll reset your key and email you the new one. Your old key stops working once it&rsquo;s sent.</p>
+        <div class="key-gate-row">
+          <input id="gate-rec-email" type="email" class="form-control filter-input" placeholder="Email" autocomplete="off">
+          <button id="gate-rec-send" class="btn btn-accent">Email me a new key</button>
+        </div>
+        <div id="gate-rec-status" class="key-gate-status"></div>
+        <p class="key-gate-hint"><a role="button" id="gate-rec-back">&larr; Back</a></p>
+      </div>
     </div>
   </div>
 

@@ -13,6 +13,7 @@ import logging
 import shutil
 import threading
 import time
+import zipfile
 from pathlib import Path
 
 import requests
@@ -22,6 +23,12 @@ logger = logging.getLogger(__name__)
 IMPORT_URL = "https://swgtracker.com/import_mailcontent.php"
 SCAN_INTERVAL = 5  # seconds between folder sweeps
 FAIL_RETRY_SECS = 300  # don't re-attempt a failing file every sweep
+def archive_name(mtime: float) -> str:
+    """Month-stamped from the FILE's time, not today's: each mail files into its
+    own month's archive (swgt_mail_archive_2026-08.zip), so loose stragglers
+    from earlier months settle into their proper zips on any later sweep —
+    the rotation cleans itself up with no rollover logic."""
+    return f"swgt_mail_archive_{time.strftime('%Y-%m', time.localtime(mtime))}.zip"
 SALE_SUBJECT = "Vendor Sale Complete"
 # both share the body format: ... of "ITEM" from "SELLER" for N credits ...
 PURCHASE_SUBJECTS = ("Vendor Item Purchased", "Instant Sale Item Purchased")
@@ -45,6 +52,7 @@ class MailMonitor:
         self.recent: list[dict] = []      # newest-first event feed for the UI
         self._need_raw: set[str] = set()  # ledgered mails uploaded before raw was stored
         self._fail_at: dict[str, float] = {}  # mail_id -> last failed attempt (backoff)
+        self._zip_cache: dict[str, tuple[tuple, set]] = {}  # zip path -> (stat sig, namelist)
 
     # --- controller interface (web_api expects these) ---
 
@@ -121,8 +129,11 @@ class MailMonitor:
         logger.info("Mail monitor stopped")
 
     def _disposition(self):
-        """(disp, move_dir): what happens to a mail file once it's uploaded.
-        'move' without a destination degrades to 'keep' — never move blindly.
+        """(disp, move_dir, zip_after, zip_remove): what happens to a mail file
+        once it's uploaded. 'move' without a destination degrades to 'keep' —
+        never move blindly. zip_after is a modifier on keep/move (meaningless
+        with delete): a copy lands in the monthly archive zip; zip_remove
+        additionally drops the loose file once it's safely archived.
         Legacy configs only have the delete boolean."""
         disp = str(self.config.get("mail_disposition", "") or "").strip().lower()
         if disp not in ("keep", "delete", "move"):
@@ -134,10 +145,12 @@ class MailMonitor:
                 move_dir = Path(raw).expanduser()
             else:
                 disp = "keep"
-        return disp, move_dir
+        zip_after = bool(self.config.get("mail_zip", False)) and disp != "delete"
+        zip_remove = zip_after and bool(self.config.get("mail_zip_remove", False))
+        return disp, move_dir, zip_after, zip_remove
 
     def _sweep(self):
-        disp, move_dir = self._disposition()
+        disp, move_dir, zip_after, zip_remove = self._disposition()
         self._sweep_sales = []  # (item, credits) uploaded this pass — notified in one batch
         for folder, character in self._folders():
             if not folder.is_dir():
@@ -156,12 +169,13 @@ class MailMonitor:
                         except OSError:
                             pass
                         self._need_raw.discard(mail_id)
-                    self._dispose(f, disp, move_dir)
+                    self._dispose(f, disp, move_dir, zip_after, zip_remove)
                     continue
-                self._upload(f, mail_id, disp, move_dir, character)
+                self._upload(f, mail_id, disp, move_dir, character, zip_after, zip_remove)
         self._notify_sales()
 
-    def _upload(self, f: Path, mail_id: str, disp: str = "keep", move_dir=None, character: str = ""):
+    def _upload(self, f: Path, mail_id: str, disp: str = "keep", move_dir=None,
+                character: str = "", zip_after: bool = False, zip_remove: bool = False):
         # backoff: a file that just failed doesn't get retried every 5s sweep
         last_fail = self._fail_at.get(mail_id, 0)
         if last_fail and time.time() - last_fail < FAIL_RETRY_SECS:
@@ -236,7 +250,7 @@ class MailMonitor:
         else:
             self.session_uploaded += 1
             self._event(kind, f.name, detail or subject)
-        self._dispose(f, disp, move_dir)
+        self._dispose(f, disp, move_dir, zip_after, zip_remove)
 
     def _notify_sales(self):
         """One notification per sweep: a lone sale gets its detail, a backlog
@@ -265,12 +279,83 @@ class MailMonitor:
         except OSError:
             logger.warning("couldn't delete %s", f)
 
-    def _dispose(self, f: Path, disp: str, move_dir):
+    def _zip_names(self, zpath: Path) -> set | None:
+        """The archive's namelist behind a stat-validated cache (None = archive
+        exists but is unreadable). Backup mode leaves the loose files in place,
+        so every sweep re-checks each of them — that must not reopen the zip
+        thousands of times."""
+        key = str(zpath)
+        try:
+            st = zpath.stat()
+            sig = (st.st_mtime_ns, st.st_size)
+        except OSError:  # no archive yet
+            self._zip_cache.pop(key, None)
+            return set()
+        cached = self._zip_cache.get(key)
+        if cached and cached[0] == sig:
+            return cached[1]
+        try:
+            with zipfile.ZipFile(zpath) as z:
+                names = set(z.namelist())
+        except (OSError, zipfile.BadZipFile):
+            logger.warning("unreadable archive %s — leaving mail files alone", zpath)
+            return None
+        self._zip_cache[key] = (sig, names)
+        return names
+
+    def _zip(self, f: Path, target_dir: Path) -> bool:
+        """Fold the mail into its month's archive zip in target_dir. Entries are
+        stored under the source folder's name (mail ids are only unique per
+        character, and several watched folders can share one move destination).
+        Returns True only once the mail is verifiably in the archive — callers
+        never remove a loose file on a False."""
+        try:
+            zpath = target_dir / archive_name(f.stat().st_mtime)
+        except OSError:
+            return False
+        arcname = f"{f.parent.name}/{f.name}"
+        names = self._zip_names(zpath)
+        if names is None:
+            return False
+        if arcname in names:
+            return True
+        try:
+            target_dir.mkdir(parents=True, exist_ok=True)
+            with zipfile.ZipFile(zpath, "a", zipfile.ZIP_DEFLATED) as z:
+                z.write(f, arcname)
+        except (OSError, zipfile.BadZipFile):
+            logger.warning("couldn't archive %s into %s", f, zpath)
+            self._zip_cache.pop(str(zpath), None)
+            return False
+        names.add(arcname)
+        try:
+            st = zpath.stat()
+            self._zip_cache[str(zpath)] = ((st.st_mtime_ns, st.st_size), names)
+        except OSError:
+            self._zip_cache.pop(str(zpath), None)
+        return True
+
+    def _dispose(self, f: Path, disp: str, move_dir, zip_after: bool = False,
+                 zip_remove: bool = False):
         """Post-upload file handling: keep (default), delete, or move to the
-        user's processed-mail folder (collision-safe rename)."""
+        user's processed-mail folder (collision-safe rename). zip_after is a
+        modifier on keep/move: a copy lands in the monthly archive zip at the
+        file's destination (watched folder for keep, chosen folder for move).
+        zip_remove then drops the loose file — but only once it's safely in
+        the archive."""
         if disp == "delete":
             self._delete(f)
             return
+        if zip_after:
+            target = move_dir if (disp == "move" and move_dir is not None) else f.parent
+            if not self._zip(f, target):
+                return  # not safely archived — leave the file where it is
+            if zip_remove:
+                self._delete(f)
+                return
+            if disp != "move":
+                return  # keep + backup zip: the loose file stays too
+            # zip without remove on a move: the loose copy still moves below
         if disp != "move" or move_dir is None:
             return
         try:

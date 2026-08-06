@@ -1800,6 +1800,16 @@ tr.row-detail > td { background: var(--bg-tertiary); padding: 0; }
 .key-gate-row .filter-input { max-width: none; flex: 1; }
 .key-gate-status { font-size: 12px; color: var(--accent); min-height: 18px; }
 
+/* Terms-of-Service gate (shares the key-gate shell) */
+.terms-gate-text { text-align: left; }
+.terms-gate-text .terms-link, .terms-gate-check .terms-link { color: var(--accent-hover); cursor: pointer; }
+.terms-gate-text .terms-link:hover, .terms-gate-check .terms-link:hover { text-decoration: underline; }
+.terms-gate-check {
+  display: flex; gap: 8px; align-items: flex-start; text-align: left;
+  font-size: 13px; color: var(--text-primary); margin: 14px 0; cursor: pointer;
+}
+.terms-gate-check input { margin-top: 2px; }
+
 /* ---- Resources: + Filter menu, pills, saved searches ---- */
 .res-filter-wrap { position: relative; flex: none; }
 .res-filter-btn { height: 34px; white-space: nowrap; }

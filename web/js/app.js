@@ -736,13 +736,58 @@ function initKeyGate() {
         hideKeyGate();
         $('#gate-key').value = '';
         toast('API key verified');
-        startData();
+        await startAfterAuth();
         if (loadedPages.has('settings')) loadSettings(); // don't leave a stale key in the form
       } else {
         $('#gate-status').textContent = 'That key was rejected by swgtracker.com — check it and try again.';
       }
     } finally {
       btn.disabled = false;
+    }
+  });
+}
+
+// ---- Terms-of-Service gate ----
+// The site gates every portal page on the current ToS version (users.terms_version,
+// see portal/terms_accept.php); this is the desktop counterpart, backed by the same
+// users-row columns via api/terms.php — accepting in either place satisfies both.
+// Fails open: offline, an auth error, or an older site deploy must never lock the app.
+async function termsAccepted() {
+  let res;
+  try { res = await apiFetch('GET', 'api/terms.php'); } catch (_) { return true; }
+  if (!res.ok || !res.data || !res.data.terms) return true;
+  return !!res.data.terms.ok;
+}
+
+// The one post-key-gate entry point: gate on ToS if needed, else start the app.
+async function startAfterAuth() {
+  if (await termsAccepted()) startData();
+  else $('#terms-gate').hidden = false;
+}
+
+function initTermsGate() {
+  const gate = $('#terms-gate');
+  gate.addEventListener('click', (e) => {
+    const a = e.target.closest('.terms-link');
+    if (!a) return;
+    e.preventDefault();
+    api().open_external(a.dataset.termsUrl).catch?.(() => {});
+  });
+  $('#terms-agree').addEventListener('change', (e) => {
+    $('#terms-accept').disabled = !e.target.checked;
+  });
+  $('#terms-accept').addEventListener('click', async () => {
+    const btn = $('#terms-accept');
+    btn.disabled = true;
+    $('#terms-status').textContent = 'Saving…';
+    const res = await apiFetch('POST', 'api/terms.php', { data: { agree: 1 } });
+    if (res.ok) {
+      gate.hidden = true;
+      $('#terms-status').textContent = '';
+      startData();
+    } else {
+      $('#terms-status').textContent = res.error || 'Could not save your acceptance — please try again.';
+      btn.disabled = !$('#terms-agree').checked;
     }
   });
 }
@@ -797,6 +842,7 @@ async function boot() {
   initAbout();
   refreshMonitorState(); // header button reflects auto-started monitoring
   initKeyGate();
+  initTermsGate();
   initPulseChart();
   initTooltips(); // WKWebView shows no native title tooltips
   initHelp();     // delegated — every [data-help] icon, now and later
@@ -818,7 +864,7 @@ async function boot() {
   } catch (_) { /* ignore */ }
 
   if (await apiKeyWorks()) {
-    startData();
+    await startAfterAuth();
   } else {
     showKeyGate('');
   }

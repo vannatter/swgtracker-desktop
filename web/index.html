@@ -1667,6 +1667,27 @@
   </div>
 
   <!-- API-key gate: covers the app until a working key is saved -->
+  <div id="terms-gate" class="key-gate" hidden>
+    <div class="key-gate-card">
+      <i class="fa-solid fa-file-contract key-gate-icon"></i>
+      <h2>Before you continue</h2>
+      <p class="terms-gate-text">We have published a
+        <a role="button" class="terms-link" data-terms-url="https://swgtracker.com/terms.php">Terms of Service</a> and a
+        <a role="button" class="terms-link" data-terms-url="https://swgtracker.com/privacy.php">Privacy Policy</a>.
+        The short version: SWG Tracker is an unofficial, non-commercial fan site, not affiliated with any
+        Star Wars rights holder or publisher, and all data here is collected by our own community.
+        To keep using your account, please review and accept them.</p>
+      <label class="terms-gate-check">
+        <input id="terms-agree" type="checkbox">
+        <span>I have read and agree to the
+          <a role="button" class="terms-link" data-terms-url="https://swgtracker.com/terms.php">Terms of Service</a> and
+          <a role="button" class="terms-link" data-terms-url="https://swgtracker.com/privacy.php">Privacy Policy</a>.</span>
+      </label>
+      <button id="terms-accept" class="btn btn-accent" disabled>I Agree, Continue</button>
+      <div id="terms-status" class="key-gate-status"></div>
+    </div>
+  </div>
+
   <div id="key-gate" class="key-gate" hidden>
     <div class="key-gate-card">
       <i class="fa-solid fa-key key-gate-icon"></i>

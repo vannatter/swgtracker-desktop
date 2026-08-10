@@ -29,7 +29,7 @@ from src.core.alert_poller import AlertPoller
 from src.core.bundle_manager import BundleManager
 from src.web_api import WebApi
 
-APP_VERSION = "0.12.6"  # keep in sync with pyproject.toml — bump with every change batch
+APP_VERSION = "0.12.7"  # keep in sync with pyproject.toml — bump with every change batch
 
 logging.basicConfig(
     level=logging.INFO,
@@ -63,6 +63,72 @@ def _set_mac_dock_icon():
             info["NSHumanReadableCopyright"] = "swgtracker.com companion"
     except Exception:  # noqa: BLE001 — cosmetic only, never block launch
         logger.debug("couldn't set Dock identity", exc_info=True)
+
+
+def _setup_tray(window, config):
+    """Windows only: make the Settings 'Minimize to system tray' toggle real —
+    minimizing or closing the window tucks the app into the tray (mail
+    monitoring and alert polling keep running); the tray icon reopens it or
+    quits for good. macOS keeps its normal window/Dock behavior. Returns the
+    pystray icon so main() can stop it on exit, or None."""
+    if sys.platform != "win32":
+        return None
+    try:
+        import pystray
+        from PIL import Image
+        img = Image.open(str(ROOT / "src" / "resources" / "icon.png"))
+    except Exception:  # noqa: BLE001 — no tray beats no app
+        logger.info("tray unavailable", exc_info=True)
+        return None
+
+    quitting = {"flag": False}
+
+    def _show(icon=None, item=None):
+        try:
+            window.restore()
+            window.show()
+        except Exception:  # noqa: BLE001
+            logger.error("tray show failed", exc_info=True)
+
+    def _quit(icon=None, item=None):
+        quitting["flag"] = True
+        try:
+            window.destroy()
+        except Exception:  # noqa: BLE001 — the window may already be gone
+            import os
+            os._exit(0)
+
+    icon = pystray.Icon(
+        "swgtracker", img, "SWG Tracker Desktop",
+        menu=pystray.Menu(
+            pystray.MenuItem("Open SWG Tracker", _show, default=True),  # double-click
+            pystray.MenuItem("Quit", _quit),
+        ),
+    )
+    icon.run_detached()
+
+    def _on_minimized():
+        if config.get("minimize_to_tray", True):
+            try:
+                window.hide()
+            except Exception:  # noqa: BLE001
+                pass
+
+    def _on_closing():
+        # X button: hide to tray instead of quitting — unless the user is
+        # quitting from the tray menu or has the setting off. The live
+        # config read means a Settings change applies without a restart.
+        if quitting["flag"] or not config.get("minimize_to_tray", True):
+            return True
+        try:
+            window.hide()
+        except Exception:  # noqa: BLE001 — if hiding fails, let the close happen
+            return True
+        return False  # cancels the close
+
+    window.events.minimized += _on_minimized
+    window.events.closing += _on_closing
+    return icon
 
 
 def main():
@@ -142,8 +208,12 @@ def main():
             logger.error("bundle apply failed", exc_info=True)
     bridge.reload_ui = _reload_ui
 
+    tray_icon = _setup_tray(window, config)
+
     # --debug enables the webview inspector (right-click → Inspect Element)
     webview.start(debug="--debug" in sys.argv)  # blocks until the window closes
+    if tray_icon:
+        tray_icon.stop()
     bundles.stop()
 
 

@@ -60,7 +60,8 @@ jobs:
       - name: Install deps
         # pynput + winsdk: the in-game scanner (global hotkey + Windows.Media.Ocr
         # — the OS's built-in OCR, no Tesseract install, no bundled models).
-        run: pip install requests pywebview pyinstaller pillow pynput winsdk
+        # pystray: the minimize-to-tray icon.
+        run: pip install requests pywebview pyinstaller pillow pynput winsdk pystray
       - name: Make .ico
         run: python -c "from PIL import Image; Image.open('src/resources/icon.png').save('build/icon.ico', sizes=[(16,16),(32,32),(48,48),(64,64),(128,128),(256,256)])"
       - name: Version resource for the exe (file properties otherwise say 0.0.0.0)
@@ -90,6 +91,7 @@ jobs:
           --add-data "web;web"
           --add-data "src/resources;src/resources"
           --hidden-import src.core.win_overlay
+          --hidden-import pystray._win32
           run_web.py
       - name: Build installer (zip-extracted DLLs hit Mark-of-the-Web; installed files don't)
         shell: pwsh

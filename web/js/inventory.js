@@ -17,16 +17,44 @@ const INV_COLUMNS = [
 // has no `notes`, so a sortable notes header would silently sort by item_name.
 const invState = { page: 1, perPage: 100, hasNext: false, sortField: 'item_name', sortOrder: 'ASC', items: [],
                    noteFor: null,   // inventory id open in the notes dialog
-                   groups: [], grpCollapsed: new Set(), tagFilter: null };
+                   groups: [], grpCollapsed: new Set(), tagFilter: null,
+                   dragGroup: null,       // folder key being drag-reordered (stockpile parity)
+                   checked: new Set(),    // checkbox selection — bulk actions like Restock to X
+                   selected: new Set() }; // click-marked rows (Veizyr) — survive re-renders and window switches
 
 // tags live as one comma-separated string server-side, like stockpile/factories
 const invTags = (i) => String(i.tags || '').split(',').map((t) => t.trim()).filter(Boolean);
 
-const invColCount = () => INV_COLUMNS.length + 2; // + envelope pin-cell + actions cell
+const invColCount = () => INV_COLUMNS.length + 3; // + select checkbox + envelope pin-cell + actions cell
 
 function buildInvHeader() {
-  $('#inv-head').innerHTML = sortableHeaderHtml(INV_COLUMNS, invState.sortField, invState.sortOrder) +
+  $('#inv-head').innerHTML =
+    `<th class="pin-cell"><input type="checkbox" id="inv-selall" title="Select every visible item"></th>` +
+    sortableHeaderHtml(INV_COLUMNS, invState.sortField, invState.sortOrder) +
     '<th class="pin-cell"></th><th class="col-actions"></th>'; // restock-email envelope + actions
+  invSyncSelAll();
+}
+
+// ids of the items the list is currently showing (tag filter respected)
+function invVisibleIds() {
+  let items = invState.items;
+  if (invState.tagFilter) items = items.filter((i) => invTags(i).includes(invState.tagFilter));
+  return items.map((i) => String(i.id));
+}
+
+// header checkbox mirrors the per-row ones: checked = all visible, dash = some.
+// The selection bar (Restock to X) lives or dies with the count.
+function invSyncSelAll() {
+  const box = $('#inv-selall');
+  if (box) {
+    const vis = invVisibleIds();
+    const on = vis.filter((id) => invState.checked.has(id)).length;
+    box.checked = vis.length > 0 && on === vis.length;
+    box.indeterminate = on > 0 && on < vis.length;
+  }
+  const n = invState.checked.size;
+  $('#inv-selbar').hidden = !n;
+  if (n) $('#inv-selbar-n').textContent = `${n} item${n === 1 ? '' : 's'} selected`;
 }
 
 // page-head "Email all" checkbox mirrors the per-row envelopes: checked when
@@ -70,7 +98,8 @@ function invRowHtml(item, idx) {
   const notePreview = labNotesText(item.notes);   // rich notes -> plain text for the tooltip
   const hasNotes = !!notePreview;
   const tagged = invTags(item).length > 0;
-  return `<tr data-idx="${idx}" data-iid="${iid}"${invState.groups.length ? ' draggable="true"' : ''}>
+  return `<tr class="${invState.selected.has(iid) ? 'inv-picked' : ''}" data-idx="${idx}" data-iid="${iid}"${invState.groups.length ? ' draggable="true"' : ''}>
+    <td class="pin-cell inv-sel-cell"><input type="checkbox" class="inv-sel" data-selid="${iid}"${invState.checked.has(iid) ? ' checked' : ''}></td>
     <td class="stat inv-edit ${stockCls}" data-edit="stocked" data-idx="${idx}" title="Click to edit">${fmtNum(stocked)}</td>
     <td class="col-name res-name"><span class="stk-tagslot">${tagged
       ? `<i class="fa-solid fa-tag stk-tagind" data-invtaghover="${idx}"></i>` : ''}</span>${escapeHtml(item.item_name || '')}</td>
@@ -106,7 +135,7 @@ function renderInvRows() {
     const collapsed = invState.grpCollapsed.has(sec.key);
     if (sec.key !== 'un' || sections.length > 1) {
       if (parts.length) parts.push(spacer);
-      parts.push(grpTableHeaderHtml(sec.key, sec.name, sec.items.length, collapsed, sec.key !== 'un', invColCount(), 'col-actions'));
+      parts.push(grpTableHeaderHtml(sec.key, sec.name, sec.items.length, collapsed, sec.key !== 'un', invColCount(), 'col-actions', sec.key !== 'un'));
     }
     if (!collapsed) parts.push(...sec.items.map(([item, idx]) => invRowsHtml(item, idx)));
   });
@@ -122,6 +151,7 @@ function renderInvRows() {
       + allTags.map((t) => `<span class="fac-tag${invState.tagFilter === t ? ' active' : ''}"
           data-invtag="${escapeHtml(t)}">${escapeHtml(t)}</span>`).join('')
     : '';
+  invSyncSelAll(); // selection bar + header checkbox track every repaint
 }
 
 // ---- notes dialog: hover the icon to preview, click to edit (matches the
@@ -426,6 +456,36 @@ function initInventory() {
     const item = invState.items[safeInt(noteCell.dataset.notes)];
     if (item) invOpenNoteDialog(item);
   });
+
+  // checkbox selection (bulk actions) — kept separate from the green marking
+  $('#inv-body').addEventListener('change', (e) => {
+    const cb = e.target.closest('.inv-sel');
+    if (!cb) return;
+    if (cb.checked) invState.checked.add(cb.dataset.selid);
+    else invState.checked.delete(cb.dataset.selid);
+    invSyncSelAll();
+  });
+  $('#inv-head').addEventListener('change', (e) => {
+    if (!e.target.closest('#inv-selall')) return;
+    const vis = invVisibleIds();
+    if (e.target.checked) vis.forEach((id) => invState.checked.add(id));
+    else vis.forEach((id) => invState.checked.delete(id));
+    renderInvRows();
+    invSyncSelAll();
+  });
+
+  // click a row to mark it — the highlight is state, not hover/focus, so it
+  // stays lit while you alt-tab to the game and read your vendor (Veizyr).
+  // Clicks on anything interactive (edit cells, buttons, checkbox, folder rows) don't count.
+  $('#inv-body').addEventListener('click', (e) => {
+    if (e.target.closest('button, a, input, [data-edit], [data-sales], [data-invalert], [data-invtaghover], .inv-sel-cell, .stk-group')) return;
+    const tr = e.target.closest('tr[data-iid]');
+    if (!tr) return;
+    const iid = tr.dataset.iid;
+    if (invState.selected.has(iid)) invState.selected.delete(iid);
+    else invState.selected.add(iid);
+    tr.classList.toggle('inv-picked'); // in place — no re-render, keeps scroll
+  });
   $('#inv-note-save').addEventListener('click', () => invSaveNoteDialog());
   $('#inv-note-cancel').addEventListener('click', () => { $('#inv-note-modal').hidden = true; });
   wireRichToolbar($('#inv-note-modal'));
@@ -500,13 +560,9 @@ function initInventory() {
     renderInvRows();
   });
   $('#inv-body').addEventListener('click', (e) => {
-    const tog = e.target.closest('[data-grptoggle]');
-    if (tog) {
-      const k = tog.dataset.grptoggle;
-      invState.grpCollapsed.has(k) ? invState.grpCollapsed.delete(k) : invState.grpCollapsed.add(k);
-      renderInvRows();
-      return;
-    }
+    const grp = e.target.closest('tr[data-grpkey]');
+    if (!grp) return;
+    if (e.target.closest('[data-grprenamein]')) return; // typing in the rename box
     const ren = e.target.closest('[data-grprename]');
     if (ren) {
       grpBeginRename('#inv-body', ren.dataset.grprename,
@@ -523,7 +579,69 @@ function initInventory() {
         invState.items.forEach((i) => { if (Number(i.group_id) === gid) i.group_id = null; });
         renderInvRows();
       });
+      return;
     }
+    // anywhere else on the header row collapses/expands it — stockpile parity
+    const k = grp.dataset.grpkey;
+    invState.grpCollapsed.has(k) ? invState.grpCollapsed.delete(k) : invState.grpCollapsed.add(k);
+    renderInvRows();
+  });
+
+  // drop group `dragKey` at the position of `targetKey` ('un' = move to the end)
+  async function invReorderGroup(dragKey, targetKey) {
+    if (String(dragKey) === String(targetKey)) return;
+    const ordered = [...invState.groups].sort((a, b) => (a.sort_order - b.sort_order) || a.name.localeCompare(b.name));
+    const from = ordered.findIndex((g) => String(g.id) === String(dragKey));
+    if (from < 0) return;
+    const [moved] = ordered.splice(from, 1);
+    let to = targetKey === 'un' ? ordered.length : ordered.findIndex((g) => String(g.id) === String(targetKey));
+    if (to < 0) to = ordered.length;
+    ordered.splice(to, 0, moved);
+    ordered.forEach((g, k) => { g.sort_order = k; });
+    renderInvRows();
+    const res = await grpApi({ action: 'reorder', ids: ordered.map((g) => g.id) });
+    if (!res.ok) toast(res.error || 'Could not save the folder order — site update pending?', false);
+  }
+
+  // dragging a FOLDER HEADER reorders groups (the stockpile "hand")
+  const invClearReorderHover = () => document.querySelectorAll('#inv-body .stk-reorder-over')
+    .forEach((el) => el.classList.remove('stk-reorder-over'));
+  $('#inv-body').addEventListener('dragstart', (e) => {
+    const grpRow = e.target.closest('tr.stk-group[draggable="true"]');
+    if (!grpRow) return;
+    if (e.target.closest('[data-grpdel], [data-grprenamein]')) { e.preventDefault(); return; }
+    invState.dragGroup = grpRow.dataset.grpkey;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', 'group:' + invState.dragGroup);
+    const name = grpRow.querySelector('.stk-group-name');
+    const ghost = document.createElement('div');
+    ghost.className = 'stk-drag-ghost';
+    ghost.textContent = name ? name.textContent : 'folder';
+    document.body.appendChild(ghost);
+    e.dataTransfer.setDragImage(ghost, -12, -8);
+    setTimeout(() => ghost.remove(), 0);
+  });
+  $('#inv-body').addEventListener('dragover', (e) => {
+    if (!invState.dragGroup) return;
+    const hd = e.target.closest('tr[data-grpkey]');
+    if (!hd || hd.dataset.grpkey === invState.dragGroup) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    invClearReorderHover();
+    hd.classList.add('stk-reorder-over');
+  });
+  $('#inv-body').addEventListener('drop', (e) => {
+    if (!invState.dragGroup) return;
+    const hd = e.target.closest('tr[data-grpkey]');
+    invClearReorderHover();
+    if (!hd) return;
+    e.preventDefault();
+    invReorderGroup(invState.dragGroup, hd.dataset.grpkey);
+    invState.dragGroup = null;
+  });
+  $('#inv-body').addEventListener('dragend', () => {
+    invState.dragGroup = null;
+    invClearReorderHover();
   });
   // drag a row onto (or under) a folder row to file it
   $('#inv-body').addEventListener('dragstart', (e) => {
@@ -560,6 +678,29 @@ function initInventory() {
       }
     }
     renderInvRows();
+  });
+
+  // Restock to X — acts on the checked rows; select-all covers "everything"
+  $('#inv-restock-apply').addEventListener('click', async () => {
+    const ids = [...invState.checked];
+    if (!ids.length) return;
+    const x = safeInt($('#inv-restock-x').value);
+    if (x < 0) { toast('Enter a stocked count of 0 or more', false); return; }
+    const res = await apiFetch('PUT', 'api/inventory.php',
+      { data: { restock_to: x, ids: ids.map((i) => safeInt(i)) } });
+    if (!res.ok) { toast(res.error || 'Restock failed — site update pending?', false); return; }
+    const changed = safeInt(res.data && res.data.changed);
+    toast(`Restocked ${fmtNum(changed)} item${changed === 1 ? '' : 's'} to ${fmtNum(x)}`);
+    invState.checked.clear(); // the job's done — the bar folds away
+    loadInventory();
+  });
+  $('#inv-sel-clear').addEventListener('click', () => {
+    invState.checked.clear();
+    renderInvRows();
+    invSyncSelAll();
+  });
+  $('#inv-restock-x').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') $('#inv-restock-apply').click();
   });
 
   $('#inv-add').addEventListener('click', addInvItem);

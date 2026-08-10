@@ -353,9 +353,16 @@ function labBindBenchActions() {
   $('#lab-auto-cheap').addEventListener('click', () => labAutoPick('cheap'));
   $('#lab-auto-cheapstock').addEventListener('click', () => labAutoPick('cheapstock'));
   $('#lab-clear').addEventListener('click', () => {
-    labState.slots.forEach((s, i) => { s.pick = null; s.collapsed = i !== 0; });
+    // frozen picks survive Clear — unfreeze via the padlock for a full wipe
+    const kept = labState.slots.filter((s) => s.locked && s.pick).length;
+    labState.slots.forEach((s, i) => {
+      if (s.locked && s.pick) { s.collapsed = true; return; }
+      s.pick = null;
+      s.collapsed = i !== 0;
+    });
     labState.wasComplete = false;
     labRenderAll();
+    if (kept) toast(`Kept ${kept} frozen slot${kept > 1 ? 's' : ''} — click the padlock to unfreeze`);
   });
 }
 
@@ -473,7 +480,12 @@ function labRenderSlots() {
           const drag = short > 0
             ? `<span class="lab-drag" title="This pick scores below the cap \u2014 it drags the average down by ${short.toFixed(0)} across ${slot.units} units">\u25bc ${short.toFixed(0)}</span>`
             : '';
-          return `<span class="lab-picked-chip">${escapeHtml(slot.pick.name)} \u00b7 ${q.toFixed(1)}</span> ${drag}`;
+          const lock = `<button type="button" class="lab-lock ${slot.locked ? 'on' : ''}" data-lock="${si}"
+            title="${slot.locked
+              ? 'Frozen \u2014 auto-pick buttons and Clear keep this resource; click to unfreeze'
+              : 'Freeze this pick \u2014 Best in spawn / stockpile / cheapest will build around it'}">
+            <i class="fa-solid ${slot.locked ? 'fa-lock' : 'fa-lock-open'}"></i></button>`;
+          return `${lock}<span class="lab-picked-chip ${slot.locked ? 'lab-picked-frozen' : ''}">${escapeHtml(slot.pick.name)} \u00b7 ${q.toFixed(1)}</span> ${drag}`;
         })()}</span>
       </div>
       <div class="lab-slot-body" ${slot.collapsed ? 'hidden' : ''}>
@@ -562,9 +574,13 @@ function labAutoPick(mode) {
 
   if (mode === 'best' || mode === 'stock') {
     // Per-slot sources, hoisted — the cascade below rescans them many times.
-    const srcBySlot = labState.slots.map((slot) => (mode === 'best'
-      ? slot.pool.filter((r) => r.status === 1 && !labIsBanned(r))
-      : slot.pool.filter((r) => stkState.resourceIds.has(String(r.id)) && !labIsBanned(r))));
+    // A frozen slot's only candidate is its locked pick: the initial assignment
+    // keeps it and the swap cascade can't trade it away (Phlan's request).
+    const srcBySlot = labState.slots.map((slot) => (slot.locked && slot.pick
+      ? [slot.pick]
+      : mode === 'best'
+        ? slot.pool.filter((r) => r.status === 1 && !labIsBanned(r))
+        : slot.pool.filter((r) => stkState.resourceIds.has(String(r.id)) && !labIsBanned(r))));
 
     // Start from best-average picks — when every line can cap, this is already
     // the answer and the cascade below changes nothing.
@@ -638,6 +654,9 @@ function labAutoPick(mode) {
   const stockOnly = mode === 'cheapstock';
   const cost = (r) => labEcpu(r);
   const cands = labState.slots.map((slot) => {
+    // frozen slot: its locked pick is the whole candidate list — the cost
+    // optimizer prices the rest of the bench around it
+    if (slot.locked && slot.pick) return [{ r: slot.pick, q: labAvgQ(slot.pick, slot) }];
     const source = (stockOnly
       ? slot.pool.filter((r) => stkState.resourceIds.has(String(r.id)))
       : slot.pool).filter((r) => !labIsBanned(r));
@@ -1175,6 +1194,12 @@ function initLab() {
   $('#lab-slots').addEventListener('click', (e) => {
     const retry = e.target.closest('[data-poolretry]');
     if (retry) { labRetryPool(safeInt(retry.dataset.poolretry)); return; }
+    const lock = e.target.closest('[data-lock]');
+    if (lock) { // before the header check — the padlock lives inside the toggle row
+      const slot = labState.slots[safeInt(lock.dataset.lock)];
+      if (slot && slot.pick) { slot.locked = !slot.locked; labRenderSlots(); }
+      return;
+    }
     const head = e.target.closest('.lab-slot-toggle');
     if (head) {
       const slot = labState.slots[safeInt(head.closest('.lab-slot').dataset.si)];
@@ -1208,6 +1233,7 @@ function initLab() {
     const r = slot.pool.find((x) => String(x.id) === tr.dataset.rid);
     const unpick = slot.pick && String(slot.pick.id) === tr.dataset.rid;
     slot.pick = unpick ? null : r;
+    if (unpick) slot.locked = false; // removing the pick thaws the slot
     labState.wasComplete = false; // swaps re-run the experiment ceremony
     slot.collapsed = !unpick; // picking folds the section; unpicking reopens it
     if (!unpick) {

@@ -249,11 +249,16 @@ function harvHopper(h) {
   if (gone && gone.at) until = Math.min(until, gone.at);
   const units = Math.min(size, Math.max(0, (rate * (until - since)) / 3600));
   const fullAt = since + (size / rate) * 3600;
+  const powerEnd = (power && power.depletesAt) || 0;
   return {
     units, size, pct: (units / size) * 100,
     // fullAt only when it will actually get there before power dies
-    fullAt: (gone || (power && power.depletesAt && power.depletesAt < fullAt)) ? null : fullAt,
-    stalled: !!(power && power.depletesAt && power.depletesAt <= now), // fill STOPPED (power)
+    fullAt: (gone || (powerEnd && powerEnd < fullAt)) ? null : fullAt,
+    fullAtRaw: fullAt,   // unconditional projection — the hover explains the rest
+    powerEnd,
+    // where the fill will freeze when power dies first
+    unitsAtPowerEnd: powerEnd ? Math.min(size, Math.max(0, (rate * (powerEnd - since)) / 3600)) : null,
+    stalled: !!(powerEnd && powerEnd <= now), // fill STOPPED (power)
     frozen: !!gone, // fill STOPPED (resource despawned)
   };
 }
@@ -295,11 +300,11 @@ function harvAgo(secs) {
 
 // ---- rendering ----
 
-function harvMeter(label, pct, text, cls) {
+function harvMeter(label, pct, text, cls, tip = '') {
   return `<div class="harv-meter-row">
     <span class="harv-meter-label">${label}</span>
     <div class="harv-meter"><span class="harv-meter-fill ${cls}" style="width:${Math.max(0, Math.min(100, pct)).toFixed(1)}%"></span></div>
-    <span class="harv-meter-text ${cls}">${text}</span>
+    <span class="harv-meter-text ${cls}" ${tip ? `title="${escapeHtml(tip)}"` : ''}>${text}</span>
   </div>`;
 }
 
@@ -313,6 +318,23 @@ function harvCardHtml(h) {
   const meters = [];
   if (hopper) {
     const full = hopper.pct >= 99.9;
+    // the hover always explains the state — including WHY there's no "full in"
+    // (it only shows when the hopper actually gets there before power dies)
+    let tip = '';
+    if (full) {
+      tip = 'Hopper is full — extraction has stopped; empty it to resume.';
+    } else if (hopper.frozen) {
+      tip = 'The resource despawned, which stops extraction — the hopper is frozen where it was at despawn.';
+    } else if (hopper.stalled) {
+      tip = `Power ran out ${fmtDate(hopper.powerEnd)} — extraction is stopped until you add power.`;
+    } else if (hopper.fullAt) {
+      tip = `Fills to ${fmtShort(hopper.size)} around ${fmtDate(hopper.fullAt)} at the current rate`
+        + (hopper.powerEnd ? ` — power lasts until ${fmtDate(hopper.powerEnd)}, so it gets there` : '') + '.';
+    } else if (hopper.powerEnd) {
+      tip = `No "full in" because power ends first: it runs out in ${harvAgo(hopper.powerEnd - now)}, `
+        + `stopping the hopper at ≈${fmtShort(hopper.unitsAtPowerEnd)} / ${fmtShort(hopper.size)} `
+        + `(${((hopper.unitsAtPowerEnd / hopper.size) * 100).toFixed(0)}%) — a full hopper would need ${harvAgo(hopper.fullAtRaw - now)}.`;
+    }
     // green + shimmer while it fills; red "stalled" (no power) or "frozen"
     // (resource despawned). Units tick up live via a 1s ticker while filling.
     meters.push(harvMeter('Hopper', hopper.pct,
@@ -320,7 +342,7 @@ function harvCardHtml(h) {
         : `<span class="harv-units" data-uhid="${h.id}">${fmtNum(Math.floor(hopper.units))}</span> / ${fmtShort(hopper.size)}${hopper.frozen ? ' · paused — resource gone'
           : hopper.stalled ? ' · stalled — no power'
           : hopper.fullAt ? ` · full in ${harvAgo(hopper.fullAt - now)}` : ''}`,
-      full ? 'warn' : (hopper.stalled || hopper.frozen) ? 'bad' : 'filling'));
+      full ? 'warn' : (hopper.stalled || hopper.frozen) ? 'bad' : 'filling', tip));
   }
   if (power) {
     const out = power.remaining <= 0;

@@ -27,6 +27,7 @@
   --q-ok:     #cccccc;
   --q-poor:   #777777;
   --q-accept: #ff9f43;   /* orange — "acceptable", between green (good) and yellow (warning) */
+  --frozen: #7ecbdd;     /* ice blue — the Lab's frozen-slot padlock/chip; deliberately outside the stat palette */
 
   --row-active: #1b3129;
   --row-pinned: #2c3144;
@@ -661,6 +662,42 @@ td.lab-dim { opacity: .45; }
 .lab-hidden-chip:hover, .lab-hidden-chip.on { color: var(--text-hover); background: var(--border); }
 .lab-spawn-chip { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .lab-spawn-chip.on { color: var(--accent-green); }
+/* freeze padlock on a filled slot — auto-picks build around a locked slot */
+.lab-lock { border: 0; background: none; color: var(--text-muted); cursor: pointer; padding: 2px 5px; font-size: 11px; }
+.lab-lock:hover { color: var(--text-hover); }
+.lab-lock.on { color: var(--frozen); }
+.lab-picked-frozen { color: var(--frozen); }
+/* schematic detail: per-row resource age, like the site's "Added 3 days ago" */
+.scd-agecell { color: var(--text-muted); font-size: 11px; white-space: nowrap; text-align: right; }
+
+/* My Schematic detail: the entry's notes — full width, a clean app card with
+   just an amber edge saying "note" (no icon, no tinted wash) */
+.mysd-notes { margin: 2px 0 10px; }
+.mysd-notes-body {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-left: 3px solid var(--q-good); border-radius: 6px;
+  padding: 10px 14px; font-size: 13px; color: var(--text-primary); cursor: pointer;
+}
+.mysd-notes-body:hover { border-color: var(--text-muted); border-left-color: var(--q-good); }
+/* rendered notes end in a <p>/<ul> whose default bottom margin doubles the card's
+   padding — the last block hands its spacing back */
+.mysd-notes-body > :last-child { margin-bottom: 0; }
+.mysd-notes-add { font-size: 12px; color: var(--text-muted); cursor: pointer; }
+.mysd-notes-add:hover { color: var(--text-hover); }
+
+/* inventory: selection bar — appears while checkboxes are ticked */
+.inv-selbar {
+  display: flex; align-items: center; gap: 8px; margin: 0 0 8px;
+  padding: 6px 12px; background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 8px; font-size: 13px; color: var(--text-primary);
+}
+.inv-selbar .inv-num { width: 90px; }
+.inv-selbar-sep { color: var(--text-muted); }
+
+/* inventory: click-marked row — a whisper of the muted green over the dark bg,
+   with a solid edge stripe to find it from the other monitor */
+#inv-body tr.inv-picked td { background: rgba(75, 121, 103, .18); }
+#inv-body tr.inv-picked td:first-child { box-shadow: inset 3px 0 0 var(--accent-green); }
 .lab-stock { margin-left: 6px; font-size: 10px; font-weight: 700; color: var(--q-fair); white-space: nowrap; }
 .lab-mycpu { color: var(--q-fair) !important; font-weight: 700; }
 .lab-pickcell { font-size: 11px; color: var(--text-muted); text-align: center; width: 44px; }
@@ -1096,7 +1133,7 @@ tr.grp-row td { background: var(--bg-secondary); font-size: 13px; font-weight: 6
                 box-shadow: inset 3px 0 0 var(--accent-dark); }
 tr.grp-row .grp-count { margin-left: 10px; }
 /* grid-view row actions hug the right edge on both pages */
-#harv-list td.col-actions, #fac-list td.col-actions { white-space: nowrap; text-align: right; }
+#harv-list td.col-actions, #fac-list td.col-actions, #inv-body td.col-actions { white-space: nowrap; text-align: right; }
 #fac-list td.col-actions .btn-icon[data-facstart] { color: #45e97e; }   /* play = go */
 #fac-list td.col-actions .btn-icon[data-facresume] { color: #e2b843; }  /* resume = paused amber */
 #fac-list td.col-actions .btn-icon[data-facdone]:hover,

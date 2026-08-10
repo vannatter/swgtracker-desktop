@@ -166,6 +166,9 @@ function scdStatCell(spawn, field, relevant) {
 
 function scdSpawnRowHtml(spawn, group, highlight, rel) {
   const q = scdSpawnQuality(spawn);
+  // Age like the site's Best tab ("Added 3 days ago", exact date on hover) —
+  // Philosophy/Eponine's request
+  const ts = safeInt(spawn.timestamp);
   return `<tr class="scd-row ${highlight ? 'activeResource' : ''}" data-group="${group}">
     ${addCellHtml(safeInt(spawn.resourceId), spawn.resourceName)}
     ${wishCellHtml(safeInt(spawn.resourceId), spawn.resourceName)}
@@ -173,6 +176,7 @@ function scdSpawnRowHtml(spawn, group, highlight, rel) {
       title="${escapeHtml(spawn.resourceTypeName || 'Open resource page')}">${escapeHtml(spawn.resourceName || '')}</span></td>
     <td class="stat ${qualityClass(q / 10)}">${q.toFixed(2)}</td>
     ${SCD_STATS.map((f) => scdStatCell(spawn, f, rel.has(f))).join('')}
+    <td class="scd-agecell" ${ts ? `title="${escapeHtml(fmtDate(ts))}"` : ''}>${ts ? `Added ${fmtAgo(ts)}` : '--'}</td>
   </tr>`;
 }
 
@@ -184,7 +188,8 @@ function renderScdTable() {
   const rel = scdRelevantStats();
   $('#scd-head').innerHTML =
     '<th class="pin-cell"></th><th class="pin-cell"></th><th class="col-name">Resource Name</th><th>Quality</th>' +
-    SCD_STATS.map((f) => `<th class="${rel.has(f) ? 'lab-rel-h' : 'lab-dim'}">${f.toUpperCase()}</th>`).join('');
+    SCD_STATS.map((f) => `<th class="${rel.has(f) ? 'lab-rel-h' : 'lab-dim'}">${f.toUpperCase()}</th>`).join('') +
+    '<th>Age</th>';
 
   const listKey = scdState.tab === 'current' ? 'currentBestResourceList' : 'serverBestResourceList';
   const groups = (s.resourceDtoList || []).map((dto) => {
@@ -193,7 +198,7 @@ function renderScdTable() {
     const spawns = [...(dto[listKey] || [])].sort((a, b) => scdSpawnQuality(b) - scdSpawnQuality(a));
     const age = scdState.tab === 'current' && spawns.length ? scdSpawnAge(spawns[0].timestamp) : '';
     const header = `<tr class="scd-group" data-toggle="${dto.resourceTypeCode}">
-      <td class="col-text" colspan="${SCD_STATS.length + 4}">
+      <td class="col-text" colspan="${SCD_STATS.length + 5}">
         <i class="fa-solid fa-caret-down"></i> ${escapeHtml(dto.resourceTypeName || '')}
         ${age ? `<span class="scd-age">${age}</span>` : ''}
         ${spawns.length ? '' : '<span class="scd-age">(none in spawn)</span>'}

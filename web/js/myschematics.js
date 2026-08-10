@@ -144,12 +144,25 @@ async function mysSaveNoteDialog() {
   item.notes = notes; // optimistic
   item.tags = tags;
   renderMysList();
+  // the detail page shows the same notes — keep it in step when it's open
+  if (mysdState.item && String(mysdState.item.user_schematic_id) === mysNoteFor) mysdRenderNotes(item);
   try {
     const res = await apiFetch('PUT', 'api/my_schematics.php', {
       data: { user_schematic_id: safeInt(mysNoteFor), notes, tags },
     });
     if (!res.ok) toast(res.error || 'Failed to save notes — is the site update deployed?', false);
   } catch (e) { toast(String(e), false); }
+}
+
+// the schematic's notes on its own detail page — click to edit via the same
+// dialog the list's sticky-note icon opens (Philosophy/Eponine's request)
+function mysdRenderNotes(item) {
+  const el = $('#mysd-notes');
+  const has = !!labNotesText(item.notes);
+  el.hidden = false;
+  el.innerHTML = has
+    ? `<div class="mysd-notes-body" data-mysdnotes title="Click to edit notes">${labNotesHtml(item.notes)}</div>`
+    : '<a role="button" class="mysd-notes-add" data-mysdnotes><i class="fa-regular fa-note-sticky"></i> Add notes</a>';
 }
 
 const mysdState = { item: null, analysis: null };
@@ -487,6 +500,7 @@ async function openMySchematicPage(item) {
   $('#mysd-chips').innerHTML = fl.length
     ? fl.map((l) => `<span class="mys-chip">${escapeHtml(l)}</span>`).join('')
     : '<span class="mys-chip all" title="No formulas chosen — comparing against all of them">All formulas</span>';
+  mysdRenderNotes(item);
   $('#mysd-body').innerHTML = (item.resources || []).map(mysdRowHtml).join('');
   showGridLoading('#mysd-loading');
 
@@ -1415,6 +1429,10 @@ function initMySchematics() {
     const link = e.target.closest('[data-nav]');
     if (link) showPage(link.dataset.nav);
   });
+  $('#mysd-notes').addEventListener('click', (e) => {
+    if (e.target.closest('[data-mysdnotes]') && mysdState.item) mysOpenNoteDialog(mysdState.item);
+  });
+
   $('#mysd-open-schem').addEventListener('click', () => {
     if (mysdState.item) openSchematicPage(String(mysdState.item.schematic_id), mysdState.item.name);
   });

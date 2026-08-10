@@ -304,6 +304,7 @@
           </span>
         </div>
         <div class="mysd-chips" id="mysd-chips"></div>
+        <div id="mysd-notes" class="mysd-notes" hidden></div>
 
         <div class="table-wrap">
           <table class="data-grid" id="mysd-grid">
@@ -677,6 +678,16 @@
           <div id="inv-tagbar" class="fac-tagbar" hidden></div>
           <label class="inv-allmail" title="One digest email (at most every 6 hours) when tracked items drop to their threshold or oversell — this switch covers every item; the envelope on each row picks individually">
             <input type="checkbox" id="inv-alert-all"><i class="fa-solid fa-envelope"></i> Restock alerts: all items</label>
+        </div>
+
+        <div id="inv-selbar" class="inv-selbar" hidden>
+          <b id="inv-selbar-n"></b>
+          <span class="inv-selbar-sep">·</span>
+          <span>Restock to</span>
+          <input id="inv-restock-x" type="number" class="form-control filter-input inv-num" value="10" min="0"
+                 title="Restock alerts re-arm on their own once stock is back above threshold">
+          <button id="inv-restock-apply" class="btn btn-sm btn-accent"><i class="fa-solid fa-boxes-stacked"></i> Apply</button>
+          <button id="inv-sel-clear" class="btn btn-sm btn-outline-secondary">Clear selection</button>
         </div>
 
         <div class="table-wrap">

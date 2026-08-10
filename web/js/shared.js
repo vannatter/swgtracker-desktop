@@ -736,7 +736,7 @@ function grpBeginRename(listSel, key, g, rerender) {
 // identical structure and classes to My Stockpile's stk-group rows, with the
 // generic data-grp* hooks the shared handlers use. Trash sits in a trailing
 // pin-cell so it lines up with each grid's per-row action column.
-function grpTableHeaderHtml(key, name, count, collapsed, deletable, colTotal, actionsCls = 'pin-cell') {
+function grpTableHeaderHtml(key, name, count, collapsed, deletable, colTotal, actionsCls = 'pin-cell', draggable = false) {
   const nameHtml = deletable
     ? `<span class="stk-group-name" data-grprename="${key}" title="Click to rename">${escapeHtml(name)}</span>`
     : `<span class="stk-group-name stk-group-unfiled">${escapeHtml(name)}</span>`;
@@ -749,7 +749,7 @@ function grpTableHeaderHtml(key, name, count, collapsed, deletable, colTotal, ac
   const delCell = deletable
     ? `<td class="${actionsCls}"><button class="${btnCls}" data-grpdel="${key}" title="Delete group (its items become Unfiled)"><i class="fa-solid fa-trash-can"></i></button></td>`
     : `<td class="${actionsCls}"></td>`;
-  return `<tr class="stk-group" data-grpkey="${key}">
+  return `<tr class="stk-group${draggable ? ' stk-group-draggable' : ''}" data-grpkey="${key}"${draggable ? ' draggable="true"' : ''}>
     <td colspan="${colTotal - 1}">
       <div class="stk-group-main">
         <span class="stk-group-left">

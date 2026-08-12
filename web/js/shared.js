@@ -188,8 +188,10 @@ function setDateFormat(fmt) {
 // and a naive parse reads as LOCAL — normalise to T-form and pin to UTC.
 function parseAnyDate(dt) {
   if (dt == null || dt === '') return null;
-  if (/^\d+$/.test(String(dt))) {
-    const n = parseInt(dt, 10);
+  // fractional epochs too — computed timestamps like hopper fullAt are floats,
+  // and the old integer-only match let the raw number leak into the UI
+  if (/^\d+(\.\d+)?$/.test(String(dt))) {
+    const n = Math.floor(Number(dt));
     return n > 0 ? new Date(n * 1000) : null;
   }
   let str = String(dt).replace(' ', 'T');

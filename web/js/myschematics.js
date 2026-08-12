@@ -1498,6 +1498,66 @@ function initMySchematics() {
     if (c) openSchematicPage(c.dataset.copen, c.dataset.cname || '');
   });
 
+  // Manufacture: load this schematic into an idle factory — product name always,
+  // plus time/quantity from your latest matching run (Philosophy/Eponine)
+  const mysdPrevRun = () => {
+    const product = String(mysdState.item?.name || '').toLowerCase();
+    return facState.history.find((h) => String(h.product || '').toLowerCase() === product) || null;
+  };
+  $('#mysd-manufacture').addEventListener('click', async () => {
+    const item = mysdState.item;
+    if (!item) return;
+    await loadFactories(); // fresh list + run history (page elements always exist — SPA)
+    if (mysdState.item !== item) return;
+    const idle = facState.items.filter((f) => !f.started_at);
+    if (!idle.length) {
+      toast(facState.items.length
+        ? 'All your factories are mid-run — finish one first'
+        : 'No factories yet — set one up on the Factories page', false);
+      return;
+    }
+    const prev = mysdPrevRun();
+    $('#mysd-fac-title').textContent = `Manufacture ${item.name}`;
+    $('#mysd-fac-hint').textContent = prev
+      ? 'Times and quantity restored from your last run of this product — adjust if needed.'
+      : 'Set the per-unit crafting time and how many to run.';
+    $('#mysd-fac-time').value = prev ? String(prev.time_value) : '';
+    $('#mysd-fac-unit').value = prev ? prev.time_unit : 'm';
+    $('#mysd-fac-qty').value = prev ? String(prev.quantity) : '1000';
+    $('#mysd-fac-list').innerHTML = idle.map((f) => `
+      <button type="button" class="mysd-fac-opt" data-mfac="${f.id}">
+        <b>${escapeHtml(f.name)}</b>
+        <span class="mys-type">${[f.owner, f.planet].filter(Boolean).map((x) => escapeHtml(x)).join(' · ') || 'idle'}</span>
+        <span class="mysd-fac-go"><i class="fa-solid fa-play"></i> Start here</span>
+      </button>`).join('');
+    $('#mysd-fac-modal').hidden = false;
+    if (!prev) $('#mysd-fac-time').focus();
+  });
+  $('#mysd-fac-cancel').addEventListener('click', () => { $('#mysd-fac-modal').hidden = true; });
+  bindBackdropClose($('#mysd-fac-modal'), () => { $('#mysd-fac-modal').hidden = true; });
+  $('#mysd-fac-list').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-mfac]');
+    if (!b || !mysdState.item) return;
+    const f = facState.items.find((x) => String(x.id) === b.dataset.mfac);
+    if (!f) return;
+    const time_value = parseFloat($('#mysd-fac-time').value);
+    const quantity = safeInt($('#mysd-fac-qty').value);
+    if (!(time_value > 0) || !(quantity > 0)) {
+      toast('Set the per-unit time and quantity first', false);
+      return;
+    }
+    $('#mysd-fac-modal').hidden = true;
+    Object.assign(f, { product: mysdState.item.name || '',
+                       time_value, time_unit: $('#mysd-fac-unit').value, quantity });
+    const saved = await facPost({ action: 'save', factory: f });
+    if (!saved.ok) return;
+    const started = await facPost({ action: 'start', id: f.id });
+    if (!started.ok) return;
+    facState.flashId = String(f.id);
+    toast(`${f.name} is running — ${fmtNum(quantity)} × ${mysdState.item.name}`);
+    showPage('factories');
+  });
+
   $('#mysd-open-schem').addEventListener('click', () => {
     if (mysdState.item) openSchematicPage(String(mysdState.item.schematic_id), mysdState.item.name);
   });

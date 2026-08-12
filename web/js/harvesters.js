@@ -377,6 +377,8 @@ function harvCardHtml(h) {
   return `<div class="harv-card ${gone ? 'harv-gone' : ''}" data-hid="${h.id}" draggable="true">${goneBanner}
     <div class="harv-hd">
       <div class="harv-title">
+        ${hopper && hopper.pct < 99.9 && !hopper.stalled && !hopper.frozen
+          ? '<i class="fa-solid fa-gear harv-gear" title="Extracting"></i>' : ''}
         <span class="harv-name">${escapeHtml(h.name || h.harvester_type)}</span>
         ${h.character_name ? `<span class="harv-char"><i class="fa-solid fa-user"></i> ${escapeHtml(h.character_name)}</span>` : ''}
         ${alert}

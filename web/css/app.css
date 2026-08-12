@@ -670,6 +670,23 @@ td.lab-dim { opacity: .45; }
 /* schematic detail: per-row resource age, like the site's "Added 3 days ago" */
 .scd-agecell { color: var(--text-muted); font-size: 11px; white-space: nowrap; text-align: right; }
 
+/* My Schematic detail: Manufacture — run inputs + pick an idle factory to start */
+.mysd-fac-fields { display: flex; gap: 10px; margin: 12px 0 2px; }
+.mysd-fac-fields .fac-field { flex: 1; }
+.mysd-fac-pickhint { margin-top: 12px; font-size: 12px; color: var(--text-muted); text-align: left; }
+.mysd-fac-list { display: flex; flex-direction: column; gap: 6px; margin: 8px 0 4px; max-height: 300px; overflow-y: auto; }
+.mysd-fac-opt {
+  display: flex; align-items: baseline; gap: 10px; text-align: left; cursor: pointer;
+  background: var(--bg-input); border: 1px solid var(--border); border-radius: 8px;
+  padding: 10px 14px; color: var(--text-primary); font-size: 13px;
+}
+.mysd-fac-opt:hover { border-color: var(--accent); color: var(--text-hover); }
+.mysd-fac-go { margin-left: auto; white-space: nowrap; font-size: 12px; color: var(--text-muted); }
+.mysd-fac-opt:hover .mysd-fac-go { color: var(--accent-hover); }
+
+/* the card Manufacture just filled announces itself briefly */
+.fac-card.fac-flash { box-shadow: 0 0 0 2px var(--accent), 0 0 18px rgba(226, 67, 80, .45); transition: box-shadow .3s; }
+
 /* My Schematic detail: cost-to-make line + missing-components warning */
 .mysd-cost { margin: 2px 0 8px; font-size: 13px; }
 .mysd-cost-line { color: var(--text-primary); cursor: default; }
@@ -1208,6 +1225,14 @@ tr.grp-row .grp-count { margin-left: 10px; }
              border: 1px solid var(--border); border-radius: 4px; color: var(--text-muted); }
 .fac-done .fac-badge { color: #45e97e; border-color: #45e97e; }
 .fac-running .fac-badge { color: #45e97e; border-color: rgba(69, 233, 126, .45); }
+
+/* the working gear — a slow spin says "this one's doing something" without
+   nagging; shared by running factories and extracting harvesters */
+@keyframes swgt-gear { to { transform: rotate(360deg); } }
+.fac-gear, .harv-gear { display: inline-block; animation: swgt-gear 3.2s linear infinite; }
+.fac-gear { font-size: 9px; vertical-align: 1px; }
+.harv-gear { color: var(--accent-green); font-size: 12px; flex: none; }
+@media (prefers-reduced-motion: reduce) { .fac-gear, .harv-gear { animation: none; } }
 .fac-paused .fac-badge { color: #e2b843; border-color: rgba(226, 184, 67, .5); }
 .fac-histrow { display: flex; align-items: center; gap: 10px; }
 /* history combobox: floating panel with type chips + pick/tag/delete rows */

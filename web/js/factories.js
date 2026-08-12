@@ -5,7 +5,8 @@
    Desktop notification fires from here when a run lands (the email path is
    the site cron's job, for people away from the machine). */
 
-const facState = { items: [], history: [], timer: null, saveTimers: {}, dragId: null,
+const facState = { flashId: null,   // card to spotlight after "Manufacture" hands off here
+                   items: [], history: [], timer: null, saveTimers: {}, dragId: null,
                    view: 'cards', viewLoaded: false,  // 'cards' | 'grid', sticky via config fac_view
                    tagFilter: null,                    // active tag-cloud filter, session-only
                    groups: [],                         // api/groups.php folders (kind=factory)
@@ -85,7 +86,7 @@ function facCardHtml(f, embed = false) {
         ${(f.x != null && f.y != null) ? `<button class="btn btn-icon fac-wpbtn" data-facwpcopy="${f.id}"
           title="${escapeHtml(loc)} — click to copy a /waypoint command"><i class="fa-solid fa-location-dot"></i></button>` : ''}
         ${pills ? `<span class="fac-sub">${pills}</span>` : ''}
-        <span class="fac-badge">${st.toUpperCase()}</span>
+        <span class="fac-badge">${running ? '<i class="fa-solid fa-gear fac-gear"></i> ' : ''}${st.toUpperCase()}</span>
         <button class="btn btn-icon fac-details${open ? ' open' : ''}" data-facdetails="${f.id}"
                 title="Details — group, owner, tags, location"><i class="fa-solid fa-sliders"></i></button>
         <button class="btn btn-icon" data-facremove="${f.id}" title="Remove factory"><i class="fa-solid fa-xmark"></i></button>
@@ -179,7 +180,7 @@ function facGridHtml(items) {
     return `<tr class="fac-${st}" data-facid="${f.id}" data-facstate="${st}" draggable="true">
       <td class="col-name" title="${escapeHtml([facLoc(f), f.tags].filter(Boolean).join(' · '))}">${escapeHtml(f.name)}</td>
       <td class="col-text">${escapeHtml(f.owner || '—')}</td>
-      <td><span class="fac-badge">${st.toUpperCase()}</span></td>
+      <td><span class="fac-badge">${st === 'running' ? '<i class="fa-solid fa-gear fac-gear"></i> ' : ''}${st.toUpperCase()}</span></td>
       <td class="col-name">${escapeHtml(f.product || '—')}</td>
       <td class="col-num">${f.quantity ? fmtNum(f.quantity) : '—'}</td>
       <td class="col-num fac-units">${f.started_at ? fmtNum(facUnitsDone(f)) : '—'}</td>
@@ -296,6 +297,17 @@ function renderFactories() {
   }
   facUpdateViewToggle();
   facCacheForNotify();
+
+  // spotlight the card "Manufacture" just filled, once, then let it fade
+  if (facState.flashId) {
+    const el = document.querySelector(`#fac-list [data-facid="${facState.flashId}"]`);
+    if (el) {
+      facState.flashId = null;
+      el.scrollIntoView({ block: 'center' });
+      el.classList.add('fac-flash');
+      setTimeout(() => el.classList.remove('fac-flash'), 1800);
+    }
+  }
 }
 
 // light per-second refresh of the moving parts only (full re-render would

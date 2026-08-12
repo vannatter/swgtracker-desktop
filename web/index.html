@@ -299,6 +299,7 @@
           <nav class="crumbs" id="mysd-crumbs"></nav>
           <span class="rd-actions">
             <span class="mys-badge" id="mysd-badge" hidden></span>
+            <button id="mysd-manufacture" class="btn btn-sm btn-outline-secondary" title="Load this schematic into one of your idle factories"><i class="fa-solid fa-industry"></i> Manufacture</button>
             <button id="mysd-open-schem" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-scroll"></i> View Schematic</button>
             <button id="mysd-remove" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-trash-can"></i> Remove</button>
           </span>
@@ -1181,6 +1182,28 @@
 
 
   <!-- Add-inventory dialog: name + stocked + threshold, nothing else -->
+  <div id="mysd-fac-modal" class="key-gate" hidden>
+    <div class="key-gate-card sp-card">
+      <h2 id="mysd-fac-title">Manufacture</h2>
+      <p id="mysd-fac-hint" class="settings-hint"></p>
+      <div class="mysd-fac-fields">
+        <label class="fac-field"><span class="fac-label">Time per unit</span>
+          <input id="mysd-fac-time" class="form-control filter-input" inputmode="decimal" placeholder="e.g. 3"></label>
+        <label class="fac-field"><span class="fac-label">Unit</span>
+          <select id="mysd-fac-unit" class="form-select filter-select">
+            <option value="s">Seconds</option><option value="m" selected>Minutes</option><option value="h">Hours</option>
+          </select></label>
+        <label class="fac-field"><span class="fac-label">Quantity</span>
+          <input id="mysd-fac-qty" class="form-control filter-input" inputmode="numeric" value="1000"></label>
+      </div>
+      <div class="mysd-fac-pickhint">Click an idle factory to start the run in it:</div>
+      <div id="mysd-fac-list" class="mysd-fac-list"></div>
+      <div class="stk-note-actions">
+        <button id="mysd-fac-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <div id="inv-add-modal" class="key-gate" hidden>
     <div class="key-gate-card sp-card inv-add-card">
       <h2 id="inv-modal-title">Add Inventory Item</h2>

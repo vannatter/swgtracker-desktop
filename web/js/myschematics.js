@@ -154,6 +154,65 @@ async function mysSaveNoteDialog() {
   } catch (e) { toast(String(e), false); }
 }
 
+// ---- Cost to Make (snickerfritz's request) ---------------------------------
+// Two prices across the assigned slots: the market eCPU from the resource DB,
+// and what YOU actually paid (stockpile my-CPU) where known — each times the
+// slot's unit count. Also flags required sub-component schematics that aren't
+// in My Schematics yet (their resource costs can't be counted).
+async function mysdRenderCost(item) {
+  const el = $('#mysd-cost');
+  el.hidden = true;
+  const det = await mysGetDetail(item.schematic_id, item.formulas || '');
+  if (mysdState.item !== item || !det) return;
+  // my-CPU lives on stockpile rows — make sure they're here before pricing
+  if (typeof stkState !== 'undefined' && !stkState.items.length) {
+    try { await syncStockpile(); } catch (_) { /* market prices still render */ }
+  }
+  if (mysdState.item !== item) return;
+
+  const unitsByCode = new Map((det.needed || []).map((n) => [String(n.id), safeInt(n.units)]));
+  let market = 0, mine = 0, mineKnown = 0, priced = 0, unpriced = 0;
+  const lines = [];
+  for (const r of (item.resources || [])) {
+    const units = unitsByCode.get(String(r.resource_type)) || 0;
+    const rec = r.resource_name ? await mysGetResource(r.resource_name) : null;
+    if (mysdState.item !== item) return;
+    if (!rec || !units) { unpriced++; continue; }
+    const mkt = ecpuClamp(rec.cpu, safeInt(rec.status) === 1, safeInt(rec.planet_mustafar) === 1) || 1;
+    const my = labMyCpu(rec);
+    market += mkt * units;
+    mine += (my !== null ? my : mkt) * units; // no personal price — market stands in
+    if (my !== null) mineKnown++;
+    priced++;
+    lines.push(`${r.resource_name} × ${fmtNum(units)} — market ${fmtNum(mkt * units)} cr`
+      + (my !== null ? ` · yours ${fmtNum(my * units)} cr` : ''));
+  }
+
+  const req = (det.components || []).filter((c) => c.type === 'schematic' && c.optional !== 'yes');
+  const have = new Set(mysState.items.map((i) => String(i.schematic_id)));
+  const missing = req.filter((c) => !have.has(String(c.id)));
+
+  if (!priced && !missing.length) return; // nothing to say yet
+  const bits = [];
+  if (priced) {
+    bits.push(`market ~<b>${fmtNum(market)}</b> cr`);
+    if (mineKnown) {
+      bits.push(`your stockpile prices ~<b>${fmtNum(mine)}</b> cr${mineKnown < priced ? ' <span class="mysd-cost-dim">(partly market — not everything has a my-CPU)</span>' : ''}`);
+    }
+    if (unpriced) bits.push(`<span class="mysd-cost-dim">${unpriced} slot${unpriced > 1 ? 's' : ''} unpriced</span>`);
+  }
+  el.innerHTML = (priced
+    ? `<span class="mysd-cost-line" title="${escapeHtml(lines.join('\n'))}"><i class="fa-solid fa-coins"></i> Cost to make: ${bits.join(' · ')}</span>`
+    : '')
+    + (missing.length
+      ? `<div class="mysd-cost-missing"><i class="fa-solid fa-triangle-exclamation"></i>
+          Needs component schematics not in your My Schematics yet:
+          ${missing.map((c) => `<a role="button" data-copen="${escapeHtml(String(c.id))}" data-cname="${escapeHtml(c.desc || '')}">${escapeHtml(c.desc || '')}</a>`).join(', ')}
+          — their resource costs aren't included</div>`
+      : '');
+  el.hidden = false;
+}
+
 // the schematic's notes on its own detail page — click to edit via the same
 // dialog the list's sticky-note icon opens (Philosophy/Eponine's request)
 function mysdRenderNotes(item) {
@@ -246,6 +305,7 @@ async function mysGetDetail(schematicId, formulas = '') {
       det = {
         dtoByCode: new Map(s.resourceDtoList.map((d) => [d.resourceTypeCode, d])),
         needed: s.resourcesNeeded || [], // for ghost rows on slotless entries
+        components: s.componentTypes || [], // sub-component check on the detail page
         // fallback weights from the schematic's own formulas, for entries
         // whose formula_labels is null (no formulas chosen on the entry)
         weights: (s.formula || []).filter((f) => f.active !== false)
@@ -501,6 +561,7 @@ async function openMySchematicPage(item) {
     ? fl.map((l) => `<span class="mys-chip">${escapeHtml(l)}</span>`).join('')
     : '<span class="mys-chip all" title="No formulas chosen — comparing against all of them">All formulas</span>';
   mysdRenderNotes(item);
+  mysdRenderCost(item); // fire-and-forget — prices fill in when the fetches land
   $('#mysd-body').innerHTML = (item.resources || []).map(mysdRowHtml).join('');
   showGridLoading('#mysd-loading');
 
@@ -1431,6 +1492,10 @@ function initMySchematics() {
   });
   $('#mysd-notes').addEventListener('click', (e) => {
     if (e.target.closest('[data-mysdnotes]') && mysdState.item) mysOpenNoteDialog(mysdState.item);
+  });
+  $('#mysd-cost').addEventListener('click', (e) => {
+    const c = e.target.closest('[data-copen]');
+    if (c) openSchematicPage(c.dataset.copen, c.dataset.cname || '');
   });
 
   $('#mysd-open-schem').addEventListener('click', () => {

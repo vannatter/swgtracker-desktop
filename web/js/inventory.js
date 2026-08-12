@@ -19,7 +19,8 @@ const invState = { page: 1, perPage: 100, hasNext: false, sortField: 'item_name'
                    noteFor: null,   // inventory id open in the notes dialog
                    groups: [], grpCollapsed: new Set(), tagFilter: null,
                    dragGroup: null,       // folder key being drag-reordered (stockpile parity)
-                   checked: new Set(),    // checkbox selection — bulk actions like Restock to X
+                   checked: new Set(),    // checkbox selection — bulk edit / multi-drag filing
+                   lastSel: null,         // last-toggled checkbox (anchor for shift-click ranges)
                    selected: new Set() }; // click-marked rows (Veizyr) — survive re-renders and window switches
 
 // tags live as one comma-separated string server-side, like stockpile/factories
@@ -54,7 +55,7 @@ function invSyncSelAll() {
   }
   const n = invState.checked.size;
   $('#inv-selbar').hidden = !n;
-  if (n) $('#inv-selbar-n').textContent = `${n} item${n === 1 ? '' : 's'} selected`;
+  if (n) $('#inv-selbar-n').textContent = `${n} selected`;
 }
 
 // page-head "Email all" checkbox mirrors the per-row envelopes: checked when
@@ -457,12 +458,27 @@ function initInventory() {
     if (item) invOpenNoteDialog(item);
   });
 
-  // checkbox selection (bulk actions) — kept separate from the green marking
-  $('#inv-body').addEventListener('change', (e) => {
+  // checkbox selection (bulk actions) — kept separate from the green marking.
+  // shift+click extends from the last-toggled checkbox across the visible order.
+  $('#inv-body').addEventListener('click', (e) => {
     const cb = e.target.closest('.inv-sel');
     if (!cb) return;
-    if (cb.checked) invState.checked.add(cb.dataset.selid);
-    else invState.checked.delete(cb.dataset.selid);
+    const iid = cb.dataset.selid;
+    if (e.shiftKey && invState.lastSel && invState.lastSel !== iid) {
+      const vis = invVisibleIds();
+      const a = vis.indexOf(invState.lastSel), b = vis.indexOf(iid);
+      if (a >= 0 && b >= 0) {
+        const on = cb.checked; // the state this click produced drives the range
+        vis.slice(Math.min(a, b), Math.max(a, b) + 1)
+          .forEach((id) => { if (on) invState.checked.add(id); else invState.checked.delete(id); });
+        renderInvRows();
+        invState.lastSel = iid;
+        return;
+      }
+    }
+    if (cb.checked) invState.checked.add(iid);
+    else invState.checked.delete(iid);
+    invState.lastSel = iid;
     invSyncSelAll();
   });
   $('#inv-head').addEventListener('change', (e) => {
@@ -643,10 +659,22 @@ function initInventory() {
     invState.dragGroup = null;
     invClearReorderHover();
   });
-  // drag a row onto (or under) a folder row to file it
+  // drag a row onto (or under) a folder row to file it — if the dragged row is
+  // CHECKED, the whole checked selection files together (Veizyr)
   $('#inv-body').addEventListener('dragstart', (e) => {
     const el = e.target.closest('tr[data-iid]');
-    if (el) el.classList.add('inv-dragging');
+    if (!el) return;
+    if (e.target.closest('.inv-sel-cell')) { e.preventDefault(); return; } // checkbox stays clickable
+    el.classList.add('inv-dragging');
+    const multi = invState.checked.has(el.dataset.iid) && invState.checked.size > 1;
+    if (multi) {
+      const ghost = document.createElement('div');
+      ghost.className = 'stk-drag-ghost';
+      ghost.textContent = `${invState.checked.size} items`;
+      document.body.appendChild(ghost);
+      e.dataTransfer.setDragImage(ghost, -12, -8);
+      setTimeout(() => ghost.remove(), 0);
+    }
   });
   $('#inv-body').addEventListener('dragover', (e) => {
     const dragging = document.querySelector('#inv-body tr.inv-dragging');
@@ -670,28 +698,40 @@ function initInventory() {
     const key = p ? p.dataset.grpkey : 'un';
     if (item) {
       const gid = key === 'un' ? null : safeInt(key);
-      if ((item.group_id || null) !== gid) {
-        item.group_id = gid;
-        const res = await apiFetch('PUT', 'api/inventory.php', {
-          data: { inventory_id: safeInt(item.id), group_id: gid } });
-        if (!res.ok) toast(res.error || 'Could not move — site update pending?', false);
-      }
+      // the dragged row being checked pulls the whole checked set with it
+      const ids = invState.checked.has(String(item.id)) && invState.checked.size > 1
+        ? [...invState.checked] : [String(item.id)];
+      const movers = invState.items.filter((i) =>
+        ids.includes(String(i.id)) && (i.group_id || null) !== gid);
+      movers.forEach((i) => { i.group_id = gid; }); // optimistic
+      const results = await Promise.all(movers.map((i) =>
+        apiFetch('PUT', 'api/inventory.php', { data: { inventory_id: safeInt(i.id), group_id: gid } })
+          .catch((e) => ({ ok: false, error: String(e) }))));
+      const failed = results.filter((r) => !r.ok).length;
+      if (failed) toast(`${failed} item${failed > 1 ? 's' : ''} could not move — site update pending?`, false);
+      else if (movers.length > 1) toast(`Filed ${movers.length} items`);
     }
     renderInvRows();
   });
 
-  // Restock to X — acts on the checked rows; select-all covers "everything"
-  $('#inv-restock-apply').addEventListener('click', async () => {
+  // Mass edit — whichever fields are filled apply to every checked row;
+  // blank means "keep". Covers restock-to-X, threshold sweeps, and vendor
+  // renames (Veizyr) in one bar.
+  $('#inv-bulk-apply').addEventListener('click', async () => {
     const ids = [...invState.checked];
     if (!ids.length) return;
-    const x = safeInt($('#inv-restock-x').value);
-    if (x < 0) { toast('Enter a stocked count of 0 or more', false); return; }
+    const set = {};
+    if ($('#inv-bulk-stocked').value.trim() !== '') set.stocked = safeInt($('#inv-bulk-stocked').value);
+    if ($('#inv-bulk-threshold').value.trim() !== '') set.threshold = safeInt($('#inv-bulk-threshold').value);
+    if ($('#inv-bulk-vendor').value.trim() !== '') set.vendor = $('#inv-bulk-vendor').value.trim();
+    if (!Object.keys(set).length) { toast('Fill in Stocked, Threshold and/or Vendor first', false); return; }
     const res = await apiFetch('PUT', 'api/inventory.php',
-      { data: { restock_to: x, ids: ids.map((i) => safeInt(i)) } });
-    if (!res.ok) { toast(res.error || 'Restock failed — site update pending?', false); return; }
+      { data: { bulk_set: set, ids: ids.map((i) => safeInt(i)) } });
+    if (!res.ok) { toast(res.error || 'Bulk edit failed — site update pending?', false); return; }
     const changed = safeInt(res.data && res.data.changed);
-    toast(`Restocked ${fmtNum(changed)} item${changed === 1 ? '' : 's'} to ${fmtNum(x)}`);
+    toast(`Updated ${fmtNum(changed)} item${changed === 1 ? '' : 's'}`);
     invState.checked.clear(); // the job's done — the bar folds away
+    ['#inv-bulk-stocked', '#inv-bulk-threshold', '#inv-bulk-vendor'].forEach((s) => { $(s).value = ''; });
     loadInventory();
   });
   $('#inv-sel-clear').addEventListener('click', () => {
@@ -699,9 +739,8 @@ function initInventory() {
     renderInvRows();
     invSyncSelAll();
   });
-  $('#inv-restock-x').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') $('#inv-restock-apply').click();
-  });
+  ['#inv-bulk-stocked', '#inv-bulk-threshold', '#inv-bulk-vendor'].forEach((s) =>
+    $(s).addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#inv-bulk-apply').click(); }));
 
   $('#inv-add').addEventListener('click', addInvItem);
   // Enter anywhere in the dialog submits

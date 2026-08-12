@@ -670,6 +670,16 @@ td.lab-dim { opacity: .45; }
 /* schematic detail: per-row resource age, like the site's "Added 3 days ago" */
 .scd-agecell { color: var(--text-muted); font-size: 11px; white-space: nowrap; text-align: right; }
 
+/* My Schematic detail: cost-to-make line + missing-components warning */
+.mysd-cost { margin: 2px 0 8px; font-size: 13px; }
+.mysd-cost-line { color: var(--text-primary); cursor: default; }
+.mysd-cost-line .fa-coins { color: var(--q-good); margin-right: 4px; }
+.mysd-cost-line b { color: var(--text-hover); }
+.mysd-cost-dim { color: var(--text-muted); font-size: 12px; }
+.mysd-cost-missing { margin-top: 5px; font-size: 12px; color: var(--q-accept); }
+.mysd-cost-missing a { color: var(--accent-hover); cursor: pointer; }
+.mysd-cost-missing a:hover { text-decoration: underline; }
+
 /* My Schematic detail: the entry's notes — full width, a clean app card with
    just an amber edge saying "note" (no icon, no tinted wash) */
 .mysd-notes { margin: 2px 0 10px; }
@@ -685,14 +695,24 @@ td.lab-dim { opacity: .45; }
 .mysd-notes-add { font-size: 12px; color: var(--text-muted); cursor: pointer; }
 .mysd-notes-add:hover { color: var(--text-hover); }
 
-/* inventory: selection bar — appears while checkboxes are ticked */
+/* inventory: selection bar — appears while checkboxes are ticked. One quiet
+   row: count chip, three "blank = keep" fields, Apply, ✕. Details live in
+   hover titles, not printed text. */
 .inv-selbar {
   display: flex; align-items: center; gap: 8px; margin: 0 0 8px;
-  padding: 6px 12px; background: var(--bg-card); border: 1px solid var(--border);
+  padding: 6px 10px; background: var(--bg-card); border: 1px solid var(--border);
   border-radius: 8px; font-size: 13px; color: var(--text-primary);
 }
-.inv-selbar .inv-num { width: 90px; }
-.inv-selbar-sep { color: var(--text-muted); }
+.inv-selbar-count {
+  flex: none; white-space: nowrap; font-weight: 700; color: #fff;
+  background: var(--accent-dark); border-radius: 6px; padding: 5px 12px; font-size: 12px;
+}
+.inv-selbar .inv-bulk-num { width: 110px; max-width: none; flex: none; }
+.inv-selbar .inv-bulk-vendor { width: 220px; max-width: none; flex: none; }
+.inv-selbar input::-webkit-outer-spin-button,
+.inv-selbar input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.inv-selbar .btn-icon { color: var(--text-muted); }
+.inv-selbar .btn-icon:hover { color: var(--text-hover); }
 
 /* inventory: click-marked row — a whisper of the muted green over the dark bg,
    with a solid edge stripe to find it from the other monitor */

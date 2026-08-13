@@ -57,7 +57,7 @@ function mailPathEntryHtml(entry, idx) {
       <select class="form-select filter-select mail-label ${entry.path && !entry.label ? 'mail-label-missing' : ''}"
               title="The character whose mail lives in this folder">${opts}</select>
       <input type="text" class="form-control filter-input mail-path flex-grow-1"
-             placeholder="C:\\SWG Restoration III\\profiles\\…\\mail_CharacterName"
+             placeholder="C:\\SWG Restoration\\x64\\profiles\\…\\mail_CharacterName (x64 client writes under x64\\)"
              value="${escapeHtml(entry.path || '')}">
       <button class="btn btn-sm btn-outline-secondary mail-browse" data-browse="${idx}" title="Choose folder"><i class="fa-solid fa-folder-open"></i></button>
       <button class="btn btn-sm btn-outline-secondary mail-remove" data-remove="${idx}" title="Remove">&times;</button>

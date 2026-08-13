@@ -268,8 +268,22 @@ async function loadResources() {
   };
 
   let res;
-  try { res = await api().search_resources(params); }
-  catch (e) { res = { ok: false, error: String(e) }; }
+  if ($('#res-pinned-only').checked && resState.pinned.size) {
+    // Pinned view fetches the pinned ids DIRECTLY (status/pages ignored) — the
+    // old filter-the-current-page approach lost pins that were despawned or
+    // ranked pages deep (Jylin's Duroomevris). Via the gateway: the shell's
+    // search bridge whitelists params and would drop `ids`.
+    try { res = await apiFetch('GET', 'api/resources.php', { params: { ids: [...resState.pinned].join(',') } }); }
+    catch (e) { res = { ok: false, error: String(e) }; }
+    if (res.ok && res.data && !(res.data.results || []).length && resState.pinned.size) {
+      // older site deploy without the ids filter would return page 1 unfiltered;
+      // the client-side pinned filter below still keeps the view honest
+      res.data.results = (res.data.results || []);
+    }
+  } else {
+    try { res = await api().search_resources(params); }
+    catch (e) { res = { ok: false, error: String(e) }; }
+  }
 
   $('#res-loading').hidden = true;
 

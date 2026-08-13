@@ -18,7 +18,6 @@ const INV_COLUMNS = [
 const invState = { page: 1, perPage: 100, hasNext: false, sortField: 'item_name', sortOrder: 'ASC', items: [],
                    noteFor: null,   // inventory id open in the notes dialog
                    groups: [], grpCollapsed: new Set(), tagFilter: null,
-                   dragGroup: null,       // folder key being drag-reordered (stockpile parity)
                    checked: new Set(),    // checkbox selection — bulk edit / multi-drag filing
                    lastSel: null,         // last-toggled checkbox (anchor for shift-click ranges)
                    selected: new Set() }; // click-marked rows (Veizyr) — survive re-renders and window switches
@@ -56,6 +55,15 @@ function invSyncSelAll() {
   const n = invState.checked.size;
   $('#inv-selbar').hidden = !n;
   if (n) $('#inv-selbar-n').textContent = `${n} selected`;
+  // group-header checkboxes mirror their members (dash = partial)
+  document.querySelectorAll('#inv-body [data-grpselect]').forEach((cb) => {
+    const key = cb.dataset.grpselect;
+    const members = invState.items.filter((i) =>
+      (i.group_id != null && String(i.group_id) !== '0' ? String(i.group_id) : 'un') === key);
+    const on = members.filter((i) => invState.checked.has(String(i.id))).length;
+    cb.checked = members.length > 0 && on === members.length;
+    cb.indeterminate = on > 0 && on < members.length;
+  });
 }
 
 // page-head "Email all" checkbox mirrors the per-row envelopes: checked when
@@ -136,7 +144,7 @@ function renderInvRows() {
     const collapsed = invState.grpCollapsed.has(sec.key);
     if (sec.key !== 'un' || sections.length > 1) {
       if (parts.length) parts.push(spacer);
-      parts.push(grpTableHeaderHtml(sec.key, sec.name, sec.items.length, collapsed, sec.key !== 'un', invColCount(), 'col-actions', sec.key !== 'un'));
+      parts.push(grpTableHeaderHtml(sec.key, sec.name, sec.items.length, collapsed, sec.key !== 'un', invColCount(), 'col-actions', sec.key !== 'un', true));
     }
     if (!collapsed) parts.push(...sec.items.map(([item, idx]) => invRowsHtml(item, idx)));
   });
@@ -458,6 +466,18 @@ function initInventory() {
     if (item) invOpenNoteDialog(item);
   });
 
+  // group-header checkbox selects/deselects everything in that folder
+  $('#inv-body').addEventListener('change', (e) => {
+    const cb = e.target.closest('[data-grpselect]');
+    if (!cb) return;
+    const key = cb.dataset.grpselect;
+    invState.items.filter((i) =>
+      (i.group_id != null && String(i.group_id) !== '0' ? String(i.group_id) : 'un') === key)
+      .forEach((i) => { if (cb.checked) invState.checked.add(String(i.id)); else invState.checked.delete(String(i.id)); });
+    renderInvRows();
+    invSyncSelAll();
+  });
+
   // checkbox selection (bulk actions) — kept separate from the green marking.
   // shift+click extends from the last-toggled checkbox across the visible order.
   $('#inv-body').addEventListener('click', (e) => {
@@ -575,89 +595,22 @@ function initInventory() {
     invState.tagFilter = invState.tagFilter === t.dataset.invtag ? null : t.dataset.invtag;
     renderInvRows();
   });
-  $('#inv-body').addEventListener('click', (e) => {
-    const grp = e.target.closest('tr[data-grpkey]');
-    if (!grp) return;
-    if (e.target.closest('[data-grprenamein]')) return; // typing in the rename box
-    const ren = e.target.closest('[data-grprename]');
-    if (ren) {
-      grpBeginRename('#inv-body', ren.dataset.grprename,
-        invState.groups.find((g) => String(g.id) === ren.dataset.grprename), renderInvRows);
-      return;
-    }
-    const gdel = e.target.closest('[data-grpdel]');
-    if (gdel) {
-      if (!confirmArmLabeled(gdel, 'Delete group?')) return;
-      const gid = safeInt(gdel.dataset.grpdel);
+  // folder headers: collapse / rename / delete / drag-reorder — the ONE shared
+  // wiring every page uses (grpWireGroups in shared.js); inventory defined the
+  // behavior, shared.js now owns it
+  grpWireGroups('#inv-body', {
+    groups: () => invState.groups,
+    collapsed: () => invState.grpCollapsed,
+    render: renderInvRows,
+    onDelete: (key) => {
+      const gid = safeInt(key);
       grpApi({ action: 'remove', id: gid }).then((res) => {
         if (!res.ok) return;
         invState.groups = invState.groups.filter((g) => g.id !== gid);
         invState.items.forEach((i) => { if (Number(i.group_id) === gid) i.group_id = null; });
         renderInvRows();
       });
-      return;
-    }
-    // anywhere else on the header row collapses/expands it — stockpile parity
-    const k = grp.dataset.grpkey;
-    invState.grpCollapsed.has(k) ? invState.grpCollapsed.delete(k) : invState.grpCollapsed.add(k);
-    renderInvRows();
-  });
-
-  // drop group `dragKey` at the position of `targetKey` ('un' = move to the end)
-  async function invReorderGroup(dragKey, targetKey) {
-    if (String(dragKey) === String(targetKey)) return;
-    const ordered = [...invState.groups].sort((a, b) => (a.sort_order - b.sort_order) || a.name.localeCompare(b.name));
-    const from = ordered.findIndex((g) => String(g.id) === String(dragKey));
-    if (from < 0) return;
-    const [moved] = ordered.splice(from, 1);
-    let to = targetKey === 'un' ? ordered.length : ordered.findIndex((g) => String(g.id) === String(targetKey));
-    if (to < 0) to = ordered.length;
-    ordered.splice(to, 0, moved);
-    ordered.forEach((g, k) => { g.sort_order = k; });
-    renderInvRows();
-    const res = await grpApi({ action: 'reorder', ids: ordered.map((g) => g.id) });
-    if (!res.ok) toast(res.error || 'Could not save the folder order — site update pending?', false);
-  }
-
-  // dragging a FOLDER HEADER reorders groups (the stockpile "hand")
-  const invClearReorderHover = () => document.querySelectorAll('#inv-body .stk-reorder-over')
-    .forEach((el) => el.classList.remove('stk-reorder-over'));
-  $('#inv-body').addEventListener('dragstart', (e) => {
-    const grpRow = e.target.closest('tr.stk-group[draggable="true"]');
-    if (!grpRow) return;
-    if (e.target.closest('[data-grpdel], [data-grprenamein]')) { e.preventDefault(); return; }
-    invState.dragGroup = grpRow.dataset.grpkey;
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', 'group:' + invState.dragGroup);
-    const name = grpRow.querySelector('.stk-group-name');
-    const ghost = document.createElement('div');
-    ghost.className = 'stk-drag-ghost';
-    ghost.textContent = name ? name.textContent : 'folder';
-    document.body.appendChild(ghost);
-    e.dataTransfer.setDragImage(ghost, -12, -8);
-    setTimeout(() => ghost.remove(), 0);
-  });
-  $('#inv-body').addEventListener('dragover', (e) => {
-    if (!invState.dragGroup) return;
-    const hd = e.target.closest('tr[data-grpkey]');
-    if (!hd || hd.dataset.grpkey === invState.dragGroup) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    invClearReorderHover();
-    hd.classList.add('stk-reorder-over');
-  });
-  $('#inv-body').addEventListener('drop', (e) => {
-    if (!invState.dragGroup) return;
-    const hd = e.target.closest('tr[data-grpkey]');
-    invClearReorderHover();
-    if (!hd) return;
-    e.preventDefault();
-    invReorderGroup(invState.dragGroup, hd.dataset.grpkey);
-    invState.dragGroup = null;
-  });
-  $('#inv-body').addEventListener('dragend', () => {
-    invState.dragGroup = null;
-    invClearReorderHover();
+    },
   });
   // drag a row onto (or under) a folder row to file it — if the dragged row is
   // CHECKED, the whole checked selection files together (Veizyr)
@@ -724,14 +677,30 @@ function initInventory() {
     if ($('#inv-bulk-stocked').value.trim() !== '') set.stocked = safeInt($('#inv-bulk-stocked').value);
     if ($('#inv-bulk-threshold').value.trim() !== '') set.threshold = safeInt($('#inv-bulk-threshold').value);
     if ($('#inv-bulk-vendor').value.trim() !== '') set.vendor = $('#inv-bulk-vendor').value.trim();
-    if (!Object.keys(set).length) { toast('Fill in Stocked, Threshold and/or Vendor first', false); return; }
-    const res = await apiFetch('PUT', 'api/inventory.php',
-      { data: { bulk_set: set, ids: ids.map((i) => safeInt(i)) } });
-    if (!res.ok) { toast(res.error || 'Bulk edit failed — site update pending?', false); return; }
-    const changed = safeInt(res.data && res.data.changed);
+    const addTags = $('#inv-bulk-tags').value.trim();
+    if (!Object.keys(set).length && !addTags) { toast('Fill in Stocked, Threshold, Vendor and/or tags first', false); return; }
+    let changed = 0;
+    if (Object.keys(set).length) {
+      const res = await apiFetch('PUT', 'api/inventory.php',
+        { data: { bulk_set: set, ids: ids.map((i) => safeInt(i)) } });
+      if (!res.ok) { toast(res.error || 'Bulk edit failed — site update pending?', false); return; }
+      changed = safeInt(res.data && res.data.changed);
+    }
+    if (addTags) {
+      // tags MERGE per item (existing kept), so this is one PUT per row
+      const rows = invState.items.filter((i) => invState.checked.has(String(i.id)));
+      const results = await Promise.all(rows.map((i) => {
+        i.tags = mergeTags(i.tags, addTags);
+        return apiFetch('PUT', 'api/inventory.php',
+          { data: { inventory_id: safeInt(i.id), tags: i.tags } }).catch((e) => ({ ok: false, error: String(e) }));
+      }));
+      const failed = results.filter((r) => !r.ok).length;
+      if (failed) { toast(`${failed} tag update${failed > 1 ? 's' : ''} failed — site update pending?`, false); return; }
+      changed = Math.max(changed, rows.length);
+    }
     toast(`Updated ${fmtNum(changed)} item${changed === 1 ? '' : 's'}`);
     invState.checked.clear(); // the job's done — the bar folds away
-    ['#inv-bulk-stocked', '#inv-bulk-threshold', '#inv-bulk-vendor'].forEach((s) => { $(s).value = ''; });
+    ['#inv-bulk-stocked', '#inv-bulk-threshold', '#inv-bulk-vendor', '#inv-bulk-tags'].forEach((s) => { $(s).value = ''; });
     loadInventory();
   });
   $('#inv-sel-clear').addEventListener('click', () => {
@@ -739,7 +708,7 @@ function initInventory() {
     renderInvRows();
     invSyncSelAll();
   });
-  ['#inv-bulk-stocked', '#inv-bulk-threshold', '#inv-bulk-vendor'].forEach((s) =>
+  ['#inv-bulk-stocked', '#inv-bulk-threshold', '#inv-bulk-vendor', '#inv-bulk-tags'].forEach((s) =>
     $(s).addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#inv-bulk-apply').click(); }));
 
   $('#inv-add').addEventListener('click', addInvItem);

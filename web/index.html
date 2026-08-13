@@ -42,6 +42,7 @@
         <li class="nav-item" data-page="wishlist"><i class="fa-solid fa-heart"></i> My Wishlist</li>
         <li class="nav-item" data-page="sales"><i class="fa-solid fa-tags"></i> My Sales</li>
         <li class="nav-item" data-page="insights"><i class="fa-solid fa-chart-line"></i> Sales Insights</li>
+        <li class="nav-item" data-page="customers"><i class="fa-solid fa-users"></i> My Customers</li>
         <li class="nav-item" data-page="purchases"><i class="fa-solid fa-cart-shopping"></i> My Purchases</li>
         <li class="nav-item" data-page="inventory"><i class="fa-solid fa-warehouse"></i> My Inventory</li>
         <li class="nav-item" data-page="characters"><i class="fa-solid fa-user-group"></i> Characters</li>
@@ -255,6 +256,14 @@
 
         <div id="stk-tagbar" class="fac-tagbar" hidden></div>
 
+        <div id="stk-selbar" class="inv-selbar" hidden
+             title="Comma-separated — added to each selected resource's existing tags, never replacing them">
+          <span id="stk-selbar-n" class="inv-selbar-count"></span>
+          <input id="stk-bulk-tags" type="text" class="form-control filter-input inv-bulk-vendor" placeholder="Add tags" autocomplete="off">
+          <button id="stk-bulk-apply" class="btn btn-sm btn-accent">Apply</button>
+          <button id="stk-sel-clear" class="btn btn-icon" title="Clear selection"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+
         <div class="table-wrap">
           <table class="data-grid" id="stk-grid">
             <thead><tr id="stk-head"></tr></thead>
@@ -282,6 +291,13 @@
           <button class="btn btn-icon" data-refresh="myschematics" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
         </div>
         <div id="mys-tagbar" class="fac-tagbar" hidden></div>
+        <div id="mys-selbar" class="inv-selbar" hidden
+             title="Comma-separated — added to each selected schematic's existing tags, never replacing them">
+          <span id="mys-selbar-n" class="inv-selbar-count"></span>
+          <input id="mys-bulk-tags" type="text" class="form-control filter-input inv-bulk-vendor" placeholder="Add tags" autocomplete="off">
+          <button id="mys-bulk-apply" class="btn btn-sm btn-accent">Apply</button>
+          <button id="mys-sel-clear" class="btn btn-icon" title="Clear selection"><i class="fa-solid fa-xmark"></i></button>
+        </div>
         <div class="table-wrap">
           <table class="data-grid" id="mys-grid">
             <thead><tr id="mys-head"></tr></thead>
@@ -330,7 +346,16 @@
           <i class="fa-solid fa-circle-info info-tip"
              title="Resources you're hunting. When one spawns, hit the cubes icon to promote it straight into your stockpile."></i>
           <input id="wish-search" type="text" class="form-control filter-input head-search" placeholder="Search wishlist...">
+          <button id="wish-newgroup" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-folder-plus"></i> New Group</button>
           <button class="btn btn-icon" data-refresh="wishlist" title="Sync with server"><i class="fa-solid fa-rotate-right"></i></button>
+        </div>
+        <div id="wish-tagbar" class="fac-tagbar" hidden></div>
+        <div id="wish-selbar" class="inv-selbar" hidden
+             title="Comma-separated — added to each selected resource's existing tags, never replacing them">
+          <span id="wish-selbar-n" class="inv-selbar-count"></span>
+          <input id="wish-bulk-tags" type="text" class="form-control filter-input inv-bulk-vendor" placeholder="Add tags" autocomplete="off">
+          <button id="wish-bulk-apply" class="btn btn-sm btn-accent">Apply</button>
+          <button id="wish-sel-clear" class="btn btn-icon" title="Clear selection"><i class="fa-solid fa-xmark"></i></button>
         </div>
 
         <div class="table-wrap">
@@ -375,6 +400,43 @@
           </table>
           <div id="al-feed-empty" class="grid-empty" hidden></div>
         </div>
+      </section>
+
+      <!-- My Customers: customer-first view over parsed sales -->
+      <section id="page-customers" class="page">
+        <div class="page-head">
+          <h1>My Customers <i class="fa-solid fa-circle-question info-tip" title="Everyone who has bought from your vendors, ranked by Score — a blend of how recently, how often and how much they buy. Click a customer for their scorecard."></i></h1>
+          <input id="cust-search" type="text" class="form-control filter-input head-search" placeholder="Search customers...">
+          <button id="cust-newgroup" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-folder-plus"></i> New Group</button>
+          <button class="btn btn-icon" data-refresh="customers" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
+        </div>
+        <div id="cust-tagbar" class="fac-tagbar" hidden></div>
+        <div id="cust-selbar" class="inv-selbar" hidden
+             title="Comma-separated — added to each selected customer's existing tags, never replacing them">
+          <span id="cust-selbar-n" class="inv-selbar-count"></span>
+          <input id="cust-bulk-tags" type="text" class="form-control filter-input inv-bulk-vendor" placeholder="Add tags" autocomplete="off">
+          <button id="cust-bulk-apply" class="btn btn-sm btn-accent">Apply</button>
+          <button id="cust-sel-clear" class="btn btn-icon" title="Clear selection"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="table-wrap">
+          <table class="data-grid" id="cust-grid">
+            <thead><tr id="cust-head"></tr></thead>
+            <tbody id="cust-body"></tbody>
+          </table>
+          <div id="cust-loading" class="grid-loading" hidden><span class="spinner"></span> Loading…</div>
+          <div id="cust-empty" class="grid-empty" hidden></div>
+        </div>
+        <div class="page-foot"><span id="cust-status"></span></div>
+      </section>
+
+      <!-- Customer scorecard (drill-down from My Customers) -->
+      <section id="page-customer" class="page">
+        <div class="rd-head">
+          <nav class="crumbs" id="custd-crumbs"></nav>
+          <span class="rd-actions"></span>
+        </div>
+        <div id="custd-host" class="custd-host"></div>
+        <div id="custd-notes" class="mysd-notes" hidden></div>
       </section>
 
       <!-- Sales page -->
@@ -594,6 +656,13 @@
         <div id="fac-empty" class="al-empty" hidden>No factories yet — click <b>Add Factory</b> and start timing your runs.
           Factories aren't tied to a character, so friends' factories you're borrowing fit right in.</div>
         <div id="fac-tagbar" class="fac-tagbar" hidden></div>
+        <div id="fac-selbar" class="inv-selbar" hidden
+             title="Comma-separated — added to each selected factory's existing tags, never replacing them">
+          <span id="fac-selbar-n" class="inv-selbar-count"></span>
+          <input id="fac-bulk-tags" type="text" class="form-control filter-input inv-bulk-vendor" placeholder="Add tags" autocomplete="off">
+          <button id="fac-bulk-apply" class="btn btn-sm btn-accent">Apply</button>
+          <button id="fac-sel-clear" class="btn btn-icon" title="Clear selection"><i class="fa-solid fa-xmark"></i></button>
+        </div>
         <div id="fac-list" class="fac-list"></div>
       </section>
 
@@ -614,6 +683,15 @@
         </div>
 
         <div id="harv-suggest" class="harv-suggest"></div>
+
+        <div id="harv-tagbar" class="fac-tagbar" hidden></div>
+        <div id="harv-selbar" class="inv-selbar" hidden
+             title="Comma-separated — added to each selected harvester's existing tags, never replacing them">
+          <span id="harv-selbar-n" class="inv-selbar-count"></span>
+          <input id="harv-bulk-tags" type="text" class="form-control filter-input inv-bulk-vendor" placeholder="Add tags" autocomplete="off">
+          <button id="harv-bulk-apply" class="btn btn-sm btn-accent">Apply</button>
+          <button id="harv-sel-clear" class="btn btn-icon" title="Clear selection"><i class="fa-solid fa-xmark"></i></button>
+        </div>
 
         <div class="table-wrap harv-wrap">
           <div id="harv-list" class="harv-list"></div>
@@ -691,6 +769,8 @@
                  title="Leave blank to keep each item's current threshold">
           <input id="inv-bulk-vendor" type="text" class="form-control filter-input inv-bulk-vendor" placeholder="Vendor" autocomplete="off"
                  title="Leave blank to keep each item's current vendor — handy after renaming a vendor">
+          <input id="inv-bulk-tags" type="text" class="form-control filter-input inv-bulk-vendor" placeholder="Add tags" autocomplete="off"
+                 title="Comma-separated — added to each selected item's existing tags, never replacing them">
           <button id="inv-bulk-apply" class="btn btn-sm btn-accent">Apply</button>
           <button id="inv-sel-clear" class="btn btn-icon" title="Clear selection"><i class="fa-solid fa-xmark"></i></button>
         </div>
@@ -1016,7 +1096,9 @@
 
         <div class="settings-section">
           <h2>SWG Mail Directories <i class="fa-solid fa-circle-question info-tip" data-help="mail-directories"></i>
-            <span class="settings-sub">Up to 4 folders — each is tied to one of your characters</span></h2>
+            <span class="settings-sub">Up to 4 folders — each is tied to one of your characters.
+              On the x64 client (most Restoration players) the game writes under the <code>x64</code> folder:
+              <code>…\x64\profiles\…\mail_Character</code></span></h2>
           <div id="set-mailpaths"></div>
           <div class="set-addpath-row"><button id="set-addpath" class="btn btn-sm btn-outline-secondary">+ Add Character</button></div>
           <datalist id="set-char-list"></datalist>
@@ -1182,6 +1264,18 @@
 
 
   <!-- Add-inventory dialog: name + stocked + threshold, nothing else -->
+  <div id="cust-note-modal" class="key-gate" hidden>
+    <div class="key-gate-card sp-card">
+      <h2 id="cust-note-title">Notes</h2>
+      <div class="stk-note-toolbar" data-richbar></div>
+      <div id="cust-note-text" class="notes-input stk-note-editor" contenteditable="true" spellcheck="false"></div>
+      <div class="stk-note-actions">
+        <button id="cust-note-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
+        <button id="cust-note-save" class="btn btn-sm btn-accent">Save</button>
+      </div>
+    </div>
+  </div>
+
   <div id="mysd-fac-modal" class="key-gate" hidden>
     <div class="key-gate-card sp-card">
       <h2 id="mysd-fac-title">Manufacture</h2>
@@ -1361,6 +1455,11 @@
         <div class="inv-add-field harv-grow">
           <label class="sp-field-label">Group <span class="settings-sub">optional — create groups on the page</span></label>
           <select id="harv-f-group" class="form-select filter-select harv-wide"></select>
+        </div>
+        <div class="inv-add-field harv-grow">
+          <label class="sp-field-label">Tags <span class="settings-sub">comma, separated</span></label>
+          <input id="harv-f-tags" type="text" class="form-control filter-input harv-wide" maxlength="255"
+                 placeholder="comma, separated" autocomplete="off" spellcheck="false">
         </div>
       </div>
 
@@ -1794,6 +1893,7 @@
   <script src="js/purchases.js"></script>
   <script src="js/harvesters.js"></script>
   <script src="js/factories.js"></script>
+  <script src="js/customers.js"></script>
   <script src="js/characters.js"></script>
   <script src="js/settings.js"></script>
   <script src="js/alerts.js"></script>\n  <script src="js/lab.js"></script>

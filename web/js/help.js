@@ -51,6 +51,11 @@ path isn't the same on every machine, so don't go looking for a specific one:
 start at your SWG install, open \`profiles\`, and keep opening folders until you
 see the \`mail_\` ones. That's the level you want.
 
+**On the x64 client** (most Restoration players): the game writes into the
+\`x64\` folder inside your install, so the path looks like
+\`C:\\SWG Restoration\\x64\\profiles\\<login>\\<server>\\mail_Character\`.
+If your \`mail_\` folders seem stale or missing, check under \`x64\` first.
+
 If there are no \`mail_\` folders anywhere, either \`/mailsave\` hasn't run for
 any character yet, or it's still working — give it a few minutes and look again.
 

@@ -6,6 +6,7 @@
    the site cron's job, for people away from the machine). */
 
 const facState = { flashId: null,   // card to spotlight after "Manufacture" hands off here
+                   checked: new Set(), lastSel: null, // grid-view selection (bulk tags)
                    items: [], history: [], timer: null, saveTimers: {}, dragId: null,
                    view: 'cards', viewLoaded: false,  // 'cards' | 'grid', sticky via config fac_view
                    tagFilter: null,                    // active tag-cloud filter, session-only
@@ -178,6 +179,7 @@ function facGridHtml(items) {
   const rowFor = (f) => {
     const st = facStatus(f), dur = facDuration(f);
     return `<tr class="fac-${st}" data-facid="${f.id}" data-facstate="${st}" draggable="true">
+      <td class="pin-cell fac-sel-cell"><input type="checkbox" class="fac-sel" data-selid="${f.id}"${facState.checked.has(String(f.id)) ? ' checked' : ''}></td>
       <td class="col-name" title="${escapeHtml([facLoc(f), f.tags].filter(Boolean).join(' · '))}">${escapeHtml(f.name)}</td>
       <td class="col-text">${escapeHtml(f.owner || '—')}</td>
       <td><span class="fac-badge">${st === 'running' ? '<i class="fa-solid fa-gear fac-gear"></i> ' : ''}${st.toUpperCase()}</span></td>
@@ -199,11 +201,15 @@ function facGridHtml(items) {
     </tr>`;
   };
   const sections = grpSections(facState.groups, items, (f) => f.group_id);
-  const rows = sections.map((s) =>
-    ((s.key !== 'un' || sections.length > 1)
-      ? `<tr class="grp-row" data-grpkey="${s.key}"><td colspan="11">${escapeHtml(s.name)} <span class="grp-count">${s.items.length}</span></td></tr>` : '')
-    + s.items.map(rowFor).join('')).join('');
+  const FAC_GRID_COLS = 12; // checkbox + 10 data columns + actions
+  const rows = sections.map((s) => {
+    const collapsed = facState.collapsed.has(s.key);
+    return ((s.key !== 'un' || sections.length > 1)
+      ? grpTableHeaderHtml(s.key, s.name, s.items.length, collapsed, s.key !== 'un', FAC_GRID_COLS, 'col-actions', s.key !== 'un', true) : '')
+      + (collapsed ? '' : s.items.map(rowFor).join(''));
+  }).join('');
   return `<div class="table-wrap"><table class="data-grid"><thead><tr>
+    <th class="pin-cell"><input type="checkbox" id="fac-selall" title="Select every visible factory"></th>
     <th class="col-name">Factory</th><th class="col-text">Owner</th>
     <th>Status</th><th class="col-name">Product</th>
     <th class="col-num">Qty</th><th class="col-num">Made</th><th class="col-num">Per unit</th><th>Run time</th>
@@ -240,6 +246,31 @@ function facHistMenuHtml() {
 function facRefreshHistMenu() {
   const menu = document.querySelector(`[data-fachistmenu="${facState.histOpen}"]`);
   if (menu) { menu.hidden = false; menu.innerHTML = facHistMenuHtml(); }
+}
+
+// selection bar + select-all + group checkboxes track the checked set
+function facSyncSel() {
+  const n = facState.checked.size;
+  const bar = $('#fac-selbar');
+  if (bar) {
+    bar.hidden = !n;
+    if (n) $('#fac-selbar-n').textContent = `${n} selected`;
+  }
+  const vis = [...document.querySelectorAll('#fac-list .fac-sel')].map((x) => x.dataset.selid);
+  const on = vis.filter((id) => facState.checked.has(id)).length;
+  const all = $('#fac-selall');
+  if (all) {
+    all.checked = vis.length > 0 && on === vis.length;
+    all.indeterminate = on > 0 && on < vis.length;
+  }
+  document.querySelectorAll('#fac-list [data-grpselect]').forEach((cb) => {
+    const key = cb.dataset.grpselect;
+    const members = facState.items.filter((f) =>
+      (f.group_id != null && String(f.group_id) !== '0' ? String(f.group_id) : 'un') === key);
+    const sel = members.filter((f) => facState.checked.has(String(f.id))).length;
+    cb.checked = members.length > 0 && sel === members.length;
+    cb.indeterminate = sel > 0 && sel < members.length;
+  });
 }
 
 function facUpdateViewToggle() {
@@ -297,6 +328,7 @@ function renderFactories() {
   }
   facUpdateViewToggle();
   facCacheForNotify();
+  facSyncSel();
 
   // spotlight the card "Manufacture" just filled, once, then let it fade
   if (facState.flashId) {
@@ -542,6 +574,83 @@ function initFactories() {
   $('#fac-list').addEventListener('mousedown', (e) => {
     facState._bgDown = e.target.hasAttribute && e.target.hasAttribute('data-faceditbg');
   });
+  // grid-view selection: checkboxes + select-all + shift ranges + group-select;
+  // the bar bulk-adds tags (merge, never replace)
+  $('#fac-list').addEventListener('click', (e) => {
+    const cb = e.target.closest('.fac-sel');
+    if (!cb) return;
+    const fid = cb.dataset.selid;
+    if (e.shiftKey && facState.lastSel && facState.lastSel !== fid) {
+      const vis = [...document.querySelectorAll('#fac-list .fac-sel')].map((x) => x.dataset.selid);
+      const a = vis.indexOf(facState.lastSel), b = vis.indexOf(fid);
+      if (a >= 0 && b >= 0) {
+        const on = cb.checked;
+        vis.slice(Math.min(a, b), Math.max(a, b) + 1)
+          .forEach((id) => { if (on) facState.checked.add(id); else facState.checked.delete(id); });
+        renderFactories();
+        facState.lastSel = fid;
+        return;
+      }
+    }
+    if (cb.checked) facState.checked.add(fid);
+    else facState.checked.delete(fid);
+    facState.lastSel = fid;
+    facSyncSel();
+  });
+  $('#fac-list').addEventListener('change', (e) => {
+    if (e.target.closest('#fac-selall')) {
+      const vis = [...document.querySelectorAll('#fac-list .fac-sel')].map((x) => x.dataset.selid);
+      if (e.target.checked) vis.forEach((id) => facState.checked.add(id));
+      else vis.forEach((id) => facState.checked.delete(id));
+      renderFactories();
+      return;
+    }
+    const gs = e.target.closest('[data-grpselect]');
+    if (!gs) return;
+    facState.items.filter((f) =>
+      (f.group_id != null && String(f.group_id) !== '0' ? String(f.group_id) : 'un') === gs.dataset.grpselect)
+      .forEach((f) => {
+        if (gs.checked) facState.checked.add(String(f.id));
+        else facState.checked.delete(String(f.id));
+      });
+    renderFactories();
+  });
+  $('#fac-bulk-apply').addEventListener('click', async () => {
+    const addTags = $('#fac-bulk-tags').value.trim();
+    if (!addTags || !facState.checked.size) return;
+    const rows = facState.items.filter((f) => facState.checked.has(String(f.id)));
+    for (const f of rows) {
+      f.tags = mergeTags(f.tags, addTags);
+      await facPost({ action: 'save', factory: f });
+    }
+    toast(`Tagged ${rows.length} factor${rows.length === 1 ? 'y' : 'ies'}`);
+    facState.checked.clear();
+    $('#fac-bulk-tags').value = '';
+    renderFactories();
+  });
+  $('#fac-bulk-tags').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#fac-bulk-apply').click(); });
+  $('#fac-sel-clear').addEventListener('click', () => {
+    facState.checked.clear();
+    renderFactories();
+  });
+
+  // folder headers: the shared gold-standard wiring (collapse anywhere,
+  // rename, delete, drag-to-reorder)
+  grpWireGroups('#fac-list', {
+    groups: () => facState.groups,
+    collapsed: () => facState.collapsed,
+    render: renderFactories,
+    onDelete: async (key) => {
+      const gid = safeInt(key);
+      const res = await grpApi({ action: 'remove', id: gid });
+      if (res.ok) {
+        facState.groups = facState.groups.filter((g) => g.id !== gid);
+        facState.items.forEach((f) => { if (Number(f.group_id) === gid) f.group_id = null; });
+        renderFactories();
+      }
+    },
+  });
+
   $('#fac-list').addEventListener('click', async (e) => {
     const wpc = e.target.closest('[data-facwpcopy]');
     if (wpc) {
@@ -605,31 +714,7 @@ function initFactories() {
       renderFactories();
       return;
     }
-    const tog = e.target.closest('[data-grptoggle]');
-    if (tog) {
-      const k = tog.dataset.grptoggle;
-      facState.collapsed.has(k) ? facState.collapsed.delete(k) : facState.collapsed.add(k);
-      renderFactories();
-      return;
-    }
-    const ren = e.target.closest('[data-grprename]');
-    if (ren) {
-      grpBeginRename('#fac-list', ren.dataset.grprename,
-        facState.groups.find((g) => String(g.id) === ren.dataset.grprename), renderFactories);
-      return;
-    }
-    const gdel = e.target.closest('[data-grpdel]');
-    if (gdel) {
-      if (!confirmArmLabeled(gdel, 'Delete group?')) return;
-      const gid = safeInt(gdel.dataset.grpdel);
-      const res = await grpApi({ action: 'remove', id: gid });
-      if (res.ok) {
-        facState.groups = facState.groups.filter((g) => g.id !== gid);
-        facState.items.forEach((f) => { if (Number(f.group_id) === gid) f.group_id = null; });
-        renderFactories();
-      }
-      return;
-    }
+    if (e.target.closest('.grp-hd')) return; // folder headers belong to the shared wiring
     const start = e.target.closest('[data-facstart]');
     if (start) {
       const f = facState.items.find((x) => String(x.id) === start.dataset.facstart);
@@ -690,8 +775,19 @@ function initFactories() {
 
   // drag to reorder
   $('#fac-list').addEventListener('dragstart', (e) => {
+    if (e.target.closest('.fac-sel-cell')) { e.preventDefault(); return; } // checkbox stays clickable
     const card = e.target.closest('[data-facid]');
-    if (card) { facState.dragId = card.dataset.facid; card.classList.add('fac-dragging'); }
+    if (!card) return;
+    facState.dragId = card.dataset.facid;
+    card.classList.add('fac-dragging');
+    if (facState.checked.has(card.dataset.facid) && facState.checked.size > 1) {
+      const ghost = document.createElement('div');
+      ghost.className = 'stk-drag-ghost';
+      ghost.textContent = `${facState.checked.size} factories`;
+      document.body.appendChild(ghost);
+      e.dataTransfer.setDragImage(ghost, -12, -8);
+      setTimeout(() => ghost.remove(), 0);
+    }
   });
   $('#fac-list').addEventListener('dragover', (e) => {
     e.preventDefault();
@@ -706,7 +802,7 @@ function initFactories() {
     // hovering a group's empty space (or an empty group) → drop at its end;
     // hovering the section HEADER files into that section too
     const hd = e.target.closest('[data-grpkey]');
-    if (hd && hd.tagName === 'TR') {  // grid view divider row → land right under it
+    if (hd && hd.tagName === 'TR') {  // grid view header row → land right under it
       hd.parentNode.insertBefore(dragging, hd.nextSibling);
       return;
     }
@@ -723,17 +819,21 @@ function initFactories() {
       const f = facState.items.find((x) => String(x.id) === dragging.dataset.facid);
       const cont = dragging.closest('[data-facgroup]');
       let key = cont ? cont.dataset.facgroup : null;
-      if (!key && dragging.tagName === 'TR') {  // grid view: section = nearest divider above
+      if (!key && dragging.tagName === 'TR') {  // grid view: section = nearest header above
         let p = dragging.previousElementSibling;
-        while (p && !p.classList.contains('grp-row')) p = p.previousElementSibling;
+        while (p && !p.hasAttribute('data-grpkey')) p = p.previousElementSibling;
         key = p ? p.dataset.grpkey : 'un';
       }
       if (f && key) {
         const gid = key === 'un' ? null : safeInt(key);
-        if ((f.group_id || null) !== gid) {
-          f.group_id = gid;
-          await facPost({ action: 'save', factory: f });
-        }
+        // the dragged card being checked pulls the whole checked set with it
+        const ids = facState.checked.has(String(f.id)) && facState.checked.size > 1
+          ? [...facState.checked] : [String(f.id)];
+        const movers = facState.items.filter((x) =>
+          ids.includes(String(x.id)) && (x.group_id || null) !== gid);
+        movers.forEach((x) => { x.group_id = gid; }); // optimistic
+        for (const x of movers) await facPost({ action: 'save', factory: x });
+        if (movers.length > 1) toast(`Filed ${movers.length} factories`);
       }
     }
     const ids = [...document.querySelectorAll('#fac-list [data-facid]')]

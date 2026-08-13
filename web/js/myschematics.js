@@ -9,7 +9,8 @@
    PUT contract assumed pending full docs: {"id": <resources[].id>, "resource_name": "..."} */
 
 const mysState = { items: [], schematicIds: new Set(), sortField: '', sortOrder: 'ASC',
-  groups: [], grpCollapsed: new Set(), tagFilter: null };
+  groups: [], grpCollapsed: new Set(), tagFilter: null,
+  checked: new Set(), lastSel: null }; // checkbox selection (bulk tags) + shift-range anchor
 
 // tags live as one comma-separated string server-side, like stockpile/factories
 const mysTags = (s) => String(s.tags || '').split(',').map((t) => t.trim()).filter(Boolean);
@@ -22,8 +23,34 @@ const MYS_COLUMNS = [
 ];
 
 function buildMysHeader() {
-  $('#mys-head').innerHTML = sortableHeaderHtml(MYS_COLUMNS, mysState.sortField, mysState.sortOrder)
+  $('#mys-head').innerHTML =
+    '<th class="pin-cell"><input type="checkbox" id="mys-selall" title="Select every visible schematic"></th>'
+    + sortableHeaderHtml(MYS_COLUMNS, mysState.sortField, mysState.sortOrder)
     + '<th class="pin-cell"></th><th class="pin-cell"></th><th class="pin-cell"></th>'; // alerts + notes + remove
+}
+
+const mysColCount = () => MYS_COLUMNS.length + 4; // select + alerts + notes + remove
+
+// selection bar + select-all + per-group checkboxes track the checked set
+function mysSyncSel() {
+  const vis = mysVisibleItems().map(([s]) => String(s.user_schematic_id));
+  const on = vis.filter((id) => mysState.checked.has(id)).length;
+  const all = $('#mys-selall');
+  if (all) {
+    all.checked = vis.length > 0 && on === vis.length;
+    all.indeterminate = on > 0 && on < vis.length;
+  }
+  const n = mysState.checked.size;
+  $('#mys-selbar').hidden = !n;
+  if (n) $('#mys-selbar-n').textContent = `${n} selected`;
+  document.querySelectorAll('#mys-body [data-grpselect]').forEach((cb) => {
+    const key = cb.dataset.grpselect;
+    const members = mysState.items.filter((i) =>
+      (i.group_id != null && String(i.group_id) !== '0' ? String(i.group_id) : 'un') === key);
+    const sel = members.filter((i) => mysState.checked.has(String(i.user_schematic_id))).length;
+    cb.checked = members.length > 0 && sel === members.length;
+    cb.indeterminate = sel > 0 && sel < members.length;
+  });
 }
 
 // NB: distinct from mysStatusHtml(r, a) below, which renders detail-page rows
@@ -69,6 +96,7 @@ function renderMysList() {
     const tagged = mysTags(s).length > 0;
     return `
     <tr data-idx="${idx}" data-usid="${escapeHtml(String(s.user_schematic_id))}"${canDrag ? ' draggable="true"' : ''}>
+      <td class="pin-cell mys-sel-cell"><input type="checkbox" class="mys-sel" data-selid="${escapeHtml(String(s.user_schematic_id))}"${mysState.checked.has(String(s.user_schematic_id)) ? ' checked' : ''}></td>
       <td class="col-name res-name"><span class="stk-tagslot">${tagged
         ? `<i class="fa-solid fa-tag stk-tagind" data-mystaghover="${idx}"></i>` : ''}</span>${escapeHtml(s.name || '')}${s.custom_name
         ? `<span class="mys-loadout">${escapeHtml(s.custom_name)}</span>` : ''}</td>
@@ -87,13 +115,13 @@ function renderMysList() {
   // grouped: stockpile-style folder rows split the table (rename/collapse/
   // delete inline, gap between folders); ungrouped-only = a flat list
   const sections = grpSections(mysState.groups, visible, ([s]) => s.group_id);
-  const spacer = '<tr class="stk-group-gap"><td colspan="7"></td></tr>';
+  const spacer = `<tr class="stk-group-gap"><td colspan="${mysColCount()}"></td></tr>`;
   const parts = [];
   sections.forEach((sec) => {
     const collapsed = mysState.grpCollapsed.has(sec.key);
     if (sec.key !== 'un' || sections.length > 1) {
       if (parts.length) parts.push(spacer);
-      parts.push(grpTableHeaderHtml(sec.key, sec.name, sec.items.length, collapsed, sec.key !== 'un', 7));
+      parts.push(grpTableHeaderHtml(sec.key, sec.name, sec.items.length, collapsed, sec.key !== 'un', mysColCount(), 'pin-cell', sec.key !== 'un', true));
     }
     if (!collapsed) parts.push(...sec.items.map(rowFor));
   });
@@ -109,6 +137,7 @@ function renderMysList() {
       + allTags.map((t) => `<span class="fac-tag${mysState.tagFilter === t ? ' active' : ''}"
           data-mystag="${escapeHtml(t)}">${escapeHtml(t)}</span>`).join('')
     : '';
+  mysSyncSel();
 
   const empty = $('#mys-empty');
   empty.hidden = true;
@@ -1390,7 +1419,17 @@ function initMySchematics() {
   // drag a row onto (or under) a folder row to file it
   $('#mys-body').addEventListener('dragstart', (e) => {
     const el = e.target.closest('tr[data-usid]');
-    if (el) el.classList.add('mys-dragging');
+    if (!el) return;
+    if (e.target.closest('.mys-sel-cell')) { e.preventDefault(); return; } // checkbox stays clickable
+    el.classList.add('mys-dragging');
+    if (mysState.checked.has(el.dataset.usid) && mysState.checked.size > 1) {
+      const ghost = document.createElement('div');
+      ghost.className = 'stk-drag-ghost';
+      ghost.textContent = `${mysState.checked.size} items`;
+      document.body.appendChild(ghost);
+      e.dataTransfer.setDragImage(ghost, -12, -8);
+      setTimeout(() => ghost.remove(), 0);
+    }
   });
   $('#mys-body').addEventListener('dragover', (e) => {
     const dragging = document.querySelector('#mys-body tr.mys-dragging');
@@ -1414,44 +1453,107 @@ function initMySchematics() {
     const key = p ? p.dataset.grpkey : 'un';
     if (s) {
       const gid = key === 'un' ? null : safeInt(key);
-      if ((s.group_id || null) !== gid) {
-        s.group_id = gid;
-        const res = await apiFetch('PUT', 'api/my_schematics.php', {
-          data: { user_schematic_id: safeInt(s.user_schematic_id), group_id: gid } });
-        if (!res.ok) toast(res.error || 'Could not move — site update pending?', false);
-      }
+      // the dragged row being checked pulls the whole checked set with it
+      const ids = mysState.checked.has(String(s.user_schematic_id)) && mysState.checked.size > 1
+        ? [...mysState.checked] : [String(s.user_schematic_id)];
+      const movers = mysState.items.filter((i) =>
+        ids.includes(String(i.user_schematic_id)) && (i.group_id || null) !== gid);
+      movers.forEach((i) => { i.group_id = gid; }); // optimistic
+      const results = await Promise.all(movers.map((i) =>
+        apiFetch('PUT', 'api/my_schematics.php',
+          { data: { user_schematic_id: safeInt(i.user_schematic_id), group_id: gid } })
+          .catch((err) => ({ ok: false, error: String(err) }))));
+      const failed = results.filter((r) => !r.ok).length;
+      if (failed) toast(`${failed} item${failed > 1 ? 's' : ''} could not move — site update pending?`, false);
+      else if (movers.length > 1) toast(`Filed ${movers.length} schematics`);
     }
     renderMysList();
   });
 
-  // list rows open the detail page
+  // checkbox selection: shift-click ranges over the visible order; the
+  // group-header checkbox grabs its whole folder; bar bulk-adds tags
   $('#mys-body').addEventListener('click', (e) => {
-    const tog = e.target.closest('[data-grptoggle]');
-    if (tog) {
-      const k = tog.dataset.grptoggle;
-      mysState.grpCollapsed.has(k) ? mysState.grpCollapsed.delete(k) : mysState.grpCollapsed.add(k);
-      renderMysList();
-      return;
+    const cb = e.target.closest('.mys-sel');
+    if (!cb) return;
+    const usid = cb.dataset.selid;
+    if (e.shiftKey && mysState.lastSel && mysState.lastSel !== usid) {
+      const vis = mysVisibleItems().map(([s]) => String(s.user_schematic_id));
+      const a = vis.indexOf(mysState.lastSel), b = vis.indexOf(usid);
+      if (a >= 0 && b >= 0) {
+        const on = cb.checked;
+        vis.slice(Math.min(a, b), Math.max(a, b) + 1)
+          .forEach((id) => { if (on) mysState.checked.add(id); else mysState.checked.delete(id); });
+        renderMysList();
+        mysState.lastSel = usid;
+        return;
+      }
     }
-    const ren = e.target.closest('[data-grprename]');
-    if (ren) {
-      grpBeginRename('#mys-body', ren.dataset.grprename,
-        mysState.groups.find((g) => String(g.id) === ren.dataset.grprename), renderMysList);
-      return;
-    }
-    const gdel = e.target.closest('[data-grpdel]');
-    if (gdel) {
-      if (!confirmArmLabeled(gdel, 'Delete group?')) return;
-      const gid = safeInt(gdel.dataset.grpdel);
+    if (cb.checked) mysState.checked.add(usid);
+    else mysState.checked.delete(usid);
+    mysState.lastSel = usid;
+    mysSyncSel();
+  });
+  $('#mys-head').addEventListener('change', (e) => {
+    if (!e.target.closest('#mys-selall')) return;
+    const vis = mysVisibleItems().map(([s]) => String(s.user_schematic_id));
+    if (e.target.checked) vis.forEach((id) => mysState.checked.add(id));
+    else vis.forEach((id) => mysState.checked.delete(id));
+    renderMysList();
+  });
+  $('#mys-body').addEventListener('change', (e) => {
+    const cb = e.target.closest('[data-grpselect]');
+    if (!cb) return;
+    mysState.items.filter((i) =>
+      (i.group_id != null && String(i.group_id) !== '0' ? String(i.group_id) : 'un') === cb.dataset.grpselect)
+      .forEach((i) => {
+        if (cb.checked) mysState.checked.add(String(i.user_schematic_id));
+        else mysState.checked.delete(String(i.user_schematic_id));
+      });
+    renderMysList();
+  });
+  $('#mys-bulk-apply').addEventListener('click', async () => {
+    const addTags = $('#mys-bulk-tags').value.trim();
+    if (!addTags || !mysState.checked.size) return;
+    const rows = mysState.items.filter((i) => mysState.checked.has(String(i.user_schematic_id)));
+    const results = await Promise.all(rows.map((i) => {
+      i.tags = mergeTags(i.tags, addTags);
+      return apiFetch('PUT', 'api/my_schematics.php',
+        { data: { user_schematic_id: safeInt(i.user_schematic_id), tags: i.tags } }).catch((e) => ({ ok: false, error: String(e) }));
+    }));
+    const failed = results.filter((r) => !r.ok).length;
+    if (failed) { toast(`${failed} tag update${failed > 1 ? 's' : ''} failed — site update pending?`, false); return; }
+    toast(`Tagged ${rows.length} schematic${rows.length === 1 ? '' : 's'}`);
+    mysState.checked.clear();
+    $('#mys-bulk-tags').value = '';
+    renderMysList();
+  });
+  $('#mys-bulk-tags').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#mys-bulk-apply').click(); });
+  $('#mys-sel-clear').addEventListener('click', () => {
+    mysState.checked.clear();
+    renderMysList();
+  });
+
+  // folder headers: the shared gold-standard wiring (collapse anywhere,
+  // rename, delete, drag-to-reorder)
+  grpWireGroups('#mys-body', {
+    groups: () => mysState.groups,
+    collapsed: () => mysState.grpCollapsed,
+    render: renderMysList,
+    onDelete: (key) => {
+      const gid = safeInt(key);
       grpApi({ action: 'remove', id: gid }).then((res) => {
         if (!res.ok) return;
         mysState.groups = mysState.groups.filter((g) => g.id !== gid);
         mysState.items.forEach((s) => { if (Number(s.group_id) === gid) s.group_id = null; });
         renderMysList();
       });
-      return;
-    }
+    },
+  });
+
+  // list rows open the detail page
+  $('#mys-body').addEventListener('click', (e) => {
     if (e.target.closest('.grp-rename-input') || e.target.closest('tr[data-grpkey]')) return;
+    if (e.target.closest('.mys-sel-cell')) return; // checkbox ≠ open the detail page
     const al = e.target.closest('[data-mysalert]');
     if (al) {
       const item = mysState.items[safeInt(al.dataset.mysalert)];
@@ -1555,6 +1657,10 @@ function initMySchematics() {
     if (!started.ok) return;
     facState.flashId = String(f.id);
     toast(`${f.name} is running — ${fmtNum(quantity)} × ${mysdState.item.name}`);
+    // refetch BEFORE landing: started_at is stamped server-side, and the
+    // factories page skips its loader on revisit — without this the card
+    // still said "idle" until a manual refresh (Philosophy/Eponine)
+    await loadFactories();
     showPage('factories');
   });
 

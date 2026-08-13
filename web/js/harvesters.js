@@ -195,6 +195,8 @@ const harvState = {
   timer: null,           // re-render tick so countdowns move
   groups: [],            // api/groups.php folders (kind=harvester)
   grpCollapsed: new Set(), // collapsed section keys, session-only
+  tagFilter: null,       // active tag-cloud filter, session-only
+  checked: new Set(), lastSel: null, // grid-view selection (bulk tags)
 };
 
 // the header toggle: icon shows the view you'd SWITCH TO
@@ -290,6 +292,9 @@ async function harvCheckResourceStatus() {
   renderHarvesters();
 }
 
+// tags live as one comma-separated string server-side, like factories
+const harvTags = (h) => String(h.tags || '').split(',').map((t) => t.trim()).filter(Boolean);
+
 function harvAgo(secs) {
   if (secs <= 0) return 'now';
   const d = Math.floor(secs / 86400), h = Math.floor((secs % 86400) / 3600), m = Math.floor((secs % 3600) / 60);
@@ -381,6 +386,7 @@ function harvCardHtml(h) {
           ? '<i class="fa-solid fa-gear harv-gear" title="Extracting"></i>' : ''}
         <span class="harv-name">${escapeHtml(h.name || h.harvester_type)}</span>
         ${h.character_name ? `<span class="harv-char"><i class="fa-solid fa-user"></i> ${escapeHtml(h.character_name)}</span>` : ''}
+        ${harvTags(h).map((t) => `<span class="fac-pill fac-pill-tag">${escapeHtml(t)}</span>`).join('')}
         ${alert}
       </div>
       <div class="harv-sub" title="${escapeHtml([h.harvester_type, h.ber ? `BER ${h.ber}` : '', h.resource_name ? `${h.resource_name}${h.concentration ? ` @ ${h.concentration}%` : ''}` : '', loc].filter(Boolean).join(' · '))}">
@@ -486,6 +492,7 @@ function harvGridHtml(items) {
     const powOut = power && power.remaining <= 0;
     const mntOut = maint && maint.remaining <= 0;
     return `<tr data-hid="${h.id}" draggable="true">
+      <td class="pin-cell harv-sel-cell"><input type="checkbox" class="harv-sel" data-selid="${h.id}"${harvState.checked.has(String(h.id)) ? ' checked' : ''}></td>
       <td class="col-name" title="${escapeHtml(h.harvester_type)}${h.ber ? ` · BER ${h.ber}` : ''}">${escapeHtml(h.name || h.harvester_type)}</td>
       <td class="col-text">${h.character_name ? escapeHtml(h.character_name) : '<span class="stat_off">—</span>'}</td>
       <td class="col-text">${h.resource_name ? `<b class="harv-reslink" data-res="${escapeHtml(h.resource_name)}">${escapeHtml(h.resource_name)}</b>${h.concentration ? ` @ ${h.concentration}%` : ''}${harvResGone(h) ? ' <span class="harv-gone-tag">despawned</span>' : ''}` : '<span class="stat_off">—</span>'}</td>
@@ -506,13 +513,17 @@ function harvGridHtml(items) {
       </td>
     </tr>`;
   };
-  // grouped: a slim section row splits the table; ungrouped-only = no dividers
+  // grouped: the shared gold-standard header rows split the table
   const sections = grpSections(harvState.groups, items, (h) => h.group_id);
-  const rows = sections.map((s) =>
-    ((s.key !== 'un' || sections.length > 1)
-      ? `<tr class="grp-row" data-grpkey="${s.key}"><td colspan="7">${escapeHtml(s.name)} <span class="grp-count">${s.items.length}</span></td></tr>` : '')
-    + s.items.map(rowFor).join('')).join('');
+  const HARV_GRID_COLS = 8; // checkbox + 6 data columns + actions
+  const rows = sections.map((s) => {
+    const collapsed = harvState.grpCollapsed.has(s.key);
+    return ((s.key !== 'un' || sections.length > 1)
+      ? grpTableHeaderHtml(s.key, s.name, s.items.length, collapsed, s.key !== 'un', HARV_GRID_COLS, 'col-actions', s.key !== 'un', true) : '')
+      + (collapsed ? '' : s.items.map(rowFor).join(''));
+  }).join('');
   return `<div class="table-wrap"><table class="data-grid"><thead><tr>
+      <th class="pin-cell"><input type="checkbox" id="harv-selall" title="Select every visible harvester"></th>
       <th class="col-name">Name</th><th class="col-text">Character</th><th class="col-text">Resource</th>
       <th class="col-text">Hopper</th><th class="col-text">Power</th><th class="col-text">Maint</th><th class="col-actions"></th>
     </tr></thead><tbody>${rows}</tbody></table></div>`;
@@ -523,6 +534,7 @@ function harvGridHtml(items) {
 function harvFilteredItems() {
   let items = harvState.items;
   if (harvState.charFilter) items = items.filter((h) => String(h.character_id) === harvState.charFilter);
+  if (harvState.tagFilter) items = items.filter((h) => harvTags(h).includes(harvState.tagFilter));
   const q = (harvState.query || '').toLowerCase();
   if (q) {
     items = items.filter((h) => [h.name, h.harvester_type, h.resource_name, h.planet, h.character_name,
@@ -530,6 +542,31 @@ function harvFilteredItems() {
       .some((v) => String(v || '').toLowerCase().includes(q)));
   }
   return items;
+}
+
+// selection bar + select-all + group checkboxes track the checked set
+function harvSyncSel() {
+  const n = harvState.checked.size;
+  const bar = $('#harv-selbar');
+  if (bar) {
+    bar.hidden = !n;
+    if (n) $('#harv-selbar-n').textContent = `${n} selected`;
+  }
+  const vis = [...document.querySelectorAll('#harv-list .harv-sel')].map((x) => x.dataset.selid);
+  const on = vis.filter((id) => harvState.checked.has(id)).length;
+  const all = $('#harv-selall');
+  if (all) {
+    all.checked = vis.length > 0 && on === vis.length;
+    all.indeterminate = on > 0 && on < vis.length;
+  }
+  document.querySelectorAll('#harv-list [data-grpselect]').forEach((cb) => {
+    const key = cb.dataset.grpselect;
+    const members = harvState.items.filter((h) =>
+      (h.group_id != null && String(h.group_id) !== '0' ? String(h.group_id) : 'un') === key);
+    const sel = members.filter((h) => harvState.checked.has(String(h.id))).length;
+    cb.checked = members.length > 0 && sel === members.length;
+    cb.indeterminate = sel > 0 && sel < members.length;
+  });
 }
 
 function renderHarvesters() {
@@ -550,6 +587,20 @@ function renderHarvesters() {
           ? `<div class="grp-sec">${grpHeaderHtml(s.key, s.name, s.items.length, collapsed, 'harvesters')}${body}</div>`
           : body;
       }).join('');
+
+  // tag cloud from every harvester so an active filter can always be unclicked
+  const allTags = [...new Set(harvState.items.flatMap(harvTags))];
+  if (harvState.tagFilter && !allTags.includes(harvState.tagFilter)) harvState.tagFilter = null;
+  const tagbar = $('#harv-tagbar');
+  if (tagbar) {
+    tagbar.hidden = !allTags.length;
+    tagbar.innerHTML = allTags.length
+      ? '<span class="fac-tagbar-label"><i class="fa-solid fa-tags"></i></span>'
+        + allTags.map((t) => `<span class="fac-tag${harvState.tagFilter === t ? ' active' : ''}"
+            data-harvtag="${escapeHtml(t)}">${escapeHtml(t)}</span>`).join('')
+      : '';
+  }
+  harvSyncSel();
 
   // a card left expanded across a reload must fetch its events, not sit on
   // "Loading…" forever (loadHarvesters wipes the cache after every action)
@@ -987,6 +1038,7 @@ function harvOpenForm(h = null) {
     + [...harvState.groups].sort((a, b) => (a.sort_order - b.sort_order) || a.name.localeCompare(b.name))
       .map((g) => `<option value="${g.id}">${escapeHtml(g.name)}</option>`).join('');
   $('#harv-f-group').value = h && h.group_id ? String(h.group_id) : '';
+  $('#harv-f-tags').value = h ? (h.tags || '') : '';
   $('#harv-f-email').checked = !!(h && Number(h.notify_email));
   // hopper alert %: existing harvesters keep theirs; new ones start from the
   // last value you set anywhere (sticky via config harv_alert_pct)
@@ -1079,6 +1131,7 @@ async function harvSubmitForm() {
     harvester_type: type,
     name: $('#harv-f-name').value.trim() || harvNickText(),
     group_id: $('#harv-f-group').value ? Number($('#harv-f-group').value) : null,
+    tags: $('#harv-f-tags').value.trim(),
     notify_email: $('#harv-f-email').checked ? 1 : 0,
     alert_pct: Math.max(1, Math.min(100, safeInt($('#harv-f-alertpct').value) || harvState.defaultAlertPct || 90)),
     character_id: charId || null,
@@ -1366,15 +1419,26 @@ function initHarvesters() {
 
   // drag a card (or a grid row) into another section — body or header — to file it
   $('#harv-list').addEventListener('dragstart', (e) => {
+    if (e.target.closest('.harv-sel-cell')) { e.preventDefault(); return; } // checkbox stays clickable
     const el = e.target.closest('.harv-card, tr[data-hid]');
-    if (el) el.classList.add('harv-dragging');
+    if (!el) return;
+    el.classList.add('harv-dragging');
+    const hid = el.dataset.hid;
+    if (hid && harvState.checked.has(String(hid)) && harvState.checked.size > 1) {
+      const ghost = document.createElement('div');
+      ghost.className = 'stk-drag-ghost';
+      ghost.textContent = `${harvState.checked.size} harvesters`;
+      document.body.appendChild(ghost);
+      e.dataTransfer.setDragImage(ghost, -12, -8);
+      setTimeout(() => ghost.remove(), 0);
+    }
   });
   $('#harv-list').addEventListener('dragover', (e) => {
     const dragging = document.querySelector('.harv-dragging');
     if (!dragging) return;
     e.preventDefault();
     const hd = e.target.closest('[data-grpkey]');
-    if (hd && hd.tagName === 'TR') {  // grid view divider row → land right under it
+    if (hd && hd.tagName === 'TR') {  // grid view header row → land right under it
       hd.parentNode.insertBefore(dragging, hd.nextSibling);
       return;
     }
@@ -1398,47 +1462,119 @@ function initHarvesters() {
     const h = harvState.items.find((x) => String(x.id) === dragging.dataset.hid);
     const cont = dragging.closest('[data-hgroup]');
     let key = cont ? cont.dataset.hgroup : null;
-    if (!key && dragging.tagName === 'TR') {  // grid view: section = nearest divider above
+    if (!key && dragging.tagName === 'TR') {  // grid view: section = nearest header above
       let p = dragging.previousElementSibling;
-      while (p && !p.classList.contains('grp-row')) p = p.previousElementSibling;
+      while (p && !p.hasAttribute('data-grpkey')) p = p.previousElementSibling;
       key = p ? p.dataset.grpkey : 'un';
     }
     if (h && key) {
       const gid = key === 'un' ? null : safeInt(key);
-      if ((h.group_id || null) !== gid) {
-        h.group_id = gid;
-        await apiFetch('PUT', 'api/harvesters.php', { data: { id: h.id, group_id: gid } });
-      }
+      // the dragged harvester being checked pulls the whole checked set with it
+      const ids = harvState.checked.has(String(h.id)) && harvState.checked.size > 1
+        ? [...harvState.checked] : [String(h.id)];
+      const movers = harvState.items.filter((x) =>
+        ids.includes(String(x.id)) && (x.group_id || null) !== gid);
+      movers.forEach((x) => { x.group_id = gid; }); // optimistic
+      const results = await Promise.all(movers.map((x) =>
+        apiFetch('PUT', 'api/harvesters.php', { data: { id: x.id, group_id: gid } })
+          .catch((err) => ({ ok: false, error: String(err) }))));
+      const failed = results.filter((r) => !r.ok).length;
+      if (failed) toast(`${failed} harvester${failed > 1 ? 's' : ''} could not move`, false);
+      else if (movers.length > 1) toast(`Filed ${movers.length} harvesters`);
     }
     renderHarvesters();
   });
 
-  $('#harv-list').addEventListener('click', async (e) => {
-    const tog = e.target.closest('[data-grptoggle]');
-    if (tog) {
-      const k = tog.dataset.grptoggle;
-      harvState.grpCollapsed.has(k) ? harvState.grpCollapsed.delete(k) : harvState.grpCollapsed.add(k);
+  // tag chips filter the list
+  $('#harv-tagbar').addEventListener('click', (e) => {
+    const t = e.target.closest('[data-harvtag]');
+    if (!t) return;
+    harvState.tagFilter = harvState.tagFilter === t.dataset.harvtag ? null : t.dataset.harvtag;
+    renderHarvesters();
+  });
+
+  // grid-view selection: checkboxes + select-all + shift ranges + group-select;
+  // the bar bulk-adds tags (merge, never replace)
+  $('#harv-list').addEventListener('click', (e) => {
+    const cb = e.target.closest('.harv-sel');
+    if (!cb) return;
+    const hid = cb.dataset.selid;
+    if (e.shiftKey && harvState.lastSel && harvState.lastSel !== hid) {
+      const vis = [...document.querySelectorAll('#harv-list .harv-sel')].map((x) => x.dataset.selid);
+      const a = vis.indexOf(harvState.lastSel), b = vis.indexOf(hid);
+      if (a >= 0 && b >= 0) {
+        const on = cb.checked;
+        vis.slice(Math.min(a, b), Math.max(a, b) + 1)
+          .forEach((id) => { if (on) harvState.checked.add(id); else harvState.checked.delete(id); });
+        renderHarvesters();
+        harvState.lastSel = hid;
+        return;
+      }
+    }
+    if (cb.checked) harvState.checked.add(hid);
+    else harvState.checked.delete(hid);
+    harvState.lastSel = hid;
+    harvSyncSel();
+  });
+  $('#harv-list').addEventListener('change', (e) => {
+    if (e.target.closest('#harv-selall')) {
+      const vis = [...document.querySelectorAll('#harv-list .harv-sel')].map((x) => x.dataset.selid);
+      if (e.target.checked) vis.forEach((id) => harvState.checked.add(id));
+      else vis.forEach((id) => harvState.checked.delete(id));
       renderHarvesters();
       return;
     }
-    const ren = e.target.closest('[data-grprename]');
-    if (ren) {
-      grpBeginRename('#harv-list', ren.dataset.grprename,
-        harvState.groups.find((g) => String(g.id) === ren.dataset.grprename), renderHarvesters);
-      return;
-    }
-    const gdel = e.target.closest('[data-grpdel]');
-    if (gdel) {
-      if (!confirmArmLabeled(gdel, 'Delete group?')) return;
-      const gid = safeInt(gdel.dataset.grpdel);
+    const gs = e.target.closest('[data-grpselect]');
+    if (!gs) return;
+    harvState.items.filter((h) =>
+      (h.group_id != null && String(h.group_id) !== '0' ? String(h.group_id) : 'un') === gs.dataset.grpselect)
+      .forEach((h) => {
+        if (gs.checked) harvState.checked.add(String(h.id));
+        else harvState.checked.delete(String(h.id));
+      });
+    renderHarvesters();
+  });
+  $('#harv-bulk-apply').addEventListener('click', async () => {
+    const addTags = $('#harv-bulk-tags').value.trim();
+    if (!addTags || !harvState.checked.size) return;
+    const rows = harvState.items.filter((h) => harvState.checked.has(String(h.id)));
+    const results = await Promise.all(rows.map((h) => {
+      h.tags = mergeTags(h.tags, addTags);
+      return apiFetch('PUT', 'api/harvesters.php', { data: { id: h.id, tags: h.tags } })
+        .catch((err) => ({ ok: false, error: String(err) }));
+    }));
+    const failed = results.filter((r) => !r.ok).length;
+    if (failed) { toast(`${failed} tag update${failed > 1 ? 's' : ''} failed — site update pending?`, false); return; }
+    toast(`Tagged ${rows.length} harvester${rows.length === 1 ? '' : 's'}`);
+    harvState.checked.clear();
+    $('#harv-bulk-tags').value = '';
+    renderHarvesters();
+  });
+  $('#harv-bulk-tags').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#harv-bulk-apply').click(); });
+  $('#harv-sel-clear').addEventListener('click', () => {
+    harvState.checked.clear();
+    renderHarvesters();
+  });
+
+  // folder headers: the shared gold-standard wiring (collapse anywhere,
+  // rename, delete, drag-to-reorder)
+  grpWireGroups('#harv-list', {
+    groups: () => harvState.groups,
+    collapsed: () => harvState.grpCollapsed,
+    render: renderHarvesters,
+    onDelete: async (key) => {
+      const gid = safeInt(key);
       const res = await grpApi({ action: 'remove', id: gid });
       if (res.ok) {
         harvState.groups = harvState.groups.filter((g) => g.id !== gid);
         harvState.items.forEach((h) => { if (Number(h.group_id) === gid) h.group_id = null; });
         renderHarvesters();
       }
-      return;
-    }
+    },
+  });
+
+  $('#harv-list').addEventListener('click', async (e) => {
+    if (e.target.closest('.grp-hd')) return; // folder headers belong to the shared wiring
     const resLink = e.target.closest('.harv-reslink');
     if (resLink) { openResourcePage(resLink.dataset.res); return; }
     const btn = e.target.closest('[data-hact]');

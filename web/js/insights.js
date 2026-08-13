@@ -72,14 +72,23 @@ async function loadInsights() {
 function insScoreBuyers(buyers, sinceTs) {
   const n = buyers.length;
   if (!n) return [];
-  const rankOf = (arr, v) => arr.filter((x) => x < v).length / Math.max(1, n - 1);
+  // percentile rank = (# strictly below) / (n-1), via one sort + first-index
+  // map — the old filter-per-buyer pass was O(n²), which the 12k-customer
+  // My Customers list turned into whole seconds
+  const ranker = (vals) => {
+    const sorted = [...vals].sort((a, b) => a - b);
+    const firstIdx = new Map();
+    sorted.forEach((v, i) => { if (!firstIdx.has(v)) firstIdx.set(v, i); });
+    return (v) => firstIdx.get(v) / Math.max(1, n - 1);
+  };
   const totals = buyers.map((b) => safeInt(b.total));
   const counts = buyers.map((b) => safeInt(b.count));
+  const rankTotal = ranker(totals), rankCount = ranker(counts);
   const nowTs = Math.floor(Date.now() / 1000);
   const windowSpan = Math.max(1, nowTs - (sinceTs || nowTs - 90 * 86400));
   return buyers.map((b) => {
-    const spendR = rankOf(totals, safeInt(b.total));
-    const freqR = rankOf(counts, safeInt(b.count));
+    const spendR = rankTotal(safeInt(b.total));
+    const freqR = rankCount(safeInt(b.count));
     const recency = 1 - Math.min(1, (nowTs - safeInt(b.last)) / windowSpan);
     // Loyalty-weighted: coming back matters most. One-time buyers cap at 49 —
     // however big the single purchase, loyalty needs a second visit.
@@ -250,8 +259,10 @@ function insGaugeShow(host, score, tierClass) {
 
 // Per-customer mini charts, computed straight from their purchase list:
 // spending cadence over time, a personal buy-time heatmap, and vendor split.
-function renderInsCustCharts(sales) {
-  const tl = $('#ins-cust-timeline'), heat = $('#ins-cust-heat'), ven = $('#ins-cust-vendors');
+function renderInsCustCharts(sales, ids = {}) {
+  // default targets are the Insights customer modal; the My Customers
+  // scorecard passes its own ids and gets the identical charts
+  const tl = $(ids.tl || '#ins-cust-timeline'), heat = $(ids.heat || '#ins-cust-heat'), ven = $(ids.ven || '#ins-cust-vendors');
   if (!sales || !sales.length) {
     const none = '<div class="ins-empty-mini">No purchase data.</div>';
     tl.innerHTML = none; heat.innerHTML = none; ven.innerHTML = none;
@@ -310,11 +321,31 @@ function renderInsCustCharts(sales) {
     </div>`).join('');
 }
 
-async function openInsCustCard(name) {
+// The ONE scorecard card mounts either in the modal overlay (Insights / My
+// Sales) or inside the My Customers detail page — same element, same ids,
+// identical everything (Dustin: both rendering options, zero drift).
+function insMountCustCard(where) {
+  const card = document.querySelector('.ins-cust-card');
+  const modal = $('#ins-cust-modal');
+  const host = $('#custd-host');
+  if (where === 'page') {
+    if (host && card.parentElement !== host) host.appendChild(card);
+    card.classList.add('as-page');
+    modal.hidden = true;
+  } else if (card.parentElement !== modal) {
+    modal.appendChild(card);
+    card.classList.remove('as-page');
+  } else {
+    card.classList.remove('as-page');
+  }
+}
+
+async function openInsCustCard(name, mount = 'modal') {
   const b = (insState.custScored || []).find((x) => x.name === name);
   if (!b) return;
+  insMountCustCard(mount);
   const modal = $('#ins-cust-modal');
-  $('#ins-cust-name').textContent = b.name;
+  $('#ins-cust-name').textContent = b.full_name || b.name;
   // NOT the tier-chip class — that carries a tinted chip background which
   // must not paint behind the gauge; gauges get their own color hooks.
   const gaugeClass = { VIP: 'g-vip', Regular: 'g-reg', Returning: 'g-ret', 'One-time': 'g-one' };
@@ -337,7 +368,7 @@ async function openInsCustCard(name) {
   insState.custSales = [];
   insState.custPurchFilter = '';
   $('#ins-cust-purchfilter').value = '';
-  modal.hidden = false;
+  if (mount === 'modal') modal.hidden = false;
   insState.custOpen = b;
   // the scorecard has its OWN range (sticky, defaults to all time) — the whole
   // relationship matters here, not just the page's analysis window
@@ -370,7 +401,12 @@ async function insLoadCustDetail(b) {
     res = await apiFetch('GET', 'api/sales.php',
       { params: { action: 'buyer_sales', buyer: b.name, days } });
   } catch (e) { res = { ok: false, error: String(e) }; }
-  if ($('#ins-cust-modal').hidden || insState.custOpen !== b || insState.custDays !== days) return;
+  // the card can be showing in the modal OR mounted in the My Customers page —
+  // a modal-hidden check alone discarded every page-mode fetch ("Loading
+  // purchases…" forever)
+  const cardShowing = !$('#ins-cust-modal').hidden
+    || (document.querySelector('.ins-cust-card.as-page') && $('#page-customer').classList.contains('active'));
+  if (!cardShowing || insState.custOpen !== b || insState.custDays !== days) return;
   const sales = (res.ok && res.data && res.data.sales) || null;
   if (!sales) {
     $('#ins-cust-purchases').innerHTML =

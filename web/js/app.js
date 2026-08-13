@@ -11,6 +11,7 @@ const PAGE_LOADERS = {
   wishlist: () => syncWishlist(),
   sales: () => loadSales(),
   insights: () => loadInsights(),
+  customers: () => loadMyCustomers(),
   purchases: () => loadPurchases(),
   characters: () => loadCharactersPage(),
   harvesters: () => loadHarvesters(),
@@ -906,6 +907,7 @@ async function boot() {
   initMail();
   initScanner();
   initFactories();
+  initMyCustomers();
   initDevMode();
   initAbout();
   refreshMonitorState(); // header button reflects auto-started monitoring

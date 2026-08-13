@@ -29,7 +29,6 @@ const stkState = {
   collapsed: new Set(),  // group keys collapsed: 'unfiled' or String(bucketId)
   selection: new Set(),  // selected stockpile_ids (strings)
   lastSid: null,         // anchor row for shift-range select
-  dragBucket: null,      // bucket key being dragged to reorder (null = dragging items)
   tagFilter: null,       // active tag-cloud filter (session-only)
   noteFor: null,         // stockpile_id open in the notes/tags dialog
   treeOrder: null,       // type_code -> taxonomy position (stkLoadTreeOrder)
@@ -235,44 +234,22 @@ async function stkSaveNoteDialog() {
 }
 
 function stkGroupHeaderHtml(key, name, count, deletable) {
-  const collapsed = stkState.collapsed.has(key);
-  const nameHtml = deletable
-    ? `<span class="stk-group-name" data-renamebucket="${key}" title="Click to rename">${escapeHtml(name)}</span>`
-    : `<span class="stk-group-name stk-group-unfiled">${escapeHtml(name)}</span>`;
-  // trash lives in a trailing pin-cell so it lines up with the per-row remove column
-  const delCell = deletable
-    ? `<td class="pin-cell"><button class="stk-bucket-del" data-delbucket="${key}" title="Delete folder (its items become Unfiled)"><i class="fa-solid fa-trash-can"></i></button></td>`
-    : '<td class="pin-cell"></td>';
-  return `<tr class="stk-group${deletable ? ' stk-group-draggable' : ''}" data-group="${key}" data-drop="${key}"${deletable ? ' draggable="true"' : ''}>
-    <td colspan="${stkColCount() - 1}">
-      <div class="stk-group-main">
-        <span class="stk-group-left">
-          <i class="fa-solid ${collapsed ? 'fa-caret-right' : 'fa-caret-down'} stk-caret" data-togglebucket="${key}"></i>
-          ${nameHtml}
-          <span class="stk-group-count">${count} item${count === 1 ? '' : 's'}</span>
-        </span>
-      </div>
-    </td>
-    ${delCell}
-  </tr>`;
+  // the shared gold-standard header row (see grpTableHeaderHtml/grpWireGroups);
+  // bucket keys are unchanged, persistence adapts to the bucket API in initStockpile
+  return grpTableHeaderHtml(key, name, count, stkState.collapsed.has(key),
+    deletable, stkColCount(), 'pin-cell', deletable, true);
 }
 
-// drop bucket `dragKey` at the position of `targetKey` (UNFILED = move to the end)
-async function stkReorderBucket(dragKey, targetKey) {
-  if (String(dragKey) === String(targetKey)) return;
-  const ordered = [...stkState.buckets].sort((a, b) => (a.sort_order - b.sort_order) || a.name.localeCompare(b.name));
-  const from = ordered.findIndex((b) => String(b.id) === String(dragKey));
-  if (from < 0) return;
-  const [moved] = ordered.splice(from, 1);
-  let to = (targetKey === UNFILED) ? ordered.length
-    : ordered.findIndex((b) => String(b.id) === String(targetKey));
-  if (to < 0) to = ordered.length;
-  ordered.splice(to, 0, moved);
-  ordered.forEach((b, k) => { b.sort_order = k; });
-  renderStockpile();
-  try {
-    await Promise.all(ordered.map((b) => api().update_stockpile_bucket(b.id, null, b.sort_order)));
-  } catch (e) { toast(String(e), false); await syncStockpile(); }
+// group-header checkboxes reflect their members' selection (dash = partial)
+function stkBucketKeyOf(item) { return item.bucket_id != null ? String(item.bucket_id) : UNFILED; }
+function stkSyncGroupSelects() {
+  document.querySelectorAll('#stk-body [data-grpselect]').forEach((cb) => {
+    const key = cb.dataset.grpselect;
+    const members = stkState.items.filter((i) => stkBucketKeyOf(i) === key);
+    const on = members.filter((i) => stkState.selection.has(String(i.stockpile_id))).length;
+    cb.checked = members.length > 0 && on === members.length;
+    cb.indeterminate = on > 0 && on < members.length;
+  });
 }
 
 function stkVisibleItems() {
@@ -335,6 +312,8 @@ function renderStockpile(statusMsg) {
     rowsHtml = parts.join('');
   }
   $('#stk-body').innerHTML = rowsHtml;
+  stkSyncGroupSelects();
+  stkSyncSelBar();
   // fill any open detail panels with their linked schematics (cached after first load)
   // tag cloud built from every item so an active filter can always be unclicked
   const allTags = [...new Set(stkState.items.flatMap(stkTags))];
@@ -528,9 +507,19 @@ async function removeStockItem(idx) {
 
 // --- Buckets: selection, drag-to-file, and folder CRUD ---
 
+// the bulk-tag bar lives or dies with the selection count
+function stkSyncSelBar() {
+  const n = stkState.selection.size;
+  const bar = $('#stk-selbar');
+  if (!bar) return;
+  bar.hidden = !n;
+  if (n) $('#stk-selbar-n').textContent = `${n} selected`;
+}
+
 function stkSetSelected(sid, on) {
   sid = String(sid);
   if (on) stkState.selection.add(sid); else stkState.selection.delete(sid);
+  stkSyncSelBar();
   const row = $(`#stk-body tr[data-sid="${sid}"]`);
   if (row) {
     row.classList.toggle('stk-selected', on);
@@ -579,34 +568,16 @@ async function stkNewBucket() {
   if (!res.ok) { toast(res.error || 'Could not create folder', false); return; }
   stkState.buckets.push({ id: res.data.id, name: res.data.name, sort_order: res.data.sort_order });
   renderStockpile();
-  stkBeginRename(String(res.data.id));
+  grpBeginRename('#stk-body', String(res.data.id),
+    stkState.buckets[stkState.buckets.length - 1], () => renderStockpile(), stkPersistRename);
 }
 
-function stkBeginRename(key) {
-  const span = $(`#stk-body [data-renamebucket="${key}"]`);
-  if (!span) return;
-  const bucket = stkState.buckets.find((b) => String(b.id) === String(key));
-  if (!bucket) return;
-  span.outerHTML = `<input type="text" class="form-control filter-input stk-rename-input" data-renamein="${key}" value="${escapeHtml(bucket.name)}" maxlength="100">`;
-  const inp = $(`#stk-body [data-renamein="${key}"]`);
-  inp.focus();
-  inp.select();
-}
-
-async function stkCommitRename(key, value) {
-  const bucket = stkState.buckets.find((b) => String(b.id) === String(key));
-  if (!bucket) { renderStockpile(); return; }
-  const name = value.trim();
-  if (name && name !== bucket.name) {
-    bucket.name = name; // optimistic
-    renderStockpile();
-    try {
-      const res = await api().update_stockpile_bucket(bucket.id, name);
-      if (!res.ok) { toast(res.error || 'Rename failed', false); await syncStockpile(); }
-    } catch (e) { toast(String(e), false); }
-  } else {
-    renderStockpile();
-  }
+// rename persistence for the shared inline rename (buckets, not the groups API)
+async function stkPersistRename(bucket, name) {
+  try {
+    const res = await api().update_stockpile_bucket(bucket.id, name);
+    if (!res.ok) { toast(res.error || 'Rename failed', false); await syncStockpile(); }
+  } catch (e) { toast(String(e), false); }
 }
 
 async function stkDeleteBucket(key) {
@@ -625,6 +596,41 @@ async function stkDeleteBucket(key) {
 
 function initStockpile() {
   buildStkHeader();
+
+  // bulk "Add tags" over the selection — merge, never replace
+  $('#stk-bulk-apply').addEventListener('click', async () => {
+    const addTags = $('#stk-bulk-tags').value.trim();
+    const sids = new Set([...stkState.selection].map(String));
+    if (!addTags || !sids.size) return;
+    const rows = stkState.items.filter((i) => sids.has(String(i.stockpile_id)));
+    const results = await Promise.all(rows.map((i) => {
+      i.tags = mergeTags(i.tags, addTags);
+      return apiFetch('PUT', 'api/stockpile.php',
+        { data: { stockpile_id: safeInt(i.stockpile_id), tags: i.tags } }).catch((e) => ({ ok: false, error: String(e) }));
+    }));
+    const failed = results.filter((r) => !r.ok).length;
+    if (failed) { toast(`${failed} tag update${failed > 1 ? 's' : ''} failed`, false); return; }
+    stkState.selection.clear();
+    $('#stk-bulk-tags').value = '';
+    stkSyncSelBar();
+    renderStockpile(`Tagged ${rows.length} resource${rows.length === 1 ? '' : 's'}`);
+  });
+  $('#stk-bulk-tags').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#stk-bulk-apply').click(); });
+  $('#stk-sel-clear').addEventListener('click', () => {
+    stkState.selection.clear();
+    stkSyncSelBar();
+    renderStockpile();
+  });
+
+  // group-header checkbox selects/deselects everything in that folder
+  $('#stk-body').addEventListener('change', (e) => {
+    const cb = e.target.closest('[data-grpselect]');
+    if (!cb) return;
+    const key = cb.dataset.grpselect;
+    stkState.items.filter((i) => stkBucketKeyOf(i) === key)
+      .forEach((i) => stkSetSelected(i.stockpile_id, cb.checked));
+    stkSyncGroupSelects();
+  });
 
   $('#stk-search').addEventListener('input', () => renderStockpile());
   $('[data-refresh="stockpile"]').addEventListener('click', () => syncStockpile());
@@ -658,23 +664,7 @@ function initStockpile() {
     const cb = e.target.closest('.stk-sel');
     if (cb) { stkToggleSelect(cb.dataset.sid, e.shiftKey); return; }
 
-    // folder header: rename (name) and delete keep their own behavior; clicking
-    // anywhere else on the header row collapses/expands it.
-    const grp = e.target.closest('tr.stk-group');
-    if (grp) {
-      if (e.target.closest('[data-renamein]')) return; // typing in the rename box
-      const rename = e.target.closest('[data-renamebucket]');
-      if (rename) { stkBeginRename(rename.dataset.renamebucket); return; }
-      const del = e.target.closest('[data-delbucket]');
-      if (del) {
-        if (confirmArm(del, 'Click again to delete this folder')) stkDeleteBucket(del.dataset.delbucket);
-        return;
-      }
-      const key = grp.dataset.group;
-      if (stkState.collapsed.has(key)) stkState.collapsed.delete(key); else stkState.collapsed.add(key);
-      renderStockpile();
-      return;
-    }
+    if (e.target.closest('tr.stk-group')) return; // folder headers belong to the shared wiring
 
     // note icon: hover previews, click opens the notes/tags dialog
     const noteCell = e.target.closest('[data-notes]');
@@ -697,12 +687,6 @@ function initStockpile() {
     }
     const nameCell = e.target.closest('td.res-name');
     if (nameCell) openResourcePage(nameCell.textContent);
-  });
-
-  // Rename commit on blur / Enter / Escape
-  $('#stk-body').addEventListener('focusout', (e) => {
-    const inp = e.target.closest('[data-renamein]');
-    if (inp) stkCommitRename(inp.dataset.renamein, inp.value);
   });
 
   // hover popovers: Schem count → schematic links; tag icon → clickable tag chips
@@ -759,35 +743,10 @@ function initStockpile() {
   $('#stk-note-cancel').addEventListener('click', () => { $('#stk-note-modal').hidden = true; });
   wireRichToolbar($('#stk-note-modal'));
   bindBackdropClose($('#stk-note-modal'), () => { $('#stk-note-modal').hidden = true; });
-  $('#stk-body').addEventListener('keydown', (e) => {
-    const inp = e.target.closest('[data-renamein]');
-    if (inp && (e.key === 'Enter' || e.key === 'Escape')) {
-      if (e.key === 'Escape') inp.value = ''; // discard — commit ignores empty
-      inp.blur();
-    }
-  });
-
   // Drag any row (grab anywhere except the link/editable cells/actions) onto a folder
   // header to file it — no need to select first. If rows ARE multi-selected, the whole
   // selection moves together.
   $('#stk-body').addEventListener('dragstart', (e) => {
-    // dragging a FOLDER HEADER reorders buckets
-    const grpRow = e.target.closest('tr.stk-group[draggable="true"]');
-    if (grpRow) {
-      if (e.target.closest('[data-delbucket], [data-renamein]')) { e.preventDefault(); return; }
-      stkState.dragBucket = grpRow.dataset.group;
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', 'bucket:' + stkState.dragBucket);
-      const name = grpRow.querySelector('.stk-group-name');
-      const ghost = document.createElement('div');
-      ghost.className = 'stk-drag-ghost';
-      ghost.textContent = name ? name.textContent : 'folder';
-      document.body.appendChild(ghost);
-      e.dataTransfer.setDragImage(ghost, -12, -8);
-      setTimeout(() => ghost.remove(), 0);
-      return;
-    }
-    stkState.dragBucket = null;
     const row = e.target.closest('tr.stk-row[draggable="true"]');
     if (!row) return;
     // the name link, amount/cpu editors, remove, and the checkbox keep their own behavior
@@ -831,39 +790,42 @@ function initStockpile() {
   const clearDropHover = () => $('#stk-body').querySelectorAll('.stk-drop-hover, .stk-reorder-over')
     .forEach((el) => el.classList.remove('stk-drop-hover', 'stk-reorder-over'));
   $('#stk-body').addEventListener('dragover', (e) => {
-    const zone = e.target.closest('[data-group]');
-    if (!zone) return;
-    const key = zone.dataset.group;
-    const header = $(`#stk-body tr.stk-group[data-drop="${key}"]`);
-    if (stkState.dragBucket) {
-      // reordering a folder — highlight the header we'd drop before
-      if (key === stkState.dragBucket) return;
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-      clearDropHover();
-      header?.classList.add('stk-reorder-over');
-    } else if (stkState.selection.size) {
-      // filing items into a folder
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-      clearDropHover();
-      header?.classList.add('stk-drop-hover');
-    }
+    // headers carry data-grpkey (shared builder); item rows carry data-group
+    const zone = e.target.closest('[data-group], tr[data-grpkey]');
+    if (!zone || !stkState.selection.size) return;
+    const key = zone.dataset.group ?? zone.dataset.grpkey;
+    const header = $(`#stk-body tr.stk-group[data-grpkey="${key}"]`);
+    // filing items into a folder
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    clearDropHover();
+    header?.classList.add('stk-drop-hover');
   });
   $('#stk-body').addEventListener('dragleave', (e) => {
     if (!e.relatedTarget || !$('#stk-body').contains(e.relatedTarget)) clearDropHover();
   });
   $('#stk-body').addEventListener('drop', (e) => {
-    const zone = e.target.closest('[data-group]');
+    const zone = e.target.closest('[data-group], tr[data-grpkey]');
     clearDropHover();
     if (!zone) return;
     e.preventDefault();
-    if (stkState.dragBucket) {
-      stkReorderBucket(stkState.dragBucket, zone.dataset.group);
-      stkState.dragBucket = null;
-    } else if (stkState.selection.size) {
-      stkAssignSelectionTo(zone.dataset.group);
-    }
+    if (stkState.selection.size) stkAssignSelectionTo(zone.dataset.group ?? zone.dataset.grpkey);
   });
-  $('#stk-body').addEventListener('dragend', () => { stkState.dragBucket = null; clearDropHover(); });
+  $('#stk-body').addEventListener('dragend', () => clearDropHover());
+
+  // folder headers: the shared gold-standard wiring, persisted via the bucket API
+  grpWireGroups('#stk-body', {
+    groups: () => stkState.buckets,
+    collapsed: () => stkState.collapsed,
+    render: () => renderStockpile(),
+    unfiledKey: UNFILED,
+    persistRename: stkPersistRename,
+    onDelete: (key) => stkDeleteBucket(key),
+    onReorder: async () => {
+      try {
+        await Promise.all(stkState.buckets.map((b) => api().update_stockpile_bucket(b.id, null, b.sort_order)));
+        return { ok: true };
+      } catch (e) { await syncStockpile(); return { ok: false, error: String(e) }; }
+    },
+  });
 }

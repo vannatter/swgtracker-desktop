@@ -23,7 +23,8 @@ window.addEventListener('error', (e) => {
 });
 window.addEventListener('unhandledrejection', (e) => {
   const r = e.reason;
-  try { window.pywebview?.api?.log_js('error', `unhandled rejection: ${(r && (r.stack || r.message)) || r}`); } catch (_) { /* ignore */ }
+  // WebKit stacks don't include the message line (V8's do) — log both
+  try { window.pywebview?.api?.log_js('error', `unhandled rejection: ${(r && r.message) || ''} :: ${(r && r.stack) || r}`); } catch (_) { /* ignore */ }
 });
 const $ = (sel) => document.querySelector(sel);
 const safeInt = (v) => { const n = parseInt(v, 10); return Number.isFinite(n) ? n : 0; };
@@ -697,22 +698,27 @@ async function grpList(kind) {
 }
 
 // section header bar, styled to match My Stockpile's folder rows: accent
-// stripe, caret collapses, name renames inline, trash (far right) deletes —
-// members fall back to Unfiled. key 'un' = the fixed Unfiled section.
+// stripe, click anywhere collapses, name renames inline, trash (far right)
+// deletes — members fall back to Unfiled. key 'un' = the fixed Unfiled
+// section (never deletable or draggable). Real groups drag to reorder.
 function grpHeaderHtml(key, name, count, collapsed, noun = 'items') {
-  return `<div class="grp-hd" data-grpkey="${key}">
-    <i class="fa-solid ${collapsed ? 'fa-caret-right' : 'fa-caret-down'} grp-caret" data-grptoggle="${key}" title="${collapsed ? 'Expand' : 'Collapse'}"></i>
-    ${key === 'un'
-      ? `<span class="grp-name grp-name-unfiled">${escapeHtml(name)}</span>`
-      : `<span class="grp-name" data-grprename="${key}" title="Click to rename">${escapeHtml(name)}</span>`}
+  const real = key !== 'un';
+  return `<div class="grp-hd${real ? ' stk-group-draggable' : ''}" data-grpkey="${key}"${real ? ' draggable="true"' : ''}>
+    ${real
+      ? `<span class="grp-name" data-grprename="${key}" title="Click to rename">${escapeHtml(name)}</span>`
+      : `<span class="grp-name grp-name-unfiled">${escapeHtml(name)}</span>`}
     <span class="grp-count">${count} item${count === 1 ? '' : 's'}</span>
-    ${key === 'un' ? ''
-      : `<button class="grp-del" data-grpdel="${key}" title="Delete group — its ${noun} become Unfiled"><i class="fa-solid fa-trash-can"></i></button>`}
+    <i class="fa-solid ${collapsed ? 'fa-caret-right' : 'fa-caret-down'} grp-caret" data-grptoggle="${key}" title="${collapsed ? 'Expand' : 'Collapse'}"></i>
+    ${real
+      ? `<button class="grp-del" data-grpdel="${key}" title="Delete group — its ${noun} become Unfiled"><i class="fa-solid fa-trash-can"></i></button>`
+      : ''}
   </div>`;
 }
 
-// swap a header's name span for an input; commit on blur/Enter, cancel on Esc
-function grpBeginRename(listSel, key, g, rerender) {
+// swap a header's name span for an input; commit on blur/Enter, cancel on Esc.
+// persist(g, name) overrides where the rename is saved (default: groups API) —
+// stockpile buckets pass their own endpoint.
+function grpBeginRename(listSel, key, g, rerender, persist) {
   const span = $(`${listSel} [data-grprename="${key}"]`);
   if (!span || !g) return;
   span.outerHTML = `<input type="text" class="form-control filter-input grp-rename-input"
@@ -724,7 +730,7 @@ function grpBeginRename(listSel, key, g, rerender) {
     const name = input.value.trim();
     if (name && name !== g.name) {
       g.name = name; // optimistic
-      await grpApi({ action: 'rename', id: g.id, name });
+      await (persist ? persist(g, name) : grpApi({ action: 'rename', id: g.id, name }));
     }
     rerender();
   });
@@ -734,11 +740,138 @@ function grpBeginRename(listSel, key, g, rerender) {
   });
 }
 
+// merge comma-string tags: existing + typed, deduped case-insensitively,
+// existing casing and order preserved — bulk "Add tags" never clobbers
+function mergeTags(existing, typed) {
+  const out = [];
+  const seen = new Set();
+  [...String(existing || '').split(','), ...String(typed || '').split(',')].forEach((t) => {
+    const tag = t.trim();
+    if (!tag) return;
+    const k = tag.toLowerCase();
+    if (seen.has(k)) return;
+    seen.add(k);
+    out.push(tag);
+  });
+  return out.join(', ');
+}
+
+// ---- ONE folder-header wiring for every page -------------------------------
+// My Inventory is the gold standard: click anywhere on a header collapses it,
+// the name renames inline, the trash deletes (armed confirm), and dragging a
+// header reorders the folders (drop on Unfiled = send to the end). Handles
+// both table-row headers (grpTableHeaderHtml) and card-section headers
+// (grpHeaderHtml) — both carry data-grpkey. Header drags bind in the CAPTURE
+// phase and stop propagation, so each page's own row/card drag handlers never
+// see them.
+//   opts: {
+//     groups()      -> [{id, name, sort_order}]   (buckets work too)
+//     collapsed()   -> Set of collapsed keys      (mutated in place)
+//     render()      -> repaint the page
+//     onDelete(key)                               (remove + unfile + render)
+//     onReorder(ids) -> Promise (optional; default groups-API reorder)
+//     persistRename(g, name) -> Promise (optional; default groups-API rename)
+//     unfiledKey    (optional; default 'un')
+//   }
+function grpWireGroups(listSel, o) {
+  const unfiled = o.unfiledKey || 'un';
+  let dragKey = null;
+  const clearHover = () => $(listSel).querySelectorAll('.stk-reorder-over')
+    .forEach((el) => el.classList.remove('stk-reorder-over'));
+
+  async function reorder(from, target) {
+    if (String(from) === String(target)) return;
+    const list = [...o.groups()].sort((a, b) =>
+      (a.sort_order - b.sort_order) || String(a.name).localeCompare(String(b.name)));
+    const i = list.findIndex((g) => String(g.id) === String(from));
+    if (i < 0) return;
+    const [moved] = list.splice(i, 1);
+    let to = String(target) === unfiled ? list.length
+      : list.findIndex((g) => String(g.id) === String(target));
+    if (to < 0) to = list.length;
+    list.splice(to, 0, moved);
+    list.forEach((g, k) => { g.sort_order = k; });
+    o.render();
+    const ids = list.map((g) => g.id);
+    const res = await (o.onReorder ? o.onReorder(ids) : grpApi({ action: 'reorder', ids }));
+    if (res && res.ok === false) toast(res.error || 'Could not save the folder order — site update pending?', false);
+  }
+
+  $(listSel).addEventListener('click', (e) => {
+    const hd = e.target.closest('[data-grpkey]');
+    if (!hd) return;
+    if (e.target.closest('[data-grprenamein]')) return; // typing in the rename box
+    const ren = e.target.closest('[data-grprename]');
+    if (ren) {
+      const key = ren.dataset.grprename;
+      grpBeginRename(listSel, key, o.groups().find((g) => String(g.id) === String(key)),
+        o.render, o.persistRename);
+      return;
+    }
+    const del = e.target.closest('[data-grpdel]');
+    if (del) {
+      if (!confirmArmLabeled(del, 'Delete group?')) return;
+      o.onDelete(del.dataset.grpdel);
+      return;
+    }
+    if (e.target.closest('button, a, input')) return; // other header controls keep their jobs
+    const key = hd.dataset.grpkey;
+    const c = o.collapsed();
+    c.has(key) ? c.delete(key) : c.add(key);
+    o.render();
+  });
+
+  $(listSel).addEventListener('dragstart', (e) => {
+    const hd = e.target.closest('[data-grpkey][draggable="true"]');
+    if (!hd || e.target.closest('[data-grpdel],[data-grprenamein]')) return;
+    dragKey = hd.dataset.grpkey;
+    e.stopPropagation();
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', 'group:' + dragKey);
+    const name = hd.querySelector('.stk-group-name, .grp-name');
+    const ghost = document.createElement('div');
+    ghost.className = 'stk-drag-ghost';
+    ghost.textContent = name ? name.textContent : 'folder';
+    document.body.appendChild(ghost);
+    e.dataTransfer.setDragImage(ghost, -12, -8);
+    setTimeout(() => ghost.remove(), 0);
+  }, true);
+  $(listSel).addEventListener('dragover', (e) => {
+    if (!dragKey) return;
+    e.stopPropagation();
+    const hd = e.target.closest('[data-grpkey]');
+    if (!hd || hd.dataset.grpkey === dragKey) { clearHover(); return; }
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    clearHover();
+    hd.classList.add('stk-reorder-over');
+  }, true);
+  $(listSel).addEventListener('drop', (e) => {
+    if (!dragKey) return;
+    e.stopPropagation();
+    const hd = e.target.closest('[data-grpkey]');
+    clearHover();
+    if (hd) {
+      e.preventDefault();
+      reorder(dragKey, hd.dataset.grpkey);
+    }
+    dragKey = null;
+  }, true);
+  $(listSel).addEventListener('dragend', (e) => {
+    if (!dragKey) return;
+    e.stopPropagation();
+    dragKey = null;
+    clearHover();
+  }, true);
+
+  return { dragging: () => dragKey };
+}
+
 // stockpile-look folder row for TABLE pages (My Schematics / My Inventory):
 // identical structure and classes to My Stockpile's stk-group rows, with the
 // generic data-grp* hooks the shared handlers use. Trash sits in a trailing
 // pin-cell so it lines up with each grid's per-row action column.
-function grpTableHeaderHtml(key, name, count, collapsed, deletable, colTotal, actionsCls = 'pin-cell', draggable = false) {
+function grpTableHeaderHtml(key, name, count, collapsed, deletable, colTotal, actionsCls = 'pin-cell', draggable = false, selectable = false) {
   const nameHtml = deletable
     ? `<span class="stk-group-name" data-grprename="${key}" title="Click to rename">${escapeHtml(name)}</span>`
     : `<span class="stk-group-name stk-group-unfiled">${escapeHtml(name)}</span>`;
@@ -755,9 +888,10 @@ function grpTableHeaderHtml(key, name, count, collapsed, deletable, colTotal, ac
     <td colspan="${colTotal - 1}">
       <div class="stk-group-main">
         <span class="stk-group-left">
-          <i class="fa-solid ${collapsed ? 'fa-caret-right' : 'fa-caret-down'} stk-caret" data-grptoggle="${key}"></i>
+          ${selectable ? `<input type="checkbox" class="grp-selall" data-grpselect="${key}" title="Select everything in this group">` : ''}
           ${nameHtml}
           <span class="stk-group-count">${count} item${count === 1 ? '' : 's'}</span>
+          <i class="fa-solid ${collapsed ? 'fa-caret-right' : 'fa-caret-down'} stk-caret stk-caret-trail" data-grptoggle="${key}"></i>
         </span>
       </div>
     </td>

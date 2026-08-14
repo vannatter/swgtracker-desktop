@@ -687,6 +687,10 @@ td.lab-dim { opacity: .45; }
 /* the card Manufacture just filled announces itself briefly */
 .fac-card.fac-flash { box-shadow: 0 0 0 2px var(--accent), 0 0 18px rgba(226, 67, 80, .45); transition: box-shadow .3s; }
 
+/* resource detail: Used In tab's rank-distribution note */
+.rd-tabnote { font-size: 12px; color: var(--text-muted); margin: 6px 2px 8px; }
+.rd-tabnote b { font-weight: 700; }
+
 /* My Customers scorecard hosts the Insights customer card as PAGE content —
    same element that the modal shows, undressed from its overlay chrome.
    Triple-class selector: the overlay sizing rule (.key-gate-card.ins-cust-card,

@@ -195,6 +195,7 @@ function renderRdTable() {
   const empty = $('#rd-empty');
   empty.hidden = true;
   let head = '', body = '', emptyMsg = '';
+  $('#rd-tabnote').hidden = true; // only the Used In branch fills it
 
   if (rdTabState.tab === 'top') {
     // Best-ranked spawns per schematic experimentation formula
@@ -278,6 +279,18 @@ function renderRdTable() {
     head = rdSortableTh('Schematic', 'schematicName', 'col-name')
       + rdSortableTh('As', 'resourceClassName', 'col-text')
       + rdSortableTh('Rank', 'ranking');
+    // rank-ascending default front-loads the #1 rows, which reads as "it says
+    // #1 for everything" (Philosophy's report) — the distribution line shows
+    // the real spread, and the meaning of Rank gets said out loud
+    const dist = {};
+    (d.used_ins || []).forEach((u) => { const r = safeInt(u.ranking); dist[r] = (dist[r] || 0) + 1; });
+    const distTxt = Object.keys(dist).map(Number).sort((a, b) => a - b)
+      .map((r) => `<b class="${rankClass(r)}">#${r}</b> in ${fmtNum(dist[r])}`).join(' · ');
+    const note = $('#rd-tabnote');
+    note.hidden = !distTxt;
+    note.innerHTML = distTxt
+      ? `Rank = where this resource places among <b>currently spawned</b> resources of the needed class, per schematic — ${distTxt}`
+      : '';
     const uses = rdSorted(
       [...(d.used_ins || [])].sort((a, b) => safeInt(a.ranking) - safeInt(b.ranking)), {
         schematicName: (u) => lc(u.schematicName),

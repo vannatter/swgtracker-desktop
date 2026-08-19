@@ -687,6 +687,12 @@ td.lab-dim { opacity: .45; }
 /* the card Manufacture just filled announces itself briefly */
 .fac-card.fac-flash { box-shadow: 0 0 0 2px var(--accent), 0 0 18px rgba(226, 67, 80, .45); transition: box-shadow .3s; }
 
+/* item names keep their literal spacing — game mails pad crate sizes and
+   charge counts with runs of spaces ("… 7 U     25"), and collapsing them made
+   the display lie about the real item string */
+#inv-body td.res-name, #sales-body td.col-name, #ins-cust-purchases td.col-name,
+#inv-sales-modal td { white-space: pre-wrap; }
+
 /* resource detail: Used In tab's rank-distribution note */
 .rd-tabnote { font-size: 12px; color: var(--text-muted); margin: 6px 2px 8px; }
 .rd-tabnote b { font-weight: 700; }

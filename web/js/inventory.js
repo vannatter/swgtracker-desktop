@@ -86,9 +86,15 @@ async function invLoadVendorSuggestions() {
   } catch (_) { invState.vendors = []; }
 }
 
-// filtered vendor suggestions under the vendor input (most-sold first)
+// filtered vendor suggestions under the vendor input (most-sold first).
+// NEVER repaint while the pointer is over the list: a keystroke landing as the
+// mouse travels to click used to swap the options under the cursor, so the
+// click picked a DIFFERENT vendor than the one the user aimed at — Philosophy's
+// ~20% "saved the wrong vendor" mystery.
+let invSugHover = false;
 function invRenderVendorSug() {
   const box = $('#inv-vendor-sug');
+  if (invSugHover && !box.hidden) return; // frozen under the pointer
   const q = $('#inv-new-vendor').value.trim().toLowerCase();
   const hits = (invState.vendors || [])
     .filter((v) => !q || v.toLowerCase().includes(q))
@@ -445,6 +451,8 @@ function initInventory() {
   // styled vendor suggestions (own dropdown, not native datalist)
   $('#inv-new-vendor').addEventListener('focus', invRenderVendorSug);
   $('#inv-new-vendor').addEventListener('input', invRenderVendorSug);
+  $('#inv-vendor-sug').addEventListener('mouseenter', () => { invSugHover = true; });
+  $('#inv-vendor-sug').addEventListener('mouseleave', () => { invSugHover = false; invRenderVendorSug(); });
   $('#inv-new-vendor').addEventListener('blur', () => setTimeout(() => { $('#inv-vendor-sug').hidden = true; }, 150));
   $('#inv-vendor-sug').addEventListener('mousedown', (e) => {
     const opt = e.target.closest('[data-vendor]');

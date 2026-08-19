@@ -136,6 +136,10 @@
         <div class="rd-head">
           <nav class="crumbs" id="rd-crumbs"></nav>
           <span class="rd-actions">
+            <button id="rd-edit" class="btn btn-sm btn-outline-secondary" hidden
+                    title="Fix this resource's stats — community data, changes apply for everyone"><i class="fa-solid fa-pen"></i> Edit stats</button>
+            <button id="rd-disable" class="btn btn-sm btn-outline-secondary rd-disable" hidden
+                    title="Disable a bad/bogus resource — hides it for everyone (recoverable, nothing is deleted)"><i class="fa-solid fa-ban"></i> Disable</button>
             <button id="rd-wish" class="btn btn-sm btn-outline-secondary" hidden><i class="fa-regular fa-heart"></i> Wishlist</button>
             <button id="rd-add" class="btn btn-sm btn-accent" hidden><i class="fa-solid fa-plus"></i> Add to Stockpile</button>
           </span>
@@ -1604,6 +1608,21 @@
       <div class="stk-note-actions">
         <button id="stk-note-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
         <button id="stk-note-save" class="btn btn-sm btn-accent"><i class="fa-solid fa-check"></i> Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Community resource editing: fix stats reported wrong; applies for everyone -->
+  <div id="res-edit-modal" class="key-gate" hidden>
+    <div class="key-gate-card sp-card inv-add-card">
+      <h2>Edit stats</h2>
+      <div class="settings-hint">Correcting <b id="res-edit-title">resource</b> — resource stats are
+        community data, so your fix applies for everyone. Each stat is capped by the resource class;
+        every change is recorded.</div>
+      <div id="res-edit-grid" class="res-edit-grid"></div>
+      <div class="inv-add-actions">
+        <button id="res-edit-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
+        <button id="res-edit-save" class="btn btn-sm btn-accent"><i class="fa-solid fa-check"></i> Save changes</button>
       </div>
     </div>
   </div>

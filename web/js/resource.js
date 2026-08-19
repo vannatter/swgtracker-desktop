@@ -66,6 +66,23 @@ function renderResourcePage(data) {
   rdState.name = r.name || '';
   updateRdAddButton();
   updateRdWishButton();
+  // Community editing is rep-gated server-side; an older server omits can_edit
+  // (then the buttons stay live and the server still enforces on save).
+  // Locked buttons stay clickable (a real `disabled` swallows hover, killing
+  // the tooltip in WKWebView) — the click just explains the gate.
+  rdState.canEdit = data.can_edit === undefined || safeInt(data.can_edit) === 1;
+  rdState.lockTip = rdState.canEdit ? '' : `Unlocks at rep ${safeInt(data.rep_needed)} — you're at ${data.editor_rep ?? 0}. `
+    + 'Rep grows as you use the tracker: harvesters, factories, inventory, stockpiles, schematics.';
+  [['#rd-edit', 'fa-pen', "Fix this resource's stats — community data, changes apply for everyone"],
+   ['#rd-disable', 'fa-ban', 'Disable a bad/bogus resource — hides it for everyone (recoverable, nothing is deleted)'],
+  ].forEach(([sel, icon, tip]) => {
+    const btn = $(sel);
+    btn.hidden = false;
+    btn.classList.toggle('rd-locked', !rdState.canEdit);
+    btn.title = rdState.canEdit ? tip : rdState.lockTip;
+    delete btn.dataset.tip; // initTooltips caches title→data-tip on hover; drop stale copies
+    btn.querySelector('i').className = `fa-solid ${rdState.canEdit ? icon : 'fa-lock'}`;
+  });
 
   // Breadcrumb — Resources › Type › Name (+ swgaide external link)
   const ext = safeInt(r.swgaide_id) > 0
@@ -320,6 +337,8 @@ async function openResourcePage(name) {
   $('#rd-meta').textContent = '';
   $('#rd-add').hidden = true;
   $('#rd-wish').hidden = true;
+  $('#rd-edit').hidden = true;
+  $('#rd-disable').hidden = true;
   $('#rd-scoreline').textContent = '';
   $('#rd-cards').innerHTML = `<div class="rd-card"><div class="rd-value">${escapeHtml(name || '')}</div><div class="rd-label">Loading…</div></div>`;
   $('#rd-planets').innerHTML = '';
@@ -346,7 +365,97 @@ async function openResourcePage(name) {
   renderResourcePage(res.data);
 }
 
+// ---- Community editing: fix bad stats / disable bogus resources ----
+// Stats are community data; edits go through the authenticated PUT on
+// api/resources.php, which validates against the class caps, recomputes the
+// weighted profession values, and records every change in resource_edits.
+// Disable is a soft delete (resources.deleted = 1) — nothing is ever removed.
+
+function openResEditDialog() {
+  const r = (rdState.data || {}).resource;
+  if (!r) return;
+  // one input per stat the class actually has (cap > 0), prefilled + capped
+  const fields = RD_STATS
+    .map((f) => ({ f, cap: safeInt(r[`${f}_max`]), val: safeInt(r[f]) }))
+    .filter((s) => s.cap > 0);
+  if (!fields.length) { toast('This resource class has no editable stats', false); return; }
+  $('#res-edit-title').textContent = rdState.name;
+  $('#res-edit-grid').innerHTML = fields.map((s) => `
+    <div class="inv-add-field">
+      <label class="sp-field-label">${s.f.toUpperCase()} <span class="settings-sub">max ${s.cap}</span></label>
+      <input type="number" class="form-control filter-input" data-resedit="${s.f}"
+             value="${s.val}" min="1" max="${s.cap}" autocomplete="off">
+    </div>`).join('');
+  $('#res-edit-modal').hidden = false;
+  const first = document.querySelector('#res-edit-grid input');
+  if (first) { first.focus(); first.select(); }
+}
+
+async function saveResEdit() {
+  const r = (rdState.data || {}).resource;
+  if (!r) return;
+  const stats = {};
+  const bad = [];
+  document.querySelectorAll('#res-edit-grid [data-resedit]').forEach((inp) => {
+    const f = inp.dataset.resedit;
+    const cap = safeInt(r[`${f}_max`]);
+    const v = parseInt(inp.value, 10);
+    if (!Number.isFinite(v) || v < 1 || v > cap) { bad.push(f.toUpperCase()); return; }
+    if (v !== safeInt(r[f])) stats[f] = v;
+  });
+  if (bad.length) { toast(`${bad.join(', ')}: enter a whole number within the class cap`, false); return; }
+  if (!Object.keys(stats).length) { $('#res-edit-modal').hidden = true; return; }
+
+  const btn = $('#res-edit-save');
+  btn.disabled = true;
+  const res = await apiFetch('PUT', 'api/resources.php', { data: { id: rdState.id, stats } });
+  btn.disabled = false;
+  // require an explicit success flag — an older server answers PUT with the
+  // browse payload, which must not read as "saved"
+  if (!res.ok || !res.data || !res.data.success) {
+    toast(res.data?.error || res.error || 'Update failed', false);
+    return;
+  }
+  $('#res-edit-modal').hidden = true;
+  toast('Stats updated for everyone — score refreshes on the next site update');
+  openResourcePage(rdState.name); // repaint cards from the server's view
+}
+
+async function disableResource(btn) {
+  const res = await apiFetch('PUT', 'api/resources.php', { data: { id: rdState.id, deleted: 1 } });
+  if (!res.ok || !res.data || !res.data.success) {
+    toast(res.data?.error || res.error || 'Disable failed', false);
+    btn.disabled = false;
+    return;
+  }
+  toast(`"${rdState.name}" disabled — it is hidden for everyone but recoverable`);
+  showPage('resources');
+  if (typeof loadResources === 'function') loadResources();
+}
+
 function initResourcePage() {
+  $('#rd-edit').addEventListener('click', () => {
+    if (!rdState.canEdit) { toast(rdState.lockTip, false); return; }
+    openResEditDialog();
+  });
+  $('#res-edit-cancel').addEventListener('click', () => { $('#res-edit-modal').hidden = true; });
+  $('#res-edit-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'res-edit-modal') $('#res-edit-modal').hidden = true;
+  });
+  $('#res-edit-save').addEventListener('click', saveResEdit);
+  $('#res-edit-grid').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') saveResEdit();
+  });
+
+  $('#rd-disable').addEventListener('click', async () => {
+    if (!rdState.id) return;
+    if (!rdState.canEdit) { toast(rdState.lockTip, false); return; }
+    const btn = $('#rd-disable');
+    if (!confirmArmLabeled(btn, 'Disable for everyone?')) return;
+    btn.disabled = true;
+    await disableResource(btn);
+  });
+
   // stockpile tag pill → My Stockpile filtered to that tag
   $('#rd-stktags').addEventListener('click', (e) => {
     const tag = e.target.closest('[data-rdstktag]');

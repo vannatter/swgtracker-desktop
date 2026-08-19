@@ -1586,6 +1586,12 @@ body.dev-mode .dev-pill { display: inline-flex; }
 .inv-add-row { display: flex; gap: 12px; margin-top: 12px; }
 .inv-add-field { flex: 1 1 0; }
 .inv-add-field input { width: 100%; max-width: none; }
+
+/* Community stat editing: one compact input per class stat */
+.res-edit-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 10px 12px; margin-top: 12px; }
+.res-edit-grid .sp-field-label .settings-sub { font-weight: 400; }
+.rd-disable:hover:not(.confirming) { color: var(--red, #e06c75); border-color: var(--red, #e06c75); }
+.rd-locked, .rd-locked:hover { opacity: .55; cursor: not-allowed; color: inherit; border-color: inherit; }
 .inv-add-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 .mm-row-openable { cursor: pointer; }
 .mm-row-openable:hover td { background: var(--bg-secondary); }

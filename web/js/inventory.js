@@ -115,7 +115,8 @@ function invRowHtml(item, idx) {
   const tagged = invTags(item).length > 0;
   return `<tr class="${invState.selected.has(iid) ? 'inv-picked' : ''}" data-idx="${idx}" data-iid="${iid}"${invState.groups.length ? ' draggable="true"' : ''}>
     <td class="pin-cell inv-sel-cell"><input type="checkbox" class="inv-sel" data-selid="${iid}"${invState.checked.has(iid) ? ' checked' : ''}></td>
-    <td class="stat inv-edit ${stockCls}" data-edit="stocked" data-idx="${idx}" title="Click to edit">${fmtNum(stocked)}</td>
+    <td class="stat inv-edit ${stockCls}" data-edit="stocked" data-idx="${idx}" title="Click to edit">${stockCls
+      ? `<i class="fa-solid fa-triangle-exclamation inv-warnico" title="${stocked < 0 ? 'Oversold — stock is negative' : 'At or below restock threshold'}"></i>` : ''}${fmtNum(stocked)}</td>
     <td class="col-name res-name"><span class="stk-tagslot">${tagged
       ? `<i class="fa-solid fa-tag stk-tagind" data-invtaghover="${idx}"></i>` : ''}</span>${escapeHtml(item.item_name || '')}</td>
     <td class="stat inv-edit" data-edit="threshold" data-idx="${idx}" title="Click to edit">${fmtNum(threshold)}</td>
@@ -244,14 +245,18 @@ async function loadInventory() {
   $('#inv-empty').hidden = true;
 
   const filter = $('#inv-filter').value;
+  // scope rides inside the search string ("vendor:caf") — the server parses the
+  // prefix, so the existing bridge needs no new param; quotes = exact match
+  const scope = $('#inv-scope').value;
+  const q = $('#inv-search').value.trim();
   const params = {
-    search: $('#inv-search').value.trim(),
+    search: q && scope ? `${scope}:${q}` : q,
     page: invState.page,
     perpage: invState.perPage,
     sort: invState.sortField,
     order: invState.sortOrder,
   };
-  if (filter === 'negative_stock') params.inventory_type = 'negative_stock';
+  if (filter === 'negative_stock' || filter === 'restock') params.inventory_type = filter;
   else if (filter === 'low') params.threshold = safeInt($('#inv-low').value);
 
   let res, groups;
@@ -279,6 +284,8 @@ async function loadInventory() {
 
   buildInvHeader();
   invSyncAllToggle();
+  // inventory changed under us — Sales' not-in-inventory index refetches on next use
+  if (typeof salesInvNames !== 'undefined') salesInvNames = null;
   invNotifySweep(); // manual stock edits + fresh sale matches alert immediately
   if (!rows.length) {
     // still render folder rows (if any) so an empty list can be organized
@@ -385,6 +392,7 @@ async function addInvItem() {
     toast(editId ? `${name} updated` : `${name} added to inventory`);
     $('#inv-add-modal').hidden = true;
     loadInventory();
+    if (typeof salesOnInvAdded === 'function') salesOnInvAdded(name); // clear Sales' "not in inventory" flags
   } else {
     toast(`Couldn't save ${name}: ${res.error || 'server error'}`, false); // 409 = duplicate
     checkAuthError(res.error);
@@ -393,8 +401,9 @@ async function addInvItem() {
 
 // open the shared dialog: no item = add mode, item = edit mode (name locked,
 // since a rename would orphan the sales that match on it), item + clone =
-// add mode prefilled from the row — name selected for a quick "Style 2" tweak
-function openInvDialog(item = null, clone = false) {
+// add mode prefilled from the row — name selected for a quick "Style 2" tweak;
+// preset = add mode with just name/vendor prefilled (Sales' "not in inventory")
+function openInvDialog(item = null, clone = false, preset = null) {
   invLoadVendorSuggestions();
   const modal = $('#inv-add-modal');
   const nameInput = $('#inv-new-name');
@@ -411,14 +420,16 @@ function openInvDialog(item = null, clone = false) {
     delete modal.dataset.editId;
     $('#inv-modal-title').textContent = clone ? 'Clone Inventory Item' : 'Add Inventory Item';
     $('#inv-add').innerHTML = '<i class="fa-solid fa-plus"></i> Add Item';
-    nameInput.value = clone && item ? (item.item_name || '') : '';
-    $('#inv-new-vendor').value = clone && item ? (item.vendor || '') : '';
+    nameInput.value = clone && item ? (item.item_name || '') : (preset?.item_name || '');
+    $('#inv-new-vendor').value = clone && item ? (item.vendor || '') : (preset?.vendor || '');
     $('#inv-new-stocked').value = clone && item ? String(safeInt(item.stocked)) : '10';
     $('#inv-new-threshold').value = clone && item ? String(safeInt(item.threshold)) : '1';
   }
   modal.hidden = false;
-  ((item && !clone) ? $('#inv-new-vendor') : nameInput).focus();
+  // preset arrives with name+vendor filled — the stock count is what's left to set
+  ((item && !clone) ? $('#inv-new-vendor') : preset ? $('#inv-new-stocked') : nameInput).focus();
   if (clone) nameInput.select();
+  if (preset) $('#inv-new-stocked').select();
 }
 
 function initInventory() {
@@ -444,6 +455,7 @@ function initInventory() {
     loadInventory();
   });
   $('#inv-low').addEventListener('change', () => { invState.page = 1; loadInventory(); });
+  $('#inv-scope').addEventListener('change', () => { invState.page = 1; loadInventory(); });
   $('[data-refresh="inventory"]').addEventListener('click', () => loadInventory());
   $('#inv-prev').addEventListener('click', () => { if (invState.page > 1) { invState.page--; loadInventory(); } });
   $('#inv-next').addEventListener('click', () => { if (invState.hasNext) { invState.page++; loadInventory(); } });

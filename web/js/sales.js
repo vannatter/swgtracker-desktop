@@ -114,6 +114,9 @@ async function loadSales() {
   } else {
     $('#sales-body').innerHTML = sales.map(saleRowHtml).join('');
     $('#sales-status').textContent = `Page ${page} of ${totalPages} — ${fmtNum(total)} total sales`;
+    // flag sold items that aren't in My Inventory (index fetched once, then kept fresh)
+    if (salesInvNames) salesMarkMissing();
+    else salesLoadInvNames().then(salesMarkMissing);
   }
 
   $('#sales-prev').disabled = page <= 1;
@@ -125,6 +128,51 @@ function showSalesEmpty(msg) {
   const el = $('#sales-empty');
   el.textContent = msg;
   el.hidden = false;
+}
+
+// ---- "not in My Inventory" indicator ---------------------------------------
+// A sold item that matches nothing in My Inventory gets a cart icon: game
+// mails pad names with runs of spaces, so a hand-typed inventory entry can
+// silently miss its sales — this makes the gap visible right where the sale
+// is, and one click adds the item with the sale's exact name and vendor.
+// Matching mirrors the server's sales matcher: case- and whitespace-blind.
+let salesInvNames = null; // Set of normalized tracked item names, null = not loaded
+
+const salesNormItem = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+
+async function salesLoadInvNames() {
+  const names = new Set();
+  for (let p = 1; p <= 6; p++) { // 500/page — covers 3000 tracked items
+    let r;
+    try { r = await api().get_inventory({ page: p, perpage: 500 }); } catch (_) { return; }
+    if (!r.ok || !r.data) return; // unknown state — leave the flags off rather than wrong
+    const rows = r.data.results || [];
+    rows.forEach((i) => names.add(salesNormItem(i.item_name)));
+    if (rows.length < 500) break;
+  }
+  salesInvNames = names;
+}
+
+function salesMarkMissing() {
+  if (!salesInvNames) return;
+  document.querySelectorAll('#sales-body td.col-name[data-filter]').forEach((td) => {
+    const missing = !salesInvNames.has(salesNormItem(td.dataset.filter));
+    const ico = td.querySelector('.sales-notinv');
+    if (missing && !ico) {
+      td.insertAdjacentHTML('beforeend',
+        ' <i class="fa-solid fa-cart-plus sales-notinv" data-addinv="1" title="Not in My Inventory —'
+        + ' this sale isn\'t depleting any tracked stock (check for a name typo, or click to add it'
+        + ' with this exact name and vendor)"></i>');
+    } else if (!missing && ico) {
+      ico.remove();
+    }
+  });
+}
+
+// inventory.js calls this after any add so the flags clear without a reload
+function salesOnInvAdded(name) {
+  if (salesInvNames) salesInvNames.add(salesNormItem(name));
+  salesMarkMissing();
 }
 
 const custState = { rows: [], visible: [], sortField: 'total', sortOrder: 'DESC' };
@@ -175,6 +223,15 @@ function initSales() {
   buildSalesHeader();
 
   $('#sales-body').addEventListener('click', (e) => {
+    const add = e.target.closest('[data-addinv]');
+    if (add) {
+      const tr = add.closest('tr');
+      openInvDialog(null, false, {
+        item_name: add.closest('td').dataset.filter,       // exact name, padding and all
+        vendor: tr?.children[3]?.dataset.filter || '',     // the sale's vendor column
+      });
+      return;
+    }
     const card = e.target.closest('[data-scorecard]');
     if (card) { insOpenScorecard(card.dataset.scorecard); return; }
     const cell = e.target.closest('[data-filter]');

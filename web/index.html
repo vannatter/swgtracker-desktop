@@ -750,11 +750,18 @@
              title="Crafted-item stock. Click a Stocked or Threshold number to edit it."></i>
           <select id="inv-filter" class="form-select filter-select head-filter">
             <option value="">All items</option>
+            <option value="restock">Needs restock</option>
             <option value="negative_stock">Negative stock</option>
             <option value="low">Low stock (≤)</option>
           </select>
           <input id="inv-low" type="number" class="form-control filter-input inv-num" value="5" min="0" title="Low-stock cutoff" hidden>
-          <input id="inv-search" type="text" class="form-control filter-input head-search" placeholder="Search item or vendor...">
+          <select id="inv-scope" class="form-select filter-select inv-scope" title="Which field the search matches">
+            <option value="">Item + Vendor</option>
+            <option value="item">Item only</option>
+            <option value="vendor">Vendor only</option>
+          </select>
+          <input id="inv-search" type="text" class="form-control filter-input head-search" placeholder="Search..."
+                 title="Wrap the search in double quotes for an exact match — &quot;Caf&quot; finds only items named exactly Caf">
           <button id="inv-newgroup" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-folder-plus"></i> New Group</button>
           <button id="inv-add-open" class="btn btn-sm btn-accent"><i class="fa-solid fa-plus"></i> Add Item</button>
           <button class="btn btn-icon" data-refresh="inventory" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>

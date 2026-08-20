@@ -484,6 +484,12 @@ td.col-actions .btn-icon.open { color: var(--accent); }
 .inv-edit:hover { color: var(--q-good); }
 .inv-neg { color: var(--accent) !important; font-weight: 700; }
 .inv-low { color: var(--q-good) !important; }
+/* shape, not just color: restock rows are hard to spot by tint alone */
+.inv-warnico { font-size: 10px; margin-right: 5px; opacity: .9; }
+.inv-scope { flex: none; width: 138px; }
+/* Sales: sold item matches nothing in My Inventory — click adds it */
+.sales-notinv { color: var(--q-good); font-size: 12px; margin-left: 6px; cursor: pointer; }
+.sales-notinv:hover { color: var(--accent); }
 .confirm-del { color: var(--accent) !important; animation: pulse-del .5s ease-in-out infinite alternate; }
 @keyframes pulse-del { from { opacity: 1; } to { opacity: .45; } }
 

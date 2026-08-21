@@ -284,12 +284,31 @@ async function harvCheckResourceStatus() {
         // freeze at the recorded despawn time, or (none recorded) the moment we
         // first noticed — kept stable so the hopper stops growing, not reset.
         const at = gone ? (safeInt(hit.inactive_at) || (map[key] && map[key].at) || harvNow()) : 0;
-        map[key] = { gone, at };
+        // type + spawn date ride along for the resource-name hover
+        map[key] = { gone, at, type: hit.type_name || '', ts: safeInt(hit.timestamp) };
       }
     } catch (_) { /* leave unknown = not flagged */ }
   }));
   harvState.resStatus = map;
   renderHarvesters();
+}
+
+// resource-name hover: class, spawn date, and time in spawn — the details you'd
+// otherwise open each resource's page for (req: snickerfritz). Filled in once
+// harvCheckResourceStatus lands; before that, a plain "click for details".
+function harvResTip(name) {
+  const s = harvState.resStatus ? harvState.resStatus[String(name).toLowerCase()] : null;
+  if (!s || !s.type) return 'Click for resource details';
+  const bits = [s.type];
+  if (s.ts) bits.push(`Spawned ${fmtDate(s.ts)}`);
+  if (s.gone) {
+    const days = s.ts && s.at ? Math.max(0, Math.floor((s.at - s.ts) / 86400)) : 0;
+    bits.push(`Despawned ${s.at ? fmtDate(s.at) : ''}${days ? ` after ${days}d` : ''}`.trim());
+  } else if (s.ts) {
+    const days = Math.max(0, Math.floor((Date.now() / 1000 - s.ts) / 86400));
+    bits.push(days === 0 ? '<1d in spawn' : `${days}d in spawn`);
+  }
+  return bits.join(' · ');
 }
 
 // tags live as one comma-separated string server-side, like factories
@@ -390,7 +409,7 @@ function harvCardHtml(h) {
         ${alert}
       </div>
       <div class="harv-sub" title="${escapeHtml([h.harvester_type, h.ber ? `BER ${h.ber}` : '', h.resource_name ? `${h.resource_name}${h.concentration ? ` @ ${h.concentration}%` : ''}` : '', loc].filter(Boolean).join(' · '))}">
-        ${escapeHtml(h.harvester_type)}${h.ber ? ` · BER ${h.ber}` : ''}${h.resource_name ? ` · <b class="harv-reslink" data-res="${escapeHtml(h.resource_name)}">${escapeHtml(h.resource_name)}</b>` : ''}${h.concentration ? ` @ ${h.concentration}%` : ''}${loc ? ` · ${escapeHtml(loc)}` : ''}
+        ${escapeHtml(h.harvester_type)}${h.ber ? ` · BER ${h.ber}` : ''}${h.resource_name ? ` · <b class="harv-reslink" data-res="${escapeHtml(h.resource_name)}" title="${escapeHtml(harvResTip(h.resource_name))}">${escapeHtml(h.resource_name)}</b>` : ''}${h.concentration ? ` @ ${h.concentration}%` : ''}${loc ? ` · ${escapeHtml(loc)}` : ''}
       </div>
     </div>
     <div class="harv-meters">${meters.join('') || '<span class="stat_off">No rates set — edit to enable countdowns.</span>'}</div>
@@ -495,7 +514,7 @@ function harvGridHtml(items) {
       <td class="pin-cell harv-sel-cell"><input type="checkbox" class="harv-sel" data-selid="${h.id}"${harvState.checked.has(String(h.id)) ? ' checked' : ''}></td>
       <td class="col-name" title="${escapeHtml(h.harvester_type)}${h.ber ? ` · BER ${h.ber}` : ''}">${escapeHtml(h.name || h.harvester_type)}</td>
       <td class="col-text">${h.character_name ? escapeHtml(h.character_name) : '<span class="stat_off">—</span>'}</td>
-      <td class="col-text">${h.resource_name ? `<b class="harv-reslink" data-res="${escapeHtml(h.resource_name)}">${escapeHtml(h.resource_name)}</b>${h.concentration ? ` @ ${h.concentration}%` : ''}${harvResGone(h) ? ' <span class="harv-gone-tag">despawned</span>' : ''}` : '<span class="stat_off">—</span>'}</td>
+      <td class="col-text">${h.resource_name ? `<b class="harv-reslink" data-res="${escapeHtml(h.resource_name)}" title="${escapeHtml(harvResTip(h.resource_name))}">${escapeHtml(h.resource_name)}</b>${h.concentration ? ` @ ${h.concentration}%` : ''}${harvResGone(h) ? ' <span class="harv-gone-tag">despawned</span>' : ''}` : '<span class="stat_off">—</span>'}</td>
       <td class="col-text harv-cell ${hopCls}">${hopper
         ? `<span class="harv-minibar"><span class="harv-meter-fill ${hopFull ? 'warn' : (hopper.stalled || hopper.frozen) ? 'bad' : 'filling'}" style="width:${Math.max(0, Math.min(100, hopper.pct)).toFixed(1)}%"></span></span>`
           + `<span class="harv-minibar-text">${hopFull ? 'FULL' : `<span class="harv-units" data-uhid="${h.id}">${fmtNum(Math.floor(hopper.units))}</span> / ${fmtShort(hopper.size)}${hopper.frozen ? ' · paused' : hopper.stalled ? ' · stalled' : ''}`}</span>`

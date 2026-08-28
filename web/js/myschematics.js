@@ -381,7 +381,13 @@ async function analyzeMySchematic(s) {
     const sbl = mflt(dto?.serverBestResourceList);
     const cbl = mflt(dto?.currentBestResourceList);
     const lists = [...sbl, ...cbl];
-    const best = sbl[0] || cbl[0] || null;
+    // best across BOTH lists by quality — serverBest[0] alone lags a brand-new
+    // spawn (only in currentBest) that outclasses everything recorded, so
+    // fresh upgrades wouldn't flag until the blackbox re-ranked. Ties keep the
+    // in-spawn copy so the badge reads "in spawn", not a stale duplicate.
+    const best = lists.slice().sort((a, b) =>
+      (Number(b.resourceQuality) || 0) - (Number(a.resourceQuality) || 0) ||
+      (mysSpawnActive(b) ? 1 : 0) - (mysSpawnActive(a) ? 1 : 0))[0] || null;
     const bestQ = best ? Number(best.resourceQuality) || 0 : null;
 
     let assignedQ = null;
@@ -1115,7 +1121,10 @@ function cselectOptHtml(o) {
 }
 
 function cselectHtml(rowId, options) {
-  const first = options[0]; // best preselected
+  // preselect the TRUE best — same rule as the "Best" quick chip (highest
+  // quality, stocked breaks ties). The list itself stays stocked-first for
+  // browsing, but a stocked 890 must not preselect over an in-spawn 955.
+  const first = [...options].sort((a, b) => b.q - a.q || (b.stocked ? 1 : 0) - (a.stocked ? 1 : 0))[0];
   const btnLabel = first ? cselectOptHtml(first) : '';
   return `<div class="cselect" data-sp="${escapeHtml(String(rowId))}"
       data-value="${first ? escapeHtml(first.name) : ''}">

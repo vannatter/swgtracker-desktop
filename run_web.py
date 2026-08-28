@@ -29,7 +29,7 @@ from src.core.alert_poller import AlertPoller
 from src.core.bundle_manager import BundleManager
 from src.web_api import WebApi
 
-APP_VERSION = "0.12.7"  # keep in sync with pyproject.toml — bump with every change batch
+APP_VERSION = "0.12.8"  # keep in sync with pyproject.toml — bump with every change batch
 
 logging.basicConfig(
     level=logging.INFO,
@@ -63,6 +63,35 @@ def _set_mac_dock_icon():
             info["NSHumanReadableCopyright"] = "swgtracker.com companion"
     except Exception:  # noqa: BLE001 — cosmetic only, never block launch
         logger.debug("couldn't set Dock identity", exc_info=True)
+
+
+def _ensure_single_instance():
+    """Windows only: refuse to run twice. The tray feature hides the window on
+    X-close, so users naturally relaunch from the Start menu — without this
+    guard that spawns a second process, which means a second tray icon and a
+    stale copy of config.json fighting the first (the 'minimize to tray stays
+    on no matter what I set' report). Instead, wake the existing window and
+    exit. Returns the mutex handle to keep it alive for the process lifetime."""
+    if sys.platform != "win32":
+        return None
+    try:
+        import ctypes
+        kernel32 = ctypes.windll.kernel32
+        mutex = kernel32.CreateMutexW(None, False, "SWGTrackerDesktop.single")
+        if kernel32.GetLastError() != 183:  # ERROR_ALREADY_EXISTS
+            return mutex
+        user32 = ctypes.windll.user32
+        hwnd = user32.FindWindowW(None, "SWG Tracker Desktop")  # finds hidden windows too
+        if hwnd:
+            user32.ShowWindow(hwnd, 9)  # SW_RESTORE — un-hides a tray-tucked window
+            user32.SetForegroundWindow(hwnd)
+        logger.info("another instance is already running — woke it and exiting")
+        sys.exit(0)
+    except SystemExit:
+        raise
+    except Exception:  # noqa: BLE001 — a broken guard must never block launch
+        logger.error("single-instance guard failed", exc_info=True)
+        return None
 
 
 def _setup_tray(window, config):
@@ -132,6 +161,7 @@ def _setup_tray(window, config):
 
 
 def main():
+    _instance_mutex = _ensure_single_instance()  # noqa: F841 — held for process lifetime
     _set_mac_dock_icon()
     config = ConfigManager(str(DATA_DIR / "config.json"))
     # dev version mimicry (Settings → Developer) survives restarts on purpose —

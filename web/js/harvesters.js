@@ -6,10 +6,12 @@
    fills at extraction_rate until it's full OR power runs out. Mail-driven events
    (maintenance empty / structure damaged) attach server-side in a later phase. */
 
-// Per-type defaults — maintenance/power confirmed IN GAME on Restoration
-// (2026-07): personal 12cr/26p · medium 24cr/50p · heavy 36cr/75p ·
-// elite 126cr/206p per hour; generators (no power draw) solar 15cr,
-// fusion 24cr, geothermal 24cr, wind 30cr. Hopper size is a CRAFTED attribute (varies per
+// Per-type defaults — maintenance BASE rates per spec (snickerfritz 2026-08:
+// personal 16 · medium 30 · heavy 90 · elite 126 cr/hr; the old 32/48/168
+// were wrongly back-derived by treating in-game readings as MM-discounted).
+// Power: personal 26 · medium 50 · heavy 75 · elite 206 units/hr; generators
+// (no power draw) burn maintenance only — their rates are still the old
+// derivation and unconfirmed against spec. Hopper size is a CRAFTED attribute (varies per
 // deed), so it stays user-entered — elite base ~240k, ~400k experimented.
 // ber = the type's MAX (fully-experimented craft; swgr.org wiki confirms
 // heavy 14 / elite 44 / geo 15 / fusion 19, rest from the NGE templates) —
@@ -21,9 +23,9 @@
 const HARV_MERCHANT_MULT = 0.75;
 const HARV_TIERS = {
   personal: { ber: 5, maint: 16, power: 26, hopper: 25000 },
-  medium:   { ber: 11, maint: 32, power: 50, hopper: 50000 },
-  heavy:    { ber: 14, maint: 48, power: 75, hopper: 100000 },
-  elite:    { ber: 44, maint: 168, power: 206, hopper: 400000 },
+  medium:   { ber: 11, maint: 30, power: 50, hopper: 50000 },
+  heavy:    { ber: 14, maint: 90, power: 75, hopper: 100000 },
+  elite:    { ber: 44, maint: 126, power: 206, hopper: 400000 },
 };
 const HARV_TYPE_DEFAULTS = {
   'Personal Mineral Extractor': HARV_TIERS.personal,
@@ -649,7 +651,18 @@ function harvParsePlacement(raw) {
   const name = m[1].trim();
   const known = Object.keys(HARV_TYPE_DEFAULTS)
     .find((t) => t.toLowerCase() === name.toLowerCase() || name.toLowerCase().includes(t.toLowerCase()));
-  return known || null;
+  if (known) return known;
+  // generator deeds don't always carry our exact catalog names (players place
+  // "Radioactive"/"Geothermal Energy Generator" variants) — fall back to the
+  // energy keyword so those mails still suggest the right catalog type
+  const n = name.toLowerCase();
+  if (n.includes('generator')) {
+    if (n.includes('wind')) return 'Wind Power Generator';
+    if (n.includes('solar')) return 'Solar Power Generator';
+    if (n.includes('geothermal')) return 'Geothermal Power Generator';
+    if (n.includes('fusion') || n.includes('radioactive')) return 'Fusion Power Generator';
+  }
+  return null;
 }
 
 // scan the last week of Construction Complete mails for harvester placements the

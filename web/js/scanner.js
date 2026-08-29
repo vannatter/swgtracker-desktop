@@ -477,8 +477,9 @@ function aideParse(text) {
     const parts = t.split(',').map((p) => p.trim());
     if (parts.length < 2 || !parts[0] || !parts[1]) return;
     // second field must look like a class — letters, digits ("Class 1 Solid
-    // Petro Fuel"), spaces and hyphens ("Non-Ferrous")
-    if (!/^[A-Za-z][A-Za-z0-9 -]{2,40}$/.test(parts[1])) return;
+    // Petro Fuel"), spaces, hyphens ("Non-Ferrous") and apostrophes
+    // ("Bal'ta'ran Crystal Amorphous Gemstone" — 37 chars, hence the 44 cap)
+    if (!/^[A-Za-z][A-Za-z0-9' -]{2,44}$/.test(parts[1])) return;
     const stats = parts.slice(2).join(' ').trim();
     rows.push({ li, name: parts[0], klass: parts[1], stats, order: '', filled: !!stats });
   });

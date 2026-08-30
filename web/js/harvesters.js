@@ -125,6 +125,14 @@ function harvTypeAccepts(type) {
   };
 }
 
+// "/waypoint tatooine -2549 -6627 South Farm" for a harvester with coords —
+// same format the Factories page copies. null when the spot was never entered.
+function harvWpCmd(h) {
+  if (h.x == null || h.y == null || h.x === '' || h.y === '') return null;
+  return ['/waypoint', String(h.planet || '').toLowerCase(), h.x, h.y, h.name || h.harvester_type]
+    .filter((p) => p !== '' && p != null).join(' ');
+}
+
 // "Heavy Natural Gas Processor" → "Heavy Gas"; generators keep their name short
 function harvShortType(type) {
   if (!type) return '';
@@ -421,6 +429,7 @@ function harvCardHtml(h) {
       ${harvIsGenerator(h.harvester_type) ? '' : `<button class="btn btn-sm btn-outline-secondary" data-hact="power" data-hid="${h.id}" title="Set the power currently loaded"><i class="fa-solid fa-bolt"></i> Power</button>`}
       <button class="btn btn-sm btn-outline-secondary" data-hact="maint" data-hid="${h.id}" title="Set the maintenance currently paid"><i class="fa-solid fa-coins"></i> Maint</button>
       <span class="harv-actions-right">
+        ${harvWpCmd(h) ? `<button class="btn btn-icon al-rule-btn" data-hact="wp" data-hid="${h.id}" title="${escapeHtml(loc)} — copy a /waypoint command"><i class="fa-solid fa-location-dot"></i></button>` : ''}
         <button class="btn btn-icon al-rule-btn" data-hact="log" data-hid="${h.id}" title="Event log"><i class="fa-solid fa-list"></i></button>
         <button class="btn btn-icon al-rule-btn" data-hact="clone" data-hid="${h.id}" title="Duplicate — same type/resource/spot, for multi-harvester farms"><i class="fa-solid fa-clone"></i></button>
         <button class="btn btn-icon al-rule-btn" data-hact="edit" data-hid="${h.id}" title="Edit"><i class="fa-solid fa-pen"></i></button>
@@ -524,6 +533,7 @@ function harvGridHtml(items) {
       <td class="col-text harv-cell ${powOut ? 'bad' : ''}">${power ? (powOut ? 'OUT' : `${fmtShort(power.remaining)}${power.depletesAt ? ` · ${harvAgo(power.depletesAt - now)}` : ''}`) : '—'}</td>
       <td class="col-text harv-cell ${mntOut ? 'bad' : ''}">${maint ? (mntOut ? 'EMPTY' : `${fmtShort(maint.remaining)} cr${maint.depletesAt ? ` · ${harvAgo(maint.depletesAt - now)}` : ''}`) : '—'}</td>
       <td class="col-actions">
+        ${harvWpCmd(h) ? `<button class="btn btn-icon" data-hact="wp" data-hid="${h.id}" title="Copy a /waypoint command"><i class="fa-solid fa-location-dot"></i></button>` : ''}
         <button class="btn btn-icon" data-hact="hopper" data-hid="${h.id}" title="Empty the hopper"><i class="fa-solid fa-box-open"></i></button>
         <button class="btn btn-icon" data-hact="sethopper" data-hid="${h.id}" title="Set hopper amount"><i class="fa-solid fa-sliders"></i></button>
         ${harvIsGenerator(h.harvester_type) ? '' : `<button class="btn btn-icon" data-hact="power" data-hid="${h.id}" title="Set power"><i class="fa-solid fa-bolt"></i></button>`}
@@ -1583,6 +1593,30 @@ function initHarvesters() {
     renderHarvesters();
   });
   $('#harv-bulk-tags').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#harv-bulk-apply').click(); });
+
+  // waypoint lines for the selection — only harvesters with a spot entered
+  const harvSelWp = () => {
+    const sel = harvState.items.filter((h) => harvState.checked.has(String(h.id)));
+    return { lines: sel.map(harvWpCmd).filter(Boolean), total: sel.length };
+  };
+  $('#harv-bulk-wp').addEventListener('click', () => {
+    const { lines, total } = harvSelWp();
+    if (!lines.length) { toast('No coordinates on the selected harvesters — edit them to add planet + x/y', false); return; }
+    const skipped = total - lines.length;
+    copyTextToClipboard(lines.join('\n') + '\n',
+      `Copied ${lines.length} waypoint${lines.length === 1 ? '' : 's'}${skipped ? ` (${skipped} without coordinates skipped)` : ''}`);
+  });
+  $('#harv-bulk-wpnote').addEventListener('click', async () => {
+    const { lines, total } = harvSelWp();
+    if (!lines.length) { toast('No coordinates on the selected harvesters — edit them to add planet + x/y', false); return; }
+    const r = await notesAddFromText('Harvester waypoints', lines.join('\n') + '\n');
+    showPage('notes');
+    const skipped = total - lines.length;
+    toast((r.merged
+      ? (r.added ? `Added ${r.added} new waypoint${r.added === 1 ? '' : 's'} to the note` : 'Already in the note — nothing new to add')
+      : `Saved ${lines.length} waypoint${lines.length === 1 ? '' : 's'} as a note`)
+      + (skipped ? ` (${skipped} without coordinates skipped)` : ''));
+  });
   $('#harv-sel-clear').addEventListener('click', () => {
     harvState.checked.clear();
     renderHarvesters();
@@ -1614,6 +1648,11 @@ function initHarvesters() {
     const h = harvState.items.find((x) => String(x.id) === String(btn.dataset.hid));
     if (!h) return;
     const act = btn.dataset.hact;
+    if (act === 'wp') {
+      const cmd = harvWpCmd(h);
+      if (cmd) copyTextToClipboard(cmd, `Copied — paste in game: ${cmd}`);
+      return;
+    }
     if (act === 'log') { harvExpandLog(h.id); return; }
     if (act === 'clone') { harvClone(h); return; }
     if (act === 'edit') { harvOpenForm(h); return; }

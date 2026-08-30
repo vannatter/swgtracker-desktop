@@ -53,6 +53,12 @@ function mycVisibleItems() {
   const q = $('#cust-search').value.trim().toLowerCase();
   let items = mycState.items;
   if (mycState.tagFilter) items = items.filter((c) => mycTags(c).includes(mycState.tagFilter));
+  // activity filter: positive = bought within N days, negative = quiet for N+
+  const act = Number($('#cust-activity').value || 0);
+  if (act) {
+    const cutoff = Math.floor(Date.now() / 1000) - Math.abs(act) * 86400;
+    items = items.filter((c) => (act > 0 ? safeInt(c.last_ts) >= cutoff : safeInt(c.last_ts) < cutoff));
+  }
   if (q) items = items.filter((c) => String(c.name || '').toLowerCase().includes(q)
     || String(c.full_name || '').toLowerCase().includes(q)
     || String(c.tags || '').toLowerCase().includes(q));
@@ -200,7 +206,35 @@ function mycdRenderNotes() {
 function initMyCustomers() {
   buildMycHeader();
   $('#cust-search').addEventListener('input', () => renderMyCustomers());
+  $('#cust-activity').addEventListener('change', () => renderMyCustomers());
   $('[data-refresh="customers"]').addEventListener('click', () => loadMyCustomers());
+
+  // names export: the selection when there is one, else everyone in view —
+  // one per line, for in-game mail runs
+  const mycExportNames = () => {
+    const vis = mycVisibleItems();
+    const sel = vis.filter((c) => mycState.checked.has(c.name));
+    return (sel.length ? sel : vis).map((c) => c.name).filter(Boolean);
+  };
+  const mycExportLabel = () => {
+    const opt = $('#cust-activity');
+    const t = opt.value ? opt.options[opt.selectedIndex].textContent.toLowerCase() : '';
+    return `Customers${t ? ` — ${t}` : ''}`;
+  };
+  $('#cust-copy-names').addEventListener('click', () => {
+    const names = mycExportNames();
+    if (!names.length) { toast('No customers in view', false); return; }
+    copyTextToClipboard(names.join('\n') + '\n', `Copied ${names.length} name${names.length === 1 ? '' : 's'}`);
+  });
+  $('#cust-names-note').addEventListener('click', async () => {
+    const names = mycExportNames();
+    if (!names.length) { toast('No customers in view', false); return; }
+    const r = await notesAddFromText(mycExportLabel(), names.join('\n') + '\n');
+    showPage('notes');
+    toast(r.merged
+      ? (r.added ? `Added ${r.added} new name${r.added === 1 ? '' : 's'} to the note` : 'Already in the note — nothing new to add')
+      : `Saved ${names.length} name${names.length === 1 ? '' : 's'} as a note`);
+  });
 
   $('#cust-head').addEventListener('click', (e) => {
     const th = e.target.closest('[data-sort]');

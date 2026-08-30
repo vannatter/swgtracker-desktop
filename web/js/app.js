@@ -18,6 +18,7 @@ const PAGE_LOADERS = {
   factories: () => loadFactories(),
   inventory: () => loadInventory(),
   alerts: () => loadAlerts(),
+  notes: () => loadNotes(),
   lab: () => loadLab(),
   monitor: () => loadMail(),
   scanner: () => loadScanner(),
@@ -907,6 +908,7 @@ async function boot() {
   initMail();
   initScanner();
   initFactories();
+  initNotesPage();
   initMyCustomers();
   initDevMode();
   initAbout();

@@ -210,7 +210,7 @@ function resRowHtml(res) {
     // rank this spawn top-5 right now — requested by Philosophy/Eponine.
     // data-resname carries the clean name: the cell's TEXT now ends with the
     // count digits, so textContent would navigate to "Aqui13"
-    if (field === 'name') return `<td class="col-name res-name" data-resname="${escapeHtml(res.name || '')}">${escapeHtml(res.name || '')}${safeInt(res.topcount) > 0
+    if (field === 'name') return `<td class="col-name res-name" data-resname="${escapeHtml(res.name || '')}" data-resid="${escapeHtml(String(id))}">${escapeHtml(res.name || '')}${safeInt(res.topcount) > 0
       ? `<sup class="res-topcount" title="Top resource for ${safeInt(res.topcount)} schematic${safeInt(res.topcount) === 1 ? '' : 's'} — see its Top Uses tab">${safeInt(res.topcount)}</sup>` : ''}</td>`;
     if (field === 'status') return `<td class="col-status"><i class="fa-solid fa-circle res-status ${isActive ? 'on' : 'off'}" title="${isActive ? 'Active — in spawn' : 'Inactive — despawned'}"></i></td>`;
     if (field === 'type_name') {
@@ -325,7 +325,9 @@ async function loadResources() {
     return;
   }
 
+  resState.lastRows = rows; // the waypoints→note export scopes to what's on screen
   $('#res-body').innerHTML = rows.map(resRowHtml).join('');
+  resWpCounts().then(resAnnotateWaypoints); // waypoint badges land when the (cached) pool answers
   $('#res-status').textContent = `Page ${page} — showing ${rows.length}${fetched === rows.length ? '' : ` of ${fetched}`} resources`
     + (data.offline ? ' · offline data' : '');
   if (data.offline) setOffline(true); // don't wait for the next pulse poll
@@ -543,10 +545,86 @@ async function loadSavedSearches() {
   } catch (_) { /* offline / no config — leave empty */ }
 }
 
+// community waypoint counts (resource_id -> n), cached a few minutes — one
+// tiny API call decorates every page of results and feeds nothing else
+async function resWpCounts() {
+  const now = Date.now();
+  if (resState.wpCounts && now - (resState.wpAt || 0) < 5 * 60 * 1000) return resState.wpCounts;
+  try {
+    const res = await apiFetch('GET', 'api/waypoints.php');
+    const m = new Map();
+    for (const w of ((res.ok && res.data && res.data.results) || [])) {
+      const k = String(w.resource_id);
+      m.set(k, (m.get(k) || 0) + 1);
+    }
+    resState.wpCounts = m;
+    resState.wpAt = now;
+  } catch (_) { /* badges just don't show */ }
+  return resState.wpCounts || new Map();
+}
+
+// location-dot badge on rows whose resource has shared waypoints; icon only —
+// the name cell's trailing text must stay clean for the click navigation
+function resAnnotateWaypoints() {
+  const m = resState.wpCounts;
+  if (!m || !m.size) return;
+  document.querySelectorAll('#res-body .res-name[data-resid]').forEach((td) => {
+    if (td.querySelector('.res-wpmark')) return;
+    const n = m.get(td.dataset.resid);
+    if (!n) return;
+    const sup = document.createElement('sup');
+    sup.className = 'res-wpmark';
+    sup.title = `${n} shared waypoint${n === 1 ? '' : 's'} — “Waypoints → note” collects them`;
+    sup.innerHTML = '<i class="fa-solid fa-location-dot"></i>';
+    td.appendChild(sup);
+  });
+}
+
 function initResources() {
   buildResHeader();
   populateFilters();
   loadSavedSearches();
+
+  // community waypoints for the on-screen resources -> one note, /wp per line
+  $('#res-wp-note').addEventListener('click', async () => {
+    const btn = $('#res-wp-note');
+    btn.disabled = true;
+    try {
+      const res = await apiFetch('GET', 'api/waypoints.php');
+      const all = (res.ok && res.data && res.data.results) || [];
+      const ids = new Set((resState.lastRows || []).map((r) => String(r.id)));
+      const mine = all.filter((w) => ids.has(String(w.resource_id)));
+      if (!mine.length) {
+        // say WHY: despawned resources can't have waypoints (the community pool
+        // only keeps them for active spawns), active ones just have none shared
+        const rowsNow = resState.lastRows || [];
+        const activeN = rowsNow.filter((x) => safeInt(x.status) === 1).length;
+        const despawnedN = rowsNow.length - activeN;
+        let msg;
+        if (!rowsNow.length) {
+          msg = 'No resources on screen to look up';
+        } else if (!activeN) {
+          msg = `The ${despawnedN === 1 ? 'resource' : `${despawnedN} resources`} on screen ${despawnedN === 1 ? 'has' : 'have all'} despawned — waypoints only exist for resources still in spawn`;
+        } else {
+          msg = `Nobody has shared a waypoint for the active resource${activeN === 1 ? '' : 's'} on screen yet`
+            + (despawnedN ? ` (the ${despawnedN} despawned one${despawnedN === 1 ? '' : 's'} can't have any)` : '')
+            + ` — the community pool holds ${all.length} waypoint${all.length === 1 ? '' : 's'} right now`;
+        }
+        toast(msg, false);
+        return;
+      }
+      const lines = mine.map((w) => `${w.waypoint} ${w.resource_name}${w.concentration ? ` ${w.concentration}%` : ''}`);
+      const r = await notesAddFromText('Resource waypoints', lines.join('\n') + '\n');
+      showPage('notes');
+      toast(r.merged
+        ? (r.added ? `Added ${r.added} new waypoint${r.added === 1 ? '' : 's'} to the note` : 'Already in the note — nothing new to add')
+        : `Saved ${lines.length} waypoint${lines.length === 1 ? '' : 's'} as a note`);
+    } catch (_) {
+      toast('Fetching waypoints failed', false);
+    } finally {
+      btn.disabled = false;
+    }
+  });
 
   // Filter menu: open/close, quick presets, custom stat builder
   $('#res-filter-btn').addEventListener('click', (e) => { e.stopPropagation(); toggleFilterMenu(); });

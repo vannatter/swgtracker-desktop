@@ -48,6 +48,7 @@
         <li class="nav-item" data-page="characters"><i class="fa-solid fa-user-group"></i> Characters</li>
         <li class="nav-item" data-page="harvesters"><i class="fa-solid fa-tractor"></i> Harvesters</li>
         <li class="nav-item" data-page="factories"><i class="fa-solid fa-industry"></i> Factories</li>
+        <li class="nav-item" data-page="notes"><i class="fa-solid fa-note-sticky"></i> Notes</li>
         <li class="nav-item" data-page="alerts"><i class="fa-solid fa-bell"></i> Spawn Alerts</li>
         <li class="nav-item" data-page="monitor"><i class="fa-solid fa-envelope"></i> Mail</li>
         <li class="nav-item" data-page="lab"><i class="fa-solid fa-flask"></i> Laboratory</li>
@@ -84,6 +85,8 @@
       <section id="page-resources" class="page active">
         <div class="page-head">
           <h1>Resources</h1>
+          <button id="res-wp-note" class="btn btn-sm btn-outline-secondary head-right"
+                  title="Save the community waypoints for the resources on screen (active spawns only) as a note — filter first to narrow it down"><i class="fa-solid fa-location-dot"></i> Waypoints → note</button>
           <button class="btn btn-icon" data-refresh="resources" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
         </div>
 
@@ -411,7 +414,16 @@
       <section id="page-customers" class="page">
         <div class="page-head">
           <h1>My Customers <i class="fa-solid fa-circle-question info-tip" title="Everyone who has bought from your vendors, ranked by Score — a blend of how recently, how often and how much they buy. Click a customer for their scorecard."></i></h1>
+          <select id="cust-activity" class="form-select filter-select head-filter" title="Filter by last purchase">
+            <option value="">Any activity</option>
+            <option value="30">Active 30d</option>
+            <option value="60">Active 60d</option>
+            <option value="90">Active 90d</option>
+            <option value="-90">Inactive 90d+</option>
+          </select>
           <input id="cust-search" type="text" class="form-control filter-input head-search" placeholder="Search customers...">
+          <button id="cust-copy-names" class="btn btn-sm btn-outline-secondary" title="Copy names — the selected customers, or everyone in view — one per line, ready for in-game mail"><i class="fa-solid fa-copy"></i> Names</button>
+          <button id="cust-names-note" class="btn btn-sm btn-outline-secondary" title="Save those names as a note"><i class="fa-solid fa-note-sticky"></i> To note</button>
           <button id="cust-newgroup" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-folder-plus"></i> New Group</button>
           <button class="btn btn-icon" data-refresh="customers" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
         </div>
@@ -695,6 +707,8 @@
           <span id="harv-selbar-n" class="inv-selbar-count"></span>
           <input id="harv-bulk-tags" type="text" class="form-control filter-input inv-bulk-vendor" placeholder="Add tags" autocomplete="off">
           <button id="harv-bulk-apply" class="btn btn-sm btn-accent">Apply</button>
+          <button id="harv-bulk-wp" class="btn btn-sm btn-outline-secondary" title="Copy /waypoint commands for the selected harvesters (those with planet + x/y entered)"><i class="fa-solid fa-location-dot"></i> Waypoints</button>
+          <button id="harv-bulk-wpnote" class="btn btn-sm btn-outline-secondary" title="Save the selected harvesters' /waypoint commands as a note"><i class="fa-solid fa-note-sticky"></i> To note</button>
           <button id="harv-sel-clear" class="btn btn-icon" title="Clear selection"><i class="fa-solid fa-xmark"></i></button>
         </div>
 
@@ -1088,6 +1102,39 @@
           </div>
         </div>
       </div>
+
+      <section id="page-notes" class="page">
+        <div class="page-head">
+          <h1>Notes</h1>
+          <i class="fa-solid fa-circle-info info-tip"
+             title="A local note library — customer lists, waypoint sets, anything worth keeping. Notes live on this machine only; copy them to the clipboard to paste in game (/note opens the in-game notepad). Direct sync with the game's notes files is planned."></i>
+          <input id="notes-search" type="text" class="form-control filter-input head-search head-right" placeholder="Search..."
+                 title="Searches titles, characters, and note text" autocomplete="off">
+          <button id="notes-new" class="btn btn-sm btn-accent"><i class="fa-solid fa-plus"></i> New Note</button>
+        </div>
+        <div id="notes-empty" class="al-empty" hidden>No notes yet — click <b>New Note</b> and keep waypoints,
+          customer lists, or anything else at hand. Notes stay on this machine; copy one to paste in game.</div>
+        <div id="notes-layout" class="notes-layout" hidden>
+          <div class="notes-side">
+            <div id="notes-list"></div>
+          </div>
+          <div class="notes-main">
+            <div id="notes-none" class="notes-none">Select a note — or create one.</div>
+            <div id="notes-editor" hidden>
+              <div class="notes-editor-head">
+                <input id="note-f-title" class="form-control filter-input notes-title" placeholder="Title" autocomplete="off" maxlength="80">
+                <input id="note-f-char" class="form-control filter-input notes-char" placeholder="Character (optional)" list="notes-chars" autocomplete="off" maxlength="40">
+                <datalist id="notes-chars"></datalist>
+                <button id="note-save" class="btn btn-sm" disabled>Save</button>
+                <button id="note-copy" class="btn btn-icon" title="Copy the note text to the clipboard"><i class="fa-solid fa-copy"></i></button>
+                <button id="note-del" class="btn btn-icon" title="Delete this note"><i class="fa-solid fa-trash-can"></i></button>
+              </div>
+              <textarea id="note-f-content" class="notes-content" spellcheck="false"
+                        placeholder="Waypoints, customer notes, shopping lists — anything you want at hand."></textarea>
+            </div>
+          </div>
+        </div>
+      </section>
 
       <section id="page-settings" class="page">
         <div class="page-head"><h1>Settings</h1></div>
@@ -1925,6 +1972,7 @@
   <script src="js/settings.js"></script>
   <script src="js/alerts.js"></script>\n  <script src="js/lab.js"></script>
   <script src="js/mail.js"></script>
+  <script src="js/notes.js"></script>
   <script src="js/scanner.js"></script>
   <script src="js/app.js"></script>
 </body>

@@ -2428,3 +2428,34 @@ tr.row-detail > td { background: var(--bg-tertiary); padding: 0; }
 .ins-panel.collapsed .ins-caret { transform: rotate(-90deg); }
 .ins-panel.collapsed .ins-panel-head { margin-bottom: 0; }
 .ins-panel.collapsed .ins-panel-body { display: none; }
+
+/* ---- Notes page: library list + editor ---- */
+/* fills the .page column (which is height:100% of .app-content) — the extra
+   specificity beats the page's blanket `> * { flex-shrink: 0 }` rule */
+.page.active > .notes-layout { flex: 1 1 auto; min-height: 0; }
+.notes-layout { display: flex; gap: 14px; align-items: stretch; }
+.notes-side { flex: 0 0 260px; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+#notes-list { overflow-y: auto; min-height: 0; flex: 1; display: flex; flex-direction: column; gap: 6px; }
+.notes-item { background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; cursor: pointer; }
+.notes-item:hover { border-color: var(--text-muted); }
+.notes-item-sel { border-color: var(--accent); }
+.notes-item-title { color: var(--text-primary); font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.notes-item-sub { color: var(--text-muted); font-size: 11px; display: flex; gap: 8px; margin-top: 2px; }
+.notes-item-char { color: var(--accent-green); }
+.notes-main { flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
+#notes-editor { display: flex; flex-direction: column; gap: 8px; min-height: 0; flex: 1; }
+#notes-editor[hidden] { display: none; }
+.notes-editor-head { display: flex; gap: 8px; align-items: center; }
+.notes-title { flex: 1; min-width: 0; }
+.notes-char { flex: 0 0 180px; }
+.notes-content { flex: 1; min-height: 0; resize: none; background: var(--bg-input); color: var(--text-primary);
+  border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 13px; line-height: 1.5; }
+/* keep the dark ground on focus too — Bootstrap's .form-control:focus went
+   white here before the class was dropped; belt and braces */
+.notes-content:focus { outline: none; border-color: var(--border); background: var(--bg-input); color: var(--text-primary); }
+.notes-empty { color: var(--text-muted); font-size: 12px; padding: 10px 4px; }
+.notes-none { color: var(--text-muted); flex: 1; display: flex; align-items: center; justify-content: center; }
+.notes-none[hidden] { display: none; }
+.notes-layout[hidden] { display: none; }
+.res-wpmark { color: var(--accent-green); font-size: 9px; margin-left: 3px; }

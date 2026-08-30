@@ -229,6 +229,19 @@ function fmtAgoTip(dt) {
   return `<span title="${escapeHtml(fmtDate(dt))}">${fmtAgo(dt)}</span>`;
 }
 
+// Clipboard write with the execCommand fallback WKWebView sometimes needs;
+// toasts the given message on success either way.
+async function copyTextToClipboard(text, msg) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (_) {
+    const ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta);
+    ta.select(); document.execCommand('copy'); ta.remove();
+  }
+  toast(msg);
+}
+
 // Transient toast, bottom-center (id #toast; class avoids Bootstrap's .toast)
 let _toastTimer = null;
 function toast(msg, ok = true) {

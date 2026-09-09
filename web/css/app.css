@@ -2459,3 +2459,10 @@ tr.row-detail > td { background: var(--bg-tertiary); padding: 0; }
 .notes-none[hidden] { display: none; }
 .notes-layout[hidden] { display: none; }
 .res-wpmark { color: var(--accent-green); font-size: 9px; margin-left: 3px; }
+.notes-gamebar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; color: var(--text-muted); font-size: 13px; }
+.notes-gamebar .filter-select { width: auto; max-width: 320px; }
+.notes-filepick { flex: 0 0 auto; max-width: 220px; }
+.notes-sync-banner { display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+  background: var(--bg-card); border: 1px solid var(--q-accept); border-radius: 6px;
+  color: var(--text-primary); font-size: 13px; }
+.notes-sync-banner i { color: var(--q-accept); }

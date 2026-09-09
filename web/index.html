@@ -1112,6 +1112,13 @@
                  title="Searches titles, characters, and note text" autocomplete="off">
           <button id="notes-new" class="btn btn-sm btn-accent"><i class="fa-solid fa-plus"></i> New Note</button>
         </div>
+        <div id="notes-gamebar" class="notes-gamebar" hidden
+             title="Your characters' in-game notepad files (opened with /note in game), found next to your mail folders">
+          <i class="fa-solid fa-gamepad"></i><span>Game notes:</span>
+          <select id="notes-file-pick" class="form-select filter-select"></select>
+          <button id="notes-pull" class="btn btn-sm btn-outline-secondary"
+                  title="Read this game notes file into a linked note — creates the note, or refreshes it from the file"><i class="fa-solid fa-download"></i> Read into note</button>
+        </div>
         <div id="notes-empty" class="al-empty" hidden>No notes yet — click <b>New Note</b> and keep waypoints,
           customer lists, or anything else at hand. Notes stay on this machine; copy one to paste in game.</div>
         <div id="notes-layout" class="notes-layout" hidden>
@@ -1125,9 +1132,19 @@
                 <input id="note-f-title" class="form-control filter-input notes-title" placeholder="Title" autocomplete="off" maxlength="80">
                 <input id="note-f-char" class="form-control filter-input notes-char" placeholder="Character (optional)" list="notes-chars" autocomplete="off" maxlength="40">
                 <datalist id="notes-chars"></datalist>
+                <select id="note-f-file" class="form-select filter-select notes-filepick" hidden
+                        title="Link this note to a game notes file — Push writes it there, and in-game edits sync back first"></select>
+                <button id="note-push" class="btn btn-sm btn-outline-secondary" hidden
+                        title="Write this note to its game file (always backsyncs first — in-game changes are offered into the note, never overwritten)"><i class="fa-solid fa-upload"></i> Push</button>
                 <button id="note-save" class="btn btn-sm" disabled>Save</button>
                 <button id="note-copy" class="btn btn-icon" title="Copy the note text to the clipboard"><i class="fa-solid fa-copy"></i></button>
                 <button id="note-del" class="btn btn-icon" title="Delete this note"><i class="fa-solid fa-trash-can"></i></button>
+              </div>
+              <div id="notes-sync-banner" class="notes-sync-banner" hidden>
+                <i class="fa-solid fa-rotate"></i>
+                <span id="notes-sync-msg">This note's game file changed in game.</span>
+                <button id="notes-sync-append" class="btn btn-sm btn-accent" title="Add the lines the game wrote (that this note doesn't have) to the note">Append changes to note</button>
+                <button id="notes-sync-replace" class="btn btn-sm btn-outline-secondary" title="Throw away the note's text and take the game's copy">Replace note with game copy</button>
               </div>
               <textarea id="note-f-content" class="notes-content" spellcheck="false"
                         placeholder="Waypoints, customer notes, shopping lists — anything you want at hand."></textarea>

@@ -1027,6 +1027,125 @@ class WebApi:
         except Exception as e:
             return _err(e)
 
+    # --- Game notes files (in-game notepad sync; per-character notes.txt) ---
+    # The invariant is BACKSYNC FIRST: every read snapshots what's on disk into
+    # notes_file_versions before anything else happens, and writes refuse to
+    # land on a file that moved since the caller last looked (the game rewrites
+    # these files when the in-game notepad closes).
+
+    def _notes_candidates(self):
+        """notes.txt candidates probed from the configured mail folders — the
+        mail dir sits at profiles/<acct>/<galaxy>/mail_<Char>, so we check the
+        char, galaxy, and account levels. Direct path probes only, no scans."""
+        from pathlib import Path
+        out, seen = [], set()
+        for entry in (self.config.get("mail_paths") or []):
+            raw = str((entry or {}).get("path", "") or "").strip()
+            if not raw:
+                continue
+            p = Path(raw).expanduser()
+            label = str((entry or {}).get("label", "") or "").strip()
+            char = p.name[5:] if p.name.startswith("mail_") else label
+            cands = [p / "notes.txt", p.parent / "notes.txt"]
+            if char:
+                cands.append(p.parent / char / "notes.txt")
+            if p.name.startswith("mail_"):
+                cands.append(p.parent.parent / "notes.txt")
+            for c in cands:
+                try:
+                    rc = str(c.expanduser().resolve())
+                except OSError:
+                    continue
+                if rc not in seen:
+                    seen.add(rc)
+                    out.append({"path": rc, "char": char or label})
+        return out
+
+    def _notes_validate(self, path):
+        """Only discovered candidates may be read or written."""
+        from pathlib import Path
+        rc = str(Path(str(path)).expanduser().resolve())
+        if rc not in {c["path"] for c in self._notes_candidates()}:
+            raise ValueError("not a discovered notes file")
+        return rc
+
+    def notes_files(self):
+        """Discovered game notes files with existence + current hash; any disk
+        state the history hasn't recorded gets snapshotted on the way through."""
+        from pathlib import Path
+        try:
+            rows = []
+            for c in self._notes_candidates():
+                p = Path(c["path"])
+                row = {"path": c["path"], "char": c["char"], "exists": p.is_file()}
+                if row["exists"]:
+                    try:
+                        text = p.read_text("utf-8", errors="replace")
+                        row["hash"] = self.local_db.notes_version_add(c["path"], text, "game")
+                        row["mtime"] = int(p.stat().st_mtime)
+                        row["size"] = len(text)
+                    except OSError:
+                        row["exists"] = False
+                rows.append(row)
+            return _ok({"files": rows})
+        except Exception as e:
+            return _err(e)
+
+    def notes_file_read(self, path):
+        from pathlib import Path
+        try:
+            rc = self._notes_validate(path)
+            p = Path(rc)
+            if not p.is_file():
+                return _ok({"path": rc, "exists": False, "content": "", "hash": None})
+            text = p.read_text("utf-8", errors="replace")
+            h = self.local_db.notes_version_add(rc, text, "game")
+            return _ok({"path": rc, "exists": True, "content": text, "hash": h})
+        except Exception as e:
+            return _err(e)
+
+    def notes_file_write(self, path, content, base_hash=None):
+        """Guarded write: when the file changed since base_hash, nothing is
+        written — the current disk copy comes back for the caller to backsync
+        and retry. The pre-write disk state is always snapshotted first."""
+        import sys
+        from pathlib import Path
+        try:
+            rc = self._notes_validate(path)
+            p = Path(rc)
+            disk_hash = None
+            if p.is_file():
+                disk = p.read_text("utf-8", errors="replace")
+                disk_hash = self.local_db.notes_version_add(rc, disk, "game")
+                if disk_hash != (base_hash or None):
+                    return _ok({"conflict": True, "content": disk, "hash": disk_hash})
+            elif base_hash:
+                return _ok({"conflict": True, "content": "", "hash": None})
+            if not p.parent.is_dir():
+                return _err(f"folder missing: {p.parent}")
+            text = str(content or "").replace("\r\n", "\n")
+            if sys.platform == "win32":
+                text = text.replace("\n", "\r\n")  # the game writes CRLF
+            p.write_text(text, encoding="utf-8", newline="")
+            h = self.local_db.notes_version_add(rc, text, "app")
+            return _ok({"conflict": False, "hash": h})
+        except Exception as e:
+            return _err(e)
+
+    def notes_file_versions(self, path):
+        """Snapshot history for one file (metadata only) — the recovery path."""
+        try:
+            rc = self._notes_validate(path)
+            return _ok({"versions": self.local_db.notes_versions(rc)})
+        except Exception as e:
+            return _err(e)
+
+    def notes_version_content(self, version_id):
+        try:
+            return _ok({"content": self.local_db.notes_version_content(int(version_id))})
+        except Exception as e:
+            return _err(e)
+
     # --- Config ---
 
     # Secrets never cross the bridge; everything else does. A BLOCKLIST (not a

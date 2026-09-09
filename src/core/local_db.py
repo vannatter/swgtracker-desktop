@@ -125,6 +125,19 @@ class LocalDB:
                 value TEXT
             );
 
+            -- Every distinct state of a game notes file we ever see or write:
+            -- the backsync safety net — the in-game notepad clobbers external
+            -- edits on close, so nothing touches a file without snapshotting.
+            CREATE TABLE IF NOT EXISTS notes_file_versions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                path TEXT NOT NULL,
+                hash TEXT NOT NULL,
+                content TEXT NOT NULL,
+                source TEXT NOT NULL,   -- 'game' = seen on disk, 'app' = we wrote it
+                ts INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_notesver_path ON notes_file_versions(path, ts);
+
             -- Uploaded-mail ledger: restarts never re-send a mail the server has
             CREATE TABLE IF NOT EXISTS mail_ledger (
                 mail_id TEXT PRIMARY KEY,
@@ -545,6 +558,40 @@ class LocalDB:
             (str(character),))
         self._conn.commit()
         return cur.rowcount
+
+    # --- Game notes-file versions (the backsync safety net) ---
+
+    def notes_version_add(self, path: str, content: str, source: str) -> str:
+        """Record this file state unless it's already the newest snapshot;
+        returns the content hash either way. Keeps the last 25 per file."""
+        import hashlib
+        h = hashlib.sha1(content.encode("utf-8", "replace")).hexdigest()
+        with self._lock:
+            last = self._conn.execute(
+                "SELECT hash FROM notes_file_versions WHERE path = ? ORDER BY id DESC LIMIT 1",
+                (path,)).fetchone()
+            if last and last["hash"] == h:
+                return h
+            self._conn.execute(
+                "INSERT INTO notes_file_versions (path, hash, content, source, ts) VALUES (?, ?, ?, ?, ?)",
+                (path, h, content, source, int(time.time())))
+            self._conn.execute(
+                "DELETE FROM notes_file_versions WHERE path = ? AND id NOT IN "
+                "(SELECT id FROM notes_file_versions WHERE path = ? ORDER BY id DESC LIMIT 25)",
+                (path, path))
+            self._conn.commit()
+        return h
+
+    def notes_versions(self, path: str, limit: int = 25) -> list[dict]:
+        rows = self._conn.execute(
+            "SELECT id, hash, source, ts, length(content) AS size FROM notes_file_versions "
+            "WHERE path = ? ORDER BY id DESC LIMIT ?", (path, int(limit))).fetchall()
+        return [dict(r) for r in rows]
+
+    def notes_version_content(self, version_id: int) -> str:
+        row = self._conn.execute(
+            "SELECT content FROM notes_file_versions WHERE id = ?", (int(version_id),)).fetchone()
+        return (row["content"] or "") if row else ""
 
     def mail_sales_count(self) -> int:
         return self._conn.execute(

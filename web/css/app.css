@@ -2466,3 +2466,16 @@ tr.row-detail > td { background: var(--bg-tertiary); padding: 0; }
   background: var(--bg-card); border: 1px solid var(--q-accept); border-radius: 6px;
   color: var(--text-primary); font-size: 13px; }
 .notes-sync-banner i { color: var(--q-accept); }
+/* customer tag popover: fixed width, small controls — everything deliberate */
+.cust-tag-pop { width: 260px; }
+.cust-tag-pop .fac-tagbar { gap: 6px; }
+.cust-tag-pop .fac-tag { cursor: default; }
+.cust-tag-pop .fac-tag i { margin-left: 4px; opacity: .65; cursor: pointer; }
+.cust-tag-pop .fac-tag i:hover { opacity: 1; color: var(--accent-hover); }
+.cust-tag-pop .filter-input { width: 100%; font-size: 12px; padding: 5px 8px; margin-top: 6px; }
+.cust-tag-none { color: var(--text-muted); font-size: 12px; padding: 2px 0; }
+.myc-card-tags { display: inline-flex; align-items: center; gap: 6px; margin-left: 10px; }
+.myc-card-tagbtn { color: var(--text-muted); cursor: pointer; font-size: 12px; }
+.myc-card-tagbtn:hover { color: var(--text-hover); }
+.custd-notes-inline { margin-top: 10px; }
+.custd-notes-inline .mysd-notes-body { max-height: 110px; overflow-y: auto; }

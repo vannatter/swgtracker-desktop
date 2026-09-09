@@ -431,8 +431,9 @@
         <div id="cust-selbar" class="inv-selbar" hidden
              title="Comma-separated — added to each selected customer's existing tags, never replacing them">
           <span id="cust-selbar-n" class="inv-selbar-count"></span>
-          <input id="cust-bulk-tags" type="text" class="form-control filter-input inv-bulk-vendor" placeholder="Add tags" autocomplete="off">
+          <input id="cust-bulk-tags" type="text" class="form-control filter-input inv-bulk-vendor" placeholder="Add or remove tags" autocomplete="off">
           <button id="cust-bulk-apply" class="btn btn-sm btn-accent">Apply</button>
+          <button id="cust-bulk-remove" class="btn btn-sm btn-outline-secondary" title="Strip the entered tag(s) from every selected customer">Remove</button>
           <button id="cust-sel-clear" class="btn btn-icon" title="Clear selection"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <div class="table-wrap">
@@ -1682,6 +1683,8 @@
       </div>
     </div>
   </div>
+
+  <div id="cust-tag-pop" class="stk-schem-pop cust-tag-pop" hidden></div>
 
   <!-- Community resource editing: fix stats reported wrong; applies for everyone -->
   <div id="res-edit-modal" class="key-gate" hidden>

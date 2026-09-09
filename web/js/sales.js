@@ -135,19 +135,26 @@ function showSalesEmpty(msg) {
 // mails pad names with runs of spaces, so a hand-typed inventory entry can
 // silently miss its sales — this makes the gap visible right where the sale
 // is, and one click adds the item with the sale's exact name and vendor.
-// Matching mirrors the server's sales matcher: case- and whitespace-blind.
-let salesInvNames = null; // Set of normalized tracked item names, null = not loaded
+// Matching mirrors the server's sales matcher: case- and whitespace-blind,
+// and vendor-aware — a row pinned to a vendor only covers sales from that
+// vendor (vendor-less rows cover sales from anywhere), same as the depletion
+// cron. So an item tracked only at vendor A still flags its vendor-B sales.
+let salesInvNames = null; // Map normalized item name -> Set of normalized vendors ('' = any), null = not loaded
 
 const salesNormItem = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
 
 async function salesLoadInvNames() {
-  const names = new Set();
+  const names = new Map();
   for (let p = 1; p <= 6; p++) { // 500/page — covers 3000 tracked items
     let r;
     try { r = await api().get_inventory({ page: p, perpage: 500 }); } catch (_) { return; }
     if (!r.ok || !r.data) return; // unknown state — leave the flags off rather than wrong
     const rows = r.data.results || [];
-    rows.forEach((i) => names.add(salesNormItem(i.item_name)));
+    rows.forEach((i) => {
+      const k = salesNormItem(i.item_name);
+      if (!names.has(k)) names.set(k, new Set());
+      names.get(k).add(salesNormItem(i.vendor));
+    });
     if (rows.length < 500) break;
   }
   salesInvNames = names;
@@ -156,7 +163,9 @@ async function salesLoadInvNames() {
 function salesMarkMissing() {
   if (!salesInvNames) return;
   document.querySelectorAll('#sales-body td.col-name[data-filter]').forEach((td) => {
-    const missing = !salesInvNames.has(salesNormItem(td.dataset.filter));
+    const vendors = salesInvNames.get(salesNormItem(td.dataset.filter));
+    const saleVendor = salesNormItem(td.closest('tr')?.children[3]?.dataset.filter);
+    const missing = !vendors || !(vendors.has('') || vendors.has(saleVendor));
     const ico = td.querySelector('.sales-notinv');
     if (missing && !ico) {
       td.insertAdjacentHTML('beforeend',
@@ -170,8 +179,12 @@ function salesMarkMissing() {
 }
 
 // inventory.js calls this after any add so the flags clear without a reload
-function salesOnInvAdded(name) {
-  if (salesInvNames) salesInvNames.add(salesNormItem(name));
+function salesOnInvAdded(name, vendor) {
+  if (salesInvNames) {
+    const k = salesNormItem(name);
+    if (!salesInvNames.has(k)) salesInvNames.set(k, new Set());
+    salesInvNames.get(k).add(salesNormItem(vendor));
+  }
   salesMarkMissing();
 }
 

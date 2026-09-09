@@ -392,7 +392,7 @@ async function addInvItem() {
     toast(editId ? `${name} updated` : `${name} added to inventory`);
     $('#inv-add-modal').hidden = true;
     loadInventory();
-    if (typeof salesOnInvAdded === 'function') salesOnInvAdded(name); // clear Sales' "not in inventory" flags
+    if (typeof salesOnInvAdded === 'function') salesOnInvAdded(name, $('#inv-new-vendor').value); // clear Sales' "not in inventory" flags
   } else {
     toast(`Couldn't save ${name}: ${res.error || 'server error'}`, false); // 409 = duplicate
     checkAuthError(res.error);

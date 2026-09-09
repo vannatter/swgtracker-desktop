@@ -352,6 +352,10 @@ async function openInsCustCard(name, mount = 'modal') {
   insGaugeShow($('#ins-cust-gauge'), b.score, gaugeClass[b.tier] || 'g-one');
   $('#ins-cust-score').innerHTML =
     `<span class="ins-tier ${INS_TIER_CLASS[b.tier]}">${b.tier}</span>`;
+  if (typeof mycRenderCardTags === 'function') mycRenderCardTags(b.name); // editable tags ride the chip row
+  // page-injected notes block must not leak into another customer's card —
+  // the customers page re-adds it after its meta fetch
+  document.querySelectorAll('#custd-notes-inline').forEach((el) => el.remove());
   const trendTxt = b.hasTrend && b.trend !== 0
     ? ` · ${b.trend >= 1e9 ? 'all activity is recent' : b.trend > 0 ? `trending ▲${b.trend}%` : b.trend <= -1e9 ? 'quiet lately' : `slowing ▼${Math.abs(b.trend)}%`}`
     : '';

@@ -75,7 +75,7 @@ function mycRowHtml(c) {
   return `<tr data-cname="${escapeHtml(c.name)}"${mycState.groups.length ? ' draggable="true"' : ''}>
     <td class="pin-cell cust-sel-cell"><input type="checkbox" class="cust-sel" data-selid="${escapeHtml(c.name)}"${mycState.checked.has(c.name) ? ' checked' : ''}></td>
     <td class="col-name res-name"><span class="stk-tagslot">${tags.length
-      ? `<i class="fa-solid fa-tag stk-tagind" title="${escapeHtml(tags.join(', '))}"></i>` : ''}</span>${escapeHtml(c.full_name || c.name)}</td>
+      ? `<i class="fa-solid fa-tag stk-tagind" data-custtagedit="${escapeHtml(c.name)}" title="${escapeHtml(tags.join(', '))} — click to edit or remove"></i>` : ''}</span>${escapeHtml(c.full_name || c.name)}</td>
     <td class="stat"><span class="ins-tier ${INS_TIER_CLASS[c.tier] || ''}">${safeInt(c.score)}</span> ${escapeHtml(c.tier || '')}</td>
     <td class="stat">${fmtNum(c.purchases)}</td>
     <td class="col-num sale-amount">${fmtNum(c.total)} cr</td>
@@ -194,13 +194,32 @@ async function openMycCard(name) {
   } catch (_) { /* notes just stay hidden */ }
 }
 
+// tags on the scorecard header, next to the tier chip — pills plus a tag icon
+// that opens the same popover editor the table rows use. Renders nothing when
+// the customers list isn't loaded (e.g. the Insights modal before a visit).
+function mycRenderCardTags(name) {
+  const host = $('#ins-cust-score');
+  if (!host) return;
+  host.querySelectorAll('.myc-card-tags').forEach((el) => el.remove());
+  const c = mycState.items.find((x) => x.name === name);
+  if (!c) return;
+  const tags = mycTags(c);
+  host.insertAdjacentHTML('beforeend', `<span class="myc-card-tags">${tags.map((t) =>
+    `<span class="fac-pill fac-pill-tag">${escapeHtml(t)}</span>`).join('')}<i class="fa-solid fa-tag myc-card-tagbtn"
+    data-custtagedit="${escapeHtml(c.name)}" title="${tags.length ? 'Edit tags' : 'Add a tag'}"></i></span>`);
+}
+
 function mycdRenderNotes() {
-  const el = $('#custd-notes');
+  // notes used to live under the whole card (below the purchases table) and
+  // were never seen — they now ride the card itself, under the insight line
+  $('#custd-notes').hidden = true;
+  const line = $('#ins-cust-scoreline');
+  if (!line) return;
+  document.querySelectorAll('#custd-notes-inline').forEach((el) => el.remove());
   const notes = mycState.cardMeta?.notes || '';
-  el.hidden = false;
-  el.innerHTML = labNotesText(notes)
+  line.insertAdjacentHTML('afterend', `<div id="custd-notes-inline" class="custd-notes-inline">${labNotesText(notes)
     ? `<div class="mysd-notes-body" data-custdnotes title="Click to edit notes">${labNotesHtml(notes)}</div>`
-    : '<a role="button" class="mysd-notes-add" data-custdnotes><i class="fa-regular fa-note-sticky"></i> Add notes</a>';
+    : '<a role="button" class="mysd-notes-add" data-custdnotes><i class="fa-regular fa-note-sticky"></i> Add notes</a>'}</div>`);
 }
 
 function initMyCustomers() {
@@ -330,6 +349,87 @@ function initMyCustomers() {
     renderMyCustomers();
   });
   $('#cust-bulk-tags').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#cust-bulk-apply').click(); });
+
+  // bulk Remove: strip the entered tags from every selected customer —
+  // the accidental-tag eraser (Izre Idress)
+  $('#cust-bulk-remove').addEventListener('click', async () => {
+    const drop = $('#cust-bulk-tags').value.split(',').map((t) => t.trim().toLowerCase()).filter(Boolean);
+    if (!drop.length) { toast('Type the tag(s) to remove first', false); return; }
+    const sel = mycState.items.filter((c) => mycState.checked.has(c.name));
+    let failed = 0, touched = 0;
+    for (const c of sel) {
+      const keep = mycTags(c).filter((t) => !drop.includes(t.toLowerCase()));
+      if (keep.length === mycTags(c).length) continue;
+      const r = await apiFetch('PUT', 'api/customers.php',
+        { data: { customer_name: c.name, tags: keep.join(', ') } }).catch((err) => ({ ok: false, error: String(err) }));
+      if (r.ok) { c.tags = keep.join(', '); touched++; } else failed++;
+    }
+    if (failed) { toast(`${failed} tag update${failed > 1 ? 's' : ''} failed`, false); return; }
+    toast(touched ? `Removed from ${touched} customer${touched === 1 ? '' : 's'}` : 'None of the selected customers carry those tags');
+    $('#cust-bulk-tags').value = '';
+    renderMyCustomers();
+  });
+
+  // per-customer tag editor: a small popover at the tag icon — × removes a
+  // pill on the spot, the inline box adds one, click-away closes
+  let custTagFor = null;
+  const custTagPop = $('#cust-tag-pop');
+  const custTagSave = async (c, tags) => {
+    const r = await apiFetch('PUT', 'api/customers.php',
+      { data: { customer_name: c.name, tags } }).catch((err) => ({ ok: false, error: String(err) }));
+    if (!r.ok) { toast(`Saving tags failed: ${r.error || 'server error'}`, false); return false; }
+    c.tags = tags;
+    return true;
+  };
+  const custTagPopRender = (keepInput) => {
+    const c = mycState.items.find((x) => x.name === custTagFor);
+    if (!c) { custTagPop.hidden = true; return; }
+    const pending = keepInput ? ($('#cust-tag-add')?.value || '') : '';
+    custTagPop.innerHTML = `<div class="fac-tagbar" style="margin:0">${mycTags(c).map((t) =>
+      `<span class="fac-tag">${escapeHtml(t)} <i class="fa-solid fa-xmark" data-droptag="${escapeHtml(t)}" title="Remove this tag"></i></span>`).join('')
+      || '<span class="cust-tag-none">no tags</span>'}</div>
+      <input id="cust-tag-add" type="text" class="form-control filter-input" placeholder="add tag + Enter"
+             maxlength="40" spellcheck="false" autocomplete="off">`;
+    if (pending) $('#cust-tag-add').value = pending;
+  };
+  // one document-level trigger: tag icons work in the table AND on the
+  // scorecard header; any click elsewhere closes the popover
+  document.addEventListener('click', (e) => {
+    const ico = e.target.closest('[data-custtagedit]');
+    if (!ico) {
+      if (!custTagPop.hidden && !e.target.closest('#cust-tag-pop')) custTagPop.hidden = true;
+      return;
+    }
+    custTagFor = ico.dataset.custtagedit;
+    custTagPopRender(false);
+    const r = ico.getBoundingClientRect();
+    custTagPop.hidden = false;
+    custTagPop.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 328))}px`;
+    custTagPop.style.top = r.bottom + custTagPop.offsetHeight + 8 < window.innerHeight
+      ? `${r.bottom + 4}px` : `${r.top - custTagPop.offsetHeight - 4}px`;
+    $('#cust-tag-add').focus();
+  });
+  custTagPop.addEventListener('click', async (e) => {
+    const x = e.target.closest('[data-droptag]');
+    if (!x) return;
+    const c = mycState.items.find((cc) => cc.name === custTagFor);
+    if (!c) return;
+    const keep = mycTags(c).filter((t) => t !== x.dataset.droptag).join(', ');
+    if (await custTagSave(c, keep)) { custTagPopRender(true); renderMyCustomers(); mycRenderCardTags(c.name); }
+  });
+  custTagPop.addEventListener('keydown', async (e) => {
+    if (e.key === 'Escape') { custTagPop.hidden = true; return; }
+    if (e.key !== 'Enter' || e.target.id !== 'cust-tag-add') return;
+    const add = e.target.value.trim();
+    const c = mycState.items.find((cc) => cc.name === custTagFor);
+    if (!add || !c) return;
+    if (await custTagSave(c, mergeTags(c.tags, add))) {
+      custTagPopRender(false);
+      $('#cust-tag-add').focus();
+      renderMyCustomers();
+      mycRenderCardTags(c.name);
+    }
+  });
   $('#cust-sel-clear').addEventListener('click', () => {
     mycState.checked.clear();
     renderMyCustomers();
@@ -396,7 +496,7 @@ function initMyCustomers() {
 
   // rows open the scorecard (checkbox / header rows keep their own behavior)
   $('#cust-body').addEventListener('click', (e) => {
-    if (e.target.closest('.cust-sel-cell, tr[data-grpkey], .grp-rename-input, input, button, a')) return;
+    if (e.target.closest('.cust-sel-cell, tr[data-grpkey], .grp-rename-input, input, button, a, [data-custtagedit]')) return;
     const row = e.target.closest('tr[data-cname]');
     if (row) openMycCard(row.dataset.cname);
   });
@@ -406,7 +506,7 @@ function initMyCustomers() {
     const link = e.target.closest('[data-nav]');
     if (link) showPage(link.dataset.nav);
   });
-  $('#custd-notes').addEventListener('click', (e) => {
+  document.addEventListener('click', (e) => { // notes block now lives inside the mounted card
     if (!e.target.closest('[data-custdnotes]') || !mycState.card) return;
     $('#cust-note-title').textContent = mycState.card;
     $('#cust-note-text').innerHTML = labNotesHtml(mycState.cardMeta?.notes || '');

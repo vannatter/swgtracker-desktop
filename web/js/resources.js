@@ -36,6 +36,11 @@ const RES_COLUMNS = [
 // filters: structured search terms (stat / ignore / date) composed into the
 //   server `search` param alongside the name box. savedSearches: named filter
 //   sets persisted to config.
+// the site's 16 recycled canonical types (source=9 server-side; the mirror
+// doesn't carry source, but these class codes hold nothing except that row)
+const RES_RECYCLED_CODES = new Set(['hmlk', 'pmet', 'gbne', 'ghrn', 'shid', 'pcer', 'mveg', 'mfrt',
+  'bwod', 'cchm', 'swtr', 'dspc', 'crad', 'sfer', 'snfr', 'lgem']);
+
 const resState = {
   page: 1, perPage: 50, hasNext: false, pinned: new Set(),
   sortField: '', sortOrder: 'DESC', filters: [], savedSearches: [],
@@ -325,6 +330,12 @@ async function loadResources() {
     return;
   }
 
+  // recycled canonical rows (Homogenized Milk & co) are permanently "active"
+  // so pickers can offer them, but they're not spawns — keep them out of the
+  // browse list unless the user searches by name (same rule as the website)
+  if (!$('#res-search').value.trim()) {
+    rows = rows.filter((r) => !RES_RECYCLED_CODES.has(String(r.type_code)));
+  }
   resState.lastRows = rows; // the waypoints→note export scopes to what's on screen
   $('#res-body').innerHTML = rows.map(resRowHtml).join('');
   resWpCounts().then(resAnnotateWaypoints); // waypoint badges land when the (cached) pool answers

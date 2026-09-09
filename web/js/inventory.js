@@ -130,6 +130,10 @@ function invRowHtml(item, idx) {
         class="fa-${Number(item.notify_email) ? 'solid' : 'regular'} fa-envelope${Number(item.notify_email) ? ' mys-alert-on' : ''}"></i></td>
     <td class="col-actions">
       <button class="btn btn-icon" data-notes="${idx}" title="${hasNotes ? escapeHtml(notePreview) : 'Add notes'}"><i class="fa-${hasNotes ? 'solid' : 'regular'} fa-note-sticky${hasNotes ? ' has-notes' : ''}"></i></button>
+      <button class="btn btn-icon" data-ioneoff="${idx}" title="${Number(item.one_off)
+        ? 'One-off — hidden from the default list; click to bring it back'
+        : 'Mark as one-off — keeps the sales data but hides it from the list and restock views (you’re not restocking this)'}"><i
+        class="fa-solid fa-box-archive${Number(item.one_off) ? ' mys-alert-on' : ''}"></i></button>
       <button class="btn btn-icon" data-iclone="${idx}" title="Clone — same numbers, tweak the name"><i class="fa-solid fa-clone"></i></button>
       <button class="btn btn-icon" data-iedit="${idx}" title="Edit vendor / stock"><i class="fa-solid fa-pen"></i></button>
       <button class="btn btn-icon" data-iremove="${idx}" title="Remove item"><i class="fa-solid fa-trash-can"></i></button>
@@ -256,7 +260,7 @@ async function loadInventory() {
     sort: invState.sortField,
     order: invState.sortOrder,
   };
-  if (filter === 'negative_stock' || filter === 'restock') params.inventory_type = filter;
+  if (filter === 'negative_stock' || filter === 'restock' || filter === 'one_off') params.inventory_type = filter;
   else if (filter === 'low') params.threshold = safeInt($('#inv-low').value);
 
   let res, groups;
@@ -779,6 +783,22 @@ function initInventory() {
         else toast(item.notify_email
           ? `Restock emails ON — ${item.item_name}`
           : `Restock emails off — ${item.item_name}`);
+      }).catch((err) => toast(String(err), false));
+      return;
+    }
+    const oneOff = e.target.closest('[data-ioneoff]');
+    if (oneOff) {
+      const item = invState.items[safeInt(oneOff.dataset.ioneoff)];
+      if (!item) return;
+      const on = Number(item.one_off) ? 0 : 1;
+      apiFetch('PUT', 'api/inventory.php', {
+        data: { inventory_id: safeInt(item.id), one_off: on },
+      }).then((res) => {
+        if (!res.ok) { toast(res.error || 'Could not save — site update pending?', false); return; }
+        toast(on
+          ? `${item.item_name} marked one-off — find it under the One-offs filter or by search`
+          : `${item.item_name} is back in the list`);
+        loadInventory(); // it just left (or rejoined) the current view
       }).catch((err) => toast(String(err), false));
       return;
     }

@@ -2479,3 +2479,6 @@ tr.row-detail > td { background: var(--bg-tertiary); padding: 0; }
 .myc-card-tagbtn:hover { color: var(--text-hover); }
 .custd-notes-inline { margin-top: 10px; }
 .custd-notes-inline .mysd-notes-body { max-height: 110px; overflow-y: auto; }
+.lab-mys-pop { flex-direction: row; align-items: center; gap: 8px; width: 300px; max-width: 300px; }
+.lab-mys-pop .filter-input { flex: 1 1 auto; min-width: 0; width: auto; font-size: 12px; padding: 5px 8px; margin: 0; }
+.lab-mys-pop .btn { flex: 0 0 auto; white-space: nowrap; }

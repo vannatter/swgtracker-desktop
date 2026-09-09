@@ -768,6 +768,7 @@
             <option value="restock">Needs restock</option>
             <option value="negative_stock">Negative stock</option>
             <option value="low">Low stock (≤)</option>
+            <option value="one_off">One-offs</option>
           </select>
           <input id="inv-low" type="number" class="form-control filter-input inv-num" value="5" min="0" title="Low-stock cutoff" hidden>
           <select id="inv-scope" class="form-select filter-select inv-scope" title="Which field the search matches">
@@ -879,6 +880,8 @@
             <button id="lab-viewtoggle" class="btn btn-icon" title="Switch to grid view"><i class="fa-solid fa-table-cells-large"></i></button>
             <button id="lab-home-refresh" class="btn btn-icon" title="Reload experiments"><i class="fa-solid fa-rotate-right"></i></button>
           </span>
+          <button id="lab-savemys" class="btn btn-sm btn-outline-secondary" hidden disabled
+                  title="Track this build in My Schematics — the picked resources carry over as the loadout's Using list"><i class="fa-solid fa-screwdriver-wrench"></i> Add to My Schematics</button>
           <button id="lab-save" class="btn btn-sm btn-accent" hidden disabled><i class="fa-solid fa-flask"></i> Save Experiment</button>
         </div>
 
@@ -1682,6 +1685,12 @@
         <button id="stk-note-save" class="btn btn-sm btn-accent"><i class="fa-solid fa-check"></i> Save</button>
       </div>
     </div>
+  </div>
+
+  <div id="lab-mys-pop" class="stk-schem-pop lab-mys-pop" hidden>
+    <input id="lab-mys-name" type="text" class="form-control filter-input" placeholder="Loadout name (optional)"
+           maxlength="64" spellcheck="false" autocomplete="off">
+    <button id="lab-mys-go" class="btn btn-sm btn-accent"><i class="fa-solid fa-plus"></i> Add</button>
   </div>
 
   <div id="cust-tag-pop" class="stk-schem-pop cust-tag-pop" hidden></div>

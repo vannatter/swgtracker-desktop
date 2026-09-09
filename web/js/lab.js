@@ -222,9 +222,10 @@ function labRelevantStats() {
 function labRenderBench() {
   const bench = $('#lab-bench');
   bench.hidden = !labState.schematic; // no empty shell before a schematic is picked
-  if (!labState.schematic) { bench.innerHTML = ''; $('#lab-save').disabled = true; return; }
+  if (!labState.schematic) { bench.innerHTML = ''; $('#lab-save').disabled = true; $('#lab-savemys').disabled = true; return; }
   const { byFormula, complete, picked, cost } = labBench();
   $('#lab-save').disabled = false;
+  $('#lab-savemys').disabled = false;
 
   // the voila moment: last slot just filled → pour the experiment before revealing.
   // First completion gets the full pour; later swaps a quick top-up.
@@ -813,6 +814,8 @@ function labShowView(view) {
   $('#lab-home-tools').hidden = !home;
   $('#lab-back').hidden = home;
   $('#lab-save').hidden = home;
+  $('#lab-savemys').hidden = home;
+  if (home) $('#lab-mys-pop').hidden = true;
   if (home) labRenderHome();
 }
 
@@ -942,12 +945,13 @@ function labRenderHome() {
 
 // promote an experiment to a My Schematics entry: same schematic + tracked
 // lines, with every picked resource assigned — a draft you can craft from
-async function labSaveAsMySchematic(exp, btn) {
+async function labSaveAsMySchematic(exp, btn, customName) {
   if (btn) btn.disabled = true;
   const body = {
     schematic_id: exp.schematic_id,
     formulas: (exp.formula_ids || []).join(','),
-    custom_name: (exp.name && exp.name !== exp.schematic_name) ? exp.name : 'Lab draft',
+    custom_name: customName
+      || ((exp.name && exp.name !== exp.schematic_name) ? exp.name : 'Lab draft'),
     resources: (exp.picks || []).map((p) => ({
       resource_type: p.code, resource_label: p.slot, resource_name: p.name })),
   };
@@ -968,6 +972,23 @@ async function labSaveAsMySchematic(exp, btn) {
   } else {
     toast(res.error || 'Save to My Schematics failed', false);
   }
+}
+
+// bench state as a portable experiment shape — what "Add to My Schematics"
+// sends without requiring the experiment to be saved first (snickerfritz)
+function labBenchSnapshot() {
+  if (!labState.schematic) return null;
+  const existing = labState.currentExpId
+    && labState.experiments.find((x) => x.id === labState.currentExpId);
+  return {
+    schematic_id: labState.schematic.id,
+    name: (existing && existing.name) || labState.schematic.name,
+    schematic_name: labState.schematic.name,
+    formula_ids: [...labState.checked],
+    picks: labState.slots.filter((s) => s.pick).map((s) => ({
+      slot: s.label, code: s.code, id: s.pick.id, name: s.pick.name })),
+    notes: (existing && existing.notes) || labState.draftNotes,
+  };
 }
 
 // pull the saved experiments back from config and re-render (header refresh button)
@@ -1258,6 +1279,41 @@ function initLab() {
   });
 
   $('#lab-save').addEventListener('click', labSaveExperiment);
+
+  // -> My Schematics: a small anchored popover asks for the optional loadout
+  // name, then ports either the bench state or a saved experiment card
+  // (snickerfritz). labMysTarget: null = snapshot the bench at confirm time.
+  const labMysPop = $('#lab-mys-pop');
+  let labMysTarget = null;
+  const labOpenMysPop = (anchor, exp) => {
+    labMysTarget = exp || null;
+    const r = anchor.getBoundingClientRect();
+    labMysPop.hidden = false;
+    $('#lab-mys-name').value = (exp && exp.name && exp.name !== exp.schematic_name) ? exp.name : '';
+    labMysPop.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 320))}px`;
+    labMysPop.style.top = r.bottom + labMysPop.offsetHeight + 8 < window.innerHeight
+      ? `${r.bottom + 4}px` : `${r.top - labMysPop.offsetHeight - 4}px`;
+    $('#lab-mys-name').focus();
+  };
+  $('#lab-savemys').addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (labState.schematic) labOpenMysPop(e.currentTarget, null);
+  });
+  const labMysGo = async () => {
+    const exp = labMysTarget || labBenchSnapshot();
+    if (!exp) return;
+    labMysPop.hidden = true;
+    await labSaveAsMySchematic(exp, $('#lab-savemys'), $('#lab-mys-name').value.trim());
+    labMysTarget = null;
+  };
+  $('#lab-mys-go').addEventListener('click', labMysGo);
+  $('#lab-mys-name').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') labMysGo();
+    if (e.key === 'Escape') labMysPop.hidden = true;
+  });
+  document.addEventListener('click', (e) => {
+    if (!labMysPop.hidden && !e.target.closest('#lab-mys-pop, #lab-savemys')) labMysPop.hidden = true;
+  });
   $('#lab-new').addEventListener('click', () => {
     // blank slate — a new experiment must pick its own schematic
     labState.schematic = null;
@@ -1325,8 +1381,9 @@ function initLab() {
     }
     const mys = e.target.closest('[data-savemys]');
     if (mys) {
+      e.stopPropagation(); // the document click-away handler must not instantly close it
       const exp = labState.experiments.find((x) => x.id === mys.dataset.savemys);
-      if (exp) labSaveAsMySchematic(exp, mys);
+      if (exp) labOpenMysPop(mys, exp); // same naming popover as the bench button
       return;
     }
     const del = e.target.closest('[data-delexp]');

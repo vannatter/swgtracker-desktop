@@ -390,11 +390,20 @@
           <button class="btn btn-icon" data-refresh="alerts" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
         </div>
 
+        <ul class="scd-tabs al-tabs">
+          <li><button type="button" class="scd-tab active" data-altab="rules" title="Your alert rules — what to watch for">My Rules</button></li>
+          <li><button type="button" class="scd-tab" data-altab="matches" title="Spawns that matched your rules or subscriptions">My Alerts<span id="al-tab-unseen" class="al-tab-count" hidden></span></button></li>
+          <li><button type="button" class="scd-tab" data-altab="community" id="al-tab-community-btn" hidden
+            title="Site-wide spawn announcements — subscribe to get them as alerts">Announcements<span id="al-tab-annnew" class="al-tab-count" hidden></span></button></li>
+        </ul>
+
+        <div id="al-pane-rules" class="al-pane">
         <div id="al-rules" class="al-rules"></div>
         <div id="al-rules-empty" class="al-empty" hidden></div>
+        </div>
 
+        <div id="al-pane-matches" class="al-pane" hidden>
         <div class="page-head al-feed-head">
-          <h1 class="al-feed-title">Recent Matches</h1>
           <span id="al-unseen" class="mys-badge up" hidden></span>
           <button id="al-seen" class="btn btn-sm btn-outline-secondary head-filter">Mark all seen</button>
         </div>
@@ -407,6 +416,46 @@
             <tbody id="al-feed"></tbody>
           </table>
           <div id="al-feed-empty" class="grid-empty" hidden></div>
+        </div>
+        </div>
+
+        <div id="al-pane-community" class="al-pane" hidden>
+        <div class="al-community" id="al-community" hidden>
+          <div class="al-comm-head"><i class="fa-solid fa-tower-broadcast"></i> <b>Subscriptions</b>
+            <span class="al-comm-sub">notable spawns, server-wide — subscribe and they land in My Alerts and your notifications, with email if you want it</span></div>
+          <div class="al-comm-row">
+            <label class="al-comm-toggle"><input type="checkbox" id="al-feed-hot"> <b>Hot spawns</b></label>
+            <span class="al-comm-desc">every new spawn the site rates 900+</span>
+            <span class="al-comm-opt al-comm-thresh">rating ≥ <select id="al-feed-hot-min" class="form-select filter-select al-comm-rank"
+              title="Your personal floor — 900 means every announced spawn">
+              <option value="">900 (any)</option><option value="925">925</option><option value="950">950</option>
+              <option value="975">975</option><option value="990">990</option></select></span>
+            <label class="al-comm-opt"><input type="checkbox" id="al-feed-hot-email"> email</label>
+          </div>
+          <div class="al-comm-row">
+            <label class="al-comm-toggle"><input type="checkbox" id="al-feed-top"> <b>Top-ranked spawns</b></label>
+            <span class="al-comm-desc">new spawns entering a schematic's top 3</span>
+            <span class="al-comm-opt al-comm-thresh">rank ≤ <select id="al-feed-top-rank" class="form-select filter-select al-comm-rank"
+              title="Only tell me about ranks at or above this — 3 means any announced">
+              <option value="">3 (any)</option><option value="2">2</option><option value="1">1</option></select></span>
+            <label class="al-comm-opt"><input type="checkbox" id="al-feed-top-email"> email</label>
+          </div>
+        </div>
+
+        <div class="page-head al-feed-head" id="al-announce-head" hidden>
+          <h1 class="al-feed-title">Recent announcements</h1>
+          <i class="fa-solid fa-circle-info info-tip"
+             title="Everything announced site-wide — hot spawns and new top-ranked spawns — whether or not you subscribe. Subscribing above adds these to My Alerts and notifications."></i>
+        </div>
+        <div class="table-wrap" id="al-announce-wrap" hidden>
+          <table class="data-grid">
+            <thead><tr>
+              <th class="col-text">When</th><th class="col-name">Resource</th><th class="col-text">What</th>
+            </tr></thead>
+            <tbody id="al-announcements"></tbody>
+          </table>
+          <div id="al-announce-empty" class="grid-empty" hidden>Nothing announced yet.</div>
+        </div>
         </div>
       </section>
 

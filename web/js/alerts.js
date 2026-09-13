@@ -7,6 +7,7 @@ const AL_STATS = ['oq', 'cr', 'cd', 'dr', 'hr', 'ma', 'sr', 'ut', 'fl', 'pe'];
 const alState = {
   rules: [],
   hits: [],
+  announcements: [],      // the global community feed (shown to everyone)
   editingId: null,
   schematic: null,        // {id, name} picked in the editor
   formulas: [],           // formulas of the picked schematic
@@ -72,7 +73,9 @@ function alHighlightFormulaStats() {
 
 function renderAlertRules() {
   const wrap = $('#al-rules');
-  wrap.innerHTML = alState.rules.map((r) => `
+  // feed subscriptions are managed by the Community feeds card, not rule cards
+  const rules = alState.rules.filter((r) => !r.feed);
+  wrap.innerHTML = rules.map((r) => `
     <div class="al-rule ${String(r.enabled) === '1' ? '' : 'al-off'}" data-rid="${r.id}">
       <div class="form-check form-switch al-rule-toggle" title="Enable / disable">
         <input class="form-check-input" type="checkbox" data-toggle="${r.id}" ${String(r.enabled) === '1' ? 'checked' : ''}>
@@ -86,8 +89,92 @@ function renderAlertRules() {
       <button class="btn btn-icon al-rule-btn" data-del="${r.id}" title="Delete"><i class="fa-solid fa-trash-can"></i></button>
     </div>`).join('');
   const empty = $('#al-rules-empty');
-  empty.hidden = !!alState.rules.length;
+  empty.hidden = !!rules.length;
   empty.textContent = 'No alert rules yet — click New Rule to watch for spawns by class, stats, or schematic rank.';
+}
+
+// ---- Tabs (My Rules / Matches / Community) ----
+
+function alShowTab(key) {
+  localStorage.setItem('al-tab', key);
+  document.querySelectorAll('.al-tabs .scd-tab').forEach((t) => t.classList.toggle('active', t.dataset.altab === key));
+  ['rules', 'matches', 'community'].forEach((k) => { $(`#al-pane-${k}`).hidden = k !== key; });
+  if (key === 'community') alMarkAnnSeen(); // opening the tab clears its badge
+}
+
+function alMarkAnnSeen() {
+  const maxId = Math.max(0, ...(alState.announcements || []).map((a) => safeInt(a.id)));
+  if (maxId) localStorage.setItem('al-ann-last', String(maxId));
+  $('#al-tab-annnew').hidden = true;
+}
+
+// ---- Community feeds (subscriptions ride alert_rules as feed rows) ----
+
+const alFeedRule = (kind) => alState.rules.find((r) => r.feed === kind);
+
+function renderAlCommunity() {
+  // the card only appears once the server supports feeds (its GET response
+  // carries `announcements` after the update; undefined before)
+  const supported = Array.isArray(alState.announcements);
+  $('#al-community').hidden = !supported;
+  $('#al-tab-community-btn').hidden = !supported;
+  if (!supported) return;
+  const hot = alFeedRule('hot');
+  const top = alFeedRule('top');
+  $('#al-feed-hot').checked = !!(hot && String(hot.enabled) === '1');
+  // the select holds preset floors — snap a stored value to the nearest at or below
+  const q = hot ? safeInt(hot.quality_min) : 0;
+  $('#al-feed-hot-min').value = String([990, 975, 950, 925].find((o) => o <= q) || '');
+  $('#al-feed-hot-email').checked = !!(hot && String(hot.notify_email) === '1');
+  $('#al-feed-top').checked = !!(top && String(top.enabled) === '1');
+  $('#al-feed-top-rank').value = top && safeInt(top.rank_max) ? String(top.rank_max) : '';
+  $('#al-feed-top-email').checked = !!(top && String(top.notify_email) === '1');
+}
+
+async function alSaveFeed(kind) {
+  const rule = alFeedRule(kind);
+  const body = kind === 'hot'
+    ? { feed: 'hot', name: 'Hot spawns', enabled: $('#al-feed-hot').checked,
+        notify_email: $('#al-feed-hot-email').checked,
+        quality_min: safeInt($('#al-feed-hot-min').value) || 0 }
+    : { feed: 'top', name: 'Top-ranked spawns', enabled: $('#al-feed-top').checked,
+        notify_email: $('#al-feed-top-email').checked,
+        rank_max: safeInt($('#al-feed-top-rank').value) || 0 };
+  if (rule) body.id = rule.id;
+  let res;
+  try { res = await apiFetch('POST', 'api/alerts.php', { data: { rule: body } }); }
+  catch (e) { res = { ok: false, error: String(e) }; }
+  if (!res.ok) {
+    toast(res.error || 'Saving the feed subscription failed — site update pending?', false);
+  } else {
+    toast(body.enabled ? 'Subscribed — announcements land in your matches' : 'Community feed saved');
+  }
+  loadAlerts(); // re-sync the card either way
+}
+
+function renderAlAnnouncements() {
+  const list = alState.announcements || [];
+  const supported = Array.isArray(alState.announcements);
+  $('#al-announce-head').hidden = !supported;
+  $('#al-announce-wrap').hidden = !supported;
+  if (!supported) return;
+  $('#al-announcements').innerHTML = list.map((a) => `
+    <tr>
+      <td class="col-text">${fmtAgoTip(safeInt(a.created))}</td>
+      <td class="col-name res-name" data-res="${escapeHtml(a.resource_name)}">${escapeHtml(a.resource_name)}</td>
+      <td class="col-text">${escapeHtml(a.detail || '')}${a.kind === 'hot' ? ' <span class="scd-age">· hot</span>' : ' <span class="scd-age">· top rank</span>'}</td>
+    </tr>`).join('');
+  $('#al-announce-empty').hidden = !!list.length;
+  // tab badge: announcements newer than the last time the tab was opened
+  if (!$('#al-pane-community').hidden) {
+    alMarkAnnSeen();
+  } else {
+    const last = safeInt(localStorage.getItem('al-ann-last'));
+    const fresh = list.filter((a) => safeInt(a.id) > last).length;
+    const badge = $('#al-tab-annnew');
+    badge.hidden = !fresh;
+    badge.textContent = String(fresh);
+  }
 }
 
 function renderAlertFeed() {
@@ -106,6 +193,9 @@ function renderAlertFeed() {
   const badge = $('#al-unseen');
   badge.hidden = unseen === 0;
   badge.textContent = `${unseen} new`;
+  const tabBadge = $('#al-tab-unseen');
+  tabBadge.hidden = unseen === 0;
+  tabBadge.textContent = String(unseen);
 }
 
 async function loadAlerts() {
@@ -122,12 +212,15 @@ async function loadAlerts() {
   }
   alState.rules = res.data.rules || [];
   alState.hits = res.data.hits || [];
+  alState.announcements = res.data.announcements; // undefined = server predates feeds
   if (alState.hits.length) {
     alState.lastHitId = Math.max(alState.lastHitId, ...alState.hits.map((h) => safeInt(h.id)));
     localStorage.setItem('al-last-hit', alState.lastHitId);
   }
   renderAlertRules();
   renderAlertFeed();
+  renderAlCommunity();
+  renderAlAnnouncements();
 }
 
 // ---- Editor ----
@@ -445,6 +538,25 @@ function initAlerts() {
   $('#al-feed').addEventListener('click', (e) => {
     const cell = e.target.closest('[data-res]');
     if (cell) openResourcePage(cell.dataset.res);
+  });
+  $('#al-announcements').addEventListener('click', (e) => {
+    const cell = e.target.closest('[data-res]');
+    if (cell) openResourcePage(cell.dataset.res);
+  });
+
+  // tabs — restore the last one used
+  document.querySelector('.al-tabs').addEventListener('click', (e) => {
+    const t = e.target.closest('[data-altab]');
+    if (t) alShowTab(t.dataset.altab);
+  });
+  alShowTab(localStorage.getItem('al-tab') || 'rules');
+
+  // community feed subscriptions — every control saves on change
+  ['#al-feed-hot', '#al-feed-hot-min', '#al-feed-hot-email'].forEach((sel) => {
+    $(sel).addEventListener('change', () => alSaveFeed('hot'));
+  });
+  ['#al-feed-top', '#al-feed-top-rank', '#al-feed-top-email'].forEach((sel) => {
+    $(sel).addEventListener('change', () => alSaveFeed('top'));
   });
 
   startAlertPolling();

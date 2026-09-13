@@ -186,6 +186,10 @@ function facGridHtml(items) {
       <td class="col-name">${escapeHtml(f.product || '—')}</td>
       <td class="col-num">${f.quantity ? fmtNum(f.quantity) : '—'}</td>
       <td class="col-num fac-units">${f.started_at ? fmtNum(facUnitsDone(f)) : '—'}</td>
+      <td class="fac-progcell">${f.started_at
+        ? `<div class="fac-track fac-track-grid"><div class="fac-fill" style="width:${Math.min(100, facElapsed(f) / Math.max(1, dur) * 100).toFixed(1)}%"></div></div>
+           <span class="fac-gridpct">${Math.min(100, Math.round(facElapsed(f) / Math.max(1, dur) * 100))}%</span>`
+        : '<span class="stat_off">—</span>'}</td>
       <td class="col-num">${f.time_value ? `${f.time_value}${f.time_unit}` : '—'}</td>
       <td>${dur ? facFmtDur(dur) : '—'}</td>
       <td>${f.started_at ? facEta(f) : '—'}</td>
@@ -201,7 +205,7 @@ function facGridHtml(items) {
     </tr>`;
   };
   const sections = grpSections(facState.groups, items, (f) => f.group_id);
-  const FAC_GRID_COLS = 12; // checkbox + 10 data columns + actions
+  const FAC_GRID_COLS = 13; // checkbox + 11 data columns (incl. Progress) + actions
   const rows = sections.map((s) => {
     const collapsed = facState.collapsed.has(s.key);
     return ((s.key !== 'un' || sections.length > 1)
@@ -212,7 +216,7 @@ function facGridHtml(items) {
     <th class="pin-cell"><input type="checkbox" id="fac-selall" title="Select every visible factory"></th>
     <th class="col-name">Factory</th><th class="col-text">Owner</th>
     <th>Status</th><th class="col-name">Product</th>
-    <th class="col-num">Qty</th><th class="col-num">Made</th><th class="col-num">Per unit</th><th>Run time</th>
+    <th class="col-num">Qty</th><th class="col-num">Made</th><th>Progress</th><th class="col-num">Per unit</th><th>Run time</th>
     <th>Est. done</th><th>Remaining</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 

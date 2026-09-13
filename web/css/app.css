@@ -2482,3 +2482,35 @@ tr.row-detail > td { background: var(--bg-tertiary); padding: 0; }
 .lab-mys-pop { flex-direction: row; align-items: center; gap: 8px; width: 300px; max-width: 300px; }
 .lab-mys-pop .filter-input { flex: 1 1 auto; min-width: 0; width: auto; font-size: 12px; padding: 5px 8px; margin: 0; }
 .lab-mys-pop .btn { flex: 0 0 auto; white-space: nowrap; }
+
+/* ---- Spawn Alerts: community feeds card ---- */
+.al-community { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
+  padding: 10px 14px; margin-bottom: 14px; }
+/* header reads as a LABEL, not a sibling of the feed rows: small caps, muted,
+   sub-line under it, divider before the rows */
+.al-comm-head { display: block; margin-bottom: 10px; padding-bottom: 9px; border-bottom: 1px solid var(--border); }
+.al-comm-head b { font-size: 11px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--text-muted); }
+.al-comm-head i { color: var(--accent); font-size: 11px; margin-right: 4px; }
+.al-comm-sub { display: block; color: var(--text-muted); font-size: 12px; font-weight: 400; margin-top: 3px; }
+.al-comm-row { display: flex; align-items: center; gap: 14px; padding: 5px 0; font-size: 13px; }
+.al-comm-toggle { display: flex; align-items: center; gap: 7px; cursor: pointer; min-width: 170px; color: var(--text-primary); }
+.al-comm-desc { color: var(--text-muted); flex: 1; }
+.al-comm-opt { display: flex; align-items: center; gap: 5px; color: var(--text-muted); cursor: pointer; white-space: nowrap; }
+.al-comm-num { width: 70px; font-size: 12px; padding: 3px 6px; }
+.al-comm-rank { width: auto; font-size: 12px; padding: 3px 24px 3px 6px; }
+.al-tabs { margin-bottom: 14px; border-bottom: 1px solid var(--border); }
+.al-tabs .scd-tab { border-radius: 8px 8px 0 0; }
+.al-tabs .scd-tab.active { background: var(--bg-card); }
+.al-pane[hidden] { display: none; }
+/* small inline unread count — NOT the big yellow page badge */
+.al-tab-count { background: var(--accent); color: #fff; border-radius: 10px;
+  font-size: 10px; font-weight: 700; padding: 1px 7px; margin-left: 6px; vertical-align: 1px; }
+/* rating/rank threshold clusters: identical select width + right-anchored so
+   the two feed rows line up column-for-column */
+.al-comm-thresh { min-width: 185px; justify-content: flex-end; }
+.al-comm-rank { width: 110px; }
+/* factories grid: inline progress bar column */
+.fac-progcell { white-space: nowrap; }
+.fac-track-grid { display: inline-block; width: 90px; height: 5px; vertical-align: middle;
+  background: var(--bg-input); border-radius: 3px; overflow: hidden; }
+.fac-gridpct { font-size: 11px; color: var(--text-muted); margin-left: 6px; }

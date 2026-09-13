@@ -90,6 +90,7 @@ function facCardHtml(f, embed = false) {
         <span class="fac-badge">${running ? '<i class="fa-solid fa-gear fac-gear"></i> ' : ''}${st.toUpperCase()}</span>
         <button class="btn btn-icon fac-details${open ? ' open' : ''}" data-facdetails="${f.id}"
                 title="Details — group, owner, tags, location"><i class="fa-solid fa-sliders"></i></button>
+        <button class="btn btn-icon" data-facclone="${f.id}" title="Duplicate — same product, time, quantity and spot, ready to start"><i class="fa-solid fa-clone"></i></button>
         <button class="btn btn-icon" data-facremove="${f.id}" title="Remove factory"><i class="fa-solid fa-xmark"></i></button>
       </div>
     </div>
@@ -200,6 +201,7 @@ function facGridHtml(items) {
              : `<button class="btn btn-icon" data-facpause="${f.id}" title="Pause — freeze the countdown"><i class="fa-solid fa-pause"></i></button>`}
            <button class="btn btn-icon" data-facdone="${f.id}" title="Done — end this run"><i class="fa-solid fa-xmark"></i></button>`
         : `<button class="btn btn-icon" data-facstart="${f.id}" title="Start the run"><i class="fa-solid fa-play"></i></button>`}
+        <button class="btn btn-icon" data-facclone="${f.id}" title="Duplicate — same setup, ready to start"><i class="fa-solid fa-clone"></i></button>
         <button class="btn btn-icon${facState.gridEdit === String(f.id) ? ' open' : ''}" data-facedit="${f.id}" title="Edit"><i class="fa-solid fa-pen"></i></button>
         <button class="btn btn-icon" data-facremove="${f.id}" title="Remove factory"><i class="fa-solid fa-trash-can"></i></button></td>
     </tr>`;
@@ -416,6 +418,40 @@ async function loadFactories() {
   renderFactories();
   clearInterval(facState.timer);
   facState.timer = setInterval(facTick, 1000);
+}
+
+// "Primus layers" -> "Primus layers #2" (#3, #4 … skipping taken names) —
+// same convention as the harvester clone
+function facCloneName(base) {
+  const stem = String(base || '').replace(/\s*#\d+$/, '').trim() || 'Factory';
+  const names = new Set(facState.items.map((x) => String(x.name || '').toLowerCase()));
+  let n = 2;
+  while (names.has(`${stem.toLowerCase()} #${n}`)) n += 1;
+  return `${stem} #${n}`;
+}
+
+// four Primus runs = set one up, duplicate three times. Copies the whole
+// SETUP (product/time/qty/owner/spot/tags/group/notify) — never the run state.
+async function facClone(f) {
+  const res = await facPost({ action: 'save', factory: {
+    name: facCloneName(f.name),
+    owner: f.owner || '',
+    product: f.product || '',
+    time_value: f.time_value || null,
+    time_unit: f.time_unit || 's',
+    quantity: f.quantity || null,
+    planet: f.planet || '',
+    x: f.x != null ? f.x : null,
+    y: f.y != null ? f.y : null,
+    tags: f.tags || '',
+    group_id: f.group_id || null,
+    notify_desktop: f.notify_desktop ? 1 : 0,
+    notify_email: f.notify_email ? 1 : 0,
+  } });
+  if (res.ok) {
+    toast(`Duplicated — ${facCloneName(f.name)} is ready to start`);
+    loadFactories();
+  }
 }
 
 async function facPost(body) {
@@ -731,6 +767,12 @@ function initFactories() {
       await facPost({ action: 'save', factory: f });   // capture any unsaved edits
       const res = await facPost({ action: 'start', id: f.id });
       if (res.ok) loadFactories();
+      return;
+    }
+    const clone = e.target.closest('[data-facclone]');
+    if (clone) {
+      const f = facState.items.find((x) => String(x.id) === clone.dataset.facclone);
+      if (f) facClone(f);
       return;
     }
     const pause = e.target.closest('[data-facpause]');

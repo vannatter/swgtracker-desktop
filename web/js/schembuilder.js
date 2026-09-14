@@ -74,6 +74,8 @@ function sbChecks(body) {
   // labels are TO-DOs: the bar shows the first unmet one as "next: …"
   const checks = [
     { label: 'enter the schematic name', ok: !!(b.name || '').trim() },
+    ...(sbState.nameTaken && (b.name || '').trim().toLowerCase() === sbState.nameTaken
+      ? [{ label: `pick a different name — "${b.name.trim()}" already exists`, ok: false }] : []),
     { label: 'pick a category', ok: safeInt(b.category_id) > 0 },
     { label: 'add at least one resource slot or component', ok: res.length + comps.length > 0 },
     { label: 'attach at least one proof screenshot of the in-game schematic',
@@ -609,6 +611,23 @@ function initSchemBuilder() {
     sbMarkDirty();
   });
   bind('#sb-f-name', 'name');
+  // live name-collision check — the one submit rule the bar couldn't mirror
+  let sbNameTimer = null;
+  $('#sb-f-name').addEventListener('input', (e) => {
+    clearTimeout(sbNameTimer);
+    const name = e.target.value.trim().toLowerCase();
+    sbState.nameTaken = null;
+    if (!name) { sbRenderProgress(); return; }
+    sbNameTimer = setTimeout(async () => {
+      let res;
+      try { res = await api().search_schematics({ search: name, page: 1 }); }
+      catch (_) { return; }
+      const hit = ((res.ok && res.data && res.data.results) || [])
+        .some((s) => String(s.name || '').trim().toLowerCase() === name);
+      sbState.nameTaken = hit ? name : null;
+      sbRenderProgress();
+    }, 400);
+  });
   bind('#sb-f-desc', 'description');
   bind('#sb-f-category', 'category_id', (el) => safeInt(el.value));
   bind('#sb-f-quality', 'quality');

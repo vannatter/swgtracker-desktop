@@ -143,6 +143,7 @@ function schRenderReviewPanel() {
         <b>${escapeHtml(i.name)}</b>
         <span class="sch-review-cat">${escapeHtml(i.parent || '')}</span>
         <span class="sch-review-votes">${i.votes} of ${i.needed}</span>
+        ${safeInt(i.flags) ? `<span class="sb-chip sb-chip-flag" title="A reviewer flagged this as incorrect — open it to read what needs fixing"><i class="fa-solid fa-flag"></i> flagged</span>` : ''}
         ${i.mine ? '<span class="sb-chip">yours</span>'
           : i.voted ? '<span class="sb-chip sb-chip-pub">confirmed</span>'
           : '<span class="sb-chip sb-chip-todo">needs your review</span>'}
@@ -359,8 +360,11 @@ function renderSchematicPage(s) {
   // Resources needed — "40 of Beyrllius Copper" + total units
   const needed = s.resourcesNeeded || [];
   const total = needed.reduce((sum, r) => sum + safeInt(r.units), 0);
+  // slot labels visible inline (not tooltip-only) so reviewers can check the
+  // label ("Reaction Medium") against the class ("Reactive Gas") in the proof
   $('#scd-resneeded').innerHTML = needed.map((r) =>
-    `<div class="scd-line">${safeInt(r.units)} of <span class="scd-restype" title="${escapeHtml(r.desc || '')}">${escapeHtml(r.resourceName || '')}</span></div>`
+    `<div class="scd-line">${safeInt(r.units)} of <span class="scd-restype">${escapeHtml(r.resourceName || '')}</span>${(r.desc || '').trim()
+      ? ` <span class="scd-slotlabel">(${escapeHtml(r.desc)})</span>` : ''}</div>`
   ).join('') + (needed.length ? `<div class="scd-line scd-total">${total} Total Resource Units</div>` : '<div class="scd-line">None</div>');
 
   // Components needed — one line per entry, names open that schematic's page
@@ -435,6 +439,11 @@ async function openSchematicPage(id, name) {
     sbRenderVerifyBar(scdState.id, !!s.communitySubmitted); // community badge + Confirm
   }
   scdRenderModel(scdState.id);
+  if (s.communitySubmitted) {
+    // no blackbox for community schematics — fill best/current from the mirror
+    await scdComputeCommunityLists(s);
+    if (String(s.schematicId) === String(scdState.id)) renderScdTable();
+  }
 }
 
 // 3D model when the site has one exported (swgtracker.com/items/<id>.glb —
@@ -508,11 +517,44 @@ function scdModelZoom(url) {
   document.body.appendChild(ov);
 }
 
+// Community schematics have no blackbox behind them — compute the best and
+// current lists from the local mirror, the same math My Schematics and the
+// Lab use (weighted quality of the ACTIVE formulas against the class caps).
+async function scdComputeCommunityLists(s) {
+  if (!s || !s.communitySubmitted || !Array.isArray(s.resourceDtoList)) return;
+  const fl = s.formula || [];
+  const act = [...scdState.activeFormulas].map((i) => fl[Number(i)]).filter(Boolean);
+  const weightsList = (act.length ? act : fl)
+    .map((f) => mysParseWeights(f.formulaDescription)).filter(Boolean);
+  for (const dto of s.resourceDtoList) {
+    const code = String(dto.resourceTypeCode || '');
+    if (!code) continue;
+    let res;
+    try { res = await classPool(code); } catch (_) { continue; }
+    const rows = (res && res.ok && res.data) || [];
+    const caps = typeof classCaps === 'function' ? classCaps(code) : null;
+    const scored = rows.map((p) => ({
+      resourceId: p.id, resourceName: p.name, resourceTypeName: p.type_name,
+      resourceQuality: mysWeightedQuality(p, weightsList, caps) || 0,
+      timestamp: p.timestamp, status: p.status,
+      ...Object.fromEntries(SCD_STATS.flatMap((f) => [[f, p[f]], [`${f}_max`, p[`${f}_max`]]])),
+    })).sort((a, b) => b.resourceQuality - a.resourceQuality);
+    dto.serverBestResourceList = scored.slice(0, 10);
+    dto.currentBestResourceList = scored.filter((x) => safeInt(x.status) === 1).slice(0, 10);
+  }
+}
+
 // Re-fetch the best/current resource lists ranked by the checked formulas (and
 // the Mustafar filter) — the server does the ranking, matching the website.
+// Community schematics skip the server and recompute locally instead.
 let scdReqToken = 0;
 async function refetchScdBest() {
   if (!scdState.id) return;
+  if (scdState.schematic?.communitySubmitted) {
+    await scdComputeCommunityLists(scdState.schematic);
+    renderScdTable();
+    return;
+  }
   const token = ++scdReqToken;
   const ids = [...scdState.activeFormulas]
     .map((i) => scdState.formulaIds[i]).filter((x) => x != null).join(',');

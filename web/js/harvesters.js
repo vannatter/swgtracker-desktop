@@ -731,6 +731,7 @@ async function loadHarvesters() {
   harvState.chars = (ch && ch.ok && ch.data && ch.data.characters) || [];
   renderHarvesters();
   harvCheckResourceStatus(); // flag harvesters whose resource has despawned
+  navAttnSweep(); // emptying a hopper should drop the sidebar pill right away
   try {
     const cfg = await api().get_config();
     harvState.dismissed = new Set((cfg.ok && cfg.data && cfg.data.harv_dismissed_mails) || []);

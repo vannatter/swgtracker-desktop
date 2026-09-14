@@ -2640,6 +2640,15 @@ model-viewer::part(default-progress-mask) { display: none; }
 .sch-cards-empty { grid-column: 1 / -1; }
 /* community verify bar spans the full page width above the detail cards */
 .scd-community-full { margin: 0 0 18px; flex-wrap: wrap; }
+.sb-flagform { flex-basis: 100%; display: flex; gap: 6px; align-items: center; }
+.sb-flagform .filter-input { flex: 1; max-width: none; }
+.sb-flaglist { flex-basis: 100%; display: flex; flex-direction: column; gap: 3px;
+  border-top: 1px solid var(--border); padding-top: 6px; margin-top: 2px; }
+.sb-flagrow i { color: #e9b445; margin-right: 4px; }
+.sb-flaghint { font-size: 12px; }
+#scd-flag i { color: #e9b445; }
+.sb-chip-flag { border-color: #e9b445; color: #e9b445; }
+.sb-chip-flag i { font-size: 10px; }
 /* community review queue panel */
 .sch-review-panel { background: var(--bg-card); border: 1px solid var(--q-accept); border-radius: 8px;
   padding: 10px 14px; margin-bottom: 12px; }
@@ -2670,3 +2679,4 @@ model-viewer::part(default-progress-mask) { display: none; }
 .sb-model-thumb { width: 76px; height: 54px; flex: 0 0 76px; pointer-events: none; background: transparent; }
 .sb-model-preview { width: 300px; height: 220px; }
 .sb-model-preview model-viewer { width: 100%; height: 100%; background: transparent; }
+.scd-slotlabel { color: var(--text-muted); font-size: 12px; }

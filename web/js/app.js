@@ -883,9 +883,42 @@ function startData() {
   showPage('resources'); // triggers the first load via PAGE_LOADERS
   fetchPulse();
   setInterval(fetchPulse, 3 * 60 * 1000); // every 3 min, matching the Tk app
+  navAttnSweep();
+  setInterval(navAttnSweep, 60 * 1000);
   showBuildId();
   checkForUpdate();
   enforceMinShell();
+}
+
+// ---- sidebar attention pills: full hoppers + finished factory runs --------
+// App-wide sweep off its own fetches, so the sidebar nudges "go empty/collect"
+// even if you never open those pages. Uses the same status math the pages do
+// (harvHopper / facStatus); the resource-despawn freeze needs the mirror
+// lookup the Harvesters page does, so an off-page sweep can at worst count a
+// frozen hopper as full a little early — a harmless nudge.
+async function navAttnSweep() {
+  let hv, fc;
+  try {
+    [hv, fc] = await Promise.all([
+      apiFetch('GET', 'api/harvesters.php'),
+      apiFetch('GET', 'api/factories.php', { params: { action: 'list' } }),
+    ]);
+  } catch (_) { return; }
+  const harvFull = ((hv.ok && hv.data && hv.data.harvesters) || [])
+    .filter((h) => { const hp = harvHopper(h); return hp && hp.pct >= 99.9; }).length;
+  const facDone = ((fc.ok && fc.data && fc.data.factories) || [])
+    .filter((f) => facStatus(f) === 'done').length;
+  const set = (id, n, tip) => {
+    const p = $(id);
+    if (!p) return;
+    p.textContent = n;
+    p.hidden = n <= 0;
+    p.title = tip;
+  };
+  set('#nav-harv-pill', harvFull,
+    `${harvFull} full hopper${harvFull === 1 ? '' : 's'} — extraction is stopped until emptied`);
+  set('#nav-fac-pill', facDone,
+    `${facDone} finished run${facDone === 1 ? '' : 's'} ready to collect`);
 }
 
 async function boot() {

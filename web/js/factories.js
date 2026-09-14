@@ -418,6 +418,7 @@ async function loadFactories() {
   renderFactories();
   clearInterval(facState.timer);
   facState.timer = setInterval(facTick, 1000);
+  navAttnSweep(); // clearing a run should drop the sidebar pill right away
 }
 
 // "Primus layers" -> "Primus layers #2" (#3, #4 … skipping taken names) —

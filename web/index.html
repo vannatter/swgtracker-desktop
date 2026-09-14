@@ -6,7 +6,7 @@
   <title>SWG Tracker Desktop</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.1/css/all.min.css">
-  <link rel="stylesheet" href="css/app.css?v=20260914q">
+  <link rel="stylesheet" href="css/app.css?v=20260914s">
 </head>
 <body>
   <!-- Header -->
@@ -46,8 +46,10 @@
         <li class="nav-item" data-page="purchases"><i class="fa-solid fa-cart-shopping"></i> My Purchases</li>
         <li class="nav-item" data-page="inventory"><i class="fa-solid fa-warehouse"></i> My Inventory</li>
         <li class="nav-item" data-page="characters"><i class="fa-solid fa-user-group"></i> Characters</li>
-        <li class="nav-item" data-page="harvesters"><i class="fa-solid fa-tractor"></i> Harvesters</li>
-        <li class="nav-item" data-page="factories"><i class="fa-solid fa-industry"></i> Factories</li>
+        <li class="nav-item" data-page="harvesters"><i class="fa-solid fa-tractor"></i> Harvesters
+          <span id="nav-harv-pill" class="nav-pill" title="Full hoppers waiting to be emptied" hidden></span></li>
+        <li class="nav-item" data-page="factories"><i class="fa-solid fa-industry"></i> Factories
+          <span id="nav-fac-pill" class="nav-pill" title="Finished runs ready to collect" hidden></span></li>
         <li class="nav-item" data-page="notes"><i class="fa-solid fa-note-sticky"></i> Notes</li>
         <li class="nav-item" data-page="alerts"><i class="fa-solid fa-bell"></i> Spawn Alerts</li>
         <li class="nav-item" data-page="monitor"><i class="fa-solid fa-envelope"></i> Mail</li>
@@ -2125,29 +2127,29 @@
   </div>
 
   <!-- Classic scripts sharing one top-level scope; app.js boots last. -->
-  <script src="js/class_caps.js?v=20260914q"></script>
-  <script src="js/shared.js?v=20260914q"></script>
-  <script src="js/help.js?v=20260914q"></script>
-  <script src="js/resources.js?v=20260914q"></script>
-  <script src="js/resource.js?v=20260914q"></script>
-  <script src="js/schematics.js?v=20260914q"></script>
-  <script src="js/stockpile.js?v=20260914q"></script>
-  <script src="js/wishlist.js?v=20260914q"></script>
-  <script src="js/myschematics.js?v=20260914q"></script>
-  <script src="js/inventory.js?v=20260914q"></script>
-  <script src="js/sales.js?v=20260914q"></script>
-  <script src="js/insights.js?v=20260914q"></script>
-  <script src="js/purchases.js?v=20260914q"></script>
-  <script src="js/harvesters.js?v=20260914q"></script>
-  <script src="js/factories.js?v=20260914q"></script>
-  <script src="js/customers.js?v=20260914q"></script>
-  <script src="js/characters.js?v=20260914q"></script>
-  <script src="js/settings.js?v=20260914q"></script>
-  <script src="js/alerts.js?v=20260914q"></script>\n  <script src="js/lab.js?v=20260914q"></script>
-  <script src="js/mail.js?v=20260914q"></script>
-  <script src="js/notes.js?v=20260914q"></script>
-  <script src="js/schembuilder.js?v=20260914q"></script>
-  <script src="js/scanner.js?v=20260914q"></script>
-  <script src="js/app.js?v=20260914q"></script>
+  <script src="js/class_caps.js?v=20260914s"></script>
+  <script src="js/shared.js?v=20260914s"></script>
+  <script src="js/help.js?v=20260914s"></script>
+  <script src="js/resources.js?v=20260914s"></script>
+  <script src="js/resource.js?v=20260914s"></script>
+  <script src="js/schematics.js?v=20260914s"></script>
+  <script src="js/stockpile.js?v=20260914s"></script>
+  <script src="js/wishlist.js?v=20260914s"></script>
+  <script src="js/myschematics.js?v=20260914s"></script>
+  <script src="js/inventory.js?v=20260914s"></script>
+  <script src="js/sales.js?v=20260914s"></script>
+  <script src="js/insights.js?v=20260914s"></script>
+  <script src="js/purchases.js?v=20260914s"></script>
+  <script src="js/harvesters.js?v=20260914s"></script>
+  <script src="js/factories.js?v=20260914s"></script>
+  <script src="js/customers.js?v=20260914s"></script>
+  <script src="js/characters.js?v=20260914s"></script>
+  <script src="js/settings.js?v=20260914s"></script>
+  <script src="js/alerts.js?v=20260914s"></script>\n  <script src="js/lab.js?v=20260914s"></script>
+  <script src="js/mail.js?v=20260914s"></script>
+  <script src="js/notes.js?v=20260914s"></script>
+  <script src="js/schembuilder.js?v=20260914s"></script>
+  <script src="js/scanner.js?v=20260914s"></script>
+  <script src="js/app.js?v=20260914s"></script>
 </body>
 </html>

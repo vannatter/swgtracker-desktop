@@ -533,7 +533,21 @@ async function sbRenderVerifyBar(schematicId, isCommunity) {
         : st.voted ? '<span class="stat_off">— you confirmed it</span>'
         : `<button id="scd-confirm" class="btn btn-sm btn-outline-secondary"
              title="Check the proof screenshots against the details below, then confirm."><i class="fa-solid fa-check"></i> Confirm accurate</button>`}
-      ${shots ? `<span class="sb-verify-shots">${shots}</span>` : ''}`;
+      ${!st.mine && !st.flagged ? `<button id="scd-flag" class="btn btn-sm btn-outline-secondary"
+             title="Something's wrong with this schematic? Flag it and say what needs fixing — the submitter sees your note."><i class="fa-solid fa-flag"></i> Flag as incorrect</button>`
+        : ''}
+      ${shots ? `<span class="sb-verify-shots">${shots}</span>` : ''}
+      <div id="scd-flagform" class="sb-flagform" hidden>
+        <input id="scd-flag-note" class="filter-input" maxlength="500"
+          placeholder="What needs fixing? e.g. Reactive Gas should be 45 units, not 40">
+        <button id="scd-flag-send" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-flag"></i> Flag it</button>
+        <button id="scd-flag-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
+      </div>
+      ${(st.flags || []).length ? `<div class="sb-flaglist">
+          ${st.flags.map((f) => `<div class="sb-flagrow"><i class="fa-solid fa-flag"></i>
+            <span>${escapeHtml(f.note)}</span> <span class="stat_off">— ${escapeHtml(f.by)}</span></div>`).join('')}
+          ${st.mine ? '<div class="sb-flaghint stat_off">Reviewers flagged issues — retract, fix them in your draft, and resubmit.</div>' : ''}
+        </div>` : ''}`;
   }
   bar.hidden = false;
 }
@@ -565,6 +579,25 @@ function initSchemBuilder() {
       loadSchematics();
       return;
     }
+    if (e.target.closest('#scd-flag')) {
+      const form = $('#scd-flagform');
+      form.hidden = false;
+      $('#scd-flag-note').focus();
+      return;
+    }
+    if (e.target.closest('#scd-flag-cancel')) { $('#scd-flagform').hidden = true; return; }
+    if (e.target.closest('#scd-flag-send')) {
+      const sid = safeInt($('#scd-community').dataset.sid);
+      const note = $('#scd-flag-note').value.trim();
+      if (note.length < 5) { toast('Say what needs fixing (a few words at least)', false); return; }
+      let res;
+      try { res = await apiFetch('POST', 'api/user_schematics.php', { data: { action: 'flag', schematic_id: sid, note } }); }
+      catch (err) { res = { ok: false, error: String(err) }; }
+      if (!res.ok) { toast(res.error || 'Flagging failed', false); return; }
+      toast('Flagged — the submitter will see your note');
+      sbRenderVerifyBar(sid, true);
+      return;
+    }
     if (!e.target.closest('#scd-confirm')) return;
     const sid = safeInt($('#scd-community').dataset.sid);
     let res;
@@ -575,6 +608,9 @@ function initSchemBuilder() {
       ? 'That was the last confirmation — schematic verified!'
       : `Confirmed — ${res.data.votes} of ${res.data.needed}`);
     sbRenderVerifyBar(sid, true);
+  });
+  $('#scd-community').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && e.target.id === 'scd-flag-note') $('#scd-flag-send').click();
   });
   $('#sb-new').addEventListener('click', () => sbOpenDraft(0));
   $('#sb-back').addEventListener('click', async () => {

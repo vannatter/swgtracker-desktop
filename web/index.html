@@ -6,7 +6,7 @@
   <title>SWG Tracker Desktop</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.1/css/all.min.css">
-  <link rel="stylesheet" href="css/app.css">
+  <link rel="stylesheet" href="css/app.css?v=20260914m">
 </head>
 <body>
   <!-- Header -->
@@ -175,19 +175,27 @@
           <h1>Schematics</h1>
           <i class="fa-solid fa-circle-info info-tip"
              title="Pin schematics to track the best available resources for crafting. Click a row for details."></i>
+          <button id="sch-review-btn" class="btn btn-sm btn-outline-secondary head-right" hidden
+                  title="Community schematics awaiting verification — confirm the ones you can check in game"><i class="fa-solid fa-user-check"></i> Community review<span id="sch-review-count" class="al-tab-count" hidden></span></button>
+          <button id="schem-builder-btn" class="btn btn-sm btn-outline-secondary"
+                  title="A schematic missing from the list? Build and submit it — drafts save as you go"><i class="fa-solid fa-pen-ruler"></i> Add Schematic</button>
+          <button id="sch-viewtoggle" class="btn btn-icon" title="Switch to card view (3D models)"><i class="fa-solid fa-table-cells-large"></i></button>
           <button class="btn btn-icon" data-refresh="schematics" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
         </div>
 
         <div class="filter-bar">
           <input id="sch-search" type="text" class="form-control filter-input" placeholder="Search schematics...">
           <select id="sch-category" class="form-select filter-select"></select>
+          <span id="sch-subchip" class="fac-tag active sch-subchip" hidden title="Filtered to this category — click to clear"></span>
           <button id="sch-search-btn" class="btn btn-accent" title="Search"><i class="fa-solid fa-magnifying-glass"></i></button>
           <label class="pin-toggle ms-auto">
             <input id="sch-pinned-only" type="checkbox"> Pinned
           </label>
         </div>
 
-        <div class="table-wrap">
+        <div id="sch-review-panel" class="sch-review-panel" hidden></div>
+
+        <div class="table-wrap" id="sch-tablewrap">
           <table class="data-grid" id="sch-grid">
             <thead><tr id="sch-head"></tr></thead>
             <tbody id="sch-body"></tbody>
@@ -195,6 +203,7 @@
           <div id="sch-loading" class="grid-loading" hidden><span class="spinner"></span> Loading…</div>
           <div id="sch-empty" class="grid-empty" hidden></div>
         </div>
+        <div id="sch-cards" class="sch-cards" hidden></div>
 
         <div class="pager">
           <span id="sch-status" class="pager-status"></span>
@@ -216,7 +225,11 @@
           </span>
         </div>
 
+        <div id="scd-community" class="sb-verifybar scd-community-full" hidden></div>
         <div class="scd-top">
+          <div class="scd-card scd-modelcard" id="scd-modelcard" hidden>
+            <div id="scd-model" class="scd-model"></div>
+          </div>
           <div class="scd-card scd-info">
             <h2 id="scd-name"></h2>
             <p id="scd-desc" class="scd-desc"></p>
@@ -1156,6 +1169,76 @@
         </div>
       </div>
 
+      <section id="page-schembuilder" class="page">
+        <div id="sb-list-view">
+          <div class="page-head">
+            <h1>Community Schematics</h1>
+            <i class="fa-solid fa-circle-info info-tip"
+               title="Fill in schematics the tracker is missing. Drafts save server-side as you type — resume from any machine. Submitting publishes immediately as 'unverified'; it becomes official once other app users confirm it."></i>
+            <button id="sb-new" class="btn btn-sm btn-accent head-right"><i class="fa-solid fa-plus"></i> New Schematic</button>
+          </div>
+          <div id="sb-drafts" class="sb-drafts"></div>
+          <div id="sb-list-empty" class="al-empty" hidden></div>
+        </div>
+
+        <div id="sb-edit-view" hidden>
+          <div class="page-head">
+            <h1 id="sb-edit-title">New schematic</h1>
+            <span id="sb-savestate" class="sb-savestate"></span>
+            <button id="sb-back" class="btn btn-sm btn-outline-secondary head-right"><i class="fa-solid fa-arrow-left"></i> Drafts</button>
+            <button id="sb-submit" class="btn btn-sm btn-accent"
+                    title="Validates everything, then publishes as an unverified schematic for the community to confirm"><i class="fa-solid fa-upload"></i> Submit for publication</button>
+          </div>
+          <div id="sb-verify-note" class="al-empty" hidden></div>
+          <div id="sb-errors" class="sb-errors" hidden></div>
+
+          <div id="sb-progress" class="sb-progress">
+            <div class="sb-progtrack"><div id="sb-progfill" class="sb-progfill"></div></div>
+            <span id="sb-proglabel" class="sb-proglabel"></span>
+          </div>
+
+          <div class="sb-section"><h2 data-sbsec>Basics</h2>
+            <div class="sb-row">
+              <input id="sb-f-name" class="form-control filter-input sb-wide" placeholder="Schematic name (exactly as the game shows it)" maxlength="120" spellcheck="false">
+              <select id="sb-f-category" class="form-select filter-select sb-cat"></select>
+            </div>
+            <textarea id="sb-f-desc" class="form-control filter-input sb-desc-text" rows="5" placeholder="Description (the schematic's in-game text, or anything useful)"></textarea>
+            <div class="sb-row sb-meta">
+              <label>Quality <select id="sb-f-quality" class="form-select filter-select"><option value="std">standard</option><option value="hq">high quality</option></select></label>
+              <label>Type <select id="sb-f-type" class="form-select filter-select"><option>Learned</option><option>Looted</option></select></label>
+              <label>Size <input id="sb-f-size" type="number" min="1" class="form-control filter-input sb-num"></label>
+              <label>Crate <input id="sb-f-crate" type="number" min="0" class="form-control filter-input sb-num" title="Factory crate size — 0 if it can't be manufactured"></label>
+              <label class="sb-flag"><input id="sb-f-manuf" type="checkbox"> manufacturable</label>
+            </div>
+          </div>
+
+          <div class="sb-section"><h2 data-sbsec>Resource slots</h2>
+            <div id="sb-resources"></div>
+            <button id="sb-res-add" class="btn btn-sm btn-outline-secondary sb-addbtn"><i class="fa-solid fa-plus"></i> Add resource slot</button>
+          </div>
+
+          <div class="sb-section"><h2 data-sbsec>Experimentation lines</h2>
+            <div id="sb-formulas"></div>
+            <button id="sb-form-add" class="btn btn-sm btn-outline-secondary sb-addbtn"
+                    title="Each line's stat weights must total 100%"><i class="fa-solid fa-plus"></i> Add experimentation line</button>
+          </div>
+
+          <div class="sb-section"><h2 data-sbsec>Components</h2>
+            <div id="sb-components"></div>
+            <button id="sb-comp-add" class="btn btn-sm btn-outline-secondary sb-addbtn"
+                    title="Type to search existing schematics — or create a missing subcomponent as its own draft"><i class="fa-solid fa-plus"></i> Add component</button>
+          </div>
+
+          <div class="sb-section"><h2 data-sbsec>Proof screenshots</h2>
+            <p class="sb-hint">Screenshot the schematic in game so reviewers can verify without logging in —
+              ideally one per material page. At least one is required to submit.</p>
+            <div id="sb-shots" class="sb-shots"></div>
+            <input id="sb-shot-file" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden>
+            <button id="sb-shot-add" class="btn btn-sm btn-outline-secondary sb-addbtn"><i class="fa-solid fa-image"></i> Add screenshots</button>
+          </div>
+        </div>
+      </section>
+
       <section id="page-notes" class="page">
         <div class="page-head">
           <h1>Notes</h1>
@@ -2030,28 +2113,29 @@
   </div>
 
   <!-- Classic scripts sharing one top-level scope; app.js boots last. -->
-  <script src="js/class_caps.js"></script>
-  <script src="js/shared.js"></script>
-  <script src="js/help.js"></script>
-  <script src="js/resources.js"></script>
-  <script src="js/resource.js"></script>
-  <script src="js/schematics.js"></script>
-  <script src="js/stockpile.js"></script>
-  <script src="js/wishlist.js"></script>
-  <script src="js/myschematics.js"></script>
-  <script src="js/inventory.js"></script>
-  <script src="js/sales.js"></script>
-  <script src="js/insights.js"></script>
-  <script src="js/purchases.js"></script>
-  <script src="js/harvesters.js"></script>
-  <script src="js/factories.js"></script>
-  <script src="js/customers.js"></script>
-  <script src="js/characters.js"></script>
-  <script src="js/settings.js"></script>
-  <script src="js/alerts.js"></script>\n  <script src="js/lab.js"></script>
-  <script src="js/mail.js"></script>
-  <script src="js/notes.js"></script>
-  <script src="js/scanner.js"></script>
-  <script src="js/app.js"></script>
+  <script src="js/class_caps.js?v=20260914m"></script>
+  <script src="js/shared.js?v=20260914m"></script>
+  <script src="js/help.js?v=20260914m"></script>
+  <script src="js/resources.js?v=20260914m"></script>
+  <script src="js/resource.js?v=20260914m"></script>
+  <script src="js/schematics.js?v=20260914m"></script>
+  <script src="js/stockpile.js?v=20260914m"></script>
+  <script src="js/wishlist.js?v=20260914m"></script>
+  <script src="js/myschematics.js?v=20260914m"></script>
+  <script src="js/inventory.js?v=20260914m"></script>
+  <script src="js/sales.js?v=20260914m"></script>
+  <script src="js/insights.js?v=20260914m"></script>
+  <script src="js/purchases.js?v=20260914m"></script>
+  <script src="js/harvesters.js?v=20260914m"></script>
+  <script src="js/factories.js?v=20260914m"></script>
+  <script src="js/customers.js?v=20260914m"></script>
+  <script src="js/characters.js?v=20260914m"></script>
+  <script src="js/settings.js?v=20260914m"></script>
+  <script src="js/alerts.js?v=20260914m"></script>\n  <script src="js/lab.js?v=20260914m"></script>
+  <script src="js/mail.js?v=20260914m"></script>
+  <script src="js/notes.js?v=20260914m"></script>
+  <script src="js/schembuilder.js?v=20260914m"></script>
+  <script src="js/scanner.js?v=20260914m"></script>
+  <script src="js/app.js?v=20260914m"></script>
 </body>
 </html>

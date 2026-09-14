@@ -2,7 +2,31 @@
    Search + pinned-only grid; click a row to load its best-resource detail. */
 
 // sortField null = the default most-viewed order
-const schState = { page: 1, pinned: new Set(), rows: [], sortField: null, sortOrder: 'ASC' };
+const schState = { page: 1, pinned: new Set(), rows: [], sortField: null, sortOrder: 'ASC',
+  view: localStorage.getItem('sch-view') || 'list',   // 'list' | 'cards' (3D grid, like the site)
+  subcategory: '',                                    // breadcrumb navigation filter
+  modelIds: null };                                   // Set of schematic ids with a .glb, null = not fetched
+
+// the model-viewer library, loaded once on first need (detail card, zoom, card view)
+function schEnsureModelLib() {
+  if (document.getElementById('mv-lib')) return;
+  const s = document.createElement('script');
+  s.type = 'module';
+  s.id = 'mv-lib';
+  s.src = 'https://ajax.googleapis.com/ajax/libs/model-viewer/3.5.0/model-viewer.min.js';
+  document.head.appendChild(s);
+}
+
+// which schematics have models — one call, cached for the session
+async function schLoadModelIds() {
+  if (schState.modelIds) return;
+  try {
+    const res = await apiFetch('GET', 'api/item_list.php');
+    const items = (res.ok && res.data && res.data.items) || [];
+    schState.modelIds = new Set(items.filter((i) => i.model).map((i) => String(i.id)));
+    if (schState.view === 'cards') renderSchRows(); // placeholders -> models
+  } catch (_) { schState.modelIds = new Set(); }
+}
 const SCH_COLUMNS = [['Name', 'name', 'col-name'], ['Category', 'parent', 'col-text']];
 
 function buildSchHeader() {
@@ -28,7 +52,47 @@ function renderSchRows() {
       ...schState.rows.filter((s) => !schState.pinned.has(String(s.id ?? s.schematic_id ?? ''))),
     ];
   }
-  $('#sch-body').innerHTML = schState.rows.map(schRowHtml).join('');
+  const cards = schState.view === 'cards';
+  $('#sch-tablewrap').hidden = cards;
+  $('#sch-cards').hidden = !cards;
+  if (cards) {
+    schEnsureModelLib();
+    if (!schState.modelIds) schLoadModelIds();
+    // the 3D grid only shows schematics that HAVE a model (like the site's
+    // "3D only" view) — everything else stays reachable in list view
+    const withModels = schState.modelIds
+      ? schState.rows.map((s, i) => [s, i]).filter(([s]) =>
+          schState.modelIds.has(String(s.id ?? s.schematic_id ?? '')))
+      : [];
+    $('#sch-cards').innerHTML = withModels.length
+      ? withModels.map(([s, i]) => schCardHtml(s, i)).join('')
+      : `<div class="al-empty sch-cards-empty">${schState.modelIds
+          ? 'No 3D models among these schematics — switch to list view to see them all.'
+          : 'Loading models…'}</div>`;
+  } else {
+    $('#sch-body').innerHTML = schState.rows.map(schRowHtml).join('');
+  }
+}
+
+// card view: the site's 3D grid, app-side — models lazy-load as they scroll in
+function schCardHtml(schem, idx) {
+  const id = String(schem.id ?? schem.schematic_id ?? '');
+  const isPinned = schState.pinned.has(id);
+  const inMys = mysState.schematicIds.has(id);
+  const hasModel = schState.modelIds ? schState.modelIds.has(id) : false;
+  return `<div class="sch-card ${isPinned ? 'pinned' : ''}" data-idx="${idx}" data-id="${id}">
+    <div class="sch-card-model">${hasModel
+      ? `<model-viewer src="https://swgtracker.com/items/${id}.glb" loading="lazy" auto-rotate
+           auto-rotate-delay="0" interaction-prompt="none" exposure="1.1"></model-viewer>`
+      : '<i class="fa-solid fa-scroll sch-card-nomodel"></i>'}</div>
+    <div class="sch-card-name">${escapeHtml(schem.name || '')}</div>
+    <div class="sch-card-cat">${escapeHtml(schem.parent || '')}</div>
+    <span class="sch-card-actions">
+      <span class="pin-cell ${isPinned ? 'pinned-star' : ''}" data-pin="${id}" title="Pin"><i class="fa-solid fa-thumbtack"></i></span>
+      <span class="pin-cell mys-add ${inMys ? 'in-mys' : ''}" data-mys="${id}" data-name="${escapeHtml(schem.name || '')}"
+        title="${inMys ? 'In My Schematics' : 'Add to My Schematics'}"><i class="fa-solid ${inMys ? 'fa-check add-ok' : 'fa-screwdriver-wrench'}"></i></span>
+    </span>
+  </div>`;
 }
 
 function schRowHtml(schem, idx) {
@@ -44,6 +108,46 @@ function schRowHtml(schem, idx) {
     <td class="col-name res-name">${escapeHtml(schem.name || '')}</td>
     <td class="col-text res-type">${escapeHtml(schem.parent || '')}</td>
   </tr>`;
+}
+
+// ---- community review queue (unverified schematics awaiting confirmations) ----
+
+let schReview = null; // {items, needed}, refreshed with each schematics page load
+
+async function schLoadReview() {
+  try {
+    const res = await apiFetch('GET', 'api/user_schematics.php', { params: { action: 'review' } });
+    if (!res.ok || !res.data || !Array.isArray(res.data.items)) return; // server predates the queue
+    schReview = res.data;
+  } catch (_) { return; }
+  const items = schReview.items;
+  // always visible once the server supports it — an empty queue says so in
+  // the panel; hiding the button just made the feature undiscoverable
+  $('#sch-review-btn').hidden = false;
+  // the badge counts what still needs YOUR eyes: not yours, not yet voted
+  const pending = items.filter((i) => !i.mine && !i.voted).length;
+  const badge = $('#sch-review-count');
+  badge.hidden = !pending;
+  badge.textContent = String(pending);
+  if (!$('#sch-review-panel').hidden) schRenderReviewPanel(); // refresh if open
+}
+
+function schRenderReviewPanel() {
+  const items = schReview?.items || [];
+  $('#sch-review-panel').innerHTML = `
+    <div class="sch-review-head"><i class="fa-solid fa-user-check"></i>
+      <b>Awaiting community review</b>
+      <span class="al-comm-sub">open one, check it against its proof screenshots, and confirm — ${schReview?.needed ?? 3} confirmations make it official</span></div>
+    ${items.length ? items.map((i) => `
+      <div class="sch-review-row" data-revopen="${i.id}" data-name="${escapeHtml(i.name)}">
+        <b>${escapeHtml(i.name)}</b>
+        <span class="sch-review-cat">${escapeHtml(i.parent || '')}</span>
+        <span class="sch-review-votes">${i.votes} of ${i.needed}</span>
+        ${i.mine ? '<span class="sb-chip">yours</span>'
+          : i.voted ? '<span class="sb-chip sb-chip-pub">confirmed</span>'
+          : '<span class="sb-chip sb-chip-todo">needs your review</span>'}
+      </div>`).join('')
+      : '<div class="sch-review-row stat_off">Nothing awaiting review right now — community submissions land here for verification.</div>'}`;
 }
 
 // Category dropdown from api/categories.php (12 profession parents); once per session
@@ -64,15 +168,23 @@ async function loadSchematics() {
   $('#sch-empty').hidden = true;
 
   loadSchCategories(); // fire-and-forget; fills the dropdown on first load
+  schLoadReview();     // fire-and-forget; badges the community review queue
 
   let res;
   try {
     res = await api().search_schematics({
       search: $('#sch-search').value.trim(),
       category: $('#sch-category').value,
+      subcategory: schState.subcategory || '',
       page: schState.page,
     });
   } catch (e) { res = { ok: false, error: String(e) }; }
+  // breadcrumb subcategory filter: visible + clearable while active
+  const chip = $('#sch-subchip');
+  chip.hidden = !schState.subcategory;
+  if (schState.subcategory) {
+    chip.innerHTML = `${escapeHtml(schState.subcategory)} <i class="fa-solid fa-xmark" title="Clear"></i>`;
+  }
 
   $('#sch-loading').hidden = true;
 
@@ -223,11 +335,14 @@ function renderScdTable() {
 function renderSchematicPage(s) {
   scdState.schematic = s;
 
-  // Breadcrumb — Schematics › Parent › Category › Name (no href: see scd-tabs note)
+  // Breadcrumb — every level navigates: Schematics (all) › Parent (profession
+  // filter) › Category (exact subcategory filter) › Name
   $('#scd-crumbs').innerHTML = [
     '<a role="button" data-nav="schematics">Schematics</a>',
-    escapeHtml(s.schematicCategoryParent || ''),
-    escapeHtml(s.schematicCategory || ''),
+    s.schematicCategoryParent
+      ? `<a role="button" data-catnav="${escapeHtml(s.schematicCategoryParent)}">${escapeHtml(s.schematicCategoryParent)}</a>` : '',
+    s.schematicCategory
+      ? `<a role="button" data-catnav="${escapeHtml(s.schematicCategoryParent || '')}" data-subnav="${escapeHtml(s.schematicCategory)}">${escapeHtml(s.schematicCategory)}</a>` : '',
     `<span class="crumb-current">${escapeHtml(s.schematicName || '')}</span>`,
   ].filter(Boolean).join('<span class="crumb-sep">›</span>');
 
@@ -288,6 +403,7 @@ async function openSchematicPage(id, name) {
   scdState.id = String(id);
   scdState.hideMustafar = false;
   showPage('schematic');
+  $('#page-schematic').classList.add('scd-busy'); // hide empty card shells while loading
   $('#scd-mys').hidden = true;
   $('#scd-crumbs').innerHTML = '<a href="#" data-nav="schematics">Schematics</a>';
   $('#scd-name').textContent = name || 'Loading…';
@@ -306,6 +422,7 @@ async function openSchematicPage(id, name) {
   catch (e) { res = { ok: false, error: String(e) }; }
 
   $('#scd-loading').hidden = true;
+  $('#page-schematic').classList.remove('scd-busy');
 
   const s = res.ok && res.data ? (res.data.schematic || res.data) : null;
   if (!s || !s.schematicName) {
@@ -314,6 +431,81 @@ async function openSchematicPage(id, name) {
     return;
   }
   renderSchematicPage(s);
+  if (typeof sbRenderVerifyBar === 'function') {
+    sbRenderVerifyBar(scdState.id, !!s.communitySubmitted); // community badge + Confirm
+  }
+  scdRenderModel(scdState.id);
+}
+
+// 3D model when the site has one exported (swgtracker.com/items/<id>.glb —
+// same files the website's schematic pages spin). The viewer lib loads lazily
+// on first use; a schematic without a model (fetch 404 / CORS pending) just
+// keeps the card hidden.
+function scdRenderModel(id) {
+  const card = $('#scd-modelcard');
+  const host = $('#scd-model');
+  if (!card || !host) return;
+  card.hidden = true;
+  host.innerHTML = '';
+  if (!document.getElementById('mv-lib')) {
+    const s = document.createElement('script');
+    s.type = 'module';
+    s.id = 'mv-lib';
+    s.src = 'https://ajax.googleapis.com/ajax/libs/model-viewer/3.5.0/model-viewer.min.js';
+    document.head.appendChild(s);
+  }
+  const url = `https://swgtracker.com/items/${encodeURIComponent(String(id))}.glb`;
+  if (!schState.modelIds) schLoadModelIds(); // warm the has-a-model cache
+  // No layout snap: when we KNOW a model exists (cached item list), the card
+  // reserves its space immediately with a quiet spinner; the model itself
+  // stays invisible until fully rendered, then fades in.
+  const start = () => {
+    if (String(id) !== String(scdState.id)) return;
+    card.hidden = false;
+    host.innerHTML = '<div class="scd-model-loading"><span class="spinner"></span></div>';
+    const mv = document.createElement('model-viewer');
+    mv.setAttribute('src', url);
+    mv.setAttribute('loading', 'eager');
+    mv.setAttribute('camera-controls', '');
+    mv.setAttribute('auto-rotate', '');
+    mv.setAttribute('auto-rotate-delay', '0');
+    mv.setAttribute('shadow-intensity', '1');
+    mv.setAttribute('exposure', '1.1');
+    mv.setAttribute('interaction-prompt', 'none');
+    mv.classList.add('scd-mv-pending');
+    mv.addEventListener('load', () => {
+      if (String(id) !== String(scdState.id)) return;
+      host.querySelector('.scd-model-loading')?.remove();
+      mv.classList.remove('scd-mv-pending');
+      if (!card.querySelector('.scd-mv-expand')) {
+        card.insertAdjacentHTML('beforeend',
+          `<button class="btn btn-icon scd-mv-expand" data-mvzoom="${escapeHtml(url)}" title="View full size"><i class="fa-solid fa-expand"></i></button>`);
+      }
+    });
+    mv.addEventListener('error', () => { card.hidden = true; });
+    host.appendChild(mv);
+  };
+  if (schState.modelIds) {
+    if (schState.modelIds.has(String(id))) start(); // known model — reserve instantly
+    // known modelless — card stays hidden, zero probes
+  } else {
+    // cache not warm yet — fall back to a HEAD probe
+    fetch(url, { method: 'HEAD' }).then((r) => { if (r.ok) start(); })
+      .catch(() => { /* offline — card stays hidden */ });
+  }
+}
+
+// full-screen model modal — drag to orbit, scroll to zoom, ✕ or backdrop closes
+function scdModelZoom(url) {
+  const ov = document.createElement('div');
+  ov.className = 'sb-lightbox scd-mv-zoom';
+  ov.innerHTML = `<model-viewer src="${escapeHtml(url)}" loading="eager" camera-controls auto-rotate
+      auto-rotate-delay="0" shadow-intensity="1" exposure="1.1" interaction-prompt="none"></model-viewer>
+    <button class="btn btn-icon scd-mv-close" title="Close"><i class="fa-solid fa-xmark"></i></button>`;
+  ov.addEventListener('click', (e) => {
+    if (e.target === ov || e.target.closest('.scd-mv-close')) ov.remove();
+  });
+  document.body.appendChild(ov);
 }
 
 // Re-fetch the best/current resource lists ranked by the checked formulas (and
@@ -338,8 +530,18 @@ async function refetchScdBest() {
 }
 
 function initSchematicPage() {
-  // Breadcrumb back-nav
+  // Breadcrumb back-nav: plain "Schematics", or a category-filtered list
   $('#scd-crumbs').addEventListener('click', (e) => {
+    const cat = e.target.closest('[data-catnav]');
+    if (cat) {
+      e.preventDefault();
+      $('#sch-category').value = cat.dataset.catnav || '';
+      schState.subcategory = cat.dataset.subnav || '';
+      schState.page = 1;
+      showPage('schematics');
+      loadSchematics();
+      return;
+    }
     const link = e.target.closest('[data-nav]');
     if (!link) return;
     e.preventDefault();
@@ -447,7 +649,8 @@ function initSchematics() {
   $('#sch-next').addEventListener('click', () => { schState.page++; loadSchematics(); });
 
   // Pin star toggles / add to My Schematics; any other cell opens the schematic's page.
-  $('#sch-body').addEventListener('click', async (e) => {
+  // one dispatcher serves the table AND the card grid
+  const schListClick = async (e) => {
     const mysCell = e.target.closest('[data-mys]');
     if (mysCell) {
       if (mysCell.classList.contains('in-mys')) { toast(`${mysCell.dataset.name} is already in My Schematics`); return; }
@@ -466,10 +669,57 @@ function initSchematics() {
       } catch (_) { /* ignore */ }
       return;
     }
-    const row = e.target.closest('tr[data-idx]');
+    const row = e.target.closest('tr[data-idx], .sch-card[data-idx]');
     if (!row) return;
+    if (e.target.closest('model-viewer')) return; // orbiting a card model isn't a click-through
     const schem = schState.rows[safeInt(row.dataset.idx)];
     if (schem && row.dataset.id) openSchematicPage(row.dataset.id, schem.name);
+  };
+  $('#sch-body').addEventListener('click', schListClick);
+  $('#sch-cards').addEventListener('click', schListClick);
+
+  // community review queue: toggle the panel, open rows into the detail page
+  $('#sch-review-btn').addEventListener('click', () => {
+    const panel = $('#sch-review-panel');
+    if (panel.hidden) { schRenderReviewPanel(); panel.hidden = false; }
+    else panel.hidden = true;
+  });
+  $('#sch-review-panel').addEventListener('click', (e) => {
+    const row = e.target.closest('[data-revopen]');
+    if (row) openSchematicPage(row.dataset.revopen, row.dataset.name);
+  });
+
+  // list/cards toggle — same icon pair as Lab and Factories
+  const schSyncViewBtn = () => {
+    $('#sch-viewtoggle').innerHTML = `<i class="fa-solid ${schState.view === 'cards' ? 'fa-list' : 'fa-table-cells-large'}"></i>`;
+    $('#sch-viewtoggle').title = schState.view === 'cards' ? 'Switch to list view' : 'Switch to card view (3D models)';
+  };
+  schSyncViewBtn();
+  $('#sch-viewtoggle').addEventListener('click', () => {
+    schState.view = schState.view === 'cards' ? 'list' : 'cards';
+    localStorage.setItem('sch-view', schState.view);
+    schSyncViewBtn();
+    renderSchRows();
+  });
+
+  // subcategory chip (breadcrumb filter) — click clears it
+  $('#sch-subchip').addEventListener('click', () => {
+    schState.subcategory = '';
+    schState.page = 1;
+    loadSchematics();
+  });
+  $('#sch-category').addEventListener('change', () => { schState.subcategory = ''; });
+
+  // 3D zoom modal from the detail card's expand button
+  document.addEventListener('click', (e) => {
+    const z = e.target.closest('[data-mvzoom]');
+    if (z) scdModelZoom(z.dataset.mvzoom);
+  });
+  // Escape closes any full-screen lightbox (model zoom, proof screenshots)
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    const ov = document.querySelector('.sb-lightbox');
+    if (ov) ov.remove();
   });
 
   initSchematicPage();

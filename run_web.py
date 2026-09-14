@@ -29,7 +29,7 @@ from src.core.alert_poller import AlertPoller
 from src.core.bundle_manager import BundleManager
 from src.web_api import WebApi
 
-APP_VERSION = "0.12.9"  # keep in sync with pyproject.toml — bump with every change batch
+APP_VERSION = "0.13.0"  # keep in sync with pyproject.toml — bump with every change batch
 
 logging.basicConfig(
     level=logging.INFO,
@@ -113,11 +113,25 @@ def _setup_tray(window, config):
     quitting = {"flag": False}
 
     def _show(icon=None, item=None):
+        # show() BEFORE restore(): restoring a hidden window no-ops on the
+        # WinForms backend, which left people stuck in the tray until they
+        # killed the process (Devi/Jel). Then a raw Win32 fallback for the
+        # cases pywebview's own calls silently drop when invoked from the
+        # pystray thread — same technique the single-instance wake uses.
         try:
-            window.restore()
             window.show()
+            window.restore()
         except Exception:  # noqa: BLE001
             logger.error("tray show failed", exc_info=True)
+        try:
+            import ctypes
+            user32 = ctypes.windll.user32
+            hwnd = user32.FindWindowW(None, "SWG Tracker Desktop")
+            if hwnd:
+                user32.ShowWindow(hwnd, 9)  # SW_RESTORE — also un-hides
+                user32.SetForegroundWindow(hwnd)
+        except Exception:  # noqa: BLE001
+            logger.error("tray win32 fallback failed", exc_info=True)
 
     def _quit(icon=None, item=None):
         quitting["flag"] = True

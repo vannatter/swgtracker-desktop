@@ -171,13 +171,15 @@ class SWGTrackerAPI:
         return self._request('GET', 'api/schematics.php', params=params)
 
     def search_schematics(self, search: str = "", category: str = "",
-                          page: int = 1) -> tuple[bool, dict | str]:
+                          page: int = 1, subcategory: str = "") -> tuple[bool, dict | str]:
         """GET /api/schematics.php?search= - Schematic list/search."""
         params = {"page": str(page)}
         if search:
             params["search"] = search
         if category:
             params["category"] = category
+        if subcategory:  # exact category name (breadcrumb navigation)
+            params["subcategory"] = subcategory
         return self._request('GET', 'api/schematics.php', params=params)
 
     # --- Cities (no auth) ---

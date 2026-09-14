@@ -421,6 +421,7 @@ class WebApi:
                 search=params.get("search", ""),
                 category=params.get("category", ""),
                 page=int(params.get("page", 1)),
+                subcategory=params.get("subcategory", ""),
             )
             if not success and self._offline_ok(data):
                 return self._search_schematics_offline(params, data)

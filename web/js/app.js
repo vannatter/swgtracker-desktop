@@ -19,6 +19,7 @@ const PAGE_LOADERS = {
   inventory: () => loadInventory(),
   alerts: () => loadAlerts(),
   notes: () => loadNotes(),
+  schembuilder: () => loadSchemBuilder(),
   lab: () => loadLab(),
   monitor: () => loadMail(),
   scanner: () => loadScanner(),
@@ -128,7 +129,7 @@ function showPage(key, opts = {}) {
   if (!opts.internal && from && from !== key) { navBack.push(from); navForward.length = 0; }
   updateNavArrows();
   // Sub-pages (detail views) keep their parent sidebar item lit.
-  const navKey = { schematic: 'schematics', resource: 'resources', myschematic: 'myschematics' }[key] || key;
+  const navKey = { schematic: 'schematics', resource: 'resources', myschematic: 'myschematics', schembuilder: 'schematics' }[key] || key;
   document.querySelectorAll('.nav-item').forEach((n) => n.classList.toggle('active', n.dataset.page === navKey));
   document.querySelectorAll('.page').forEach((p) => p.classList.toggle('active', p.id === `page-${key}`));
   // live-state pages reload on every visit, not just the first — mail uploads
@@ -909,6 +910,7 @@ async function boot() {
   initScanner();
   initFactories();
   initNotesPage();
+  initSchemBuilder();
   initMyCustomers();
   initDevMode();
   initAbout();

@@ -6,7 +6,7 @@
   <title>SWG Tracker Desktop</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.1/css/all.min.css">
-  <link rel="stylesheet" href="css/app.css?v=20260914m">
+  <link rel="stylesheet" href="css/app.css?v=20260914p">
 </head>
 <body>
   <!-- Header -->
@@ -1229,6 +1229,18 @@
                     title="Type to search existing schematics — or create a missing subcomponent as its own draft"><i class="fa-solid fa-plus"></i> Add component</button>
           </div>
 
+          <div class="sb-section"><h2 data-sbsec>Appearance (optional)</h2>
+            <p class="sb-hint">Many items share meshes — if this schematic's product looks like an existing item,
+              pick it and this schematic gets its 3D model.</p>
+            <div class="sb-row">
+              <input id="sb-model-search" class="form-control filter-input sb-wide" placeholder="Search items with models…"
+                     spellcheck="false" autocomplete="off">
+              <button id="sb-model-clear" class="btn btn-icon" title="Clear the model association" hidden><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div id="sb-model-results" class="sb-compsearch" hidden></div>
+            <div id="sb-model-preview" class="sb-model-preview" hidden></div>
+          </div>
+
           <div class="sb-section"><h2 data-sbsec>Proof screenshots</h2>
             <p class="sb-hint">Screenshot the schematic in game so reviewers can verify without logging in —
               ideally one per material page. At least one is required to submit.</p>
@@ -2113,29 +2125,29 @@
   </div>
 
   <!-- Classic scripts sharing one top-level scope; app.js boots last. -->
-  <script src="js/class_caps.js?v=20260914m"></script>
-  <script src="js/shared.js?v=20260914m"></script>
-  <script src="js/help.js?v=20260914m"></script>
-  <script src="js/resources.js?v=20260914m"></script>
-  <script src="js/resource.js?v=20260914m"></script>
-  <script src="js/schematics.js?v=20260914m"></script>
-  <script src="js/stockpile.js?v=20260914m"></script>
-  <script src="js/wishlist.js?v=20260914m"></script>
-  <script src="js/myschematics.js?v=20260914m"></script>
-  <script src="js/inventory.js?v=20260914m"></script>
-  <script src="js/sales.js?v=20260914m"></script>
-  <script src="js/insights.js?v=20260914m"></script>
-  <script src="js/purchases.js?v=20260914m"></script>
-  <script src="js/harvesters.js?v=20260914m"></script>
-  <script src="js/factories.js?v=20260914m"></script>
-  <script src="js/customers.js?v=20260914m"></script>
-  <script src="js/characters.js?v=20260914m"></script>
-  <script src="js/settings.js?v=20260914m"></script>
-  <script src="js/alerts.js?v=20260914m"></script>\n  <script src="js/lab.js?v=20260914m"></script>
-  <script src="js/mail.js?v=20260914m"></script>
-  <script src="js/notes.js?v=20260914m"></script>
-  <script src="js/schembuilder.js?v=20260914m"></script>
-  <script src="js/scanner.js?v=20260914m"></script>
-  <script src="js/app.js?v=20260914m"></script>
+  <script src="js/class_caps.js?v=20260914p"></script>
+  <script src="js/shared.js?v=20260914p"></script>
+  <script src="js/help.js?v=20260914p"></script>
+  <script src="js/resources.js?v=20260914p"></script>
+  <script src="js/resource.js?v=20260914p"></script>
+  <script src="js/schematics.js?v=20260914p"></script>
+  <script src="js/stockpile.js?v=20260914p"></script>
+  <script src="js/wishlist.js?v=20260914p"></script>
+  <script src="js/myschematics.js?v=20260914p"></script>
+  <script src="js/inventory.js?v=20260914p"></script>
+  <script src="js/sales.js?v=20260914p"></script>
+  <script src="js/insights.js?v=20260914p"></script>
+  <script src="js/purchases.js?v=20260914p"></script>
+  <script src="js/harvesters.js?v=20260914p"></script>
+  <script src="js/factories.js?v=20260914p"></script>
+  <script src="js/customers.js?v=20260914p"></script>
+  <script src="js/characters.js?v=20260914p"></script>
+  <script src="js/settings.js?v=20260914p"></script>
+  <script src="js/alerts.js?v=20260914p"></script>\n  <script src="js/lab.js?v=20260914p"></script>
+  <script src="js/mail.js?v=20260914p"></script>
+  <script src="js/notes.js?v=20260914p"></script>
+  <script src="js/schembuilder.js?v=20260914p"></script>
+  <script src="js/scanner.js?v=20260914p"></script>
+  <script src="js/app.js?v=20260914p"></script>
 </body>
 </html>

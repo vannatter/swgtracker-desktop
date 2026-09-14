@@ -226,6 +226,7 @@ function sbRenderEditor() {
   sbRenderResources();
   sbRenderFormulas();
   sbRenderComponents();
+  sbRenderModelPick();
   sbRenderShots();
   sbRenderProgress();
   // buttons included: the class-picker combobox and row-delete ✕s are
@@ -312,6 +313,48 @@ function sbRenderComponents() {
       </div>
       <div class="sb-compsearch mysd-opts" data-cres="${i}" hidden></div>
     </div>`).join('');
+}
+
+// ---- appearance: associate an existing item's 3D model ----------------------
+// Searches only items that HAVE models (schState.modelIds via schematics.js);
+// publishing symlinks the donor's .glb at this schematic's id server-side.
+
+function sbRenderModelPick() {
+  const b = sbState.cur?.body || {};
+  const prev = $('#sb-model-preview');
+  $('#sb-model-clear').hidden = !b.model_from;
+  if (!b.model_from) {
+    prev.hidden = true;
+    prev.innerHTML = '';
+    $('#sb-model-search').value = '';
+    return;
+  }
+  $('#sb-model-search').value = b.model_from_name || `#${b.model_from}`;
+  if (typeof schEnsureModelLib === 'function') schEnsureModelLib();
+  prev.hidden = false;
+  prev.innerHTML = `<model-viewer src="https://swgtracker.com/items/${safeInt(b.model_from)}.glb"
+    loading="eager" auto-rotate auto-rotate-delay="0" camera-controls interaction-prompt="none" exposure="1.1"></model-viewer>`;
+}
+
+async function sbModelSearch(q) {
+  const box = $('#sb-model-results');
+  if (!q || q.length < 2) { box.hidden = true; return; }
+  if (typeof schLoadModelIds === 'function' && !schState.modelIds) await schLoadModelIds();
+  let res;
+  try { res = await api().search_schematics({ search: q, page: 1 }); }
+  catch (_) { res = null; }
+  const rows = ((res && res.ok && res.data && res.data.results) || [])
+    .filter((s) => schState.modelIds?.has(String(s.id))).slice(0, 6);
+  if (typeof schEnsureModelLib === 'function' && rows.length) schEnsureModelLib();
+  // every suggestion carries its own mini spinning model — no blind picks
+  box.innerHTML = rows.length ? rows.map((s) =>
+    `<div class="mysd-opt sb-modelopt" data-modelpick="${s.id}" data-name="${escapeHtml(s.name)}">
+       <model-viewer class="sb-model-thumb" src="https://swgtracker.com/items/${s.id}.glb"
+         loading="lazy" auto-rotate auto-rotate-delay="0" interaction-prompt="none" exposure="1.1"></model-viewer>
+       <span class="sb-modelopt-name">${escapeHtml(s.name)}</span>
+       <span class="mysd-opt-meta">${escapeHtml(s.parent || '')}</span></div>`).join('')
+    : '<div class="mysd-opt-none">No modeled items match — leave it blank, a model can be exported later.</div>';
+  box.hidden = false;
 }
 
 // ---- proof screenshots (required for submit; reviewers verify from these) ----
@@ -481,7 +524,7 @@ async function sbRenderVerifyBar(schematicId, isCommunity) {
       `<img class="sb-verify-shot" src="https://swgtracker.com${escapeHtml(u)}" loading="lazy"
             data-shotview="${escapeHtml(u)}" title="In-game proof — click to view full size">`).join('');
     bar.innerHTML = `<i class="fa-solid fa-users"></i> Community schematic — <b>unverified</b>
-      (${st.votes} of ${st.needed} confirmations)
+      <span title="Unconfirmed schematics return to draft after 30 days, ready to fix and resubmit">(${st.votes} of ${st.needed} confirmations · 30 days to verify)</span>
       ${st.mine ? `<span class="stat_off">— yours; others must confirm it</span>
           <button id="scd-retract" class="btn btn-sm btn-outline-secondary" data-sid="${schematicId}"
             title="Pull it back — it leaves the site and search everywhere, and your draft (if kept) reopens for editing"><i class="fa-solid fa-rotate-left"></i> Retract</button>`
@@ -593,6 +636,28 @@ function initSchemBuilder() {
   $('#sb-comp-add').addEventListener('click', () => {
     sbState.cur.body.components.push({ desc: '', number: null, similar: false, optional: false, looted: false });
     sbRenderComponents(); sbMarkDirty();
+  });
+
+  // appearance / model association
+  let sbModelTimer = null;
+  $('#sb-model-search').addEventListener('input', (e) => {
+    clearTimeout(sbModelTimer);
+    sbModelTimer = setTimeout(() => sbModelSearch(e.target.value.trim()), 250);
+  });
+  $('#sb-model-results').addEventListener('click', (e) => {
+    const pick = e.target.closest('[data-modelpick]');
+    if (!pick) return;
+    sbState.cur.body.model_from = safeInt(pick.dataset.modelpick);
+    sbState.cur.body.model_from_name = pick.dataset.name;
+    $('#sb-model-results').hidden = true;
+    sbRenderModelPick();
+    sbMarkDirty();
+  });
+  $('#sb-model-clear').addEventListener('click', () => {
+    delete sbState.cur.body.model_from;
+    delete sbState.cur.body.model_from_name;
+    sbRenderModelPick();
+    sbMarkDirty();
   });
 
   // proof screenshots

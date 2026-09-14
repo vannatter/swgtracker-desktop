@@ -2663,3 +2663,10 @@ model-viewer::part(default-progress-mask) { display: none; }
 .scd-model model-viewer.scd-mv-pending { opacity: 0; }
 /* while the schematic detail loads, only crumbs + spinner show — no empty shells */
 .scd-busy .scd-top, .scd-busy #scd-formulas, .scd-busy .scd-tabs { display: none; }
+/* appearance picker: in-flow results + live donor preview */
+#sb-model-results { position: relative; top: auto; left: 0 !important; margin: 2px 0 8px; max-width: 640px; }
+.sb-modelopt { display: flex; align-items: center; gap: 12px; }
+.sb-modelopt-name { flex: 1; }
+.sb-model-thumb { width: 76px; height: 54px; flex: 0 0 76px; pointer-events: none; background: transparent; }
+.sb-model-preview { width: 300px; height: 220px; }
+.sb-model-preview model-viewer { width: 100%; height: 100%; background: transparent; }

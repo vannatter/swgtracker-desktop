@@ -2649,6 +2649,10 @@ model-viewer::part(default-progress-mask) { display: none; }
 #scd-flag i { color: #e9b445; }
 .sb-chip-flag { border-color: #e9b445; color: #e9b445; }
 .sb-chip-flag i { font-size: 10px; }
+/* JTL space-resource marker on type names (Resources list + detail crumb) */
+.res-jtl { display: inline-block; margin-left: 5px; padding: 0 5px; border-radius: 8px;
+  border: 1px solid #6ea8fe; color: #6ea8fe; font-size: 9.5px; font-weight: 700;
+  vertical-align: 1px; letter-spacing: .5px; cursor: help; }
 /* community review queue panel */
 .sch-review-panel { background: var(--bg-card); border: 1px solid var(--q-accept); border-radius: 8px;
   padding: 10px 14px; margin-bottom: 12px; }

@@ -92,7 +92,7 @@ function renderResourcePage(data) {
   $('#rd-crumbs').innerHTML = [
     '<a role="button" data-nav="resources">Resources</a>',
     r.type_code
-      ? `<a role="button" data-navcat="${escapeHtml(r.type_code)}" title="See all ${escapeHtml(r.type_name || '')} spawns">${escapeHtml(r.type_name || '')}</a>`
+      ? `<a role="button" data-navcat="${escapeHtml(r.type_code)}" title="See all ${escapeHtml(r.type_name || '')} spawns">${escapeHtml(r.type_name || '')}</a>${jtlChip(r.type_code)}`
       : escapeHtml(r.type_name || ''),
     `<span class="crumb-current">${escapeHtml(r.name || '')}</span>${ext}`,
   ].filter(Boolean).join('<span class="crumb-sep">›</span>');

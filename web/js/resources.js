@@ -11,6 +11,15 @@ const RESOURCE_CATEGORY_FALLBACK = [
   ['agem', 'Asteroidal Gemstone'], ['amin', 'Asteroidal Mineral'],
 ];
 
+// Restoration's 8 JTL space-resource classes (wiki + the site's gen_restree.php):
+// higher caps (stats run 1–1000), long 13–21 day spawns, one planet at a time.
+const JTL_CODES = new Set(['bistl', 'hastl', 'pealu', 'cbcpr', 'grfib', 'uoktv', 'fesil', 'hpkrd']);
+const JTL_TIP = 'JTL (Jump to Lightspeed) space resource — higher caps (stats run 1–1000), '
+  + 'long 13–21 day spawns, and only one planet at a time';
+function jtlChip(typeCode) {
+  return JTL_CODES.has(String(typeCode || '')) ? ` <span class="res-jtl" title="${JTL_TIP}">JTL</span>` : '';
+}
+
 // planet_* columns in site display order; badge shows the first letter like the site
 // (color disambiguates the D/D and T/T pairs; full name in the tooltip)
 const PLANET_KEYS = [

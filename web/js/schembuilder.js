@@ -86,9 +86,12 @@ function sbChecks(body) {
       ok: res.every((r) => (r.desc || '').trim() && (r.code || '').trim() && safeInt(r.units) > 0) });
   }
   if (forms.length) {
-    checks.push({ label: 'name every experimentation line and bring each to 100%',
-      ok: forms.every((f) => (f.name || '').trim()
-        && SB_STATS.reduce((a, s) => a + safeInt((f.weights || {})[s]), 0) === 100) });
+    // 99 counts as complete: the game's thirds formulas (33/33/33, 66/33) never reach 100
+    checks.push({ label: 'name every experimentation line and bring each to 100% (99 for thirds like 33/33/33)',
+      ok: forms.every((f) => {
+        const t = SB_STATS.reduce((a, s) => a + safeInt((f.weights || {})[s]), 0);
+        return (f.name || '').trim() && (t === 100 || t === 99);
+      }) });
   }
   if (comps.length) {
     // a draft-linked component is fine once THAT draft has been published —
@@ -283,7 +286,7 @@ function sbRenderFormulas() {
       <div class="sb-row">
         <input class="form-control filter-input sb-fname" data-ff="name" value="${escapeHtml(f.name || '')}"
                placeholder="Line name (e.g. Experimental Flavor)" spellcheck="false">
-        <span class="sb-ftotal ${total === 100 ? 'ok' : 'bad'}">${total}%</span>
+        <span class="sb-ftotal ${total === 100 || total === 99 ? 'ok' : 'bad'}" title="Weights must total 100% — or 99% for the game's thirds formulas (33/33/33, 66/33)">${total}%</span>
         <button class="btn btn-icon" data-fdel="${i}" title="Remove line"><i class="fa-solid fa-xmark"></i></button>
       </div>
       <div class="sb-stats">${SB_STATS.map((s) => `
@@ -409,13 +412,51 @@ async function sbUploadShots(files) {
   sbRenderProgress();
 }
 
-// full-size viewer used by both the builder and the verify bar
+// proof-screenshot viewer used by both the builder and the verify bar.
+// Floating windows, not a modal lightbox (snickerfritz): drag by the title
+// bar, resize by the corner, open as many as you need — so a reviewer can
+// park the recipe shots NEXT TO the schematic details and compare directly.
+let sbShotWinCount = 0;
+let sbShotZ = 900;
+function sbShotRaise(win) { win.style.zIndex = String(++sbShotZ); }
 function sbShowShot(url) {
-  const ov = document.createElement('div');
-  ov.className = 'sb-lightbox';
-  ov.innerHTML = `<img src="https://swgtracker.com${escapeHtml(url)}">`;
-  ov.addEventListener('click', () => ov.remove());
-  document.body.appendChild(ov);
+  // clicking the same shot again just brings its window forward
+  const existing = [...document.querySelectorAll('.sb-shotwin')].find((w) => w.dataset.shot === url);
+  if (existing) { sbShotRaise(existing); return; }
+  const win = document.createElement('div');
+  win.className = 'sb-shotwin';
+  win.dataset.shot = url;
+  const n = sbShotWinCount++;
+  win.style.right = `${24 + (n % 3) * 36}px`;
+  win.style.top = `${72 + (n % 3) * 36}px`;
+  win.innerHTML = `
+    <div class="sb-shotwin-bar"><i class="fa-solid fa-image"></i> Proof screenshot
+      <span class="sb-shotwin-hint">drag to move · corner to resize</span>
+      <button class="btn btn-icon" data-shotext title="Open in your browser — a real window you can drag to another monitor"><i class="fa-solid fa-arrow-up-right-from-square"></i></button>
+      <button class="btn btn-icon" data-shotclose title="Close (Esc closes the front one)"><i class="fa-solid fa-xmark"></i></button></div>
+    <div class="sb-shotwin-body"><img src="https://swgtracker.com${escapeHtml(url)}"></div>`;
+  win.addEventListener('pointerdown', () => sbShotRaise(win));
+  win.querySelector('[data-shotclose]').addEventListener('click', () => win.remove());
+  win.querySelector('[data-shotext]').addEventListener('click', () => {
+    try { api().open_external(`https://swgtracker.com${url}`); } catch (_) { /* bridge missing — button just no-ops */ }
+  });
+  const bar = win.querySelector('.sb-shotwin-bar');
+  bar.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('[data-shotclose]')) return;
+    const r = win.getBoundingClientRect();
+    win.style.left = `${r.left}px`; win.style.top = `${r.top}px`; win.style.right = 'auto';
+    const dx = e.clientX - r.left, dy = e.clientY - r.top;
+    const move = (ev) => {
+      win.style.left = `${Math.max(0, Math.min(window.innerWidth - 80, ev.clientX - dx))}px`;
+      win.style.top = `${Math.max(0, Math.min(window.innerHeight - 40, ev.clientY - dy))}px`;
+    };
+    const up = () => { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); };
+    document.addEventListener('pointermove', move);
+    document.addEventListener('pointerup', up);
+    e.preventDefault();
+  });
+  document.body.appendChild(win);
+  sbShotRaise(win);
 }
 
 // component name search — link an existing schematic, or spawn a child draft
@@ -513,7 +554,11 @@ async function sbRenderVerifyBar(schematicId, isCommunity) {
   if (!st || !st.community) return;
   bar.dataset.sid = String(schematicId);
   if (st.verified) {
-    bar.innerHTML = '<i class="fa-solid fa-circle-check"></i> Community schematic — <b>verified</b> by fellow crafters';
+    bar.innerHTML = `<div class="sb-vb-info">
+        <div class="sb-vb-title"><i class="fa-solid fa-circle-check"></i> Community schematic
+          <span class="sb-vb-chip ok">verified</span></div>
+        <div class="sb-vb-sub">confirmed accurate by fellow crafters${st.submitter ? ` · submitted by ${escapeHtml(st.submitter)}` : ''}</div>
+      </div>`;
     bar.className = 'sb-verifybar sb-verified scd-community-full';
   } else {
     // no tracking an unvetted recipe — Add to My Schematics unlocks at verified
@@ -522,21 +567,35 @@ async function sbRenderVerifyBar(schematicId, isCommunity) {
       mys.hidden = true;
     }
     bar.className = 'sb-verifybar scd-community-full'; // keep the full-width/margin class
+    // hoverable zoom affordance on each proof thumb — clearly clickable
     const shots = (st.screenshots || []).map((u) =>
-      `<img class="sb-verify-shot" src="https://swgtracker.com${escapeHtml(u)}" loading="lazy"
-            data-shotview="${escapeHtml(u)}" title="In-game proof — click to view full size">`).join('');
-    bar.innerHTML = `<i class="fa-solid fa-users"></i> Community schematic — <b>unverified</b>
-      <span title="Unconfirmed schematics return to draft after 30 days, ready to fix and resubmit">(${st.votes} of ${st.needed} confirmations · 30 days to verify)</span>
-      ${st.mine ? `<span class="stat_off">— yours; others must confirm it</span>
-          <button id="scd-retract" class="btn btn-sm btn-outline-secondary" data-sid="${schematicId}"
+      `<span class="sb-shotthumb" data-shotview="${escapeHtml(u)}"
+            title="In-game proof — click to open in a movable window and compare side-by-side">
+         <img src="https://swgtracker.com${escapeHtml(u)}" loading="lazy">
+         <i class="fa-solid fa-magnifying-glass-plus"></i></span>`).join('');
+    // three fixed columns — shots | two-line info | actions (never wrap) —
+    // with the flag form/notes as full-width rows underneath
+    const state = st.mine ? '' // "yours" lives in the sub-line, not a chip
+      : st.voted ? '<span class="sb-vb-state ok"><i class="fa-solid fa-check"></i> confirmed by you</span>' : '';
+    const actions = state + (st.mine
+      ? `<button id="scd-retract" class="btn btn-sm btn-outline-secondary" data-sid="${schematicId}"
             title="Pull it back — it leaves the site and search everywhere, and your draft (if kept) reopens for editing"><i class="fa-solid fa-rotate-left"></i> Retract</button>`
-        : st.voted ? '<span class="stat_off">— you confirmed it</span>'
-        : `<button id="scd-confirm" class="btn btn-sm btn-outline-secondary"
-             title="Check the proof screenshots against the details below, then confirm."><i class="fa-solid fa-check"></i> Confirm accurate</button>`}
-      ${!st.mine && !st.flagged ? `<button id="scd-flag" class="btn btn-sm btn-outline-secondary"
+      : st.voted ? `<button id="scd-unconfirm" class="btn btn-sm btn-outline-secondary"
+              title="Take back your confirmation — only possible while it's still unverified"><i class="fa-solid fa-rotate-left"></i> Undo</button>`
+      : `<button id="scd-confirm" class="btn btn-sm btn-outline-secondary"
+             title="Check the proof screenshots against the details below, then confirm."><i class="fa-solid fa-check"></i> Confirm accurate</button>`)
+      + (!st.mine && !st.flagged ? `<button id="scd-flag" class="btn btn-sm btn-outline-secondary"
              title="Something's wrong with this schematic? Flag it and say what needs fixing — the submitter sees your note."><i class="fa-solid fa-flag"></i> Flag as incorrect</button>`
-        : ''}
-      ${shots ? `<span class="sb-verify-shots">${shots}</span>` : ''}
+        : '');
+    bar.innerHTML = `${shots ? `<div class="sb-vb-shots">${shots}</div>` : ''}
+      <div class="sb-vb-info">
+        <div class="sb-vb-title"><i class="fa-solid fa-users"></i> Community schematic
+          <span class="sb-vb-chip" title="Unconfirmed schematics return to draft after 30 days, ready to fix and resubmit">unverified</span></div>
+        <div class="sb-vb-sub">${st.votes} of ${st.needed} confirmations · 30 days to verify${st.mine
+          ? ' · yours — others must confirm it'
+          : st.submitter ? ` · submitted by ${escapeHtml(st.submitter)}` : ''}</div>
+      </div>
+      <div class="sb-vb-actions">${actions}</div>
       <div id="scd-flagform" class="sb-flagform" hidden>
         <input id="scd-flag-note" class="filter-input" maxlength="500"
           placeholder="What needs fixing? e.g. Reactive Gas should be 45 units, not 40">
@@ -577,6 +636,16 @@ function initSchemBuilder() {
       toast('Retracted — it\'s gone from the site and search; your draft (if kept) is editable again');
       showPage('schematics');
       loadSchematics();
+      return;
+    }
+    if (e.target.closest('#scd-unconfirm')) {
+      const sid = safeInt($('#scd-community').dataset.sid);
+      let res;
+      try { res = await apiFetch('POST', 'api/user_schematics.php', { data: { action: 'unvote', schematic_id: sid } }); }
+      catch (err) { res = { ok: false, error: String(err) }; }
+      if (!res.ok) { toast(res.error || 'Undo failed', false); return; }
+      toast(`Confirmation withdrawn — ${res.data.votes} of ${res.data.needed}`);
+      sbRenderVerifyBar(sid, true);
       return;
     }
     if (e.target.closest('#scd-flag')) {
@@ -819,7 +888,7 @@ function initSchemBuilder() {
       const total = SB_STATS.reduce((a, s) => a + safeInt(f.weights[s]), 0);
       const badge = row.querySelector('.sb-ftotal');
       badge.textContent = `${total}%`;
-      badge.className = `sb-ftotal ${total === 100 ? 'ok' : 'bad'}`;
+      badge.className = `sb-ftotal ${total === 100 || total === 99 ? 'ok' : 'bad'}`;
     }
     sbMarkDirty();
   });

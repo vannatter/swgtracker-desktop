@@ -141,7 +141,7 @@ function schRenderReviewPanel() {
     ${items.length ? items.map((i) => `
       <div class="sch-review-row" data-revopen="${i.id}" data-name="${escapeHtml(i.name)}">
         <b>${escapeHtml(i.name)}</b>
-        <span class="sch-review-cat">${escapeHtml(i.parent || '')}</span>
+        <span class="sch-review-cat">${escapeHtml(i.parent || '')}${i.by ? ` · by ${escapeHtml(i.by)}` : ''}</span>
         <span class="sch-review-votes">${i.votes} of ${i.needed}</span>
         ${safeInt(i.flags) ? `<span class="sb-chip sb-chip-flag" title="A reviewer flagged this as incorrect — open it to read what needs fixing"><i class="fa-solid fa-flag"></i> flagged</span>` : ''}
         ${i.mine ? '<span class="sb-chip">yours</span>'
@@ -763,11 +763,16 @@ function initSchematics() {
     const z = e.target.closest('[data-mvzoom]');
     if (z) scdModelZoom(z.dataset.mvzoom);
   });
-  // Escape closes any full-screen lightbox (model zoom, proof screenshots)
+  // Escape closes any full-screen lightbox (model zoom), else the frontmost
+  // floating screenshot window
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     const ov = document.querySelector('.sb-lightbox');
-    if (ov) ov.remove();
+    if (ov) { ov.remove(); return; }
+    const wins = [...document.querySelectorAll('.sb-shotwin')];
+    if (wins.length) {
+      wins.sort((a, b) => safeInt(a.style.zIndex) - safeInt(b.style.zIndex)).pop().remove();
+    }
   });
 
   initSchematicPage();

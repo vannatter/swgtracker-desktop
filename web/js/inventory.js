@@ -131,8 +131,8 @@ function invRowHtml(item, idx) {
     <td class="col-actions">
       <button class="btn btn-icon" data-notes="${idx}" title="${hasNotes ? escapeHtml(notePreview) : 'Add notes'}"><i class="fa-${hasNotes ? 'solid' : 'regular'} fa-note-sticky${hasNotes ? ' has-notes' : ''}"></i></button>
       <button class="btn btn-icon" data-ioneoff="${idx}" title="${Number(item.one_off)
-        ? 'One-off — hidden from the default list; click to bring it back'
-        : 'Mark as one-off — keeps the sales data but hides it from the list and restock views (you’re not restocking this)'}"><i
+        ? 'One-off — hidden everywhere except the One-offs filter; click to bring it back'
+        : 'Mark as one-off — keeps the sales data but hides it from every view and search except the One-offs filter (you’re not restocking this)'}"><i
         class="fa-solid fa-box-archive${Number(item.one_off) ? ' mys-alert-on' : ''}"></i></button>
       <button class="btn btn-icon" data-iclone="${idx}" title="Clone — same numbers, tweak the name"><i class="fa-solid fa-clone"></i></button>
       <button class="btn btn-icon" data-iedit="${idx}" title="Edit vendor / stock"><i class="fa-solid fa-pen"></i></button>
@@ -796,7 +796,7 @@ function initInventory() {
       }).then((res) => {
         if (!res.ok) { toast(res.error || 'Could not save — site update pending?', false); return; }
         toast(on
-          ? `${item.item_name} marked one-off — find it under the One-offs filter or by search`
+          ? `${item.item_name} marked one-off — find it under the One-offs filter`
           : `${item.item_name} is back in the list`);
         loadInventory(); // it just left (or rejoined) the current view
       }).catch((err) => toast(String(err), false));

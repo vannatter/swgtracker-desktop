@@ -456,6 +456,9 @@ function scdRenderModel(id) {
   if (!card || !host) return;
   card.hidden = true;
   host.innerHTML = '';
+  // the expand button lives on the CARD, not the host — drop the previous
+  // schematic's or its zoom keeps opening the model you navigated away from
+  card.querySelector('.scd-mv-expand')?.remove();
   if (!document.getElementById('mv-lib')) {
     const s = document.createElement('script');
     s.type = 'module';
@@ -486,7 +489,10 @@ function scdRenderModel(id) {
       if (String(id) !== String(scdState.id)) return;
       host.querySelector('.scd-model-loading')?.remove();
       mv.classList.remove('scd-mv-pending');
-      if (!card.querySelector('.scd-mv-expand')) {
+      const btn = card.querySelector('.scd-mv-expand');
+      if (btn) {
+        btn.dataset.mvzoom = url; // never trust a leftover button's url
+      } else {
         card.insertAdjacentHTML('beforeend',
           `<button class="btn btn-icon scd-mv-expand" data-mvzoom="${escapeHtml(url)}" title="View full size"><i class="fa-solid fa-expand"></i></button>`);
       }

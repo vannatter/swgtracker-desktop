@@ -2755,6 +2755,28 @@ body.dev-mode .scd-hiddenrow { display: block; opacity: .55; }
 .sb-shotwin-body { flex: 1; overflow: auto; }
 .sb-shotwin-body img { width: 100%; height: auto; display: block; }
 
+/* network debug log window (Settings → Troubleshooting) */
+.netlog-win { min-width: 380px; }
+.netlog-body { font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.netlog-row { display: flex; align-items: center; gap: 8px; padding: 5px 10px; cursor: pointer;
+  border-bottom: 1px solid var(--border); white-space: nowrap; }
+.netlog-row:hover { background: var(--border); }
+.netlog-status i { color: #45e97e; font-size: 10px; }
+.netlog-row.netlog-err .netlog-status i { color: #e05260; }
+.netlog-method { color: var(--text-muted); flex: 0 0 40px; }
+.netlog-ep { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--text-hover); }
+.netlog-ms { color: var(--text-muted); }
+.netlog-time { color: var(--text-muted); }
+.netlog-detail { padding: 6px 10px 10px; border-bottom: 1px solid var(--border); background: rgba(0, 0, 0, .25); }
+.netlog-label { color: var(--text-muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: .5px;
+  margin: 6px 0 2px; }
+.netlog-block { margin: 0; white-space: pre-wrap; word-break: break-word; max-height: 220px; overflow-y: auto;
+  background: var(--bg-input, #14161c); border: 1px solid var(--border); border-radius: 5px; padding: 6px 8px; }
+.netlog-errline { color: #e05260; border-color: #e05260; }
+.netlog-detail .btn { margin-top: 8px; }
+.netlog-empty { padding: 16px; color: var(--text-muted); }
+.netlog-paused { color: #e9b445; }
+
 /* JTL space-resource marker on type names (Resources list + detail crumb) */
 .res-jtl { display: inline-block; margin-left: 5px; padding: 0 5px; border-radius: 8px;
   border: 1px solid #6ea8fe; color: #6ea8fe; font-size: 9.5px; font-weight: 700;

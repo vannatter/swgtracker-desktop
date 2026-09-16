@@ -922,14 +922,7 @@ async function navAttnSweep() {
 }
 
 async function boot() {
-  // surface JS errors in the shell log — WKWebView has no visible console,
-  // and the bridge's log_js has existed forever with no caller
-  window.addEventListener('error', (e) => {
-    try { api().log_js('error', `${e.message} @ ${e.filename || '?'}:${e.lineno || 0}`); } catch (_) { /* bridge not up yet */ }
-  });
-  window.addEventListener('unhandledrejection', (e) => {
-    try { api().log_js('error', `unhandled rejection: ${(e.reason && (e.reason.message || e.reason)) || '?'}`); } catch (_) { /* ditto */ }
-  });
+  // (JS error → shell-log forwarding lives in shared.js)
   initNav();
   initControls();
   initBroadcasts();

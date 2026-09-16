@@ -763,7 +763,9 @@ async function scdComputeCommunityLists(s) {
     if (!code) continue;
     let res;
     try { res = await classPool(code); } catch (_) { continue; }
-    const rows = (res && res.ok && res.data) || [];
+    // recycled canonicals (source 9) are always "in spawn" with degenerate
+    // caps — legit for slot picking, but not spawns to rank in Best/Current
+    const rows = ((res && res.ok && res.data) || []).filter((p) => safeInt(p.source) !== 9);
     const caps = typeof classCaps === 'function' ? classCaps(code) : null;
     const scored = rows.map((p) => ({
       resourceId: p.id, resourceName: p.name, resourceTypeName: p.type_name,

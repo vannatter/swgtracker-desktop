@@ -2,7 +2,41 @@
    All web/js files are classic scripts loaded in order (see index.html), so
    top-level consts here are visible to every page controller. */
 
-const api = () => window.pywebview.api;
+// Every bridge call flows through a recording proxy so the network log
+// (Settings → Troubleshooting) sees the legacy per-method endpoints too —
+// get_sales, get_schematic, … — not just apiFetch's generic gateway.
+const NETLOG_SKIP = new Set(['log_js']); // log spam, and never worth debugging
+let _netProxy = null;
+let _netProxyFor = null;
+const api = () => {
+  const raw = window.pywebview.api;
+  if (!raw) return raw;
+  if (_netProxy && _netProxyFor === raw) return _netProxy;
+  _netProxyFor = raw;
+  _netProxy = new Proxy(raw, {
+    get(t, prop) {
+      const v = t[prop];
+      if (typeof v !== 'function') return v;
+      if (NETLOG_SKIP.has(prop)) return v.bind(t);
+      return (...args) => {
+        const t0 = performance.now();
+        const isGw = prop === 'api_request'; // generic gateway carries its own method/endpoint
+        const method = isGw ? String(args[0] || 'CALL') : 'CALL';
+        const label = isGw ? String(args[1] || prop) : String(prop);
+        const opts = isGw ? { data: args[2], params: args[3] } : { data: args.length ? args : null };
+        const p = v.apply(t, args);
+        if (p && typeof p.then === 'function') {
+          p.then(
+            (res) => netRecord(method, label, opts, res, performance.now() - t0),
+            (err) => netRecord(method, label, opts, { ok: false, error: String(err) }, performance.now() - t0),
+          );
+        }
+        return p;
+      };
+    },
+  });
+  return _netProxy;
+};
 
 // Generic gateway to the swgtracker.com API. Prefer this for NEW endpoints so they
 // ride the auto-updating UI bundle and don't need a client/shell download. Falls back
@@ -14,7 +48,127 @@ function apiFetch(method, endpoint, opts = {}) {
   if (!bridge || typeof bridge.api_request !== 'function') {
     return Promise.resolve({ ok: false, error: 'This needs a newer app version — please update the desktop client.' });
   }
+  // recording happens in the api() proxy — no double-log here
   return bridge.api_request(method, endpoint, opts.data ?? null, opts.params ?? null);
+}
+
+// ---- network debug log (Settings → Troubleshooting → Open network log) ----
+// Every apiFetch is recorded into a ring buffer; the floating window shows
+// them live so a user can reproduce an issue and copy the failing entry
+// (request + response) straight into a bug report.
+const netLog = { entries: [], max: 150, seq: 0, paused: false };
+function netTrunc(v, cap) {
+  if (v === null || v === undefined) return '';
+  let s;
+  try { s = typeof v === 'string' ? v : JSON.stringify(v, null, 1); } catch (_) { s = String(v); }
+  return s.length > cap ? `${s.slice(0, cap)}\n… (${s.length - cap} more chars truncated)` : s;
+}
+function netRecord(method, endpoint, opts, res, ms) {
+  if (netLog.paused) return;
+  netLog.entries.unshift({
+    id: ++netLog.seq,
+    at: new Date(),
+    method,
+    endpoint,
+    params: netTrunc(opts.params, 2000),
+    body: netTrunc(opts.data, 4000),
+    ok: !!(res && res.ok),
+    error: (res && res.error) || '',
+    ms: Math.round(ms),
+    res: netTrunc(res && (res.data !== undefined ? res.data : res), 12000),
+  });
+  if (netLog.entries.length > netLog.max) netLog.entries.length = netLog.max;
+  if (document.getElementById('netlog-win')) netRenderRows();
+}
+function netRowHtml(e) {
+  return `<div class="netlog-row ${e.ok ? '' : 'netlog-err'}" data-netrow="${e.id}">
+      <span class="netlog-status">${e.ok ? '<i class="fa-solid fa-circle-check"></i>' : '<i class="fa-solid fa-circle-xmark"></i>'}</span>
+      <span class="netlog-method">${escapeHtml(e.method)}</span>
+      <span class="netlog-ep">${escapeHtml(e.endpoint)}</span>
+      <span class="netlog-ms">${e.ms}ms</span>
+      <span class="netlog-time">${e.at.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' })}</span>
+    </div>
+    <div class="netlog-detail" data-netdetail="${e.id}" hidden>
+      ${e.error ? `<div class="netlog-block netlog-errline">${escapeHtml(e.error)}</div>` : ''}
+      ${e.params ? `<div class="netlog-label">query params</div><pre class="netlog-block">${escapeHtml(e.params)}</pre>` : ''}
+      ${e.body ? `<div class="netlog-label">request body</div><pre class="netlog-block">${escapeHtml(e.body)}</pre>` : ''}
+      <div class="netlog-label">response</div><pre class="netlog-block">${escapeHtml(e.res || '(empty)')}</pre>
+      <button class="btn btn-sm btn-outline-secondary" data-netcopy="${e.id}"><i class="fa-solid fa-copy"></i> Copy entry for a bug report</button>
+    </div>`;
+}
+function netRenderRows() {
+  const body = document.querySelector('#netlog-win .netlog-body');
+  if (!body) return;
+  const openIds = new Set([...body.querySelectorAll('[data-netdetail]:not([hidden])')].map((d) => d.dataset.netdetail));
+  body.innerHTML = netLog.entries.length
+    ? netLog.entries.map(netRowHtml).join('')
+    : '<div class="netlog-empty">No requests yet — use the app and they appear here newest-first.</div>';
+  openIds.forEach((id) => { const d = body.querySelector(`[data-netdetail="${id}"]`); if (d) d.hidden = false; });
+}
+function netOpenWindow() {
+  let win = document.getElementById('netlog-win');
+  if (win) { win.remove(); return; }
+  win = document.createElement('div');
+  win.id = 'netlog-win';
+  win.className = 'sb-shotwin netlog-win'; // reuse the draggable/resizable window chrome
+  win.innerHTML = `
+    <div class="sb-shotwin-bar"><i class="fa-solid fa-network-wired"></i> Network log
+      <span class="sb-shotwin-hint">every request the app makes · click a row for details</span>
+      <button class="btn btn-icon" data-netpause title="Pause/resume capturing"><i class="fa-solid fa-pause"></i></button>
+      <button class="btn btn-icon" data-netclear title="Clear the log"><i class="fa-solid fa-eraser"></i></button>
+      <button class="btn btn-icon" data-netclose title="Close"><i class="fa-solid fa-xmark"></i></button></div>
+    <div class="sb-shotwin-body netlog-body"></div>`;
+  win.style.right = '24px';
+  win.style.top = '64px';
+  win.style.width = 'min(46vw, 680px)';
+  win.style.height = '70vh';
+  win.addEventListener('click', async (e) => {
+    if (e.target.closest('[data-netclose]')) { win.remove(); return; }
+    if (e.target.closest('[data-netclear]')) { netLog.entries = []; netRenderRows(); return; }
+    const pause = e.target.closest('[data-netpause]');
+    if (pause) {
+      netLog.paused = !netLog.paused;
+      pause.innerHTML = netLog.paused ? '<i class="fa-solid fa-play"></i>' : '<i class="fa-solid fa-pause"></i>';
+      pause.classList.toggle('netlog-paused', netLog.paused);
+      return;
+    }
+    const copy = e.target.closest('[data-netcopy]');
+    if (copy) {
+      const entry = netLog.entries.find((x) => String(x.id) === copy.dataset.netcopy);
+      if (entry) {
+        const text = `${entry.method} ${entry.endpoint} — ${entry.ok ? 'ok' : `FAILED: ${entry.error}`} (${entry.ms}ms, ${entry.at.toLocaleString()})\n`
+          + (entry.params ? `params: ${entry.params}\n` : '')
+          + (entry.body ? `body: ${entry.body}\n` : '')
+          + `response: ${entry.res}`;
+        try { await navigator.clipboard.writeText(text); toast('Copied — paste it into your bug report'); }
+        catch (_) { toast('Copy failed — select the text manually', false); }
+      }
+      return;
+    }
+    const row = e.target.closest('[data-netrow]');
+    if (row) {
+      const d = win.querySelector(`[data-netdetail="${row.dataset.netrow}"]`);
+      if (d) d.hidden = !d.hidden;
+    }
+  });
+  // drag by the title bar (same behaviour as the screenshot windows)
+  const bar = win.querySelector('.sb-shotwin-bar');
+  bar.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('.btn')) return;
+    const r = win.getBoundingClientRect();
+    win.style.left = `${r.left}px`; win.style.top = `${r.top}px`; win.style.right = 'auto';
+    const dx = e.clientX - r.left, dy = e.clientY - r.top;
+    const move = (ev) => {
+      win.style.left = `${Math.max(0, Math.min(window.innerWidth - 80, ev.clientX - dx))}px`;
+      win.style.top = `${Math.max(0, Math.min(window.innerHeight - 40, ev.clientY - dy))}px`;
+    };
+    const up = () => { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); };
+    document.addEventListener('pointermove', move);
+    document.addEventListener('pointerup', up);
+    e.preventDefault();
+  });
+  document.body.appendChild(win);
+  netRenderRows();
 }
 
 // Forward JS errors to the Python log — the webview has no visible console.

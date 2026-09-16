@@ -283,6 +283,7 @@ async function loadCharacters() {
 }
 
 function initSettings() {
+  $('#set-netlog-btn').addEventListener('click', netOpenWindow);
   document.querySelectorAll('input[name="set-maildisp"]').forEach((r) =>
     r.addEventListener('change', syncZipToggle));
   $('#set-mailzip').addEventListener('change', syncZipToggle);

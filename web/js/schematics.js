@@ -7,14 +7,34 @@ const schState = { page: 1, pinned: new Set(), rows: [], sortField: null, sortOr
   subcategory: '',                                    // breadcrumb navigation filter
   modelIds: null };                                   // Set of schematic ids with a .glb, null = not fetched
 
-// the model-viewer library, loaded once on first need (detail card, zoom, card view)
+// the site's own <swg-creature> viewer, loaded once on first need (detail
+// card, zoom, card view). Same module the website's schematic pages run —
+// identical rendering, plus the game-palette recolor API model-viewer lacked.
 function schEnsureModelLib() {
   if (document.getElementById('mv-lib')) return;
+  // WKWebView fix: three's GLTFLoader decodes textures via createImageBitmap,
+  // which WebKit PREMULTIPLIES (ignoring premultiplyAlpha:'none') — crushing
+  // low-alpha texels to black. The recolor shader keeps its region mask in
+  // the alpha channel, so masked regions rendered black (RIS chest top).
+  // GLTFLoader's own Safari fallback misses us because the WKWebView UA has
+  // no "Safari" token — remove the API so the loader takes its safe path.
+  if (window.webkit && window.webkit.messageHandlers && !window.chrome) {
+    try { delete window.createImageBitmap; } catch (_) { window.createImageBitmap = undefined; }
+  }
   const s = document.createElement('script');
   s.type = 'module';
   s.id = 'mv-lib';
-  s.src = 'https://ajax.googleapis.com/ajax/libs/model-viewer/3.5.0/model-viewer.min.js';
+  s.src = 'https://swgtracker.com/js/swg-creature.js';
+  s.addEventListener('error', () => {
+    try { api().log_js('error', 'swg-creature module failed to load (script error)'); } catch (_) { /* no bridge */ }
+  });
   document.head.appendChild(s);
+  // if the element never upgrades, say so in the shell log with specifics
+  setTimeout(() => {
+    if (!customElements.get('swg-creature')) {
+      try { api().log_js('error', 'swg-creature not defined 10s after module load started'); } catch (_) { /* no bridge */ }
+    }
+  }, 10000);
 }
 
 // which schematics have models — one call, cached for the session
@@ -82,8 +102,7 @@ function schCardHtml(schem, idx) {
   const hasModel = schState.modelIds ? schState.modelIds.has(id) : false;
   return `<div class="sch-card ${isPinned ? 'pinned' : ''}" data-idx="${idx}" data-id="${id}">
     <div class="sch-card-model">${hasModel
-      ? `<model-viewer src="https://swgtracker.com/items/${id}.glb" loading="lazy" auto-rotate
-           auto-rotate-delay="0" interaction-prompt="none" exposure="1.1"></model-viewer>`
+      ? `<swg-creature src="https://swgtracker.com/items/${id}.glb" no-picker auto-rotate fit="0.92"></swg-creature>`
       : '<i class="fa-solid fa-scroll sch-card-nomodel"></i>'}</div>
     <div class="sch-card-name">${escapeHtml(schem.name || '')}</div>
     <div class="sch-card-cat">${escapeHtml(schem.parent || '')}</div>
@@ -347,35 +366,56 @@ function renderSchematicPage(s) {
     `<span class="crumb-current">${escapeHtml(s.schematicName || '')}</span>`,
   ].filter(Boolean).join('<span class="crumb-sep">›</span>');
 
-  // Info card
+  // Info card. Quantities, crate size and the exp-benefit chip are
+  // community-editable (same as the site's pencils) — see scdSaveQty below.
   $('#scd-name').textContent = s.schematicName || '';
   $('#scd-desc').textContent = s.schematicDescription || '';
-  $('#scd-meta').textContent = [
-    s.crateSize ? `Crate Size: ${s.crateSize}` : '',
-    s.schematicQuality ? `Quality: ${String(s.schematicQuality).toUpperCase()}` : '',
+  $('#scd-meta').innerHTML = [
+    s.crateSize ? `Crate Size: <span class="scd-eqty" data-eqty="crateSize" title="Community-editable — click to fix the crate size">${safeInt(s.crateSize)}</span>` : '',
+    s.schematicQuality ? `Quality: ${escapeHtml(String(s.schematicQuality).toUpperCase())}` : '',
   ].filter(Boolean).join('   ');
-  $('#scd-benefit').innerHTML = String(s.manufactured) === 'yes' || s.formula?.length
-    ? '<span class="benefits">Benefits from Experimenting</span>' : '';
+  const expKnown = s.expBenefit !== undefined && s.expBenefit !== null;
+  const expOn = expKnown ? safeInt(s.expBenefit) === 1
+    : (String(s.manufactured) === 'yes' || !!s.formula?.length);
+  $('#scd-benefit').innerHTML = `<span class="benefits${expOn ? '' : ' scd-noexp'}" ${expKnown
+    ? 'role="button" data-exptoggle title="Community-editable — click twice to flip whether this schematic benefits from experimenting"' : ''}>${expOn
+    ? 'Benefits from Experimenting' : 'NO Benefit from Experimenting'}</span>`;
 
-  // Resources needed — "40 of Beyrllius Copper" + total units
-  const needed = s.resourcesNeeded || [];
+  // Resources needed — "40 of Beyrllius Copper" + total units. Zeroed rows
+  // are community-hidden (matching the site); dev mode still sees them with
+  // a "hidden" tag, and clicking the qty re-enables one (site: admins).
+  const neededAll = s.resourcesNeeded || [];
+  const needed = neededAll.filter((r) => safeInt(r.units) > 0);
   const total = needed.reduce((sum, r) => sum + safeInt(r.units), 0);
   // slot labels visible inline (not tooltip-only) so reviewers can check the
   // label ("Reaction Medium") against the class ("Reactive Gas") in the proof
-  $('#scd-resneeded').innerHTML = needed.map((r) =>
-    `<div class="scd-line">${safeInt(r.units)} of <span class="scd-restype">${escapeHtml(r.resourceName || '')}</span>${(r.desc || '').trim()
-      ? ` <span class="scd-slotlabel">(${escapeHtml(r.desc)})</span>` : ''}</div>`
-  ).join('') + (needed.length ? `<div class="scd-line scd-total">${total} Total Resource Units</div>` : '<div class="scd-line">None</div>');
+  $('#scd-resneeded').innerHTML = neededAll.map((r) => {
+    const hid = safeInt(r.units) <= 0;
+    return `<div class="scd-line${hid ? ' scd-hiddenrow' : ''}"><span class="scd-eqty" data-eqty="${escapeHtml(String(r.id ?? ''))}" title="${hid ? 'Hidden by a community edit (qty 0) — click to set a quantity and bring it back' : 'Community-editable — click to fix the quantity'}">${safeInt(r.units)}</span> of <span class="scd-restype">${escapeHtml(r.resourceName || '')}</span>${(r.desc || '').trim()
+      ? ` <span class="scd-slotlabel">(${escapeHtml(r.desc)})</span>` : ''}${hid ? ' <span class="scd-hidden-tag">hidden</span>' : ''}</div>`;
+  }).join('') + (needed.length ? `<div class="scd-line scd-total"><span id="scd-restotal">${total}</span> Total Resource Units</div>` : '<div class="scd-line">None</div>');
 
-  // Components needed — one line per entry, names open that schematic's page
+  // Components needed — one line per entry, names open that schematic's page.
+  // Category slots ("1 Armor Core") expand to their matching schematics, like
+  // the site's hover list — but click-to-toggle, sturdier than a tooltip.
   const comps = s.componentTypes || [];
-  $('#scd-components').innerHTML = comps.length ? comps.map((c) => {
+  $('#scd-components').innerHTML = comps.length ? comps.map((c, i) => {
+    const chid = safeInt(c.number) <= 0; // zeroed = community-removed; dev mode can restore
     const verb = c.optional === 'yes' ? 'Optional' : 'Requires';
-    const name = c.type === 'schematic'
-      ? `<a role="button" class="scd-complink" data-schem="${escapeHtml(String(c.id))}">${escapeHtml(c.desc || '')}</a>`
-      : escapeHtml(c.desc || '');
+    const items = Array.isArray(c.categoryItems) ? c.categoryItems : [];
+    let name;
+    if (c.type === 'schematic') {
+      name = `<a role="button" class="scd-complink" data-schem="${escapeHtml(String(c.id))}">${escapeHtml(c.desc || '')}</a>`;
+    } else if (items.length) {
+      name = `<a role="button" class="scd-catlink" data-cattoggle="${i}"
+        title="A category — any of ${items.length} matching schematic${items.length === 1 ? '' : 's'} fits; click to list them">${escapeHtml(c.desc || '')} <i class="fa-solid fa-caret-down"></i></a>`;
+    } else {
+      name = escapeHtml(c.desc || '');
+    }
     const looted = c.looted === 'yes' ? ' <span class="scd-age">(looted)</span>' : '';
-    return `<div class="scd-line">${verb} ${Math.max(1, safeInt(c.number))} ${name}${looted}</div>`;
+    const sub = items.length ? `<div class="scd-catitems" data-catitems="${i}" hidden>${items.map((ci) =>
+      `<a role="button" class="scd-complink" data-schem="${escapeHtml(String(ci.schematicId))}">${escapeHtml(ci.schematicName || '')}</a>`).join('')}</div>` : '';
+    return `<div class="scd-line${chid ? ' scd-hiddenrow' : ''}">${verb} <span class="scd-eqty" data-eqty="${escapeHtml(String(c.id ?? ''))}" title="${chid ? 'Removed by a community edit (count 0) — click to set a count and bring it back' : 'Community-editable — click to fix the count'}">${safeInt(c.number)}</span> ${name}${looted}${chid ? ' <span class="scd-hidden-tag">hidden</span>' : ''}</div>${sub}`;
   }).join('') : '<div class="scd-line">None</div>';
 
   // Formula switches — toggling re-fetches the server-ranked best lists for the
@@ -459,13 +499,7 @@ function scdRenderModel(id) {
   // the expand button lives on the CARD, not the host — drop the previous
   // schematic's or its zoom keeps opening the model you navigated away from
   card.querySelector('.scd-mv-expand')?.remove();
-  if (!document.getElementById('mv-lib')) {
-    const s = document.createElement('script');
-    s.type = 'module';
-    s.id = 'mv-lib';
-    s.src = 'https://ajax.googleapis.com/ajax/libs/model-viewer/3.5.0/model-viewer.min.js';
-    document.head.appendChild(s);
-  }
+  schEnsureModelLib(); // one loader for every surface (was an inline copy that kept loading model-viewer)
   const url = `https://swgtracker.com/items/${encodeURIComponent(String(id))}.glb`;
   if (!schState.modelIds) schLoadModelIds(); // warm the has-a-model cache
   // No layout snap: when we KNOW a model exists (cached item list), the card
@@ -475,17 +509,16 @@ function scdRenderModel(id) {
     if (String(id) !== String(scdState.id)) return;
     card.hidden = false;
     host.innerHTML = '<div class="scd-model-loading"><span class="spinner"></span></div>';
-    const mv = document.createElement('model-viewer');
+    card.querySelector('.scd-mv-recolor')?.remove(); // previous schematic's palette
+    document.getElementById('scd-recolor-pop')?.remove();
+    const mv = document.createElement('swg-creature');
     mv.setAttribute('src', url);
-    mv.setAttribute('loading', 'eager');
-    mv.setAttribute('camera-controls', '');
+    mv.setAttribute('no-picker', '');   // the in-canvas picker bar — we build our own popover
     mv.setAttribute('auto-rotate', '');
-    mv.setAttribute('auto-rotate-delay', '0');
-    mv.setAttribute('shadow-intensity', '1');
-    mv.setAttribute('exposure', '1.1');
-    mv.setAttribute('interaction-prompt', 'none');
+    mv.setAttribute('fit', '0.92');
     mv.classList.add('scd-mv-pending');
-    mv.addEventListener('load', () => {
+    scdState.modelEl = mv;
+    mv.addEventListener('swg-ready', (e) => {
       if (String(id) !== String(scdState.id)) return;
       host.querySelector('.scd-model-loading')?.remove();
       mv.classList.remove('scd-mv-pending');
@@ -496,8 +529,19 @@ function scdRenderModel(id) {
         card.insertAdjacentHTML('beforeend',
           `<button class="btn btn-icon scd-mv-expand" data-mvzoom="${escapeHtml(url)}" title="View full size"><i class="fa-solid fa-expand"></i></button>`);
       }
+      // recolorable regions -> palette button (real game palettes, like the site)
+      const slots = ((e.detail && e.detail.slots) || [])
+        .map((sl, i) => ({ idx: i, slot: sl }))
+        .filter((u) => u.slot && u.slot.palette && u.slot.palette.length);
+      scdState.modelSlots = slots;
+      if (slots.length && !card.querySelector('.scd-mv-recolor')) {
+        card.insertAdjacentHTML('beforeend',
+          `<button class="btn btn-icon scd-mv-recolor" data-mvrecolor title="Recolor — pick from the item's real in-game palette"><i class="fa-solid fa-palette"></i></button>`);
+      }
     });
-    mv.addEventListener('error', () => { card.hidden = true; });
+    // saved colours re-apply AFTER the widget's own defaults land (site parity)
+    mv.addEventListener('swg-load', () => scdApplySavedColors(mv, id));
+    mv.addEventListener('swg-error', () => { card.hidden = true; });
     host.appendChild(mv);
   };
   if (schState.modelIds) {
@@ -514,13 +558,195 @@ function scdRenderModel(id) {
 function scdModelZoom(url) {
   const ov = document.createElement('div');
   ov.className = 'sb-lightbox scd-mv-zoom';
-  ov.innerHTML = `<model-viewer src="${escapeHtml(url)}" loading="eager" camera-controls auto-rotate
-      auto-rotate-delay="0" shadow-intensity="1" exposure="1.1" interaction-prompt="none"></model-viewer>
+  ov.innerHTML = `<swg-creature src="${escapeHtml(url)}" no-picker auto-rotate fit="0.92"></swg-creature>
     <button class="btn btn-icon scd-mv-close" title="Close"><i class="fa-solid fa-xmark"></i></button>`;
+  const mv = ov.querySelector('swg-creature');
+  mv.addEventListener('swg-load', () => scdApplySavedColors(mv, scdState.id));
   ov.addEventListener('click', (e) => {
     if (e.target === ov || e.target.closest('.scd-mv-close')) ov.remove();
   });
   document.body.appendChild(ov);
+}
+
+// ---- game-palette recolor (site parity: recolorSlot API + per-schematic
+// saved choices; same localStorage convention as the website) ---------------
+function scdColorKey(id) { return `swgItemColors:${id}`; }
+function scdLoadColors(id) { try { return JSON.parse(localStorage.getItem(scdColorKey(id))) || {}; } catch (_) { return {}; } }
+function scdApplySavedColors(mv, id) {
+  const saved = scdLoadColors(id);
+  Object.keys(saved).forEach((slot) => {
+    const rgb = saved[slot];
+    if (Array.isArray(rgb) && rgb.length === 3 && mv.recolorSlot) mv.recolorSlot(safeInt(slot), rgb);
+  });
+}
+function scdSlotLabel(name) {
+  const n = String(name || '').toLowerCase();
+  if (n.includes('metal')) return 'Metal';
+  if (n.includes('cloth')) return 'Cloth';
+  if (n.includes('leather')) return 'Leather';
+  if (n.includes('wood')) return 'Wood';
+  return 'Color';
+}
+function scdOpenRecolorPop() {
+  const card = $('#scd-modelcard');
+  let pop = document.getElementById('scd-recolor-pop');
+  if (pop) { pop.remove(); return; }   // palette button toggles
+  const slots = scdState.modelSlots || [];
+  if (!slots.length || !card) return;
+  const id = scdState.id;
+  // friendly labels, numbered only when a type repeats (site convention)
+  const totals = {};
+  slots.forEach((u) => { const b = scdSlotLabel(u.slot.name); totals[b] = (totals[b] || 0) + 1; });
+  const seen = {};
+  const labs = slots.map((u) => {
+    const b = scdSlotLabel(u.slot.name);
+    seen[b] = (seen[b] || 0) + 1;
+    return totals[b] > 1 ? `${b} ${seen[b]}` : b;
+  });
+  const saved = scdLoadColors(id);
+  // a docked side panel INSIDE the model card — the model stays visible on
+  // the left and previews every pick live; one tab per recolorable region
+  pop = document.createElement('div');
+  pop.id = 'scd-recolor-pop';
+  pop.className = 'scd-recolor-panel';
+  pop.innerHTML = `<div class="scd-recolor-head">
+      ${slots.length > 1
+        ? `<div class="scd-paltabs">${labs.map((lab, i) =>
+            `<button class="scd-paltab${i === 0 ? ' active' : ''}" data-paltab="${i}">${escapeHtml(lab)}</button>`).join('')}</div>`
+        : `<span class="scd-pallabel">${escapeHtml(labs[0])}</span>`}
+      <button class="btn btn-icon" data-palreset title="Reset all regions to default"><i class="fa-solid fa-rotate-left"></i></button>
+      <button class="btn btn-icon" data-palclose title="Close"><i class="fa-solid fa-xmark"></i></button></div>
+    <div class="scd-truedark-row">
+      <label title="True dark — dark colour picks render actually dark instead of washing out (same setting as the website)">
+        <input type="checkbox" data-truedark> True dark</label>
+      <input type="range" data-truedarkref min="0.05" max="0.5" step="0.01" hidden title="Darkness depth">
+    </div>`
+    + slots.map((u, i) => {
+      const cur = (saved[u.idx] || []).join(',');
+      return `<div class="scd-palgrid" data-palpane="${i}"${i ? ' hidden' : ''}>${u.slot.palette.map((c) =>
+        `<button class="scd-swatch${cur === `${c[0]},${c[1]},${c[2]}` ? ' active' : ''}" data-palslot="${u.idx}" data-palrgb="${c[0]},${c[1]},${c[2]}"
+           style="background:rgb(${c[0]},${c[1]},${c[2]})"></button>`).join('')}</div>`;
+    }).join('');
+  pop.addEventListener('click', (e) => {
+    const tab = e.target.closest('[data-paltab]');
+    if (tab) {
+      pop.querySelectorAll('.scd-paltab').forEach((t) => t.classList.toggle('active', t === tab));
+      pop.querySelectorAll('[data-palpane]').forEach((p) => { p.hidden = p.dataset.palpane !== tab.dataset.paltab; });
+      return;
+    }
+    if (e.target.closest('[data-palclose]')) { pop.remove(); return; }
+    if (e.target.closest('[data-palreset]')) {
+      scdState.modelEl?.resetColor?.();
+      try { localStorage.removeItem(scdColorKey(id)); } catch (_) { /* fine */ }
+      pop.querySelectorAll('.scd-swatch.active').forEach((x) => x.classList.remove('active'));
+      return;
+    }
+    const sw = e.target.closest('[data-palrgb]');
+    if (!sw) return;
+    const slot = safeInt(sw.dataset.palslot);
+    const rgb = sw.dataset.palrgb.split(',').map(Number);
+    sw.closest('.scd-palgrid').querySelectorAll('.scd-swatch').forEach((x) => x.classList.remove('active'));
+    sw.classList.add('active');
+    scdState.modelEl?.recolorSlot?.(slot, rgb);
+    const cur = scdLoadColors(id);
+    cur[slot] = rgb;
+    try { localStorage.setItem(scdColorKey(id), JSON.stringify(cur)); } catch (_) { /* fine */ }
+  });
+  // "True dark" tuning (site parity — recolor-tune.js): same localStorage key,
+  // so the viewer honours it on every future load by itself; live changes here
+  const tune = (() => { try { return JSON.parse(localStorage.getItem('swgRecolorTune')) || {}; } catch (_) { return {}; } })();
+  tune.on = !!tune.on;
+  if (typeof tune.ref !== 'number') tune.ref = 0.21;
+  const tdBox = pop.querySelector('[data-truedark]');
+  const tdRef = pop.querySelector('[data-truedarkref]');
+  tdBox.checked = tune.on;
+  tdRef.value = tune.ref;
+  tdRef.hidden = !tune.on;
+  const applyTune = () => {
+    document.querySelectorAll('swg-creature').forEach((el) => {
+      el.setRecolorMode?.(tune.on ? 1 : 0);
+      el.setRecolorRef?.(tune.ref);
+    });
+    try { localStorage.setItem('swgRecolorTune', JSON.stringify(tune)); } catch (_) { /* fine */ }
+  };
+  tdBox.addEventListener('change', () => { tune.on = tdBox.checked; tdRef.hidden = !tune.on; applyTune(); });
+  tdRef.addEventListener('input', () => { tune.ref = parseFloat(tdRef.value); applyTune(); });
+  card.appendChild(pop);
+}
+
+// ---- community edit history: a proper dialog, in plain sentences ----------
+function scdEditFieldLabel(f) {
+  const s = scdState.schematic || {};
+  if (f === 'crateSize') return 'the crate size';
+  if (f === 'expBenefit') return 'the experimentation benefit';
+  if (f === 'description') return 'the description';
+  const r = (s.resourcesNeeded || []).find((x) => String(x.id) === String(f));
+  if (r) return `the ${r.resourceName}${(r.desc || '').trim() ? ` (${r.desc})` : ''} quantity`;
+  const c = (s.componentTypes || []).find((x) => String(x.id) === String(f));
+  if (c) return `the ${c.desc} count`;
+  return `“${f}”`;
+}
+function scdEditSentence(ed) {
+  const who = escapeHtml(ed.by);
+  if (ed.text || ed.field === 'description') {
+    return `${who} rewrote the description${ed.preview ? ` <span class="stat_off">— “${escapeHtml(ed.preview)}${ed.preview.length >= 140 ? '…' : ''}”</span>` : ''}`;
+  }
+  const what = escapeHtml(scdEditFieldLabel(ed.field));
+  if (ed.field === 'expBenefit') {
+    return `${who} turned ${what} <b>${ed.new ? 'on' : 'off'}</b>`;
+  }
+  if (safeInt(ed.new) === 0) return `${who} hid ${what} <span class="stat_off">(set it to 0${ed.old !== null ? `, was ${ed.old}` : ''})</span>`;
+  if (ed.old !== null && safeInt(ed.old) === 0) return `${who} restored ${what} to <b>${ed.new}</b>`;
+  return `${who} set ${what} to <b>${ed.new}</b>${ed.old !== null ? ` <span class="stat_off">(was ${ed.old})</span>` : ''}`;
+}
+async function scdShowEditHistory() {
+  const existing = document.querySelector('.scd-histbox');
+  if (existing) { existing.remove(); return; }
+  const res = await apiFetch('GET', 'api/schematic_edits.php',
+    { params: { action: 'log', schematic_id: scdState.id } }).catch((err) => ({ ok: false, error: String(err) }));
+  const edits = (res.ok && res.data && res.data.edits) || [];
+  const ov = document.createElement('div');
+  ov.className = 'sb-lightbox scd-histbox'; // sb-lightbox = Escape closes it for free
+  ov.innerHTML = `<div class="scd-histcard">
+      <div class="scd-histhead"><i class="fa-solid fa-clock-rotate-left"></i> Community edit history
+        <button class="btn btn-icon" data-histclose title="Close"><i class="fa-solid fa-xmark"></i></button></div>
+      ${edits.length
+        ? edits.map((ed) => `<div class="scd-editrow"><span class="scd-editwhat">${scdEditSentence(ed)}</span>
+            <span class="scd-editwhen">${fmtAgoTip(ed.at)}</span></div>`).join('')
+        : '<div class="scd-editrow stat_off">No community edits yet — every dotted number on this page (and the description) can be fixed by any app user, and changes land here.</div>'}
+    </div>`;
+  ov.addEventListener('click', (e) => {
+    if (e.target === ov || e.target.closest('[data-histclose]')) ov.remove();
+  });
+  document.body.appendChild(ov);
+}
+
+// ---- description editing (community text edit) ----------------------------
+function scdEditDescription(el) {
+  const old = el.textContent;
+  el.innerHTML = `<textarea class="scd-desc-input" maxlength="2000">${escapeHtml(old)}</textarea>
+    <div class="scd-desc-actions">
+      <button class="btn btn-sm btn-accent" data-descsave>Save</button>
+      <button class="btn btn-sm btn-outline-secondary" data-desccancel>Cancel</button>
+    </div>`;
+  const ta = el.querySelector('textarea');
+  ta.focus();
+  el.querySelector('[data-desccancel]').addEventListener('click', (e) => {
+    e.stopPropagation();
+    el.textContent = old;
+  });
+  el.querySelector('[data-descsave]').addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const val = ta.value.trim();
+    if (!val || val === old.trim()) { el.textContent = old; return; }
+    const res = await apiFetch('POST', 'api/schematic_edits.php', {
+      data: { action: 'text', schematic_id: scdState.id, field: 'description', value: val },
+    }).catch((err) => ({ ok: false, error: String(err) }));
+    if (!res.ok) { toast(res.error || 'Saving failed — site update pending?', false); el.textContent = old; return; }
+    el.textContent = val;
+    if (scdState.schematic) scdState.schematic.schematicDescription = val;
+    toast('Description updated for everyone — thanks for the fix');
+  });
 }
 
 // Community schematics have no blackbox behind them — compute the best and
@@ -623,8 +849,87 @@ function initSchematicPage() {
     refetchScdBest();
   });
 
-  // Component links open that schematic's page
+  // ---- community edits: quantities / crate size / exp benefit -------------
+  // Click a dotted number -> inline input -> Enter/blur saves through
+  // api/schematic_edits.php (site parity: schematic_component_overrides +
+  // the audit trail admins review). 0 hides a requirement row, like the site.
+  const scdSaveQty = async (span, val) => {
+    const cid = span.dataset.eqty;
+    const res = await apiFetch('POST', 'api/schematic_edits.php', {
+      data: { action: 'override', schematic_id: scdState.id, component_id: cid, count: val },
+    }).catch((e) => ({ ok: false, error: String(e) }));
+    if (!res.ok) { toast(res.error || 'Saving the edit failed — site update pending?', false); return false; }
+    toast('Saved — everyone sees the corrected value (site now, app data on the next hourly refresh)');
+    return true;
+  };
+  const scdQtyEdit = (span) => {
+    if (span.querySelector('input')) return;
+    const old = safeInt(span.textContent);
+    span.innerHTML = `<input type="number" min="${span.dataset.eqty === 'crateSize' ? 1 : 0}" max="10000" value="${old}" class="scd-eqty-input">`;
+    const inp = span.querySelector('input');
+    inp.focus(); inp.select();
+    let done = false;
+    const finish = async (save) => {
+      if (done) return;
+      done = true;
+      const val = safeInt(inp.value);
+      if (!save || val === old || val < 0) { span.textContent = old; return; }
+      span.textContent = val;
+      if (!(await scdSaveQty(span, val))) span.textContent = old;
+      else if (String(scdState.schematic?.schematicId) === String(scdState.id)) {
+        // keep the in-memory payload + the running total honest
+        const st = scdState.schematic;
+        if (span.dataset.eqty === 'crateSize') st.crateSize = val;
+        (st.resourcesNeeded || []).forEach((r) => { if (String(r.id) === span.dataset.eqty) r.units = String(val); });
+        (st.componentTypes || []).forEach((c) => { if (String(c.id) === span.dataset.eqty) c.number = String(val); });
+        const tot = (st.resourcesNeeded || []).reduce((sum, r) => sum + safeInt(r.units), 0);
+        const totEl = $('#scd-restotal');
+        if (totEl) totEl.textContent = tot;
+        // zeroed = hidden right away (dev mode keeps seeing it, dimmed)
+        const line = span.closest('.scd-line');
+        if (line && span.dataset.eqty !== 'crateSize') line.classList.toggle('scd-hiddenrow', val <= 0);
+      }
+    };
+    inp.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') finish(true);
+      if (e.key === 'Escape') finish(false);
+    });
+    inp.addEventListener('blur', () => finish(true));
+  };
+  document.querySelector('#page-schematic').addEventListener('click', async (e) => {
+    const span = e.target.closest('.scd-eqty');
+    if (span && !e.target.closest('input')) { scdQtyEdit(span); return; }
+    const exp = e.target.closest('[data-exptoggle]');
+    if (exp) {
+      if (!confirmArm(exp, 'Click again to flip it')) return;
+      const res = await apiFetch('POST', 'api/schematic_edits.php', {
+        data: { action: 'exp_toggle', schematic_id: safeInt(scdState.id) },
+      }).catch((err) => ({ ok: false, error: String(err) }));
+      if (!res.ok) { toast(res.error || 'Toggling failed — site update pending?', false); return; }
+      if (scdState.schematic) scdState.schematic.expBenefit = safeInt(res.data.exp_benefit);
+      const on = safeInt(res.data.exp_benefit) === 1;
+      exp.classList.toggle('scd-noexp', !on);
+      exp.textContent = on ? 'Benefits from Experimenting' : 'NO Benefit from Experimenting';
+      toast('Saved — experimenting benefit updated for everyone');
+      return;
+    }
+    const log = e.target.closest('[data-schemlog]');
+    if (log) { scdShowEditHistory(); return; }
+    // description: click to fix in place (community text edit, audited)
+    const desc = e.target.closest('#scd-desc');
+    if (desc && !desc.querySelector('textarea')) scdEditDescription(desc);
+  });
+
+  // Component links open that schematic's page; category names toggle their
+  // matching-schematics sublist
   $('#scd-components').addEventListener('click', (e) => {
+    const cat = e.target.closest('[data-cattoggle]');
+    if (cat) {
+      const sub = $(`#scd-components [data-catitems="${cat.dataset.cattoggle}"]`);
+      if (sub) sub.hidden = !sub.hidden;
+      cat.querySelector('i')?.classList.toggle('fa-caret-up', sub && !sub.hidden);
+      return;
+    }
     const link = e.target.closest('[data-schem]');
     if (!link) return;
     e.preventDefault();
@@ -719,7 +1024,7 @@ function initSchematics() {
     }
     const row = e.target.closest('tr[data-idx], .sch-card[data-idx]');
     if (!row) return;
-    if (e.target.closest('model-viewer')) return; // orbiting a card model isn't a click-through
+    if (e.target.closest('swg-creature')) return; // orbiting a card model isn't a click-through
     const schem = schState.rows[safeInt(row.dataset.idx)];
     if (schem && row.dataset.id) openSchematicPage(row.dataset.id, schem.name);
   };
@@ -758,10 +1063,12 @@ function initSchematics() {
   });
   $('#sch-category').addEventListener('change', () => { schState.subcategory = ''; });
 
-  // 3D zoom modal from the detail card's expand button
+  // 3D zoom modal + recolor popover from the detail card's buttons
   document.addEventListener('click', (e) => {
     const z = e.target.closest('[data-mvzoom]');
-    if (z) scdModelZoom(z.dataset.mvzoom);
+    if (z) { scdModelZoom(z.dataset.mvzoom); return; }
+    const rc = e.target.closest('[data-mvrecolor]');
+    if (rc) scdOpenRecolorPop(rc);
   });
   // Escape closes any full-screen lightbox (model zoom), else the frontmost
   // floating screenshot window

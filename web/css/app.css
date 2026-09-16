@@ -2613,7 +2613,7 @@ tr.row-detail > td { background: var(--bg-tertiary); padding: 0; }
 .sb-lightbox img { max-width: 92vw; max-height: 92vh; border-radius: 8px; }
 /* schematic detail: 3D model card (shown only when the model loads) */
 .scd-modelcard { flex: 0 0 300px; padding: 6px; }
-.scd-model, .scd-model model-viewer { width: 100%; height: 100%; min-height: 230px; background: transparent; }
+.scd-model, .scd-model swg-creature { width: 100%; height: 100%; min-height: 230px; background: transparent; }
 
 /* ---- Schematics card view (3D grid, like the site) + model zoom ---- */
 .sch-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; overflow-y: auto; }
@@ -2622,7 +2622,7 @@ tr.row-detail > td { background: var(--bg-tertiary); padding: 0; }
 .sch-card:hover { border-color: var(--text-muted); }
 .sch-card.pinned { border-color: var(--accent-dark); }
 .sch-card-model { height: 150px; display: flex; align-items: center; justify-content: center; }
-.sch-card-model model-viewer { width: 100%; height: 150px; background: transparent; pointer-events: none; }
+.sch-card-model swg-creature { width: 100%; height: 150px; background: transparent; pointer-events: none; }
 .sch-card-nomodel { font-size: 42px; color: var(--bg-input); }
 .sch-card-name { color: var(--text-primary); font-weight: 600; font-size: 13px; margin-top: 6px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -2631,7 +2631,32 @@ tr.row-detail > td { background: var(--bg-tertiary); padding: 0; }
 .sch-subchip { align-self: center; }
 .scd-modelcard { position: relative; }
 .scd-mv-expand { position: absolute; bottom: 8px; right: 8px; background: rgba(0,0,0,.45); }
-.scd-mv-zoom model-viewer { width: 84vw; height: 84vh; background: transparent; }
+.scd-mv-recolor { position: absolute; bottom: 8px; right: 44px; background: rgba(0,0,0,.45); }
+/* game-palette recolor: a flyout anchored to the model card's right edge —
+   it crosses over the description block while open, so the model stays fully
+   visible on the left previewing every pick; one tab per region, one row */
+.scd-recolor-panel { position: absolute; top: 0; left: calc(100% + 10px); width: 430px; max-height: 72vh;
+  z-index: 40; background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
+  padding: 10px 12px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, .55); }
+.scd-recolor-head { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text-muted); }
+.scd-recolor-head .btn { flex: 0 0 auto; }
+.scd-recolor-head [data-palreset] { margin-left: auto; }
+.scd-paltabs { display: flex; gap: 4px; flex-wrap: nowrap; min-width: 0; overflow-x: auto; }
+.scd-paltab { background: none; border: 1px solid var(--border); color: var(--text-muted); border-radius: 6px;
+  padding: 2px 10px; font-size: 11.5px; cursor: pointer; white-space: nowrap; }
+.scd-paltab:hover { color: var(--text-hover); }
+.scd-paltab.active { border-color: var(--accent); color: var(--text-hover); }
+.scd-pallabel { font-size: 11px; color: var(--text-muted); }
+.scd-truedark-row { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--text-muted); }
+.scd-truedark-row label { display: flex; align-items: center; gap: 6px; cursor: pointer; margin: 0; }
+.scd-truedark-row input[type="range"] { flex: 1; }
+.scd-palgrid { display: grid; grid-template-columns: repeat(auto-fill, 17px); gap: 3px; }
+.scd-swatch { width: 17px; height: 17px; border: 1px solid rgba(255, 255, 255, .18); border-radius: 3px;
+  cursor: pointer; padding: 0; display: block; }
+.scd-swatch:hover { transform: scale(1.25); border-color: #fff; }
+.scd-swatch.active { box-shadow: 0 0 0 2px #fff; }
+.scd-mv-zoom swg-creature { width: 84vw; height: 84vh; background: transparent; }
 .scd-mv-close { position: fixed; top: 18px; right: 22px; background: rgba(0,0,0,.6); font-size: 18px; }
 /* model-viewer's built-in top progress bar reads as a stray blank strip on
    our dark cards — we gate visibility on load ourselves, so drop it */
@@ -2672,6 +2697,51 @@ model-viewer::part(default-progress-mask) { display: none; }
 #scd-flag i { color: #e9b445; }
 .sb-chip-flag { border-color: #e9b445; color: #e9b445; }
 .sb-chip-flag i { font-size: 10px; }
+/* community-editable numbers on the schematic detail (site's pencils, app-style):
+   dotted underline says "click me"; input swaps in place */
+.scd-eqty { border-bottom: 1px dotted var(--text-muted); cursor: pointer; }
+.scd-eqty:hover { color: var(--text-hover); border-bottom-color: var(--text-hover); }
+.scd-eqty-input { width: 64px; background: var(--bg-input, #14161c); color: var(--text-primary);
+  border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; font-size: inherit; }
+.scd-noexp { background: rgba(224, 82, 96, .15) !important; color: #e05260 !important; }
+/* edit-history dialog (top-bar clock button) */
+.scd-histcard { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
+  padding: 14px 18px; width: min(560px, 90vw); max-height: 70vh; overflow-y: auto; font-size: 13px; }
+.scd-histhead { display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--text-hover);
+  margin-bottom: 10px; }
+.scd-histhead i { color: var(--q-accept); }
+.scd-histhead .btn { margin-left: auto; }
+.scd-editrow { display: flex; align-items: baseline; gap: 10px; padding: 6px 0;
+  border-top: 1px solid var(--border); }
+.scd-editrow:first-of-type { border-top: none; }
+.scd-editwhat { flex: 1; min-width: 0; }
+.scd-editwhen { margin-left: auto; color: var(--text-muted); font-size: 11.5px; white-space: nowrap; }
+/* editable description */
+#scd-desc { cursor: text; border-radius: 6px; }
+#scd-desc:hover { outline: 1px dashed var(--border); outline-offset: 3px; }
+.scd-desc-input { width: 100%; min-height: 110px; background: var(--bg-input, #14161c);
+  color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px; padding: 8px;
+  font-size: inherit; font-family: inherit; resize: vertical; }
+.scd-desc-actions { display: flex; gap: 8px; margin-top: 6px; }
+/* zeroed (community-removed) requirements: invisible normally, dev mode sees
+   them dimmed with a tag and can click the qty to restore */
+.scd-hiddenrow { display: none; }
+body.dev-mode .scd-hiddenrow { display: block; opacity: .55; }
+.scd-hidden-tag { border: 1px solid var(--text-muted); color: var(--text-muted); border-radius: 8px;
+  padding: 0 6px; font-size: 10px; text-transform: uppercase; letter-spacing: .5px; }
+
+/* category entries in the builder's component search */
+.sb-ccat-name { color: var(--text-hover); display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+.sb-ccat-name i { color: #6ea8fe; font-size: 12px; }
+.sb-ccat-preview { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+
+/* component category expansion — "1 Armor Core" lists its matching schematics */
+.scd-catlink { color: var(--accent-hover); text-decoration: none; cursor: pointer; }
+.scd-catlink:hover { color: var(--accent); text-decoration: underline; }
+.scd-catlink i { font-size: 11px; color: var(--text-muted); margin-left: 2px; }
+.scd-catitems { display: flex; flex-direction: column; gap: 3px; margin: 2px 0 6px 18px;
+  border-left: 2px solid var(--border); padding-left: 10px; }
+
 /* floating proof-screenshot windows — side-by-side review (snickerfritz) */
 .sb-shotwin { position: fixed; width: min(46vw, 760px); background: var(--bg-card, #1c1f26);
   border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 12px 40px rgba(0, 0, 0, .55);
@@ -2714,8 +2784,8 @@ model-viewer::part(default-progress-mask) { display: none; }
 .scd-model-loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
 .scd-model { position: relative; }
 .scd-mv-pending { opacity: 0; }
-.scd-model model-viewer { transition: opacity .25s ease; opacity: 1; }
-.scd-model model-viewer.scd-mv-pending { opacity: 0; }
+.scd-model swg-creature { transition: opacity .25s ease; opacity: 1; }
+.scd-model swg-creature.scd-mv-pending { opacity: 0; }
 /* while the schematic detail loads, only crumbs + spinner show — no empty shells */
 .scd-busy .scd-top, .scd-busy #scd-formulas, .scd-busy .scd-tabs { display: none; }
 /* appearance picker: in-flow results + live donor preview */

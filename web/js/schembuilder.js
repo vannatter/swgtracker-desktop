@@ -33,6 +33,7 @@ async function sbLoadMeta() {
     if (res.ok && res.data) {
       sbState.cats = res.data.categories || [];
       sbState.verifyVotes = safeInt(res.data.verify_votes) || 3;
+      sbState.compCats = res.data.component_categories || []; // game category slots ("Armor Core")
     }
   } catch (_) { /* the editor shows a deploy hint instead */ }
   if (!sbState.classNodes.length && typeof fetchCategoryNodes === 'function') {
@@ -171,6 +172,7 @@ function sbRenderList() {
       ${d.status === 'published'
         ? `<button class="btn btn-icon" data-sbview="${escapeHtml(String(d.schematic_id))}" title="Open the published schematic"><i class="fa-solid fa-scroll"></i></button>`
         : ''}
+      <button class="btn btn-icon" data-sbdup="${d.id}" title="Duplicate — start a new draft from a copy (great for armor sets and other near-identical pieces; proof screenshots aren't copied)"><i class="fa-solid fa-clone"></i></button>
       <button class="btn btn-icon" data-sbdel="${d.id}" title="Delete this draft"><i class="fa-solid fa-trash-can"></i></button>
     </div>`;
   }).join('');
@@ -304,9 +306,11 @@ function sbRenderComponents() {
       <div class="sb-row">
         <span class="sb-complink">${cp.schematic_id
           ? `<i class="fa-solid fa-scroll" title="Linked to schematic #${cp.schematic_id}"></i>`
-          : cp.draft_id
-            ? '<i class="fa-solid fa-pen-ruler" title="Linked to one of your drafts — submit it before this one"></i>'
-            : '<i class="fa-solid fa-box-open stat_off" title="Looted / unlinked component"></i>'}</span>
+          : cp.category_id
+            ? '<i class="fa-solid fa-layer-group" title="Category slot — any matching schematic fits"></i>'
+            : cp.draft_id
+              ? '<i class="fa-solid fa-pen-ruler" title="Linked to one of your drafts — submit it before this one"></i>'
+              : '<i class="fa-solid fa-box-open stat_off" title="Looted / unlinked component"></i>'}</span>
         <input class="form-control filter-input sb-units" data-cf="number" type="number" min="1" value="${safeInt(cp.number) || ''}" placeholder="qty" title="How many of this component the schematic takes">
         <span class="sb-of">×</span>
         <input class="form-control filter-input sb-desc" data-cf="desc" value="${escapeHtml(cp.desc || '')}"
@@ -337,8 +341,8 @@ function sbRenderModelPick() {
   $('#sb-model-search').value = b.model_from_name || `#${b.model_from}`;
   if (typeof schEnsureModelLib === 'function') schEnsureModelLib();
   prev.hidden = false;
-  prev.innerHTML = `<model-viewer src="https://swgtracker.com/items/${safeInt(b.model_from)}.glb"
-    loading="eager" auto-rotate auto-rotate-delay="0" camera-controls interaction-prompt="none" exposure="1.1"></model-viewer>`;
+  prev.innerHTML = `<swg-creature src="https://swgtracker.com/items/${safeInt(b.model_from)}.glb"
+    no-picker auto-rotate fit="0.92"></swg-creature>`;
 }
 
 async function sbModelSearch(q) {
@@ -354,8 +358,8 @@ async function sbModelSearch(q) {
   // every suggestion carries its own mini spinning model — no blind picks
   box.innerHTML = rows.length ? rows.map((s) =>
     `<div class="mysd-opt sb-modelopt" data-modelpick="${s.id}" data-name="${escapeHtml(s.name)}">
-       <model-viewer class="sb-model-thumb" src="https://swgtracker.com/items/${s.id}.glb"
-         loading="lazy" auto-rotate auto-rotate-delay="0" interaction-prompt="none" exposure="1.1"></model-viewer>
+       <swg-creature class="sb-model-thumb" src="https://swgtracker.com/items/${s.id}.glb"
+         no-picker auto-rotate fit="0.92"></swg-creature>
        <span class="sb-modelopt-name">${escapeHtml(s.name)}</span>
        <span class="mysd-opt-meta">${escapeHtml(s.parent || '')}</span></div>`).join('')
     : '<div class="mysd-opt-none">No modeled items match — leave it blank, a model can be exported later.</div>';
@@ -488,7 +492,30 @@ async function sbCompSearch(idx, q) {
   const mineNames = new Set(mine.map((d) => (d.name || '').toLowerCase()));
   const rows = ((res && res.ok && res.data && (res.data.results || res.data.schematics)) || [])
     .filter((s) => !mineNames.has((s.name || '').toLowerCase())).slice(0, 8);
-  box.innerHTML = mineHtml + rows.map((s) =>
+  // real game category slots ("Armor Core — any matching schematic fits"),
+  // aggregated server-side from existing schematics. The game reuses one
+  // display name across DIFFERENT ids with different contents (battle vs
+  // assault vs recon cores) — so entries stay separate, each showing its
+  // matching schematics, and only true duplicates (same name AND contents)
+  // collapse. Match on the category name OR anything inside it.
+  const ccatSeen = new Set();
+  const ccats = (sbState.compCats || []).filter((cc) => {
+    if (!safeInt(cc.n)) return false;
+    const pv = (cc.preview || []).join(', ');
+    const key = `${cc.name}|${pv}`;
+    if (ccatSeen.has(key)) return false;
+    if (!(cc.name || '').toLowerCase().includes(ql) && !pv.toLowerCase().includes(ql)) return false;
+    ccatSeen.add(key);
+    return true;
+  }).slice(0, 5);
+  const ccatHtml = ccats.map((cc) => {
+    const pv = (cc.preview || []).join(', ') + (cc.n > (cc.preview || []).length ? ', …' : '');
+    return `<div class="mysd-opt sb-ccat-opt" data-ccat="${cc.id}" data-cname="${escapeHtml(cc.name)}"
+       title="A category slot — the crafter can use ANY of its ${cc.n} matching schematics: ${escapeHtml(pv)}">
+       <span class="sb-ccat-name"><i class="fa-solid fa-layer-group"></i> ${escapeHtml(cc.name)}</span>
+       <span class="mysd-opt-meta sb-ccat-preview">${escapeHtml(pv)}</span></div>`;
+  }).join('');
+  box.innerHTML = ccatHtml + mineHtml + rows.map((s) =>
     `<div class="mysd-opt" data-clink="${s.id}" data-cname="${escapeHtml(s.name)}">${escapeHtml(s.name)}
        <span class="mysd-opt-meta">${escapeHtml(s.parent || '')}</span></div>`).join('')
     + `<div class="mysd-opt sb-newcomp" data-cnew="${idx}"><i class="fa-solid fa-plus"></i> Not in the system — create “${escapeHtml(q)}” as a new draft</div>`;
@@ -704,6 +731,26 @@ function initSchemBuilder() {
     }
     const view = e.target.closest('[data-sbview]');
     if (view) { openSchematicPage(view.dataset.sbview); return; }
+    // duplicate: copy the body into a brand-new draft (snickerfritz — armor
+    // sets are ~10 near-identical pieces). Proof shots stay behind: they
+    // prove the ORIGINAL item, the copy needs its own.
+    const dup = e.target.closest('[data-sbdup]');
+    if (dup) {
+      apiFetch('GET', 'api/user_schematics.php', { params: { id: safeInt(dup.dataset.sbdup) } }).then(async (res) => {
+        if (!res.ok || !res.data?.draft) { toast(res.error || 'Could not load that draft', false); return; }
+        const body = { ...sbEmptyBody(), ...(res.data.draft.body || {}) };
+        body.name = `${body.name || 'Untitled schematic'} (copy)`;
+        body.screenshots = [];
+        const r2 = await apiFetch('POST', 'api/user_schematics.php',
+          { data: { action: 'save', draft: { id: 0, body, parent_draft_id: 0 } } })
+          .catch((err) => ({ ok: false, error: String(err) }));
+        if (!r2.ok) { toast(r2.error || 'Duplicating failed', false); return; }
+        toast(`Copied — “${body.name}” is a fresh draft, rename it and adjust the details`);
+        await sbLoadDrafts();
+        sbOpenDraft(safeInt(r2.data.id));
+      }).catch((err) => toast(String(err), false));
+      return;
+    }
     const open = e.target.closest('[data-sbopen]');
     if (open) sbOpenDraft(safeInt(open.dataset.sbopen));
   });
@@ -928,6 +975,18 @@ function initSchemBuilder() {
       const cp = sbState.cur.body.components[safeInt(row.dataset.sbcomp)];
       cp.schematic_id = safeInt(link.dataset.clink);
       cp.desc = link.dataset.cname;
+      delete cp.draft_id;
+      delete cp.category_id;
+      sbRenderComponents(); sbMarkDirty();
+      return;
+    }
+    const ccat = e.target.closest('[data-ccat]');
+    if (ccat) {
+      const row = e.target.closest('[data-sbcomp]');
+      const cp = sbState.cur.body.components[safeInt(row.dataset.sbcomp)];
+      cp.category_id = safeInt(ccat.dataset.ccat);
+      cp.desc = ccat.dataset.cname;
+      delete cp.schematic_id;
       delete cp.draft_id;
       sbRenderComponents(); sbMarkDirty();
       return;

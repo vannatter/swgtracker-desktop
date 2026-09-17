@@ -270,10 +270,27 @@ function weightedQuality(rec, weightsList, caps = null) {
 // pre-v0.11.26 shells fall back to the fixed-shape pool (no stockpile merge).
 async function classPool(code, stockIds = []) {
   if (typeof api().ds_resources_query === 'function') {
-    return api().ds_resources_query({
+    const main = await api().ds_resources_query({
       category: String(code), status: '', sort: 'value_rating', order: 'DESC',
       limit: 4000, ids: stockIds,
     });
+    // Giant classes (Ferrous Metal: every steel/iron ever) overflow the 4000
+    // cap, and the Score-sorted cut silently dropped low-Score rows that are
+    // STILL VALID PICKS — recycled canonicals (Score ~50, permanently in
+    // spawn) vanished from Lab pools (snickerfritz: smelted metals missing).
+    // A second, small in-spawn query guarantees every current spawn makes it.
+    try {
+      const act = await api().ds_resources_query({
+        category: String(code), status: '1', sort: 'value_rating', order: 'DESC', limit: 2000,
+      });
+      if (main && main.ok && Array.isArray(main.data) && act && act.ok && Array.isArray(act.data)) {
+        const have = new Set(main.data.map((r) => String(r.id)));
+        for (const r of act.data) {
+          if (!have.has(String(r.id))) main.data.push(r);
+        }
+      }
+    } catch (_) { /* merge is best-effort — the main pool still works */ }
+    return main;
   }
   return api().get_class_pool(String(code));
 }

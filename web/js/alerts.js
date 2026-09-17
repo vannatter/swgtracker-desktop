@@ -378,7 +378,9 @@ async function alSaveRule() {
     return;
   }
   const nBack = (res.data.backfill || []).length;
-  toast(`Rule saved${nBack ? ` — ${nBack} current spawn${nBack > 1 ? 's' : ''} already match` : ''}`);
+  toast(res.data.backfill_deferred
+    ? 'Rule saved — checking current spawns in the background, matches appear in a moment'
+    : `Rule saved${nBack ? ` — ${nBack} current spawn${nBack > 1 ? 's' : ''} already match` : ''}`);
   $('#al-modal').hidden = true;
   loadAlerts();
 }

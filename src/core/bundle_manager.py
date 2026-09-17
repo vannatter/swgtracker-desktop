@@ -135,6 +135,12 @@ class BundleManager:
             if attempted and not confirmed:
                 logger.warning("bundle %s never confirmed boot — rolling back", cur)
                 prev = self._read_ptr("previous")
+                # Clear the previous-pointer BEFORE reusing it: if the previous
+                # bundle is ALSO attempted-but-unconfirmed (two crashy boots in
+                # a row), each rollback re-read the same pointer and recursed
+                # forever — RecursionError before the window even opened.
+                # Cleared, the chain is bounded: current -> previous -> builtin.
+                self._write_ptr("previous", "")
                 self._write_ptr("current", prev if prev and self._bundle_index(prev).is_file() else "")
                 return self.resolve_index()
             try:

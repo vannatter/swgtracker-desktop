@@ -6,7 +6,7 @@
   <title>SWG Tracker Desktop</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.1/css/all.min.css">
-  <link rel="stylesheet" href="css/app.css?v=20260917b">
+  <link rel="stylesheet" href="css/app.css?v=20260921l">
 </head>
 <body>
   <!-- Header -->
@@ -1683,11 +1683,11 @@
 
       <div class="inv-add-row">
         <div class="inv-add-field harv-grow">
-          <label class="sp-field-label">Nickname <span class="settings-sub">blank = named from your picks</span></label>
+          <label class="sp-field-label" title="Leave blank and it's named from your picks — resource · conc% · type">Nickname <span class="settings-sub">blank = auto-named</span></label>
           <input id="harv-f-name" type="text" class="form-control filter-input harv-wide" autocomplete="off">
         </div>
         <div class="inv-add-field harv-grow">
-          <label class="sp-field-label">Group <span class="settings-sub">optional — create groups on the page</span></label>
+          <label class="sp-field-label" title="Create and manage groups on the Harvesters page">Group <span class="settings-sub">optional</span></label>
           <select id="harv-f-group" class="form-select filter-select harv-wide"></select>
         </div>
         <div class="inv-add-field harv-grow">
@@ -1715,6 +1715,19 @@
         <div class="inv-add-field">
           <label class="sp-field-label">Maintenance paid <span class="settings-sub">optional</span></label>
           <input id="harv-f-maint" type="text" inputmode="decimal" class="form-control filter-input" placeholder="e.g. 13k" autocomplete="off">
+        </div>
+      </div>
+
+      <a role="button" id="harv-f-ratestoggle" class="harv-rates-toggle" title="The burn rates come from the harvester type — expand only if your deed differs or a default is off">
+        <i class="fa-solid fa-caret-right"></i> Burn rates <span class="settings-sub">using type defaults — expand to tweak</span></a>
+      <div class="inv-add-row" id="harv-f-ratesrow" hidden>
+        <div class="inv-add-field">
+          <label class="sp-field-label">Maintenance <span class="settings-sub">cr/hr on the deed</span></label>
+          <input id="harv-f-maintrate" type="text" inputmode="decimal" class="form-control filter-input" placeholder="type default" autocomplete="off" title="Base maintenance burn — prefilled from the harvester type, edit if your deed differs (Merchant discounts apply on top automatically)">
+        </div>
+        <div class="inv-add-field" id="harv-f-powerratewrap">
+          <label class="sp-field-label">Power drain <span class="settings-sub">units/hr</span></label>
+          <input id="harv-f-powerrate" type="text" inputmode="decimal" class="form-control filter-input" placeholder="type default" autocomplete="off" title="Power drain — prefilled from the harvester type, edit if your deed differs">
         </div>
       </div>
 
@@ -2135,29 +2148,29 @@
   </div>
 
   <!-- Classic scripts sharing one top-level scope; app.js boots last. -->
-  <script src="js/class_caps.js?v=20260917b"></script>
-  <script src="js/shared.js?v=20260917b"></script>
-  <script src="js/help.js?v=20260917b"></script>
-  <script src="js/resources.js?v=20260917b"></script>
-  <script src="js/resource.js?v=20260917b"></script>
-  <script src="js/schematics.js?v=20260917b"></script>
-  <script src="js/stockpile.js?v=20260917b"></script>
-  <script src="js/wishlist.js?v=20260917b"></script>
-  <script src="js/myschematics.js?v=20260917b"></script>
-  <script src="js/inventory.js?v=20260917b"></script>
-  <script src="js/sales.js?v=20260917b"></script>
-  <script src="js/insights.js?v=20260917b"></script>
-  <script src="js/purchases.js?v=20260917b"></script>
-  <script src="js/harvesters.js?v=20260917b"></script>
-  <script src="js/factories.js?v=20260917b"></script>
-  <script src="js/customers.js?v=20260917b"></script>
-  <script src="js/characters.js?v=20260917b"></script>
-  <script src="js/settings.js?v=20260917b"></script>
-  <script src="js/alerts.js?v=20260917b"></script>\n  <script src="js/lab.js?v=20260917b"></script>
-  <script src="js/mail.js?v=20260917b"></script>
-  <script src="js/notes.js?v=20260917b"></script>
-  <script src="js/schembuilder.js?v=20260917b"></script>
-  <script src="js/scanner.js?v=20260917b"></script>
-  <script src="js/app.js?v=20260917b"></script>
+  <script src="js/class_caps.js?v=20260921l"></script>
+  <script src="js/shared.js?v=20260921l"></script>
+  <script src="js/help.js?v=20260921l"></script>
+  <script src="js/resources.js?v=20260921l"></script>
+  <script src="js/resource.js?v=20260921l"></script>
+  <script src="js/schematics.js?v=20260921l"></script>
+  <script src="js/stockpile.js?v=20260921l"></script>
+  <script src="js/wishlist.js?v=20260921l"></script>
+  <script src="js/myschematics.js?v=20260921l"></script>
+  <script src="js/inventory.js?v=20260921l"></script>
+  <script src="js/sales.js?v=20260921l"></script>
+  <script src="js/insights.js?v=20260921l"></script>
+  <script src="js/purchases.js?v=20260921l"></script>
+  <script src="js/harvesters.js?v=20260921l"></script>
+  <script src="js/factories.js?v=20260921l"></script>
+  <script src="js/customers.js?v=20260921l"></script>
+  <script src="js/characters.js?v=20260921l"></script>
+  <script src="js/settings.js?v=20260921l"></script>
+  <script src="js/alerts.js?v=20260921l"></script>\n  <script src="js/lab.js?v=20260921l"></script>
+  <script src="js/mail.js?v=20260921l"></script>
+  <script src="js/notes.js?v=20260921l"></script>
+  <script src="js/schembuilder.js?v=20260921l"></script>
+  <script src="js/scanner.js?v=20260921l"></script>
+  <script src="js/app.js?v=20260921l"></script>
 </body>
 </html>

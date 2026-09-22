@@ -24,7 +24,7 @@ const HARV_MERCHANT_MULT = 0.75;
 const HARV_TIERS = {
   personal: { ber: 5, maint: 16, power: 26, hopper: 25000 },
   medium:   { ber: 11, maint: 30, power: 50, hopper: 50000 },
-  heavy:    { ber: 14, maint: 90, power: 75, hopper: 100000 },
+  heavy:    { ber: 14, maint: 46, power: 75, hopper: 100000 }, // was 90 off the wiki — 46 confirmed in-game (Omi, verified by snickerfritz 2026-09)
   elite:    { ber: 44, maint: 126, power: 206, hopper: 400000 },
 };
 const HARV_TYPE_DEFAULTS = {
@@ -334,10 +334,10 @@ function harvAgo(secs) {
 
 // ---- rendering ----
 
-function harvMeter(label, pct, text, cls, tip = '') {
+function harvMeter(label, pct, text, cls, tip = '', attrs = '') {
   return `<div class="harv-meter-row">
     <span class="harv-meter-label">${label}</span>
-    <div class="harv-meter"><span class="harv-meter-fill ${cls}" style="width:${Math.max(0, Math.min(100, pct)).toFixed(1)}%"></span></div>
+    <div class="harv-meter ${attrs ? 'harv-meter-click' : ''}" ${attrs}><span class="harv-meter-fill ${cls}" style="width:${Math.max(0, Math.min(100, pct)).toFixed(1)}%"></span></div>
     <span class="harv-meter-text ${cls}" ${tip ? `title="${escapeHtml(tip)}"` : ''}>${text}</span>
   </div>`;
 }
@@ -383,14 +383,16 @@ function harvCardHtml(h) {
     const low = !out && power.depletesAt && power.depletesAt - now < 86400;
     meters.push(harvMeter('Power', h.power_amount ? (power.remaining / Number(h.power_amount)) * 100 : 0,
       out ? 'OUT OF POWER' : `${fmtShort(power.remaining)}${power.depletesAt ? ` · ${harvAgo(power.depletesAt - now)} left` : ''}`,
-      out ? 'bad' : low ? 'warn' : 'ok'));
+      out ? 'bad' : low ? 'warn' : 'ok', '',
+      `data-hbar="power" data-hid="${h.id}"`));
   }
   if (maint) {
     const out = maint.remaining <= 0;
     const low = !out && maint.depletesAt && maint.depletesAt - now < 86400;
     meters.push(harvMeter('Maint', h.maint_amount ? (maint.remaining / Number(h.maint_amount)) * 100 : 0,
       out ? 'EMPTY' : `${fmtShort(maint.remaining)} cr · ${maint.depletesAt ? harvAgo(maint.depletesAt - now) + ' left' : ''}`,
-      out ? 'bad' : low ? 'warn' : 'ok'));
+      out ? 'bad' : low ? 'warn' : 'ok', '',
+      `data-hbar="maint" data-hid="${h.id}"`));
   }
 
   const alert = gone ? '<span class="harv-flag bad">resource despawned</span>'
@@ -413,7 +415,7 @@ function harvCardHtml(h) {
       <div class="harv-title">
         ${hopper && hopper.pct < 99.9 && !hopper.stalled && !hopper.frozen
           ? '<i class="fa-solid fa-gear harv-gear" title="Extracting"></i>' : ''}
-        <span class="harv-name">${escapeHtml(h.name || h.harvester_type)}</span>
+        <span class="harv-name" data-hrename="${h.id}" title="Click to rename">${escapeHtml(h.name || h.harvester_type)}</span>
         ${h.character_name ? `<span class="harv-char"><i class="fa-solid fa-user"></i> ${escapeHtml(h.character_name)}</span>` : ''}
         ${harvTags(h).map((t) => `<span class="fac-pill fac-pill-tag">${escapeHtml(t)}</span>`).join('')}
         ${alert}
@@ -428,6 +430,7 @@ function harvCardHtml(h) {
       <button class="btn btn-sm btn-outline-secondary" data-hact="sethopper" data-hid="${h.id}" title="Set what's in the hopper right now"><i class="fa-solid fa-sliders"></i> Hopper</button>
       ${harvIsGenerator(h.harvester_type) ? '' : `<button class="btn btn-sm btn-outline-secondary" data-hact="power" data-hid="${h.id}" title="Set the power currently loaded"><i class="fa-solid fa-bolt"></i> Power</button>`}
       <button class="btn btn-sm btn-outline-secondary" data-hact="maint" data-hid="${h.id}" title="Set the maintenance currently paid"><i class="fa-solid fa-coins"></i> Maint</button>
+      <button class="btn btn-sm btn-outline-secondary" data-hact="refill" data-hid="${h.id}" title="Refilled it in game — one click sets power and maintenance back to their full loaded amounts (and clears the empty alerts)"><i class="fa-solid fa-battery-full"></i> Filled</button>
       <span class="harv-actions-right">
         ${harvWpCmd(h) ? `<button class="btn btn-icon al-rule-btn" data-hact="wp" data-hid="${h.id}" title="${escapeHtml(loc)} — copy a /waypoint command"><i class="fa-solid fa-location-dot"></i></button>` : ''}
         <button class="btn btn-icon al-rule-btn" data-hact="log" data-hid="${h.id}" title="Event log"><i class="fa-solid fa-list"></i></button>
@@ -523,7 +526,7 @@ function harvGridHtml(items) {
     const mntOut = maint && maint.remaining <= 0;
     return `<tr data-hid="${h.id}" draggable="true">
       <td class="pin-cell harv-sel-cell"><input type="checkbox" class="harv-sel" data-selid="${h.id}"${harvState.checked.has(String(h.id)) ? ' checked' : ''}></td>
-      <td class="col-name" title="${escapeHtml(h.harvester_type)}${h.ber ? ` · BER ${h.ber}` : ''}">${escapeHtml(h.name || h.harvester_type)}</td>
+      <td class="col-name" title="${escapeHtml(h.harvester_type)}${h.ber ? ` · BER ${h.ber}` : ''} — click to rename"><span class="harv-name" data-hrename="${h.id}">${escapeHtml(h.name || h.harvester_type)}</span></td>
       <td class="col-text">${h.character_name ? escapeHtml(h.character_name) : '<span class="stat_off">—</span>'}</td>
       <td class="col-text">${h.resource_name ? `<b class="harv-reslink" data-res="${escapeHtml(h.resource_name)}" title="${escapeHtml(harvResTip(h.resource_name))}">${escapeHtml(h.resource_name)}</b>${h.concentration ? ` @ ${h.concentration}%` : ''}${harvResGone(h) ? ' <span class="harv-gone-tag">despawned</span>' : ''}` : '<span class="stat_off">—</span>'}</td>
       <td class="col-text harv-cell ${hopCls}">${hopper
@@ -537,6 +540,7 @@ function harvGridHtml(items) {
         <button class="btn btn-icon" data-hact="hopper" data-hid="${h.id}" title="Empty the hopper"><i class="fa-solid fa-box-open"></i></button>
         <button class="btn btn-icon" data-hact="sethopper" data-hid="${h.id}" title="Set hopper amount"><i class="fa-solid fa-sliders"></i></button>
         ${harvIsGenerator(h.harvester_type) ? '' : `<button class="btn btn-icon" data-hact="power" data-hid="${h.id}" title="Set power"><i class="fa-solid fa-bolt"></i></button>`}
+        <button class="btn btn-icon" data-hact="refill" data-hid="${h.id}" title="Refilled in game — power + maintenance back to full"><i class="fa-solid fa-battery-full"></i></button>
         <button class="btn btn-icon" data-hact="maint" data-hid="${h.id}" title="Set maintenance"><i class="fa-solid fa-coins"></i></button>
         <button class="btn btn-icon" data-hact="clone" data-hid="${h.id}" title="Duplicate"><i class="fa-solid fa-clone"></i></button>
         <button class="btn btn-icon" data-hact="edit" data-hid="${h.id}" title="Edit"><i class="fa-solid fa-pen"></i></button>
@@ -732,6 +736,19 @@ async function loadHarvesters() {
   renderHarvesters();
   harvCheckResourceStatus(); // flag harvesters whose resource has despawned
   navAttnSweep(); // emptying a hopper should drop the sidebar pill right away
+
+  // one-time correction: heavy-tier maint shipped as 90 cr/hr off the wiki;
+  // the game says 46 (Omi, confirmed by snickerfritz). Rates were never
+  // user-typable before, so a stored 90 on a heavy can only be OUR default —
+  // fix it in place (fire-and-forget; the local row updates immediately)
+  for (const h of harvState.items) {
+    const d = HARV_TYPE_DEFAULTS[h.harvester_type];
+    if (d === HARV_TIERS.heavy && Number(h.maint_rate) === 90) {
+      h.maint_rate = 46;
+      apiFetch('PUT', 'api/harvesters.php', { data: { id: h.id, maint_rate: 46 } })
+        .catch(() => { /* next load retries */ });
+    }
+  }
   try {
     const cfg = await api().get_config();
     harvState.dismissed = new Set((cfg.ok && cfg.data && cfg.data.harv_dismissed_mails) || []);
@@ -781,6 +798,94 @@ async function harvExpandLog(hid) {
   const res = await apiFetch('GET', 'api/harvesters.php', { params: { action: 'events', id: hid } });
   harvState.events[hid] = (res.ok && res.data && res.data.events) || [];
   renderHarvesters();
+}
+
+// inline rename: click the name in card or grid view, type, Enter/blur saves.
+// The input carries .grp-rename-input so the 15s re-render ticker leaves it be.
+function harvRenameInline(el) {
+  const h = harvState.items.find((x) => String(x.id) === String(el.dataset.hrename));
+  if (!h) return;
+  const old = h.name || '';
+  el.innerHTML = `<input type="text" class="form-control filter-input grp-rename-input harv-rename-input"
+    value="${escapeHtml(old)}" maxlength="120" placeholder="${escapeHtml(h.harvester_type)}" spellcheck="false">`;
+  const inp = el.querySelector('input');
+  inp.focus();
+  inp.select();
+  let done = false;
+  const finish = async (save) => {
+    if (done) return;
+    done = true;
+    const val = inp.value.trim();
+    if (!save || val === old) { renderHarvesters(); return; }
+    const res = await apiFetch('PUT', 'api/harvesters.php', { data: { id: h.id, name: val } })
+      .catch((err) => ({ ok: false, error: String(err) }));
+    if (!res.ok) { toast(res.error || 'Rename failed', false); renderHarvesters(); return; }
+    h.name = val;
+    toast(val ? `Renamed to ${val}` : 'Name cleared — back to auto-naming');
+    renderHarvesters();
+  };
+  inp.addEventListener('keydown', (e) => {
+    e.stopPropagation();
+    if (e.key === 'Enter') finish(true);
+    if (e.key === 'Escape') finish(false);
+  });
+  inp.addEventListener('blur', () => finish(true));
+  inp.addEventListener('click', (e) => e.stopPropagation());
+}
+
+// one-click "I refilled it in game" (Veizyr): power + maintenance snap back to
+// their full loaded amounts by resetting the burn clocks — kills empty alerts
+// without opening either dialog
+async function harvRefill(h) {
+  const now = harvNow();
+  const fields = { id: h.id };
+  const bits = [];
+  if (!harvIsGenerator(h.harvester_type) && Number(h.power_amount) > 0) {
+    fields.power_set_at = now;
+    bits.push('power');
+  }
+  if (Number(h.maint_amount) > 0) {
+    fields.maint_set_at = now;
+    bits.push('maintenance');
+  }
+  if (!bits.length) {
+    toast('Nothing to refill yet — set the amounts once with the Power / Maint buttons', false);
+    return;
+  }
+  const res = await apiFetch('PUT', 'api/harvesters.php', { data: fields });
+  if (!res.ok) { toast(res.error || 'Update failed', false); return; }
+  await apiFetch('POST', 'api/harvesters.php?action=event', { data: {
+    harvester_id: h.id, kind: 'maintenance',
+    detail: `Marked filled — ${bits.join(' + ')} back to full`, amount: 0,
+  } }).catch(() => { /* log entry is best-effort */ });
+  toast(`Filled — ${bits.join(' + ')} back to full`);
+  harvState.events = {};
+  loadHarvesters();
+}
+
+// click-to-set on the power/maint bars (Veizyr): the click position becomes
+// the new level, as a fraction of the loaded amount
+async function harvBarClick(bar, clientX) {
+  const h = harvState.items.find((x) => String(x.id) === String(bar.dataset.hid));
+  if (!h) return;
+  const power = bar.dataset.hbar === 'power';
+  const loaded = Number(power ? h.power_amount : h.maint_amount) || 0;
+  if (!loaded) { toast(`Set an amount first — use the ${power ? 'Power' : 'Maint'} button`, false); return; }
+  const r = bar.getBoundingClientRect();
+  const frac = Math.min(1, Math.max(0, (clientX - r.left) / r.width));
+  const amount = Math.round(loaded * frac);
+  const fields = power
+    ? { id: h.id, power_amount: amount, power_set_at: harvNow() }
+    : { id: h.id, maint_amount: amount, maint_set_at: harvNow() };
+  const res = await apiFetch('PUT', 'api/harvesters.php', { data: fields });
+  if (!res.ok) { toast(res.error || 'Update failed', false); return; }
+  await apiFetch('POST', 'api/harvesters.php?action=event', { data: {
+    harvester_id: h.id, kind: power ? 'power' : 'maintenance',
+    detail: `Set ${power ? 'power' : 'maintenance'} to ${fmtNum(amount)} (bar click)`, amount,
+  } }).catch(() => { /* best-effort */ });
+  toast(`${power ? 'Power' : 'Maintenance'} set to ${fmtShort(amount)}${power ? '' : ' cr'}`);
+  harvState.events = {};
+  loadHarvesters();
 }
 
 // compact refill dialog: shows the math's current estimate, then take your pick —
@@ -1064,6 +1169,15 @@ async function harvDelete(h) {
 
 // ---- add/edit form (one modal, create or update) ----
 
+// burn-rate expander: collapsed = trust the type defaults; open to tweak
+function harvSetRatesOpen(open) {
+  $('#harv-f-ratesrow').hidden = !open;
+  const i = $('#harv-f-ratestoggle i');
+  if (i) i.className = `fa-solid fa-caret-${open ? 'down' : 'right'}`;
+  const sub = $('#harv-f-ratestoggle .settings-sub');
+  if (sub) sub.textContent = open ? 'blank = type default' : 'using type defaults — expand to tweak';
+}
+
 function harvOpenForm(h = null) {
   const m = $('#harv-modal');
   m.dataset.editing = h ? String(h.id) : '';
@@ -1077,6 +1191,12 @@ function harvOpenForm(h = null) {
   $('#harv-f-gone').hidden = !goneNow;
   if (goneNow) $('#harv-f-gone-name').textContent = h.resource_name;
   $('#harv-f-name').value = h ? (h.name || '') : '';
+  $('#harv-f-maintrate').value = h && h.maint_rate != null && h.maint_rate !== '' ? Number(h.maint_rate) : '';
+  $('#harv-f-powerrate').value = h && h.power_rate != null && h.power_rate !== '' ? Number(h.power_rate) : '';
+  // burn rates stay tucked away unless this harvester runs on custom ones
+  const td = h ? HARV_TYPE_DEFAULTS[h.harvester_type] : null;
+  const custom = h && td && (Number(h.maint_rate) !== td.maint || (!harvIsGenerator(h.harvester_type) && Number(h.power_rate) !== td.power));
+  harvSetRatesOpen(!!custom);
   $('#harv-f-group').innerHTML = '<option value="">—</option>'
     + [...harvState.groups].sort((a, b) => (a.sort_order - b.sort_order) || a.name.localeCompare(b.name))
       .map((g) => `<option value="${g.id}">${escapeHtml(g.name)}</option>`).join('');
@@ -1124,7 +1244,8 @@ function harvSyncFormMode() {
   // generators PRODUCE power — no power pool to load, so hide+clear that field
   const gen = harvIsGenerator(type);
   $('#harv-f-powerwrap').hidden = gen;
-  if (gen) $('#harv-f-power').value = '';
+  $('#harv-f-powerratewrap').hidden = gen; // generators produce power — no drain
+  if (gen) { $('#harv-f-power').value = ''; $('#harv-f-powerrate').value = ''; }
   // BER stays within 0..type cap; concentration within 0..100 — live clamps
   const berEl = $('#harv-f-ber');
   berEl.placeholder = d ? `max ${d.ber}` : 'e.g. 44';
@@ -1186,10 +1307,18 @@ async function harvSubmitForm() {
     concentration: $('#harv-f-conc').value.trim(),
     ber: $('#harv-f-ber').value.trim(),
     hopper_size: $('#harv-f-hopper').value.trim() ? Math.min(500000, Math.round(parseAmount($('#harv-f-hopper').value))) : '',
-    // burn rates come from the type — never typed in (custom legacy rates survive edits)
-    maint_rate: d ? d.maint : (harvState.editRates && harvState.editRates.maint != null ? Number(harvState.editRates.maint) : ''),
-    power_rate: d ? d.power : (harvState.editRates && harvState.editRates.power != null ? Number(harvState.editRates.power) : ''),
+    // burn rates: typed values win (deeds vary, and defaults have been wrong
+    // before — snickerfritz asked for these to be tweakable); blank falls back
+    // to the type default, or a legacy custom rate surviving the edit
+    maint_rate: $('#harv-f-maintrate').value.trim() !== '' ? Number($('#harv-f-maintrate').value)
+      : (d ? d.maint : (harvState.editRates && harvState.editRates.maint != null ? Number(harvState.editRates.maint) : '')),
+    power_rate: $('#harv-f-powerrate').value.trim() !== '' ? Number($('#harv-f-powerrate').value)
+      : (d ? d.power : (harvState.editRates && harvState.editRates.power != null ? Number(harvState.editRates.power) : '')),
   };
+  for (const [sel, label] of [['#harv-f-maintrate', 'Maint rate'], ['#harv-f-powerrate', 'Power rate']]) {
+    const v = $(sel).value.trim();
+    if (v !== '' && !(Number(v) >= 0)) { toast(`${label} must be a number`, false); return; }
+  }
   if (!fields.harvester_type) { toast('Pick a harvester type first', false); return; }
   if (!fields.character_id) { toast('Pick which character this belongs to', false); return; }
   // garbage never saves: conc 1–100, BER positive (≤ cap), hopper a positive amount
@@ -1296,10 +1425,16 @@ function initHarvesters() {
   // picking a type swaps the deed BER to that type's max (most deeds in the
   // wild are capped crafts — edit down for an off-max one) and reshapes the
   // form (generators pull nothing)
+  $('#harv-f-ratestoggle').addEventListener('click', () =>
+    harvSetRatesOpen($('#harv-f-ratesrow').hidden));
   $('#harv-f-type').addEventListener('change', () => {
     const d = HARV_TYPE_DEFAULTS[$('#harv-f-type').value];
     if (d && d.ber) $('#harv-f-ber').value = d.ber;
     if (d && d.hopper) $('#harv-f-hopper').value = fmtShort(d.hopper); // typical craft — edit if yours differs
+    if (d) {
+      $('#harv-f-maintrate').value = d.maint || '';
+      $('#harv-f-powerrate').value = d.power || '';
+    }
     harvSyncFormMode();
   });
   // concentration and BER are whole numbers only — strip anything non-digit as typed
@@ -1352,6 +1487,7 @@ function initHarvesters() {
   const HARV_PLANET_KEYS = ['planet_corellia', 'planet_dantooine', 'planet_dathomir', 'planet_endor',
     'planet_lok', 'planet_naboo', 'planet_rori', 'planet_talus', 'planet_tatooine', 'planet_yavin4'];
   const harvHarvestable = (r) => {
+    if (safeInt(r.source) === 9) return false; // recycled canonicals come from a recycler, not the ground
     if (harvFamilyFor(r.type_code) === '') return false; // known non-harvestable class
     return HARV_PLANET_KEYS.some((p) => safeInt(r[p]) === 1)
       || !(safeInt(r.planet_mustafar) === 1 || safeInt(r.planet_kashyyyk) === 1);
@@ -1640,10 +1776,44 @@ function initHarvesters() {
     },
   });
 
+  // hover preview on the clickable power/maint bars: a pulsing ghost fill
+  // tracks the cursor with the would-be amount floating above it, so you see
+  // exactly what a click sets before committing
+  const harvClearBarPreview = () => {
+    document.querySelectorAll('.harv-meter-preview').forEach((x) => x.remove());
+    document.querySelectorAll('.harv-meter-tipfloat').forEach((x) => x.remove());
+  };
+  $('#harv-list').addEventListener('pointermove', (e) => {
+    const bar = e.target.closest('.harv-meter[data-hbar]');
+    if (!bar) { harvClearBarPreview(); return; }
+    const h = harvState.items.find((x) => String(x.id) === String(bar.dataset.hid));
+    const power = bar.dataset.hbar === 'power';
+    const loaded = h ? Number(power ? h.power_amount : h.maint_amount) || 0 : 0;
+    if (!loaded) { harvClearBarPreview(); return; }
+    const row = bar.closest('.harv-meter-row');
+    // one preview at a time — hovering a new bar drops the old one's
+    if (!bar.querySelector('.harv-meter-preview')) harvClearBarPreview();
+    let prev = bar.querySelector('.harv-meter-preview');
+    if (!prev) { prev = document.createElement('span'); prev.className = 'harv-meter-preview'; bar.appendChild(prev); }
+    let tip = row.querySelector('.harv-meter-tipfloat');
+    if (!tip) { tip = document.createElement('span'); tip.className = 'harv-meter-tipfloat'; row.appendChild(tip); }
+    const r = bar.getBoundingClientRect();
+    const frac = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+    prev.style.width = `${(frac * 100).toFixed(1)}%`;
+    tip.textContent = `click: set to ${fmtShort(Math.round(loaded * frac))}${power ? '' : ' cr'}`;
+    const rowRect = row.getBoundingClientRect();
+    tip.style.left = `${Math.min(rowRect.width - 70, Math.max(60, e.clientX - rowRect.left))}px`;
+  });
+  $('#harv-list').addEventListener('pointerleave', harvClearBarPreview);
+
   $('#harv-list').addEventListener('click', async (e) => {
     if (e.target.closest('.grp-hd')) return; // folder headers belong to the shared wiring
     const resLink = e.target.closest('.harv-reslink');
     if (resLink) { openResourcePage(resLink.dataset.res); return; }
+    const bar = e.target.closest('.harv-meter[data-hbar]');
+    if (bar) { harvBarClick(bar, e.clientX); return; }
+    const rn = e.target.closest('[data-hrename]');
+    if (rn && !rn.querySelector('input')) { harvRenameInline(rn); return; }
     const btn = e.target.closest('[data-hact]');
     if (!btn) return;
     const h = harvState.items.find((x) => String(x.id) === String(btn.dataset.hid));
@@ -1659,6 +1829,7 @@ function initHarvesters() {
     if (act === 'edit') { harvOpenForm(h); return; }
     if (act === 'power') { harvSetPool(h, 'power'); return; }
     if (act === 'maint') { harvSetPool(h, 'maint'); return; }
+    if (act === 'refill') { harvRefill(h); return; }
     if (act === 'sethopper') { harvSetPool(h, 'hopper'); return; }
     if (act === 'hopper') { harvEmptyHopper(h); return; }
     if (act === 'del') {

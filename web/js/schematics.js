@@ -317,6 +317,19 @@ function renderScdTable() {
   if (!s) return;
   $('#scd-loading').hidden = true;
 
+  // LQ / no-experimentation schematics have no ranking lists at all (the
+  // payload carries no resourceDtoList) — the site shows its "use whatever"
+  // note there; an empty grid here read as broken
+  const hasLists = Array.isArray(s.resourceDtoList) && s.resourceDtoList.length;
+  $('#scd-tabs').hidden = !hasLists;
+  if (!hasLists) {
+    $('#scd-head').innerHTML = '';
+    $('#scd-body').innerHTML = `<tr><td class="col-text scd-noranks">
+      <i class="fa-solid fa-circle-info"></i> Low quality — resource stats don't matter here; use whatever you want.
+      ${(s.resourcesNeeded || []).length ? 'The quantities on the left are all it takes.' : ''}</td></tr>`;
+    return;
+  }
+
   const rel = scdRelevantStats();
   $('#scd-head').innerHTML =
     '<th class="pin-cell"></th><th class="pin-cell"></th><th class="col-name">Resource Name</th><th>Quality</th>' +

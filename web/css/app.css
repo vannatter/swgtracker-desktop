@@ -2727,6 +2727,10 @@ model-viewer::part(default-progress-mask) { display: none; }
 #scd-flag i { color: #e9b445; }
 .sb-chip-flag { border-color: #e9b445; color: #e9b445; }
 .sb-chip-flag i { font-size: 10px; }
+/* LQ schematics: no ranking lists — friendly note instead of an empty grid */
+.scd-noranks { padding: 22px 16px !important; color: var(--text-muted); font-size: 13.5px; }
+.scd-noranks i { color: var(--q-accept); margin-right: 6px; }
+
 /* community-editable numbers on the schematic detail (site's pencils, app-style):
    dotted underline says "click me"; input swaps in place */
 .scd-eqty { border-bottom: 1px dotted var(--text-muted); cursor: pointer; }

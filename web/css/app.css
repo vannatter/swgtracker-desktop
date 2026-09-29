@@ -1600,6 +1600,12 @@ td .harv-name { font-size: inherit; font-weight: inherit; color: inherit; }
 .harv-name[data-hrename]:hover { border-bottom-color: var(--text-muted); }
 .harv-rename-input { width: 220px; max-width: none; display: inline-block; padding: 2px 8px;
   font-size: inherit; font-weight: inherit; }
+/* narrow cards (small screens / many grid columns): labeled action buttons
+   collapse to icons — the tooltips still name them */
+.harv-actions { container-type: inline-size; }
+@container (max-width: 480px) {
+  .harv-btn-label { display: none; }
+}
 .harv-meter-click { cursor: pointer; }
 .harv-meter-click:hover { outline: 1px solid var(--text-muted); outline-offset: 1px; border-radius: 3px; }
 /* click-to-set hover preview: pulsing ghost fill up to the cursor */

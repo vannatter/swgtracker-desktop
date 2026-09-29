@@ -426,11 +426,11 @@ function harvCardHtml(h) {
     </div>
     <div class="harv-meters">${meters.join('') || '<span class="stat_off">No rates set — edit to enable countdowns.</span>'}</div>
     <div class="harv-actions">
-      <button class="btn btn-sm btn-outline-secondary" data-hact="hopper" data-hid="${h.id}" title="Empty the hopper — fill restarts from zero"><i class="fa-solid fa-box-open"></i> Empty</button>
-      <button class="btn btn-sm btn-outline-secondary" data-hact="sethopper" data-hid="${h.id}" title="Set what's in the hopper right now"><i class="fa-solid fa-sliders"></i> Hopper</button>
-      ${harvIsGenerator(h.harvester_type) ? '' : `<button class="btn btn-sm btn-outline-secondary" data-hact="power" data-hid="${h.id}" title="Set the power currently loaded"><i class="fa-solid fa-bolt"></i> Power</button>`}
-      <button class="btn btn-sm btn-outline-secondary" data-hact="maint" data-hid="${h.id}" title="Set the maintenance currently paid"><i class="fa-solid fa-coins"></i> Maint</button>
-      <button class="btn btn-sm btn-outline-secondary" data-hact="refill" data-hid="${h.id}" title="Refilled it in game — one click sets power and maintenance back to their full loaded amounts (and clears the empty alerts)"><i class="fa-solid fa-battery-full"></i> Filled</button>
+      <button class="btn btn-sm btn-outline-secondary" data-hact="hopper" data-hid="${h.id}" title="Empty the hopper — fill restarts from zero"><i class="fa-solid fa-box-open"></i><span class="harv-btn-label"> Empty</span></button>
+      <button class="btn btn-sm btn-outline-secondary" data-hact="sethopper" data-hid="${h.id}" title="Set what's in the hopper right now"><i class="fa-solid fa-sliders"></i><span class="harv-btn-label"> Hopper</span></button>
+      ${harvIsGenerator(h.harvester_type) ? '' : `<button class="btn btn-sm btn-outline-secondary" data-hact="power" data-hid="${h.id}" title="Set the power currently loaded"><i class="fa-solid fa-bolt"></i><span class="harv-btn-label"> Power</span></button>`}
+      <button class="btn btn-sm btn-outline-secondary" data-hact="maint" data-hid="${h.id}" title="Set the maintenance currently paid"><i class="fa-solid fa-coins"></i><span class="harv-btn-label"> Maint</span></button>
+      <button class="btn btn-sm btn-outline-secondary" data-hact="refill" data-hid="${h.id}" title="Refilled it in game — one click sets power and maintenance back to their full loaded amounts (and clears the empty alerts)"><i class="fa-solid fa-battery-full"></i><span class="harv-btn-label"> Filled</span></button>
       <span class="harv-actions-right">
         ${harvWpCmd(h) ? `<button class="btn btn-icon al-rule-btn" data-hact="wp" data-hid="${h.id}" title="${escapeHtml(loc)} — copy a /waypoint command"><i class="fa-solid fa-location-dot"></i></button>` : ''}
         <button class="btn btn-icon al-rule-btn" data-hact="log" data-hid="${h.id}" title="Event log"><i class="fa-solid fa-list"></i></button>
@@ -863,6 +863,23 @@ async function harvRefill(h) {
   loadHarvesters();
 }
 
+// pool update fields for "it's at AMOUNT right now" — WITHOUT collapsing the
+// bar's denominator (Veizyr's bug: clicking half-bar shrank max to current).
+// The loaded total stays put and the burn clock back-dates so the remaining
+// lands on the target, same trick the hopper uses. Only topping past the
+// loaded total (or a no-rate pool that can't back-date) resets the total.
+function harvPoolFields(h, power, amount) {
+  const now = harvNow();
+  const loaded = Number(power ? h.power_amount : h.maint_amount) || 0;
+  const rate = power ? (Number(h.power_rate) || 0) : harvEffMaintRate(h);
+  if (amount >= loaded || !rate) {
+    return power ? { id: h.id, power_amount: amount, power_set_at: now }
+      : { id: h.id, maint_amount: amount, maint_set_at: now };
+  }
+  const setAt = now - Math.round(((loaded - amount) / rate) * 3600);
+  return power ? { id: h.id, power_set_at: setAt } : { id: h.id, maint_set_at: setAt };
+}
+
 // click-to-set on the power/maint bars (Veizyr): the click position becomes
 // the new level, as a fraction of the loaded amount
 async function harvBarClick(bar, clientX) {
@@ -874,9 +891,7 @@ async function harvBarClick(bar, clientX) {
   const r = bar.getBoundingClientRect();
   const frac = Math.min(1, Math.max(0, (clientX - r.left) / r.width));
   const amount = Math.round(loaded * frac);
-  const fields = power
-    ? { id: h.id, power_amount: amount, power_set_at: harvNow() }
-    : { id: h.id, maint_amount: amount, maint_set_at: harvNow() };
+  const fields = harvPoolFields(h, power, amount);
   const res = await apiFetch('PUT', 'api/harvesters.php', { data: fields });
   if (!res.ok) { toast(res.error || 'Update failed', false); return; }
   await apiFetch('POST', 'api/harvesters.php?action=event', { data: {
@@ -985,10 +1000,10 @@ function harvSetPool(h, which) {
       // emptied-at timestamp the fill math already runs on
       amount = Math.min(amount, roof);
       fields = { id: h.id, hopper_emptied_at: now - Math.round((amount / rate) * 3600) };
-    } else if (power) {
-      fields = { id: h.id, power_amount: amount, power_set_at: now };
     } else {
-      fields = { id: h.id, maint_amount: amount, maint_set_at: now };
+      // typing a value below the loaded total keeps the total (back-dated
+      // clock) — typing above it becomes the new total; see harvPoolFields
+      fields = harvPoolFields(h, power, amount);
     }
     const res = await apiFetch('PUT', 'api/harvesters.php', { data: fields });
     if (!res.ok) { toast(res.error || 'Update failed', false); return; }

@@ -2727,6 +2727,8 @@ model-viewer::part(default-progress-mask) { display: none; }
 #scd-flag i { color: #e9b445; }
 .sb-chip-flag { border-color: #e9b445; color: #e9b445; }
 .sb-chip-flag i { font-size: 10px; }
+.sb-chip-fix { border-color: #6ea8fe; color: #6ea8fe; }
+.sb-chip-fix i { font-size: 10px; }
 /* LQ schematics: no ranking lists — friendly note instead of an empty grid */
 .scd-noranks { padding: 22px 16px !important; color: var(--text-muted); font-size: 13.5px; }
 .scd-noranks i { color: var(--q-accept); margin-right: 6px; }
@@ -2763,6 +2765,26 @@ model-viewer::part(default-progress-mask) { display: none; }
 body.dev-mode .scd-hiddenrow { display: block; opacity: .55; }
 .scd-hidden-tag { border: 1px solid var(--text-muted); color: var(--text-muted); border-radius: 8px;
   padding: 0 6px; font-size: 10px; text-transform: uppercase; letter-spacing: .5px; }
+
+/* "fixes an existing schematic" row in the builder */
+.sb-fixrow { position: relative; margin-bottom: 10px; font-size: 12.5px;
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.sb-fixrow a[role="button"] { color: var(--text-muted); cursor: pointer; }
+.sb-fixrow a[role="button"]:hover { color: var(--text-hover); }
+.sb-modes { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.sb-mode { background: none; border: none; color: var(--text-muted); padding: 6px 14px; cursor: pointer;
+  font-size: 12.5px; display: inline-flex; align-items: center; gap: 7px; }
+.sb-mode + .sb-mode { border-left: 1px solid var(--border); }
+.sb-mode:hover { color: var(--text-hover); }
+.sb-mode.active { background: var(--accent-dark, #7c2d2d); color: #fff; }
+#sb-fix-search { flex-basis: 100%; }
+#sb-fix-chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--q-accept);
+  color: var(--q-accept); border-radius: 8px; padding: 3px 10px; }
+#sb-fix-chip b { color: var(--text-hover); }
+#sb-fix-search { margin-top: 6px; }
+.sb-fix-results { position: absolute; z-index: 30; left: 0; top: 100%; width: 100%;
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: 0 0 8px 8px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, .5); max-height: 300px; overflow-y: auto; }
 
 /* category entries in the builder's component search */
 .sb-ccat-name { color: var(--text-hover); display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }

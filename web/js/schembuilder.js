@@ -199,6 +199,7 @@ async function sbOpenDraft(id) {
     cur = { id: 0, status: 'draft', parent_draft_id: null, schematic_id: null, body: sbEmptyBody() };
   }
   sbState.cur = cur;
+  sbState.fixPicking = false; // transient pick-a-target state never survives a draft switch
   sbShowView('edit');
   sbRenderEditor();
 }
@@ -222,6 +223,7 @@ function sbRenderEditor() {
   if (locked) {
     $('#sb-verify-note').innerHTML = `Published as an unverified schematic — it becomes fully verified once ${sbState.verifyVotes} other app users confirm it.`;
   }
+  sbRenderFixChip(b);
   $('#sb-f-name').value = b.name || '';
   $('#sb-f-category').innerHTML = sbCatOptions(b.category_id);
   $('#sb-f-desc').value = b.description || '';
@@ -322,6 +324,67 @@ function sbRenderComponents() {
       </div>
       <div class="sb-compsearch mysd-opts" data-cres="${i}" hidden></div>
     </div>`).join('');
+}
+
+// ---- "fixes an existing schematic": link + prefill --------------------------
+// Bad old schematics were getting parallel "(Corrected)" duplicates; a linked
+// fix instead REPLACES the original in place once the community verifies it.
+
+function sbRenderFixChip(b) {
+  const linked = safeInt(b.fixes_id) > 0;
+  // fix mode WITHOUT a target yet = the whole editor waits: pick the
+  // schematic first, everything else appears prefilled from it
+  const picking = !!sbState.fixPicking && !linked;
+  $('#sb-fix-chip').hidden = !linked;
+  $('#sb-mode-new').classList.toggle('active', !linked && !picking);
+  $('#sb-mode-fix').classList.toggle('active', linked || picking);
+  $('#sb-fix-search').hidden = !picking;
+  $('#sb-fix-results').hidden = true;
+  $('#sb-editor-body').hidden = picking;
+  if (linked) $('#sb-fix-name').textContent = b.fixes_name || `#${b.fixes_id}`;
+}
+
+// map an existing schematic's payload into a draft body — the submitter edits
+// what's wrong instead of retyping the whole recipe
+async function sbPrefillFromFix(fid, name) {
+  const b = sbState.cur.body;
+  b.fixes_id = safeInt(fid);
+  b.fixes_name = name;
+  const empty = !(b.name || '').trim() && !(b.resources || []).length && !(b.components || []).length;
+  if (empty) {
+    let res;
+    try { res = await api().get_schematic(fid); } catch (_) { res = null; }
+    const p = res && res.ok && res.data ? (res.data.schematic || res.data) : null;
+    if (p && p.schematicName) {
+      b.name = p.schematicName;
+      b.description = p.schematicDescription || '';
+      b.quality = String(p.schematicQuality || 'std').toLowerCase() === 'hq' ? 'hq' : 'std';
+      b.size = safeInt(p.schematicSize) || 1;
+      b.type = String(p.schematicType || 'Learned');
+      b.crate_size = safeInt(p.crateSize);
+      b.manufactured = String(p.manufactured) === 'yes' || !!b.crate_size;
+      const cat = (sbState.cats || []).find((c) => c.description === p.schematicCategory);
+      if (cat) b.category_id = safeInt(cat.category_id);
+      b.resources = (p.resourcesNeeded || []).map((r) => ({
+        desc: r.desc || '', code: String(r.id || ''), resourceName: r.resourceName || '',
+        units: safeInt(r.units) })).filter((r) => r.units > 0);
+      b.formulas = (p.formula || []).map((f) => {
+        const wl = mysParseWeights(f.formulaDescription) || {};
+        const weights = {};
+        Object.entries(wl).forEach(([k, v]) => { weights[k.toUpperCase()] = v; });
+        return { name: String(f.formulaDescription || '').replace(/\s*[A-Z]{2}=\d+%?/g, '').trim(), weights };
+      }).filter((f) => Object.keys(f.weights).length);
+      b.components = (p.componentTypes || []).map((c) => ({
+        desc: c.desc || '', number: safeInt(c.number),
+        ...(c.type === 'schematic' ? { schematic_id: safeInt(c.id) } : {}),
+        ...(c.type === 'category' && safeInt(c.id) ? { category_id: safeInt(c.id) } : {}),
+        similar: c.similar === 'yes', optional: c.optional === 'yes', looted: c.looted === 'yes',
+      })).filter((c) => c.number > 0);
+      toast('Prefilled from the existing schematic — change what\'s wrong, attach proof, submit');
+    }
+  }
+  sbMarkDirty();
+  sbRenderEditor();
 }
 
 // ---- appearance: associate an existing item's 3D model ----------------------
@@ -571,15 +634,40 @@ async function sbRenderVerifyBar(schematicId, isCommunity) {
   const bar = $('#scd-community');
   if (!bar) return;
   bar.hidden = true;
-  if (!isCommunity) return;
   let res;
   try {
     res = await apiFetch('GET', 'api/user_schematics.php',
       { params: { action: 'status', schematic_id: schematicId } });
   } catch (_) { return; }
   const st = res.ok && res.data;
-  if (!st || !st.community) return;
+  if (!st) return;
   bar.dataset.sid = String(schematicId);
+  if (!st.community) {
+    // not a community submission — but a CORRECTION may be under review for
+    // it, or a verified one may have already taken it over
+    if (st.pending_fix) {
+      bar.innerHTML = `<div class="sb-vb-info">
+          <div class="sb-vb-title"><i class="fa-solid fa-wrench"></i> Community correction under review
+            <span class="sb-vb-chip">${st.pending_fix.votes} of ${st.pending_fix.needed}</span></div>
+          <div class="sb-vb-sub">${escapeHtml(st.pending_fix.by)} submitted a fix for this schematic — review it against the game and confirm if it's right</div>
+        </div>
+        <div class="sb-vb-actions">
+          <button class="btn btn-sm btn-outline-secondary" data-openfix="${st.pending_fix.id}"
+            data-fixname="${escapeHtml(st.pending_fix.name)}"><i class="fa-solid fa-arrow-right"></i> Review the fix</button>
+        </div>`;
+      bar.className = 'sb-verifybar scd-community-full';
+      bar.hidden = false;
+    } else if (st.community_fixed) {
+      bar.innerHTML = `<div class="sb-vb-info">
+          <div class="sb-vb-title"><i class="fa-solid fa-wrench"></i> Community-corrected
+            <span class="sb-vb-chip ok">fixed</span></div>
+          <div class="sb-vb-sub">the original data was wrong — this recipe was corrected and verified by fellow crafters</div>
+        </div>`;
+      bar.className = 'sb-verifybar sb-verified scd-community-full';
+      bar.hidden = false;
+    }
+    return;
+  }
   if (st.verified) {
     bar.innerHTML = `<div class="sb-vb-info">
         <div class="sb-vb-title"><i class="fa-solid fa-circle-check"></i> Community schematic
@@ -616,9 +704,9 @@ async function sbRenderVerifyBar(schematicId, isCommunity) {
         : '');
     bar.innerHTML = `${shots ? `<div class="sb-vb-shots">${shots}</div>` : ''}
       <div class="sb-vb-info">
-        <div class="sb-vb-title"><i class="fa-solid fa-users"></i> Community schematic
+        <div class="sb-vb-title"><i class="fa-solid ${st.fixes ? 'fa-wrench' : 'fa-users'}"></i> ${st.fixes ? 'Community correction' : 'Community schematic'}
           <span class="sb-vb-chip" title="Unconfirmed schematics return to draft after 30 days, ready to fix and resubmit">unverified</span></div>
-        <div class="sb-vb-sub">${st.votes} of ${st.needed} confirmations · 30 days to verify${st.mine
+        <div class="sb-vb-sub">${st.fixes ? `fixes <a role="button" data-openfix="${st.fixes.id}" data-fixname="${escapeHtml(st.fixes.name)}">${escapeHtml(st.fixes.name)}</a> — verifying it REPLACES that schematic's data in place · ` : ''}${st.votes} of ${st.needed} confirmations · 30 days to verify${st.mine
           ? ' · yours — others must confirm it'
           : st.submitter ? ` · submitted by ${escapeHtml(st.submitter)}` : ''}</div>
       </div>
@@ -651,6 +739,8 @@ function initSchemBuilder() {
 
   // Confirm-accurate vote on the schematic detail page (+ proof viewer + retract)
   $('#scd-community').addEventListener('click', async (e) => {
+    const fx = e.target.closest('[data-openfix]');
+    if (fx) { openSchematicPage(fx.dataset.openfix, fx.dataset.fixname); return; }
     const shot = e.target.closest('[data-shotview]');
     if (shot) { sbShowShot(shot.dataset.shotview); return; }
     const retract = e.target.closest('#scd-retract');
@@ -708,6 +798,54 @@ function initSchemBuilder() {
   $('#scd-community').addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && e.target.id === 'scd-flag-note') $('#scd-flag-send').click();
   });
+  // mode toggle: brand-new submission vs a correction to an existing one.
+  // Fix mode hides the whole form until the target schematic is picked.
+  $('#sb-mode-fix').addEventListener('click', () => {
+    if (safeInt(sbState.cur?.body?.fixes_id) > 0) return; // already linked
+    sbState.fixPicking = true;
+    sbRenderFixChip(sbState.cur.body);
+    $('#sb-fix-search').focus();
+  });
+  $('#sb-mode-new').addEventListener('click', () => {
+    sbState.fixPicking = false;
+    if (safeInt(sbState.cur?.body?.fixes_id) > 0) {
+      delete sbState.cur.body.fixes_id;
+      delete sbState.cur.body.fixes_name;
+      sbMarkDirty();
+    }
+    sbRenderEditor();
+  });
+  $('#sb-fix-clear').addEventListener('click', () => {
+    sbState.fixPicking = false;
+    delete sbState.cur.body.fixes_id;
+    delete sbState.cur.body.fixes_name;
+    sbMarkDirty();
+    sbRenderEditor();
+  });
+  let sbFixTimer = null;
+  $('#sb-fix-search').addEventListener('input', (e) => {
+    clearTimeout(sbFixTimer);
+    const q = e.target.value.trim();
+    if (q.length < 2) { $('#sb-fix-results').hidden = true; return; }
+    sbFixTimer = setTimeout(async () => {
+      let res;
+      try { res = await api().search_schematics({ search: q, page: 1 }); } catch (_) { res = null; }
+      const rows = ((res && res.ok && res.data && (res.data.results || res.data.schematics)) || []).slice(0, 8);
+      $('#sb-fix-results').innerHTML = rows.map((s) =>
+        `<div class="mysd-opt" data-fixpick="${s.id}" data-fixname="${escapeHtml(s.name)}">${escapeHtml(s.name)}
+           <span class="mysd-opt-meta">${escapeHtml(s.parent || '')}</span></div>`).join('')
+        || '<div class="mysd-opt stat_off">No matches</div>';
+      $('#sb-fix-results').hidden = false;
+    }, 250);
+  });
+  $('#sb-fix-results').addEventListener('click', (e) => {
+    const pick = e.target.closest('[data-fixpick]');
+    if (!pick) return;
+    $('#sb-fix-search').value = '';
+    sbState.fixPicking = false;
+    sbPrefillFromFix(safeInt(pick.dataset.fixpick), pick.dataset.fixname);
+  });
+
   $('#sb-new').addEventListener('click', () => sbOpenDraft(0));
   $('#sb-back').addEventListener('click', async () => {
     if (sbState.dirty) await sbSave();

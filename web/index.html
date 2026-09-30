@@ -6,7 +6,7 @@
   <title>SWG Tracker Desktop</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.1/css/all.min.css">
-  <link rel="stylesheet" href="css/app.css?v=20260928c">
+  <link rel="stylesheet" href="css/app.css?v=20260929e">
 </head>
 <body>
   <!-- Header -->
@@ -1195,6 +1195,20 @@
           <div id="sb-verify-note" class="al-empty" hidden></div>
           <div id="sb-errors" class="sb-errors" hidden></div>
 
+          <div id="sb-fixrow" class="sb-fixrow">
+            <div class="sb-modes">
+              <button type="button" id="sb-mode-new" class="sb-mode active"
+                title="A schematic the tracker doesn't have at all"><i class="fa-solid fa-plus"></i> Missing schematic</button>
+              <button type="button" id="sb-mode-fix" class="sb-mode"
+                title="An existing schematic has wrong data? Submit a correction — when the community verifies it, it replaces the original in place (same page, same rankings)"><i class="fa-solid fa-wrench"></i> Fix existing schematic</button>
+            </div>
+            <span id="sb-fix-chip" hidden><i class="fa-solid fa-wrench"></i> Fixes <b id="sb-fix-name"></b>
+              <a role="button" id="sb-fix-clear" title="Unlink — back to a brand-new schematic"><i class="fa-solid fa-xmark"></i></a></span>
+            <input id="sb-fix-search" class="form-control filter-input" placeholder="Search the schematic this corrects — its data prefills, you change what's wrong…" autocomplete="off" spellcheck="false" hidden>
+            <div id="sb-fix-results" class="mysd-opts sb-fix-results" hidden></div>
+          </div>
+
+          <div id="sb-editor-body">
           <div id="sb-progress" class="sb-progress">
             <div class="sb-progtrack"><div id="sb-progfill" class="sb-progfill"></div></div>
             <span id="sb-proglabel" class="sb-proglabel"></span>
@@ -1251,6 +1265,7 @@
             <input id="sb-shot-file" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden>
             <button id="sb-shot-add" class="btn btn-sm btn-outline-secondary sb-addbtn"><i class="fa-solid fa-image"></i> Add screenshots</button>
           </div>
+          </div><!-- /sb-editor-body -->
         </div>
       </section>
 
@@ -2148,29 +2163,29 @@
   </div>
 
   <!-- Classic scripts sharing one top-level scope; app.js boots last. -->
-  <script src="js/class_caps.js?v=20260928c"></script>
-  <script src="js/shared.js?v=20260928c"></script>
-  <script src="js/help.js?v=20260928c"></script>
-  <script src="js/resources.js?v=20260928c"></script>
-  <script src="js/resource.js?v=20260928c"></script>
-  <script src="js/schematics.js?v=20260928c"></script>
-  <script src="js/stockpile.js?v=20260928c"></script>
-  <script src="js/wishlist.js?v=20260928c"></script>
-  <script src="js/myschematics.js?v=20260928c"></script>
-  <script src="js/inventory.js?v=20260928c"></script>
-  <script src="js/sales.js?v=20260928c"></script>
-  <script src="js/insights.js?v=20260928c"></script>
-  <script src="js/purchases.js?v=20260928c"></script>
-  <script src="js/harvesters.js?v=20260928c"></script>
-  <script src="js/factories.js?v=20260928c"></script>
-  <script src="js/customers.js?v=20260928c"></script>
-  <script src="js/characters.js?v=20260928c"></script>
-  <script src="js/settings.js?v=20260928c"></script>
-  <script src="js/alerts.js?v=20260928c"></script>\n  <script src="js/lab.js?v=20260928c"></script>
-  <script src="js/mail.js?v=20260928c"></script>
-  <script src="js/notes.js?v=20260928c"></script>
-  <script src="js/schembuilder.js?v=20260928c"></script>
-  <script src="js/scanner.js?v=20260928c"></script>
-  <script src="js/app.js?v=20260928c"></script>
+  <script src="js/class_caps.js?v=20260929e"></script>
+  <script src="js/shared.js?v=20260929e"></script>
+  <script src="js/help.js?v=20260929e"></script>
+  <script src="js/resources.js?v=20260929e"></script>
+  <script src="js/resource.js?v=20260929e"></script>
+  <script src="js/schematics.js?v=20260929e"></script>
+  <script src="js/stockpile.js?v=20260929e"></script>
+  <script src="js/wishlist.js?v=20260929e"></script>
+  <script src="js/myschematics.js?v=20260929e"></script>
+  <script src="js/inventory.js?v=20260929e"></script>
+  <script src="js/sales.js?v=20260929e"></script>
+  <script src="js/insights.js?v=20260929e"></script>
+  <script src="js/purchases.js?v=20260929e"></script>
+  <script src="js/harvesters.js?v=20260929e"></script>
+  <script src="js/factories.js?v=20260929e"></script>
+  <script src="js/customers.js?v=20260929e"></script>
+  <script src="js/characters.js?v=20260929e"></script>
+  <script src="js/settings.js?v=20260929e"></script>
+  <script src="js/alerts.js?v=20260929e"></script>\n  <script src="js/lab.js?v=20260929e"></script>
+  <script src="js/mail.js?v=20260929e"></script>
+  <script src="js/notes.js?v=20260929e"></script>
+  <script src="js/schembuilder.js?v=20260929e"></script>
+  <script src="js/scanner.js?v=20260929e"></script>
+  <script src="js/app.js?v=20260929e"></script>
 </body>
 </html>

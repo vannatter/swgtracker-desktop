@@ -160,6 +160,7 @@ function schRenderReviewPanel() {
     ${items.length ? items.map((i) => `
       <div class="sch-review-row" data-revopen="${i.id}" data-name="${escapeHtml(i.name)}">
         <b>${escapeHtml(i.name)}</b>
+        ${i.fixes ? `<span class="sb-chip sb-chip-fix" title="A correction — verifying it replaces “${escapeHtml(i.fixes)}” in place"><i class="fa-solid fa-wrench"></i> fixes existing</span>` : ''}
         <span class="sch-review-cat">${escapeHtml(i.parent || '')}${i.by ? ` · by ${escapeHtml(i.by)}` : ''}</span>
         <span class="sch-review-votes">${i.votes} of ${i.needed}</span>
         ${safeInt(i.flags) ? `<span class="sb-chip sb-chip-flag" title="A reviewer flagged this as incorrect — open it to read what needs fixing"><i class="fa-solid fa-flag"></i> flagged</span>` : ''}
@@ -489,10 +490,10 @@ async function openSchematicPage(id, name) {
   }
   renderSchematicPage(s);
   if (typeof sbRenderVerifyBar === 'function') {
-    sbRenderVerifyBar(scdState.id, !!s.communitySubmitted); // community badge + Confirm
+    sbRenderVerifyBar(scdState.id, !!s.communitySubmitted); // community badge + Confirm (also pending-fix banner on normal schematics)
   }
   scdRenderModel(scdState.id);
-  if (s.communitySubmitted) {
+  if (s.communitySubmitted || s.communityFixed) {
     // no blackbox for community schematics — fill best/current from the mirror
     await scdComputeCommunityLists(s);
     if (String(s.schematicId) === String(scdState.id)) renderScdTable();
@@ -701,6 +702,9 @@ function scdEditFieldLabel(f) {
 }
 function scdEditSentence(ed) {
   const who = escapeHtml(ed.by);
+  if (ed.field === 'recipe') {
+    return `<i class="fa-solid fa-wrench"></i> ${who} corrected the whole recipe — a community fix, verified by fellow crafters`;
+  }
   if (ed.text || ed.field === 'description') {
     return `${who} rewrote the description${ed.preview ? ` <span class="stat_off">— “${escapeHtml(ed.preview)}${ed.preview.length >= 140 ? '…' : ''}”</span>` : ''}`;
   }
@@ -766,7 +770,7 @@ function scdEditDescription(el) {
 // current lists from the local mirror, the same math My Schematics and the
 // Lab use (weighted quality of the ACTIVE formulas against the class caps).
 async function scdComputeCommunityLists(s) {
-  if (!s || !s.communitySubmitted || !Array.isArray(s.resourceDtoList)) return;
+  if (!s || (!s.communitySubmitted && !s.communityFixed) || !Array.isArray(s.resourceDtoList)) return;
   const fl = s.formula || [];
   const act = [...scdState.activeFormulas].map((i) => fl[Number(i)]).filter(Boolean);
   const weightsList = (act.length ? act : fl)
@@ -797,7 +801,7 @@ async function scdComputeCommunityLists(s) {
 let scdReqToken = 0;
 async function refetchScdBest() {
   if (!scdState.id) return;
-  if (scdState.schematic?.communitySubmitted) {
+  if (scdState.schematic?.communitySubmitted || scdState.schematic?.communityFixed) {
     await scdComputeCommunityLists(scdState.schematic);
     renderScdTable();
     return;

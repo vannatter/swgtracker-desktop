@@ -89,9 +89,52 @@ function renderSchRows() {
       : `<div class="al-empty sch-cards-empty">${schState.modelIds
           ? 'No 3D models among these schematics — switch to list view to see them all.'
           : 'Loading models…'}</div>`;
+    schObserveCardModels(); // mount viewers only while visible (WebGL context cap)
   } else {
     $('#sch-body').innerHTML = schState.rows.map(schRowHtml).join('');
   }
+}
+
+// Card models mount ONLY while scrolled into view and unmount when they
+// leave: every <swg-creature> owns a WebGL context and browsers cap ~8-16
+// live contexts per page — a grid of 20 mounted all at once rendered NOTHING
+// (every context evicted). The viewer disposes its renderer on removal, so
+// swap-in/swap-out is safe and the visible row stays under the cap.
+let schCardMvObserver = null;
+const SCH_MV_CAP = 10;        // safe under the ~16 context limit, leaving room for detail/zoom viewers
+let schMvLive = [];           // mounted hosts, oldest first
+function schMvUnmount(host) {
+  if (host.querySelector('swg-creature')) {
+    host.innerHTML = '<i class="fa-solid fa-cube sch-card-nomodel" title="Hover to view the model"></i>';
+  }
+  schMvLive = schMvLive.filter((h) => h !== host);
+}
+function schMvMount(host) {
+  if (!host || host.querySelector('swg-creature')) return;
+  // over the cap: recycle the OLDEST mounted card — without this, the browser
+  // evicted contexts itself and the first row went permanently blank
+  while (schMvLive.length >= SCH_MV_CAP) schMvUnmount(schMvLive[0]);
+  const id = host.dataset.mvlazy;
+  host.innerHTML = `<swg-creature src="https://swgtracker.com/items/${encodeURIComponent(id)}.glb" no-picker auto-rotate fit="0.92"></swg-creature>`;
+  schMvLive.push(host);
+}
+function schObserveCardModels() {
+  if (!schCardMvObserver) {
+    schCardMvObserver = new IntersectionObserver((entries) => {
+      for (const en of entries) {
+        if (en.isIntersecting) schMvMount(en.target);
+        else schMvUnmount(en.target);
+      }
+    }, { rootMargin: '120px 0px' });
+    // cards beyond the cap sit as cubes — hovering one swaps it in
+    $('#sch-cards').addEventListener('mouseover', (e) => {
+      const host = e.target.closest('[data-mvlazy]');
+      if (host && !host.querySelector('swg-creature')) schMvMount(host);
+    });
+  }
+  schCardMvObserver.disconnect();
+  schMvLive = [];
+  document.querySelectorAll('#sch-cards [data-mvlazy]').forEach((el) => schCardMvObserver.observe(el));
 }
 
 // card view: the site's 3D grid, app-side — models lazy-load as they scroll in
@@ -101,8 +144,8 @@ function schCardHtml(schem, idx) {
   const inMys = mysState.schematicIds.has(id);
   const hasModel = schState.modelIds ? schState.modelIds.has(id) : false;
   return `<div class="sch-card ${isPinned ? 'pinned' : ''}" data-idx="${idx}" data-id="${id}">
-    <div class="sch-card-model">${hasModel
-      ? `<swg-creature src="https://swgtracker.com/items/${id}.glb" no-picker auto-rotate fit="0.92"></swg-creature>`
+    <div class="sch-card-model"${hasModel ? ` data-mvlazy="${id}"` : ''}>${hasModel
+      ? '<i class="fa-solid fa-cube sch-card-nomodel"></i>'
       : '<i class="fa-solid fa-scroll sch-card-nomodel"></i>'}</div>
     <div class="sch-card-name">${escapeHtml(schem.name || '')}</div>
     <div class="sch-card-cat">${escapeHtml(schem.parent || '')}</div>
@@ -217,6 +260,10 @@ async function loadSchematics() {
 
   const data = res.data || {};
   let rows = data.results || data.schematics || (Array.isArray(data) ? data : []);
+  // unverified community submissions stay OUT of the main list (they live in
+  // the review queue) — pending FIXES deliberately share the original's name,
+  // which read as duplicates here (Izre). Matches the website's filter.
+  rows = rows.filter((s) => !(safeInt(s.user_submitted) === 1 && safeInt(s.verified) === 0));
   const total = data.total_results ?? data.total ?? rows.length;
   const totalPages = data.total_pages ?? 1;
   const page = data.page ?? schState.page;
@@ -311,6 +358,13 @@ function scdSpawnRowHtml(spawn, group, highlight, rel) {
     ${SCD_STATS.map((f) => scdStatCell(spawn, f, rel.has(f))).join('')}
     <td class="scd-agecell" ${ts ? `title="${escapeHtml(fmtDate(ts))}"` : ''}>${ts ? `Added ${fmtAgo(ts)}` : '--'}</td>
   </tr>`;
+}
+
+// Notes is a PANE tab — swap the resource table for the notes section
+function scdSyncNotesTab() {
+  const notes = scdState.tab === 'notes';
+  document.querySelector('#page-schematic .scd-table-wrap').hidden = notes;
+  $('#scd-comments').hidden = !notes;
 }
 
 function renderScdTable() {
@@ -493,6 +547,8 @@ async function openSchematicPage(id, name) {
     sbRenderVerifyBar(scdState.id, !!s.communitySubmitted); // community badge + Confirm (also pending-fix banner on normal schematics)
   }
   scdRenderModel(scdState.id);
+  cmtMount('#scd-comments', 'schematic', scdState.id); // community notes live in the Notes tab
+  scdSyncNotesTab();
   if (s.communitySubmitted || s.communityFixed) {
     // no blackbox for community schematics — fill best/current from the mirror
     await scdComputeCommunityLists(s);
@@ -849,7 +905,8 @@ function initSchematicPage() {
     scdState.tab = tab.dataset.tab;
     document.querySelectorAll('#scd-tabs [data-tab]').forEach((t) =>
       t.classList.toggle('active', t === tab));
-    renderScdTable();
+    scdSyncNotesTab();
+    if (scdState.tab !== 'notes') renderScdTable();
   });
 
   // Formula toggles re-fetch the server-ranked best lists for the checked lines

@@ -902,7 +902,12 @@ td.lab-dim { opacity: .45; }
 .al-rule-mail { color: var(--text-muted); font-size: 13px; }
 .al-rule-btn { width: 30px; height: 30px; }
 .al-rule-toggle { margin: 0; }
-.al-feed-head { margin-top: 22px; }
+.al-feed-head { margin: 0 0 6px; }
+#al-pane-matches .al-feed-head { justify-content: flex-end; } /* one small control — no tall empty band */
+/* announcements header: a proper left-aligned section band, not a floating title */
+#al-announce-head { margin: 16px 0 8px; padding-bottom: 8px; border-bottom: 1px solid var(--border); justify-content: flex-start; }
+#al-announce-head .al-feed-title { font-size: 12px !important; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .07em; color: var(--text-hover); margin: 0; }
 .al-feed-title { font-size: 16px !important; }
 #al-feed tr.al-unseen { background: var(--row-active); }
 #al-feed .res-name { cursor: pointer; }
@@ -1332,11 +1337,29 @@ tr.grp-row .grp-count { margin-left: 10px; }
 .rd-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 #scd-mustafar.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 
-.rd-cards { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+/* resource hero: one structured panel — gauge+rank left, stats right, meta footer */
+.rd-hero { display: flex; gap: 18px; background: var(--bg-secondary); border-radius: 10px;
+  padding: 14px 18px; margin-bottom: 14px; align-items: stretch; }
+.rd-hero-left { flex: 0 0 150px; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 2px; border-right: 1px solid var(--border); padding-right: 18px; }
+.rd-gauge { width: 120px; text-align: center; }
+.rd-gauge-label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .08em; margin-top: -4px; }
+.rd-rankline { font-size: 11.5px; color: var(--text-muted); text-align: center; line-height: 1.4; }
+.rd-hero-right { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.rd-herofoot { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center;
+  margin-top: auto; padding-top: 4px; } /* no divider — the left column's rule is enough */
+.ins-gauge.q-great .ins-gauge-fill { stroke: var(--q-great); }
+.ins-gauge.q-good .ins-gauge-fill { stroke: var(--q-good); }
+.ins-gauge.q-fair .ins-gauge-fill { stroke: var(--q-fair); }
+.ins-gauge.q-ok .ins-gauge-fill { stroke: var(--q-ok); }
+.ins-gauge.q-poor .ins-gauge-fill { stroke: var(--q-poor); }
+.rd-cpuvote { cursor: pointer; font-size: 11px; opacity: .55; }
+.rd-cpuvote:hover { opacity: 1; }
+.rd-cards { display: flex; flex-wrap: wrap; gap: 8px; }
 .rd-card {
   flex: 0 0 92px; /* uniform — no stretching when the row wraps */
-  background: var(--bg-secondary); border-radius: 8px; overflow: hidden;
-  text-align: center; padding-bottom: 8px;
+  background: rgba(0, 0, 0, .28); border: none; border-radius: 6px; overflow: hidden;
+  text-align: center; padding-bottom: 8px; /* recessed into the hero, no outline */
 }
 .rd-bar { height: 3px; background: var(--bg-tertiary); }
 .rd-bar-fill { display: block; height: 100%; background: currentColor; }
@@ -1798,7 +1821,7 @@ tr.row-detail > td { background: var(--bg-tertiary); padding: 0; }
 
 /* ---- Settings ---- */
 /* masonry-style columns: cards keep natural heights, wide windows get two columns */
-.settings-grid { columns: 2 360px; column-gap: 12px; max-width: 1100px; }
+.settings-grid { columns: 2 360px; column-gap: 12px; }
 .settings-section {
   background: var(--bg-secondary); border-radius: 8px;
   padding: 14px 16px; margin-bottom: 12px;
@@ -2798,6 +2821,63 @@ body.dev-mode .scd-hiddenrow { display: block; opacity: .55; }
 .scd-catitems { display: flex; flex-direction: column; gap: 3px; margin: 2px 0 6px 18px;
   border-left: 2px solid var(--border); padding-left: 10px; }
 
+.bell-item-alerts { cursor: pointer; }
+.bell-item-alerts:hover { background: var(--border); }
+.bell-item-alerts .bell-item-msg i { color: var(--q-accept); margin-right: 4px; }
+
+/* app-wide unseen-alerts nag bar */
+.ann-nagbar { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; padding: 9px 14px;
+  background: rgba(233, 180, 69, .1); border: 1px solid var(--q-accept); border-radius: 8px;
+  cursor: pointer; font-size: 13px; }
+.ann-nagbar i.fa-bullhorn { color: var(--q-accept); }
+.ann-nagtext { color: var(--text-hover); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ann-naggo { color: var(--q-accept); font-weight: 600; white-space: nowrap; margin-left: auto; }
+.ann-nagbar .btn { flex: 0 0 auto; }
+
+/* community notes (resources + schematics detail pages) */
+.cmt-section { margin-top: 0; background: var(--bg-secondary); border-radius: 0 10px 10px 10px;
+  padding: 14px 18px; } /* flush under the tab row, like the data table */
+.cmt-head { font-size: 12px; font-weight: 700; color: var(--text-hover); text-transform: uppercase;
+  letter-spacing: .05em; margin-bottom: 10px; }
+.cmt-head .settings-sub { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.cmt-compose { margin-bottom: 14px; }
+.cmt-input { width: 100%; max-width: none; resize: none; overflow: hidden; min-height: 54px; }
+.cmt-actions { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.cmt-actions .cmt-post { margin-left: auto; }
+.cmt-attached { font-size: 12px; color: var(--text-muted); }
+.cmt-attached a { color: var(--text-muted); cursor: pointer; margin-left: 3px; }
+.cmt-item { border-top: 1px solid var(--border); padding: 10px 0; }
+.cmt-meta { font-size: 12px; color: var(--text-muted); margin-bottom: 3px; }
+.cmt-meta b { color: var(--text-hover); }
+.cmt-when { margin-left: 6px; }
+.cmt-del { color: var(--text-muted); cursor: pointer; margin-left: 8px; }
+.cmt-del:hover { color: var(--accent); }
+.cmt-body { font-size: 13.5px; white-space: pre-wrap; word-break: break-word; }
+.cmt-img { margin-top: 8px; max-width: 220px; max-height: 140px; border-radius: 6px;
+  border: 1px solid var(--border); cursor: zoom-in; display: block; }
+.cmt-img:hover { border-color: var(--text-muted); }
+
+/* The Wall — community graffiti on the About page */
+.wall-compose { display: flex; gap: 8px; margin-bottom: 12px; }
+.wall-compose input { flex: 1; max-width: none; } /* beat the global filter-input cap */
+.wall-posts { display: flex; flex-wrap: wrap; gap: 22px 34px; padding: 26px 22px; border-radius: 8px;
+  background:
+    repeating-linear-gradient(0deg, rgba(255,255,255,.025) 0 1px, transparent 1px 22px),
+    repeating-linear-gradient(90deg, rgba(255,255,255,.02) 0 1px, transparent 1px 46px),
+    var(--bg-primary); /* faint blockwork = duracrete wall */
+  min-height: 240px; align-content: flex-start; }
+.wall-tag { max-width: 440px; padding: 4px 8px;
+  font-family: 'Bradley Hand', 'Segoe Print', 'Comic Sans MS', cursive; }
+.wall-msg { color: var(--wc); font-weight: 700; line-height: 1.3; letter-spacing: .2px;
+  /* readable first: crisp text, the "spray" is a soft halo well behind it */
+  text-shadow: 0 2px 2px rgba(0, 0, 0, .8), 0 0 18px color-mix(in srgb, var(--wc) 35%, transparent);
+  word-break: break-word; }
+.wall-sig { font-size: 12.5px; color: var(--text-muted); margin-top: 4px;
+  font-family: inherit; }
+.wall-when { opacity: .7; }
+.wall-del { color: var(--text-muted); cursor: pointer; margin-left: 4px; }
+.wall-del:hover { color: var(--text-hover); }
+
 /* floating proof-screenshot windows — side-by-side review (snickerfritz) */
 .sb-shotwin { position: fixed; width: min(46vw, 760px); background: var(--bg-card, #1c1f26);
   border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 12px 40px rgba(0, 0, 0, .55);
@@ -2813,6 +2893,7 @@ body.dev-mode .scd-hiddenrow { display: block; opacity: .55; }
 
 /* network debug log window (Settings → Troubleshooting) */
 .netlog-win { min-width: 380px; }
+.netlog-win [data-netpause] { margin-left: auto; } /* control cluster floats right like every other window bar */
 .netlog-body { font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .netlog-row { display: flex; align-items: center; gap: 8px; padding: 5px 10px; cursor: pointer;
   border-bottom: 1px solid var(--border); white-space: nowrap; }
@@ -2874,3 +2955,10 @@ body.dev-mode .scd-hiddenrow { display: block; opacity: .55; }
 .sb-model-preview { width: 300px; height: 220px; }
 .sb-model-preview model-viewer { width: 100%; height: 100%; background: transparent; }
 .scd-slotlabel { color: var(--text-muted); font-size: 12px; }
+
+/* resource hero: planet chips read as metadata, not a rainbow */
+.rd-herofoot .rd-planet { font-size: 9.5px; padding: 1px 7px; font-weight: 600; opacity: .8; border-radius: 4px;
+  margin-right: 5px; }
+.rd-herofoot .rd-planet:last-child { margin-right: 0; }
+.rd-herofoot .rd-planets { display: inline-flex; align-items: center; gap: 0; }
+.rd-herofoot .rd-planets-label { font-size: 11.5px; color: var(--text-muted); margin-right: 7px; }

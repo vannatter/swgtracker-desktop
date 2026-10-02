@@ -6,7 +6,7 @@
   <title>SWG Tracker Desktop</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.1/css/all.min.css">
-  <link rel="stylesheet" href="css/app.css?v=20260929e">
+  <link rel="stylesheet" href="css/app.css?v=20261002i">
 </head>
 <body>
   <!-- Header -->
@@ -51,7 +51,8 @@
         <li class="nav-item" data-page="factories"><i class="fa-solid fa-industry"></i> Factories
           <span id="nav-fac-pill" class="nav-pill" title="Finished runs ready to collect" hidden></span></li>
         <li class="nav-item" data-page="notes"><i class="fa-solid fa-note-sticky"></i> Notes</li>
-        <li class="nav-item" data-page="alerts"><i class="fa-solid fa-bell"></i> Spawn Alerts</li>
+        <li class="nav-item" data-page="alerts"><i class="fa-solid fa-bell"></i> Spawn Alerts
+          <span id="nav-alerts-pill" class="nav-pill" title="Spawn alert matches you haven't seen" hidden></span></li>
         <li class="nav-item" data-page="monitor"><i class="fa-solid fa-envelope"></i> Mail</li>
         <li class="nav-item" data-page="lab"><i class="fa-solid fa-flask"></i> Laboratory</li>
         <li class="nav-item" data-page="scanner"><i class="fa-solid fa-expand"></i> Scanner</li>
@@ -83,6 +84,13 @@
 
     <!-- Content -->
     <main class="app-content">
+      <!-- unseen spawn-alert nag: app-wide, dismissible, click-through to the list -->
+      <div id="ann-nagbar" class="ann-nagbar" hidden>
+        <i class="fa-solid fa-bullhorn"></i>
+        <span id="ann-nagtext" class="ann-nagtext"></span>
+        <span class="ann-naggo">View them <i class="fa-solid fa-arrow-right"></i></span>
+        <button class="btn btn-icon" id="ann-naghide" title="Hide until new matches arrive"><i class="fa-solid fa-xmark"></i></button>
+      </div>
       <!-- Resources page -->
       <section id="page-resources" class="page active">
         <div class="page-head">
@@ -147,15 +155,23 @@
                     title="Disable a bad/bogus resource — hides it for everyone (recoverable, nothing is deleted)"><i class="fa-solid fa-ban"></i> Disable</button>
             <button id="rd-wish" class="btn btn-sm btn-outline-secondary" hidden><i class="fa-regular fa-heart"></i> Wishlist</button>
             <button id="rd-add" class="btn btn-sm btn-accent" hidden><i class="fa-solid fa-plus"></i> Add to Stockpile</button>
+            <button id="rd-refresh" class="btn btn-icon" title="Refresh this resource"><i class="fa-solid fa-rotate-right"></i></button>
           </span>
         </div>
 
-        <div class="rd-cards" id="rd-cards"></div>
-        <div class="rd-subrow">
-          <span id="rd-meta" class="rd-scoreline"></span>
-          <span id="rd-scoreline" class="rd-scoreline"></span>
-          <span class="rd-planets" id="rd-planets"></span>
-          <span class="rd-planets" id="rd-stktags"></span>
+        <div class="rd-hero">
+          <div class="rd-hero-left" title="Score — demand-weighted quality, 0–100">
+            <div id="rd-gauge" class="rd-gauge"></div>
+            <div id="rd-scoreline" class="rd-rankline"></div>
+          </div>
+          <div class="rd-hero-right">
+            <div class="rd-cards" id="rd-cards"></div>
+            <div class="rd-herofoot">
+              <span id="rd-meta" class="rd-scoreline"></span>
+              <span class="rd-planets" id="rd-planets"></span>
+              <span class="rd-planets" id="rd-stktags"></span>
+            </div>
+          </div>
         </div>
 
         <!-- Tabs mirror the site's resource page: Top Uses / Other <type> / Related / Used In -->
@@ -169,6 +185,7 @@
           <div id="rd-empty" class="grid-empty" hidden></div>
           <div id="rd-loading" class="grid-loading" hidden><span class="spinner"></span> Loading…</div>
         </div>
+        <div id="rd-comments" class="cmt-section" hidden></div>
       </section>
 
       <!-- Schematics page -->
@@ -256,6 +273,7 @@
         <ul class="scd-tabs" id="scd-tabs">
           <li><button type="button" class="scd-tab" data-tab="current">Current Resources</button></li>
           <li><button type="button" class="scd-tab active" data-tab="best">Best Resources</button></li>
+          <li><button type="button" class="scd-tab" data-tab="notes"><i class="fa-solid fa-comment"></i> Notes</button></li>
         </ul>
 
         <div class="table-wrap scd-table-wrap">
@@ -265,6 +283,7 @@
           </table>
           <div id="scd-loading" class="grid-loading" hidden><span class="spinner"></span> Loading…</div>
         </div>
+        <div id="scd-comments" class="cmt-section" hidden></div>
       </section>
 
       <!-- Stockpile page -->
@@ -274,7 +293,7 @@
           <i class="fa-solid fa-circle-info info-tip"
              title="Click a stock number to edit it. Changes push to swgtracker.com immediately."></i>
           <input id="stk-search" type="text" class="form-control filter-input head-search" placeholder="Search stockpile...">
-          <button id="stk-new-bucket" class="btn btn-sm btn-accent" title="Create a folder — then drag resources into it to organize your stockpile"><i class="fa-solid fa-folder-plus"></i> New Folder</button>
+          <button id="stk-new-bucket" class="btn btn-sm btn-outline-secondary" title="Create a group — then drag resources into it to organize your stockpile"><i class="fa-solid fa-folder-plus"></i> New Group</button>
           <button class="btn btn-icon" data-refresh="stockpile" title="Sync with server"><i class="fa-solid fa-rotate-right"></i></button>
         </div>
 
@@ -1027,6 +1046,16 @@
               <div class="set-ds-line"><span class="set-ds-label">Interface</span><span id="about-ui">—</span></div>
               <div class="set-ds-line"><span class="set-ds-label">Navigate</span><span id="about-nav-keys">—</span></div>
             </div>
+          </div>
+
+          <div class="settings-section about-card" id="about-wall-card">
+            <h2>The Wall <span class="settings-sub">graffiti for the galaxy — leave a mark for your fellow crafters, one tag a day, signed by you</span></h2>
+            <div class="wall-compose">
+              <input id="wall-input" type="text" class="form-control filter-input" maxlength="200"
+                     placeholder="Spray something… (200 chars, visible to every app user)" autocomplete="off">
+              <button id="wall-spray" class="btn btn-sm btn-accent"><i class="fa-solid fa-spray-can"></i> Tag it</button>
+            </div>
+            <div id="wall-posts" class="wall-posts"><span class="stat_off">Loading the wall…</span></div>
           </div>
 
           <div class="settings-section about-card">
@@ -2163,29 +2192,29 @@
   </div>
 
   <!-- Classic scripts sharing one top-level scope; app.js boots last. -->
-  <script src="js/class_caps.js?v=20260929e"></script>
-  <script src="js/shared.js?v=20260929e"></script>
-  <script src="js/help.js?v=20260929e"></script>
-  <script src="js/resources.js?v=20260929e"></script>
-  <script src="js/resource.js?v=20260929e"></script>
-  <script src="js/schematics.js?v=20260929e"></script>
-  <script src="js/stockpile.js?v=20260929e"></script>
-  <script src="js/wishlist.js?v=20260929e"></script>
-  <script src="js/myschematics.js?v=20260929e"></script>
-  <script src="js/inventory.js?v=20260929e"></script>
-  <script src="js/sales.js?v=20260929e"></script>
-  <script src="js/insights.js?v=20260929e"></script>
-  <script src="js/purchases.js?v=20260929e"></script>
-  <script src="js/harvesters.js?v=20260929e"></script>
-  <script src="js/factories.js?v=20260929e"></script>
-  <script src="js/customers.js?v=20260929e"></script>
-  <script src="js/characters.js?v=20260929e"></script>
-  <script src="js/settings.js?v=20260929e"></script>
-  <script src="js/alerts.js?v=20260929e"></script>\n  <script src="js/lab.js?v=20260929e"></script>
-  <script src="js/mail.js?v=20260929e"></script>
-  <script src="js/notes.js?v=20260929e"></script>
-  <script src="js/schembuilder.js?v=20260929e"></script>
-  <script src="js/scanner.js?v=20260929e"></script>
-  <script src="js/app.js?v=20260929e"></script>
+  <script src="js/class_caps.js?v=20261002i"></script>
+  <script src="js/shared.js?v=20261002i"></script>
+  <script src="js/help.js?v=20261002i"></script>
+  <script src="js/resources.js?v=20261002i"></script>
+  <script src="js/resource.js?v=20261002i"></script>
+  <script src="js/schematics.js?v=20261002i"></script>
+  <script src="js/stockpile.js?v=20261002i"></script>
+  <script src="js/wishlist.js?v=20261002i"></script>
+  <script src="js/myschematics.js?v=20261002i"></script>
+  <script src="js/inventory.js?v=20261002i"></script>
+  <script src="js/sales.js?v=20261002i"></script>
+  <script src="js/insights.js?v=20261002i"></script>
+  <script src="js/purchases.js?v=20261002i"></script>
+  <script src="js/harvesters.js?v=20261002i"></script>
+  <script src="js/factories.js?v=20261002i"></script>
+  <script src="js/customers.js?v=20261002i"></script>
+  <script src="js/characters.js?v=20261002i"></script>
+  <script src="js/settings.js?v=20261002i"></script>
+  <script src="js/alerts.js?v=20261002i"></script>\n  <script src="js/lab.js?v=20261002i"></script>
+  <script src="js/mail.js?v=20261002i"></script>
+  <script src="js/notes.js?v=20261002i"></script>
+  <script src="js/schembuilder.js?v=20261002i"></script>
+  <script src="js/scanner.js?v=20261002i"></script>
+  <script src="js/app.js?v=20261002i"></script>
 </body>
 </html>

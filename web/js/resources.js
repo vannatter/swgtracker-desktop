@@ -684,7 +684,10 @@ function initResources() {
     if (e.target.closest('[data-savebm]')) { openSaveDialog(); return; }
     const btn = e.target.closest('[data-clear]');
     if (btn) { clearResFilter(btn.dataset.clear, btn.dataset.i != null ? parseInt(btn.dataset.i, 10) : null); return; }
-    if (e.target.closest('.res-pill-status')) toggleFilterMenu(true); // jump to the status controls
+    if (e.target.closest('.res-pill-status')) {
+      e.stopPropagation(); // the document click-away would close the menu this same click just opened
+      toggleFilterMenu(true); // jump to the status controls
+    }
   });
 
   // Save-search dialog

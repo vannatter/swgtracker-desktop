@@ -180,12 +180,131 @@ window.addEventListener('unhandledrejection', (e) => {
   // WebKit stacks don't include the message line (V8's do) — log both
   try { window.pywebview?.api?.log_js('error', `unhandled rejection: ${(r && r.message) || ''} :: ${(r && r.stack) || r}`); } catch (_) { /* ignore */ }
 });
+// Draggable cards/rows (factories, harvesters, inventory, …) vs text
+// selection: a mouse-drag inside an input tried to MOVE the card instead of
+// selecting text (Danvar/Eponine). Pressing inside any editable field
+// disarms the ancestor's draggable until the mouse releases.
+document.addEventListener('mousedown', (e) => {
+  if (!e.target.closest('input, textarea, select, [contenteditable="true"]')) return;
+  const drag = e.target.closest('[draggable="true"]');
+  if (!drag) return;
+  drag.setAttribute('draggable', 'false');
+  const restore = () => {
+    drag.setAttribute('draggable', 'true');
+    document.removeEventListener('mouseup', restore);
+  };
+  document.addEventListener('mouseup', restore);
+}, true);
+
 const $ = (sel) => document.querySelector(sel);
 const safeInt = (v) => { const n = parseInt(v, 10); return Number.isFinite(n) ? n : 0; };
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+// ---- community notes on resources & schematics (api/comments.php) ---------
+// One component, two mounts (#rd-comments / #scd-comments): field reports,
+// tips, and photos, attributed and self-deletable. Photos ride the same
+// shrink-to-JPEG + data-URL path the proof screenshots use, and open in the
+// floating compare windows.
+function cmtMount(hostSel, kind, id) {
+  const host = document.querySelector(hostSel);
+  if (!host) return;
+  host.dataset.kind = kind;
+  host.dataset.id = String(id);
+  if (!host.dataset.wired) {
+    host.dataset.wired = '1';
+    host.innerHTML = `
+      <div class="cmt-head">Community notes <span class="settings-sub">field reports, tips, photos — visible to every app user</span></div>
+      <div class="cmt-compose">
+        <textarea class="form-control filter-input cmt-input" rows="2" maxlength="1000" placeholder="Leave a note for fellow crafters…"></textarea>
+        <div class="cmt-actions">
+          <input type="file" class="cmt-file" accept="image/png,image/jpeg,image/webp" hidden>
+          <button class="btn btn-sm btn-outline-secondary cmt-attach" title="Attach a photo (screenshot, survey, result)"><i class="fa-solid fa-image"></i> Photo</button>
+          <span class="cmt-attached" hidden></span>
+          <button class="btn btn-sm btn-accent cmt-post"><i class="fa-solid fa-paper-plane"></i> Post</button>
+        </div>
+      </div>
+      <div class="cmt-list"><span class="stat_off">Loading notes…</span></div>`;
+    // the composer grows with the note instead of scrolling inside itself
+    const ta = host.querySelector('.cmt-input');
+    ta.addEventListener('input', () => {
+      ta.style.height = 'auto';
+      ta.style.height = `${Math.min(300, ta.scrollHeight + 2)}px`;
+    });
+    const fileInp = host.querySelector('.cmt-file');
+    host.querySelector('.cmt-attach').addEventListener('click', () => fileInp.click());
+    fileInp.addEventListener('change', async () => {
+      const f = fileInp.files && fileInp.files[0];
+      fileInp.value = '';
+      if (!f) return;
+      host._img = typeof sbShrinkImage === 'function' ? await sbShrinkImage(f) : null;
+      const chip = host.querySelector('.cmt-attached');
+      chip.hidden = !host._img;
+      if (host._img) chip.innerHTML = '<i class="fa-solid fa-paperclip"></i> photo attached <a role="button" class="cmt-unattach" title="Remove"><i class="fa-solid fa-xmark"></i></a>';
+    });
+    host.addEventListener('click', async (e) => {
+      if (e.target.closest('.cmt-unattach')) {
+        host._img = null;
+        host.querySelector('.cmt-attached').hidden = true;
+        return;
+      }
+      if (e.target.closest('.cmt-post')) {
+        const ta = host.querySelector('.cmt-input');
+        const body = ta.value.trim();
+        if (body.length < 2) { toast('Write something first', false); return; }
+        const btn = host.querySelector('.cmt-post');
+        btn.disabled = true;
+        const res = await apiFetch('POST', 'api/comments.php', {
+          data: { kind: host.dataset.kind, id: safeInt(host.dataset.id), body, image: host._img || undefined },
+        }).catch((err) => ({ ok: false, error: String(err) }));
+        btn.disabled = false;
+        if (!res.ok) { toast(res.error || 'Posting failed — site update pending?', false); return; }
+        ta.value = '';
+        host._img = null;
+        host.querySelector('.cmt-attached').hidden = true;
+        toast('Posted — thanks for the field report');
+        cmtLoad(host);
+        return;
+      }
+      const del = e.target.closest('[data-cmtdel]');
+      if (del) {
+        if (!confirmArm(del, 'Click again to delete')) return;
+        const res = await apiFetch('DELETE', `api/comments.php?id=${safeInt(del.dataset.cmtdel)}`)
+          .catch((err) => ({ ok: false, error: String(err) }));
+        if (res.ok) { toast('Note removed'); cmtLoad(host); }
+        return;
+      }
+      const img = e.target.closest('[data-cmtimg]');
+      if (img && typeof sbShowShot === 'function') sbShowShot(img.dataset.cmtimg);
+    });
+  }
+  cmtLoad(host);
+}
+
+async function cmtLoad(host) {
+  const wantId = host.dataset.id;
+  const res = await apiFetch('GET', 'api/comments.php',
+    { params: { kind: host.dataset.kind, id: wantId } }).catch((e) => ({ ok: false, error: String(e) }));
+  if (host.dataset.id !== wantId) return; // navigated to another entity meanwhile
+  const list = host.querySelector('.cmt-list');
+  if (!list) return;
+  if (!res.ok) {
+    list.innerHTML = '<span class="stat_off">Notes aren\'t available yet — site update pending.</span>';
+    return;
+  }
+  const rows = (res.data && res.data.comments) || [];
+  list.innerHTML = rows.length ? rows.map((c) => `
+    <div class="cmt-item">
+      <div class="cmt-meta"><b>${escapeHtml(c.by)}</b> <span class="cmt-when">${fmtAgoTip(c.at)}</span>
+        ${c.mine ? `<a role="button" class="cmt-del" data-cmtdel="${c.id}" title="Delete your note"><i class="fa-solid fa-trash-can"></i></a>` : ''}</div>
+      <div class="cmt-body">${escapeHtml(c.body)}</div>
+      ${c.image ? `<img class="cmt-img" src="https://swgtracker.com${escapeHtml(c.image)}" loading="lazy"
+         data-cmtimg="${escapeHtml(c.image)}" title="Click to open in a movable window">` : ''}
+    </div>`).join('')
+    : '<span class="stat_off">No notes yet — drop the first field report.</span>';
 }
 
 // ---- account-level preferences (api/prefs.php, synced server-side so the

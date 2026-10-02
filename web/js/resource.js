@@ -99,15 +99,25 @@ function renderResourcePage(data) {
 
   $('#rd-meta').innerHTML = escapeHtml(rdAgeText(r));
 
-  // Stat cards: eCPU, Score, then non-zero stats (name lives in the breadcrumb)
+  // Score gets the scorecard's speedometer gauge; eCPU keeps its tiny card
+  // but grows the site's up/down vote arrows; stats stay as tiny cards
+  const score = safeInt(r.score ?? r.value_rating); // 0–100, already a percent
+  insGaugeShow($('#rd-gauge'), score, qualityClass(score));
+  $('#rd-gauge').insertAdjacentHTML('beforeend', '<div class="rd-gauge-label">Score</div>');
   const cards = [];
   // site rules (colorCodeCPU/pctTitle): tiers at 15/9/5/3/1, bar scaled to /40
   const cpu = ecpuClamp(r.cpu, rdIsActive(r), String(r.planet_mustafar ?? '0') === '1');
   const cpuCls = cpu >= 15 ? 'q-great' : cpu >= 9 ? 'q-good' : cpu >= 5 ? 'q-fair'
     : cpu >= 3 ? 'q-ok' : cpu >= 1 ? 'q-poor' : 'rd-muted';
-  cards.push(rdCardHtml(cpu || '—', 'eCPU', (cpu / 40) * 100, cpuCls));
-  const score = safeInt(r.score ?? r.value_rating); // 0–100, already a percent
-  cards.push(rdCardHtml(score, 'Score', score, qualityClass(score)));
+  cards.push(`<div class="rd-card rd-card-cpu">
+    <div class="rd-bar"><span class="rd-bar-fill ${cpuCls}" style="width:${Math.max(0, Math.min(100, (cpu / 40) * 100))}%"></span></div>
+    <div class="rd-value ${cpuCls}">
+      <i class="fa-solid fa-arrow-up rd-cpuvote" data-cpuvote="up" title="eCPU feels too low — vote it up"></i>
+      <span id="rd-cpu-val">${cpu || '—'}</span>
+      <i class="fa-solid fa-arrow-down rd-cpuvote" data-cpuvote="down" title="eCPU feels too high — vote it down"></i>
+    </div>
+    <div class="rd-label">eCPU</div>
+  </div>`);
   RD_STATS.forEach((f) => {
     const v = safeInt(r[f]);
     if (v <= 0) return;
@@ -119,9 +129,9 @@ function renderResourcePage(data) {
   if (rating > 0) cards.push(rdCardHtml(rating, 'Rating', rating / 10, qualityClass(rating / 10)));
   $('#rd-cards').innerHTML = cards.join('');
 
-  // Score rank context — type name lives in the breadcrumb, keep this short
+  // Score rank context — compact, lives right under the gauge
   $('#rd-scoreline').textContent = safeInt(r.score_rank) > 0
-    ? `Score rank #${r.score_rank} of ${r.score_of} seen (top ${100 - safeInt(r.score_percentile)}%)`
+    ? `#${r.score_rank} of ${r.score_of} · top ${100 - safeInt(r.score_percentile)}%`
     : '';
 
   // Planet badges
@@ -133,7 +143,10 @@ function renderResourcePage(data) {
 
   // your stockpile tags for this resource — click one to open My Stockpile
   // filtered to it (stockpile may still be syncing; fills in when it lands)
+  document.querySelector('.rd-hero').hidden = false; // data's in — show the finished header
   rdRenderStockTags(r.id);
+  cmtMount('#rd-comments', 'resource', r.id); // community notes live in their own tab
+  rdSyncNotesTab();
 
   // Bottom tabs: Top Uses / Other <type> / Related (>800) / Used In
   rdState.data = data;
@@ -201,10 +214,19 @@ function renderRdTabs() {
     ['other', `Other ${escapeHtml(r.type_name || 'Spawns')} (${(d.similar || []).length})`],
     ['related', `Related Schematics (${(d.related_schematics || []).length})`],
     ['used', `Used In (${(d.used_ins || []).length})`],
+    ['notes', '<i class="fa-solid fa-comment"></i> Notes'],
   ];
   $('#rd-tabs').innerHTML = tabs.map(([k, label]) =>
     `<li><button type="button" class="scd-tab ${rdTabState.tab === k ? 'active' : ''}" data-rdtab="${k}">${label}</button></li>`
   ).join('');
+}
+
+// Notes is a PANE tab, not a table tab — swap the table for the notes section
+function rdSyncNotesTab() {
+  const notes = rdTabState.tab === 'notes';
+  document.querySelector('.rd-table-wrap').hidden = notes;
+  if (notes) $('#rd-tabnote').hidden = true; // the rank explainer belongs to the data tabs
+  $('#rd-comments').hidden = !notes;
 }
 
 function renderRdTable() {
@@ -340,7 +362,10 @@ async function openResourcePage(name) {
   $('#rd-edit').hidden = true;
   $('#rd-disable').hidden = true;
   $('#rd-scoreline').textContent = '';
-  $('#rd-cards').innerHTML = `<div class="rd-card"><div class="rd-value">${escapeHtml(name || '')}</div><div class="rd-label">Loading…</div></div>`;
+  // the whole hero hides while loading — a stale gauge + a placeholder card
+  // half-rendered looked broken; it reappears complete with the data
+  document.querySelector('.rd-hero').hidden = true;
+  $('#rd-cards').innerHTML = '';
   $('#rd-planets').innerHTML = '';
   $('#rd-stktags').innerHTML = '';
   $('#rd-tabs').innerHTML = '';
@@ -434,6 +459,35 @@ async function disableResource(btn) {
 }
 
 function initResourcePage() {
+  $('#rd-refresh').addEventListener('click', () => {
+    if (rdState.name) openResourcePage(rdState.name);
+  });
+  // eCPU voting — the site's up/down arrows, ±0.6 with the in-spawn clamp
+  $('#rd-cards').addEventListener('click', async (e) => {
+    const v = e.target.closest('[data-cpuvote]');
+    if (!v) return;
+    const res = await apiFetch('POST', 'api/resources.php', {
+      data: { action: 'cpu', id: safeInt(rdState.id), dir: v.dataset.cpuvote },
+    }).catch((err) => ({ ok: false, error: String(err) }));
+    if (!res.ok) { toast(res.error || 'Vote failed — site update pending?', false); return; }
+    const cpu = safeInt(res.data.cpu);
+    const el = $('#rd-cpu-val');
+    if (el) el.textContent = cpu || '—';
+    // tier color + bar follow the new value live (they only updated on reload)
+    const cls = cpu >= 15 ? 'q-great' : cpu >= 9 ? 'q-good' : cpu >= 5 ? 'q-fair'
+      : cpu >= 3 ? 'q-ok' : cpu >= 1 ? 'q-poor' : 'rd-muted';
+    const card = el?.closest('.rd-card-cpu');
+    if (card) {
+      const val = card.querySelector('.rd-value');
+      if (val) val.className = `rd-value ${cls}`;
+      const fill = card.querySelector('.rd-bar-fill');
+      if (fill) {
+        fill.className = `rd-bar-fill ${cls}`;
+        fill.style.width = `${Math.max(0, Math.min(100, (cpu / 40) * 100))}%`;
+      }
+    }
+    toast(`eCPU nudged ${v.dataset.cpuvote} — now ${cpu}`);
+  });
   $('#rd-edit').addEventListener('click', () => {
     if (!rdState.canEdit) { toast(rdState.lockTip, false); return; }
     openResEditDialog();
@@ -490,7 +544,8 @@ function initResourcePage() {
     rdTabState.sortField = '';
     document.querySelectorAll('#rd-tabs [data-rdtab]').forEach((t) =>
       t.classList.toggle('active', t === tab));
-    renderRdTable();
+    rdSyncNotesTab();
+    if (rdTabState.tab !== 'notes') renderRdTable();
   });
 
   // Column sorting within a tab

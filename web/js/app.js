@@ -264,7 +264,38 @@ function renderBundleChip(pending) {
 }
 
 // ---- About page ----
+// ---- The Wall: community graffiti on the About page -----------------------
+// Deterministic "spray" look per tag: color/tilt/size seeded by post id, so
+// the wall renders identically for everyone and doesn't reshuffle on reload.
+const WALL_COLORS = ['#fe614f', '#45e97e', '#6ea8fe', '#e9b445', '#c792ea', '#4fd6d1', '#ff8fab'];
+function wallTagHtml(p) {
+  const seed = safeInt(p.id);
+  const color = WALL_COLORS[seed % WALL_COLORS.length];
+  const tilt = ((seed * 7) % 9) - 4;          // -4..4deg
+  const size = 18 + ((seed * 13) % 5);        // 18..22px — graffiti reads BIG
+  return `<div class="wall-tag" style="--wc:${color}; transform:rotate(${tilt}deg); font-size:${size}px">
+      <div class="wall-msg">${escapeHtml(p.message)}</div>
+      <div class="wall-sig">— ${escapeHtml(p.by)} <span class="wall-when">${fmtAgoTip(p.at)}</span>
+        ${p.mine ? `<a role="button" class="wall-del" data-walldel="${p.id}" title="Scrub your tag off the wall"><i class="fa-solid fa-eraser"></i></a>` : ''}</div>
+    </div>`;
+}
+async function loadWall() {
+  const host = $('#wall-posts');
+  if (!host) return;
+  let res;
+  try { res = await apiFetch('GET', 'api/wall.php'); } catch (e) { res = { ok: false, error: String(e) }; }
+  if (!res.ok) {
+    host.innerHTML = '<span class="stat_off">The wall isn\'t up yet — site update pending.</span>';
+    return;
+  }
+  const posts = (res.data && res.data.posts) || [];
+  host.innerHTML = posts.length
+    ? posts.map(wallTagHtml).join('')
+    : '<span class="stat_off">Bare duracrete… be the first to tag it.</span>';
+}
+
 async function loadAbout() {
+  loadWall(); // fire-and-forget; the rest of About renders instantly
   // Back/forward keyboard nav — ⌘ on Mac, Ctrl on Windows.
   const isMac = /Mac|iPhone|iPad/i.test(navigator.platform || navigator.userAgent || '');
   const nk = $('#about-nav-keys');
@@ -303,6 +334,30 @@ async function loadAbout() {
 
 function initAbout() {
   $('#about-check').addEventListener('click', checkUpdatesNow);
+  // the Wall: spray a tag / scrub your own
+  const spray = async () => {
+    const inp = $('#wall-input');
+    const msg = inp.value.trim();
+    if (msg.length < 2) { toast('Say something first', false); return; }
+    $('#wall-spray').disabled = true;
+    let res;
+    try { res = await apiFetch('POST', 'api/wall.php', { data: { message: msg } }); }
+    catch (e) { res = { ok: false, error: String(e) }; }
+    $('#wall-spray').disabled = false;
+    if (!res.ok) { toast(res.error || 'The wall rejected that one', false); return; }
+    inp.value = '';
+    toast('Tagged — your mark is up for everyone');
+    loadWall();
+  };
+  $('#wall-spray').addEventListener('click', spray);
+  $('#wall-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') spray(); });
+  $('#wall-posts').addEventListener('click', async (e) => {
+    const del = e.target.closest('[data-walldel]');
+    if (!del) return;
+    const res = await apiFetch('DELETE', `api/wall.php?id=${safeInt(del.dataset.walldel)}`)
+      .catch((err) => ({ ok: false, error: String(err) }));
+    if (res.ok) { toast('Scrubbed'); loadWall(); }
+  });
   $('#page-about').addEventListener('click', async (e) => {
     const ext = e.target.closest('[data-ext]');
     if (ext) { try { await api().open_external(ext.dataset.ext); } catch (_) { /* ignore */ } }
@@ -510,21 +565,31 @@ function renderBroadcastUI() {
   } else {
     bar.hidden = true;
   }
+  // unseen spawn-alert matches ride the bell too — they were invisible
+  // outside the Spawn Alerts tabs
+  const alerts = typeof alState !== 'undefined' ? safeInt(alState.unseenCount) : 0;
   const badge = $('#bell-badge');
-  badge.hidden = !open.length;
-  badge.textContent = open.length;
+  const total = open.length + alerts;
+  badge.hidden = !total;
+  badge.textContent = total;
   renderBellPanel(inbox);
 }
 
 function renderBellPanel(inbox) {
   const items = (inbox || loadBroadcastInbox()).slice().reverse();
-  $('#bell-list').innerHTML = items.length ? items.map((i) => `
+  const alerts = typeof alState !== 'undefined' ? safeInt(alState.unseenCount) : 0;
+  const alertRow = alerts
+    ? `<div class="bell-item unread bell-item-alerts" data-gotoalerts role="button">
+        <div class="bell-item-msg"><i class="fa-solid fa-bullhorn"></i> ${alerts} spawn alert match${alerts === 1 ? '' : 'es'} you haven't seen</div>
+        <span class="bell-item-meta">open Spawn Alerts <i class="fa-solid fa-arrow-right"></i></span>
+      </div>` : '';
+  $('#bell-list').innerHTML = alertRow + (items.length ? items.map((i) => `
     <div class="bell-item ${i.dismissed ? '' : 'unread'}">
       <div class="bell-item-msg">${escapeHtml(i.message)}</div>
       <span class="bell-item-meta">${i.ts ? fmtAgo(i.ts) : ''}</span>
       <button class="bell-item-del" data-delbc="${i.id}" title="Delete"><i class="fa-solid fa-trash"></i></button>
     </div>`).join('')
-    : '<div class="bell-empty">No notifications.</div>';
+    : (alertRow ? '' : '<div class="bell-empty">No notifications.</div>'));
 }
 
 function initBroadcasts() {
@@ -547,6 +612,12 @@ function initBroadcasts() {
     }
   });
   $('#bell-panel').addEventListener('click', (e) => {
+    if (e.target.closest('[data-gotoalerts]')) {
+      $('#bell-panel').hidden = true;
+      showPage('alerts');
+      if (typeof alShowTab === 'function') alShowTab('matches');
+      return;
+    }
     const del = e.target.closest('[data-delbc]');
     if (del) {
       saveBroadcastInbox(loadBroadcastInbox().filter((i) => i.id !== safeInt(del.dataset.delbc)));

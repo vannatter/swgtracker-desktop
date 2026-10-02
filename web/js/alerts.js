@@ -389,12 +389,41 @@ async function alSaveRule() {
 
 let alPollTimer = null;
 
+// ---- app-wide nag bar: unseen matches were buried inside the Spawn Alerts
+// tabs — nobody saw them. Any unseen hit newer than the last dismissal shows
+// a banner at the top of EVERY page; clicking it opens the list, × hides it
+// until something new lands, and marking alerts seen clears it naturally.
+function alUpdateNagBar(unseen, hits) {
+  // surface the count EVERYWHERE it belongs: sidebar pill + bell inbox + nag bar
+  alState.unseenCount = unseen;
+  const pill = $('#nav-alerts-pill');
+  if (pill) {
+    pill.hidden = unseen <= 0;
+    pill.textContent = unseen;
+  }
+  if (typeof renderBroadcastUI === 'function') renderBroadcastUI(); // bell badge rolls it in
+  const bar = $('#ann-nagbar');
+  if (!bar) return;
+  const unseenHits = (hits || []).filter((h) => String(h.seen) !== '1' && String(h.is_backfill) !== '1');
+  const maxUnseen = unseenHits.length ? Math.max(...unseenHits.map((h) => safeInt(h.id))) : 0;
+  const dismissed = safeInt(localStorage.getItem('ann-nag-dismissed'));
+  const show = unseen > 0 && maxUnseen > dismissed;
+  bar.hidden = !show;
+  if (show) {
+    const names = [...new Set(unseenHits.slice(0, 3).map((h) => h.resource_name))].filter(Boolean);
+    $('#ann-nagtext').textContent = `${unseen} spawn alert match${unseen === 1 ? '' : 'es'} you haven't seen`
+      + (names.length ? ` — ${names.join(', ')}${unseen > names.length ? '…' : ''}` : '');
+    bar.dataset.maxid = String(maxUnseen);
+  }
+}
+
 async function alertsPoll() {
   let res;
   try { res = await api().get_alerts({ since_id: alState.lastHitId }); }
   catch (_) { return; }
   if (!res.ok || !res.data) return;
   const hits = res.data.hits || [];
+  alUpdateNagBar(safeInt(res.data.unseen), hits);
   const fresh = hits.filter((h) => safeInt(h.id) > alState.lastHitId
     && String(h.is_backfill) !== '1' && String(h.seen) !== '1');
   if (hits.length) {
@@ -432,6 +461,18 @@ async function startAlertPolling() {
 // ---- Init ----
 
 function initAlerts() {
+  // app-wide unseen-matches nag bar: click = go to the list; × = hide until new ones land
+  $('#ann-nagbar').addEventListener('click', (e) => {
+    const bar = $('#ann-nagbar');
+    if (e.target.closest('#ann-naghide')) {
+      localStorage.setItem('ann-nag-dismissed', bar.dataset.maxid || '0');
+      bar.hidden = true;
+      return;
+    }
+    showPage('alerts');
+    alShowTab('matches');
+    bar.hidden = true; // the visit makes them seen-adjacent; the next poll re-judges
+  });
   fetchCategoryNodes(true).then((nodes) => { // true: down to exact types
     if (nodes) alState.classNodes = nodes;
     if (loadedPages.has('alerts')) renderAlertRules(); // class names now resolvable
@@ -483,6 +524,7 @@ function initAlerts() {
 
   $('#al-seen').addEventListener('click', async () => {
     try { await api().mark_alerts_seen('all'); } catch (_) { /* reload shows truth */ }
+    alUpdateNagBar(0, []); // pill, bell, and nag bar clear instantly, not at the next poll
     loadAlerts();
   });
 

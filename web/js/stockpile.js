@@ -565,7 +565,7 @@ async function stkNewBucket() {
   let res;
   try { res = await api().create_stockpile_bucket('New folder'); }
   catch (e) { toast(String(e), false); return; }
-  if (!res.ok) { toast(res.error || 'Could not create folder', false); return; }
+  if (!res.ok) { toast(res.error || 'Could not create group', false); return; }
   stkState.buckets.push({ id: res.data.id, name: res.data.name, sort_order: res.data.sort_order });
   renderStockpile();
   grpBeginRename('#stk-body', String(res.data.id),

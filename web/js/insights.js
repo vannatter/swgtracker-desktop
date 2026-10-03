@@ -219,10 +219,25 @@ function renderInsCustMsgs(b, editing = false) {
   </div>`;
 }
 
+// Resolve a buyer string (as it appears on a sale) to a scored customer.
+// Sale-buyer strings carry the game mail's space padding ("Orv     Brokk"),
+// which HTML collapses visually but not in the data — so an exact string match
+// misses. Normalize whitespace/case, then fall back to a first-name match.
+function insNormName(s) { return String(s || '').replace(/\s+/g, ' ').trim().toLowerCase(); }
+function insResolveBuyer(name) {
+  const list = insState.custScored || [];
+  const t = insNormName(name);
+  if (!t) return null;
+  const t0 = t.split(' ')[0];
+  return list.find((b) => insNormName(b.name) === t || insNormName(b.full_name) === t)
+    || list.find((b) => insNormName(b.name) === t0 || insNormName(b.full_name) === t0)
+    || list.find((b) => insNormName(b.full_name).split(' ')[0] === t0) || null;
+}
+
 // Open a customer's scorecard from ANYWHERE (e.g. the My Sales buyer cells).
 // The scored list only exists after an Insights load, so fetch it on demand.
 async function insOpenScorecard(name) {
-  if (!(insState.custScored || []).some((b) => b.name === name)) {
+  if (!insResolveBuyer(name)) {
     try {
       const res = await apiFetch('GET', 'api/sales.php',
         { params: { action: 'stats', days: insState.days } });
@@ -232,8 +247,9 @@ async function insOpenScorecard(name) {
       }
     } catch (_) { /* offline — the check below reports it */ }
   }
-  if ((insState.custScored || []).some((b) => b.name === name)) {
-    openInsCustCard(name);
+  const b = insResolveBuyer(name);
+  if (b) {
+    openInsCustCard(b.name);
   } else {
     toast(`No scorecard for ${name} in the current Insights window — try a wider range on Sales Insights`, false);
   }

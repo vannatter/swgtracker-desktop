@@ -194,12 +194,12 @@ body.offline .app-body { height: calc(100vh - 76px); }
   border-radius: 9px; padding: 1px 6px; vertical-align: 1px; }
 
 .nav-item {
-  padding: 6px 18px; /* tightened: the nav is 17 items deep now */
-  font-size: 12.5px;
+  padding: 4px 16px; /* tightened: the nav is 18 items deep now */
+  font-size: 12px;
   color: var(--text-primary);
   cursor: pointer;
   border-left: 2px solid transparent;
-  display: flex; align-items: center; gap: 10px;
+  display: flex; align-items: center; gap: 9px;
   transition: background .12s;
 }
 .nav-item i { width: 16px; text-align: center; color: var(--text-muted); }
@@ -2488,13 +2488,18 @@ tr.row-detail > td { background: var(--bg-tertiary); padding: 0; }
 .page.active > .notes-layout { flex: 1 1 auto; min-height: 0; }
 .notes-layout { display: flex; gap: 14px; align-items: stretch; }
 .notes-side { flex: 0 0 260px; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
-#notes-list { overflow-y: auto; min-height: 0; flex: 1; display: flex; flex-direction: column; gap: 6px; }
-.notes-item { background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; cursor: pointer; }
-.notes-item:hover { border-color: var(--text-muted); }
-.notes-item-sel { border-color: var(--accent); }
+#notes-list { overflow-y: auto; min-height: 0; flex: 1; display: flex; flex-direction: column; gap: 4px; }
+/* match the Macros sidebar: filled accent highlight + left bar, not a thin outline */
+.notes-item { background: var(--bg-card); border: 1px solid transparent; border-left: 3px solid transparent;
+  border-radius: 6px; padding: 7px 10px 7px 9px; cursor: pointer; }
+.notes-item:hover { background: var(--border); }
+.notes-item-sel, .notes-item-sel:hover { background: var(--accent-dark, #7c2d2d); border-left-color: var(--accent); }
 .notes-item-title { color: var(--text-primary); font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .notes-item-sub { color: var(--text-muted); font-size: 11px; display: flex; gap: 8px; margin-top: 2px; }
 .notes-item-char { color: var(--accent-green); }
+.notes-item-sel .notes-item-title { color: #fff; }
+.notes-item-sel .notes-item-sub { color: rgba(255,255,255,.75); }
+.notes-item-sel .notes-item-char { color: #fff; }
 .notes-main { flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
 #notes-editor { display: flex; flex-direction: column; gap: 8px; min-height: 0; flex: 1; }
 #notes-editor[hidden] { display: none; }
@@ -2756,6 +2761,9 @@ model-viewer::part(default-progress-mask) { display: none; }
 .scd-noranks { padding: 22px 16px !important; color: var(--text-muted); font-size: 13.5px; }
 .scd-noranks i { color: var(--q-accept); margin-right: 6px; }
 
+/* exact vs similar, inline in the requires phrasing (Danvar) */
+.scd-match { font-weight: 600; color: var(--text); }
+
 /* community-editable numbers on the schematic detail (site's pencils, app-style):
    dotted underline says "click me"; input swaps in place */
 .scd-eqty { border-bottom: 1px dotted var(--text-muted); cursor: pointer; }
@@ -2833,6 +2841,262 @@ body.dev-mode .scd-hiddenrow { display: block; opacity: .55; }
 .ann-nagtext { color: var(--text-hover); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ann-naggo { color: var(--q-accept); font-weight: 600; white-space: nowrap; margin-left: auto; }
 .ann-nagbar .btn { flex: 0 0 auto; }
+
+/* Macros page — Notes-style sidebar: names left (scroll), detail right */
+#mac-gamewarn { margin-bottom: 14px; flex: 0 0 auto; }
+#mac-gamewarn i { color: var(--q-accept); margin-right: 6px; }
+#mac-empty { flex: 0 0 auto; }
+.page.active > #mac-layout { flex: 1 1 auto; min-height: 0; }
+/* the My-Macros tab body fills the page so the editor/palette scroll internally
+   (the :not([hidden]) guard keeps display:flex from overriding the hidden state) */
+#mac-tab-mine:not([hidden]) { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+.mac-layout { display: flex; gap: 14px; align-items: stretch; flex: 1 1 auto; min-height: 0; }
+.mac-side { flex: 0 0 240px; display: flex; flex-direction: column; min-height: 0; }
+.mac-list { overflow-y: auto; min-height: 0; flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.mac-side-item { display: flex; align-items: center; gap: 8px; background: var(--bg-card);
+  border: 1px solid transparent; border-left: 3px solid transparent; border-radius: 6px;
+  padding: 7px 10px 7px 8px; cursor: pointer; }
+.mac-side-item:hover { background: var(--border); }
+.mac-side-sel, .mac-side-sel:hover { background: var(--accent-dark, #7c2d2d);
+  border-left-color: var(--accent); }
+.mac-side-sel .mac-side-name, .mac-side-sel .mac-side-slot { color: #fff; }
+.mac-side-name { color: var(--text-primary); font-weight: 600; font-size: 13px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+.mac-side-slot { color: var(--text-muted); font-size: 11px; }
+.mac-side-warn { color: #e9b445; font-size: 11px; }
+.mac-side-loop { color: #45e97e; font-size: 11px; }
+.mac-side-empty { color: var(--text-muted); font-size: 12px; padding: 10px 4px; }
+.mac-side-head { display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 0 4px 6px; flex: 0 0 auto; }
+.mac-side-head-label { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--text-muted); }
+.mac-cat-addbtn { width: 26px; height: 26px; }
+.mac-cat { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; border-radius: 6px; }
+.mac-cat-head { display: flex; align-items: center; gap: 7px; padding: 5px 8px; cursor: pointer;
+  color: var(--text-primary); font-size: 12px; font-weight: 600; border-radius: 6px; }
+.mac-cat-head:hover { background: var(--border); }
+.mac-cat-caret { width: 10px; color: var(--text-muted); font-size: 11px; }
+.mac-cat-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mac-cat-count { color: var(--text-muted); font-size: 11px; }
+.mac-cat-del, .mac-cat-edit { color: var(--text-muted); font-size: 12px; opacity: 0; transition: opacity .1s; }
+.mac-cat-head:hover .mac-cat-del, .mac-cat-head:hover .mac-cat-edit { opacity: 1; }
+.mac-cat-del:hover, .mac-cat-edit:hover { color: var(--accent); }
+.mac-cat-tags { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 4px 2px 24px; }
+.mac-cat-drop { color: var(--text-muted); font-size: 11px; font-style: italic; padding: 6px 10px 6px 24px; }
+.mac-cat-over { outline: 1px dashed var(--accent); outline-offset: -1px; background: rgba(124,45,45,.18); border-radius: 6px; }
+.mac-side-item[draggable="true"] { cursor: grab; }
+.mac-dragging { opacity: .45; }
+.mac-main { flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
+.mac-detail { background: var(--bg-secondary); border-radius: 8px; padding: 14px 18px; min-height: 0;
+  overflow: hidden; flex: 1; display: flex; flex-direction: column; }
+.mac-detail-hd { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.mac-detail-name { color: var(--text-hover); font-size: 15px; }
+.mac-detail-cmds { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; line-height: 1.7;
+  color: var(--text-primary); white-space: pre-wrap; word-break: break-word;
+  background: var(--bg-input, #14161c); border: 1px solid var(--border); border-radius: 6px; padding: 12px 14px; }
+/* NOT flex: a text node + inline <b> as flex items would collapse the space
+   between them ("clickNew Macro") — keep it normal inline flow, centered. */
+.mac-none { color: var(--text-muted); font-size: 13px; text-align: center;
+  padding: 48px 24px; line-height: 1.6; }
+
+/* inline editor (right column) — fills the detail panel top to bottom */
+.mac-ed { display: flex; flex-direction: column; gap: 12px; min-height: 0; flex: 1 1 auto; }
+.mac-ed-top { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
+.mac-ed-name { flex: 1; max-width: none; }
+.mac-ed-actions { margin-left: auto; display: inline-flex; gap: 6px; align-items: center; }
+.mac-ed-actions .btn-icon { width: 32px; height: 32px; }
+.mac-ed-split { display: flex; gap: 14px; align-items: stretch; min-height: 0; flex: 1 1 auto; }
+.mac-ed-left { flex: 1 1 60%; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+.mac-ed-palette { flex: 0 0 240px; display: flex; flex-direction: column; min-height: 0;
+  background: var(--bg-input, #14161c); border: 1px solid var(--border); border-radius: 6px; padding: 10px; }
+.mac-pal-head { font-size: 12px; font-weight: 600; color: var(--text-primary); margin-bottom: 8px; flex: 0 0 auto; }
+.mac-pal-search { width: 100%; max-width: none; margin-bottom: 8px; flex: 0 0 auto; }
+.mac-pal-list { flex: 1 1 auto; overflow-y: auto; min-height: 0; display: flex;
+  flex-direction: column; gap: 2px; }
+.mac-pal-item { display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; color: var(--text-primary);
+  padding: 4px 8px; border-radius: 4px; cursor: pointer; }
+.mac-pal-item:hover { background: var(--border); }
+.mac-pal-item .mac-shield { flex: 0 0 auto; }
+.mac-pal-more { font-size: 11px; color: var(--text-muted); padding: 6px 8px; }
+.mac-pal-cmd { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mac-pal-args { color: var(--text-muted); font-size: 11px; }
+/* usage hint + length counter under the command box */
+.mac-usage { font-size: 12px; color: var(--text-muted); background: var(--bg-input, #14161c);
+  border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; line-height: 1.5; }
+.mac-usage code { color: var(--text-primary); font-size: 12px; margin-right: 6px; }
+.mac-ed-footer { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.mac-ed-footer .mac-verdict { flex: 1 1 200px; margin-top: 0; }
+.mac-count { flex: 0 1 auto; font-size: 11.5px; color: var(--text-muted); text-align: right; }
+.mac-count .mac-count-over { color: #e96b6b; }
+.mac-count .mac-count-warn { color: #e9b445; }
+
+/* aliases reuse the macro layout; a couple of alias-specific tweaks */
+.ali-ed-slash { font-family: ui-monospace, Menlo, monospace; font-size: 15px; color: var(--text-muted); flex: 0 0 auto; }
+#ali-list .mac-side-name { flex: 0 0 auto; max-width: 48%; font-family: ui-monospace, Menlo, monospace; }
+.ali-side-cmd { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  text-align: right; font-family: ui-monospace, Menlo, monospace; }
+
+/* ---- Macros page tabs (My Macros | Community) ---- */
+.mac-tabs { display: inline-flex; gap: 2px; background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 8px; padding: 3px; margin-left: 14px; }
+.mac-tab { border: 0; background: transparent; color: var(--text-muted); font-size: 12.5px; font-weight: 600;
+  padding: 5px 14px; border-radius: 6px; cursor: pointer; }
+.mac-tab:hover { color: var(--text-hover); }
+.mac-tab-active { background: var(--accent-dark, #7c2d2d); color: #fff; }
+.mac-head-ctrls { display: inline-flex; align-items: center; gap: 8px; }
+/* don't let the search collapse when the cluster is crowded */
+.mac-head-ctrls .head-search { flex: 0 0 200px; min-width: 0; max-width: none; margin-left: 0; }
+.mac-head-ctrls .info-tip { margin-right: 2px; }
+
+/* ---- Community Macros ---- */
+.btn-xs { padding: 3px 9px; font-size: 11.5px; border-radius: 5px; }
+.cmac-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 12px; }
+.cmac-card { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px;
+  padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.cmac-card-head { display: flex; align-items: center; gap: 10px; }
+.cmac-card-name { flex: 1; min-width: 0; font-weight: 700; color: var(--text-hover); font-size: 14px;
+  font-family: ui-monospace, Menlo, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cmac-vote { display: inline-flex; align-items: center; gap: 5px; background: var(--bg-card);
+  border: 1px solid var(--border); color: var(--text-muted); border-radius: 14px; padding: 2px 10px;
+  font-size: 12px; cursor: pointer; flex: 0 0 auto; }
+.cmac-vote:hover { border-color: var(--accent); color: var(--text-primary); }
+.cmac-voted { background: var(--accent-dark, #7c2d2d); border-color: var(--accent); color: #fff; }
+.cmac-card-desc { font-size: 12.5px; color: var(--text-primary); line-height: 1.5; }
+.cmac-card-cmds { font-family: ui-monospace, Menlo, monospace; font-size: 12px; line-height: 1.5;
+  color: var(--text-muted); background: var(--bg-input, #14161c); border: 1px solid var(--border);
+  border-radius: 6px; padding: 8px 10px; margin: 0; max-height: 140px; overflow: auto; white-space: pre; }
+.cmac-card-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.cmac-chip { font-size: 11px; border-radius: 10px; padding: 2px 9px; border: 1px solid var(--border);
+  color: var(--text-muted); background: var(--bg-card); white-space: nowrap; }
+.cmac-chip-class { color: var(--text-primary); border-color: var(--accent); }
+.cmac-chip-tag { color: var(--text-muted); }
+.cmac-card-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
+  border-top: 1px solid var(--border); padding-top: 8px; margin-top: 2px; }
+.cmac-by { font-size: 11.5px; color: var(--text-muted); }
+.cmac-by b { color: var(--text-primary); font-weight: 600; }
+.cmac-card-actions { display: inline-flex; gap: 6px; align-items: center; }
+/* share form */
+.cmac-form { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px;
+  padding: 16px 18px; margin-bottom: 14px; }
+.cmac-form-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.cmac-form-top h3 { margin: 0; font-size: 15px; font-weight: 700; color: var(--text-hover); }
+.cmac-form-grid { display: flex; flex-direction: column; gap: 12px; }
+.cmac-field { display: flex; flex-direction: column; gap: 5px; }
+.cmac-field > label { font-size: 12px; font-weight: 600; color: var(--text-primary); }
+.cmac-field input, .cmac-field textarea { width: 100%; max-width: none; }
+.cmac-desc-ta { height: 56px !important; resize: vertical; }
+.cmac-cmds-ta { height: 120px !important; resize: vertical; font-family: ui-monospace, Menlo, monospace; font-size: 13px; }
+.cmac-chipset { display: flex; flex-wrap: wrap; gap: 6px; }
+.cmac-chip-toggle { cursor: pointer; }
+.cmac-chip-toggle:hover { border-color: var(--accent); color: var(--text-primary); }
+.cmac-chip-on { background: var(--accent-dark, #7c2d2d); border-color: var(--accent); color: #fff; }
+/* class groups (Combat / Crafting / …) — collapsible, default nested */
+#cmac-f-classes { display: flex; flex-direction: column; gap: 4px; }
+.cmac-classgroup { border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.cmac-classgroup.cmac-cg-open { border-color: var(--accent); }
+.cmac-cg-head { display: flex; align-items: center; gap: 8px; padding: 6px 10px; cursor: pointer; background: var(--bg-card); }
+.cmac-cg-head:hover { background: var(--border); }
+.cmac-cg-caret { width: 10px; color: var(--text-muted); font-size: 11px; }
+.cmac-cg-name { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--text-primary); }
+.cmac-cg-all { border: 1px solid var(--border); background: transparent; color: var(--text-muted);
+  font-size: 10.5px; border-radius: 10px; padding: 1px 9px; cursor: pointer; }
+.cmac-cg-all:hover { border-color: var(--accent); color: var(--text-primary); }
+.cmac-group-some { border-color: var(--accent); color: var(--text-primary); }
+.cmac-group-all { background: var(--accent-dark, #7c2d2d); border-color: var(--accent); color: #fff; }
+.cmac-cg-count { margin-left: auto; font-size: 11px; color: var(--accent-hover); }
+.cmac-classgroup-chips { display: flex; flex-wrap: wrap; gap: 5px; padding: 8px 10px; background: var(--bg-input, #14161c); }
+.cmac-chip-tag i { cursor: pointer; margin-left: 3px; opacity: .7; }
+.cmac-chip-tag i:hover { opacity: 1; color: var(--accent); }
+.cmac-taginput { display: flex; flex-direction: column; gap: 6px; }
+.cmac-chipset-tags:empty { display: none; }
+.cmac-form-actions { display: flex; gap: 8px; margin-top: 14px; }
+/* share / group dialogs (override sp-card's wide default) */
+.cmac-modal-card { width: min(560px, calc(100vw - 80px)); max-width: none; text-align: left; }
+.cmac-modal-card h2 { margin: 0 0 14px; font-size: 17px; font-weight: 700; color: var(--text-hover); }
+.cmac-modal-card .stk-note-actions { margin-top: 16px; }
+.mac-cat-modal-card { width: min(440px, calc(100vw - 80px)); max-width: none; text-align: left; }
+.mac-cat-modal-card h2 { margin: 0 0 14px; font-size: 16px; font-weight: 700; color: var(--text-hover); }
+.mac-cat-modal-card .stk-note-actions { margin-top: 16px; }
+/* bulk selection bar: a divider before destructive actions, and an outline-danger button */
+.inv-selbar-sep { width: 1px; align-self: stretch; margin: 0 2px; background: var(--border); }
+.btn-outline-danger { background: transparent; border: 1px solid #a3434d; color: #e96b6b; }
+.btn-outline-danger:hover { background: rgba(233,107,107,.12); border-color: #e96b6b; color: #ff8a8a; }
+
+/* shared confirm dialog */
+.confirm-card { width: min(420px, calc(100vw - 80px)); max-width: none; text-align: left; }
+.confirm-card h2 { margin: 0 0 8px; font-size: 17px; font-weight: 700; color: var(--text-hover); }
+.confirm-msg { margin: 0; font-size: 13px; line-height: 1.55; color: var(--text-primary); }
+.confirm-card .stk-note-actions { margin-top: 18px; }
+
+/* macro history dialog */
+.mac-hist-card { width: min(640px, calc(100vw - 80px)); max-width: none; text-align: left; }
+.mac-hist-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.mac-hist-head h2 { margin: 0; font-size: 17px; font-weight: 700; color: var(--text-hover); }
+.mac-hist-list { max-height: 52vh; overflow-y: auto; margin-top: 12px; }
+.mac-hist-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.mac-hist-table thead th { text-align: left; font-size: 10.5px; font-weight: 700; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--text-muted); padding: 0 10px 6px; border-bottom: 1px solid var(--border); }
+.mac-hist-table thead th:last-child { text-align: right; }
+.mac-hist-row td { padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.mac-hist-row:hover td { background: var(--bg-card); }
+.mac-hist-when { white-space: nowrap; }
+.mac-hist-ago { color: var(--text-primary); font-weight: 600; }
+.mac-hist-abs { display: block; font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+.mac-hist-latest { font-size: 9.5px; font-weight: 700; color: #45e97e; border: 1px solid #45e97e;
+  border-radius: 8px; padding: 0 6px; margin-left: 2px; vertical-align: middle; }
+.mac-hist-src { display: inline-block; font-size: 11px; border-radius: 8px; padding: 1px 9px;
+  border: 1px solid var(--border); color: var(--text-muted); white-space: nowrap; }
+.mac-hist-src-app { color: var(--accent-hover); border-color: var(--accent); }
+.mac-hist-size { color: var(--text-muted); white-space: nowrap; }
+.mac-hist-actions { text-align: right; white-space: nowrap; }
+.mac-hist-actions .btn { margin-left: 6px; }
+.mac-hist-prevrow td { padding: 0 10px 10px; border-bottom: 1px solid var(--border); }
+.mac-hist-prev { background: var(--bg-input, #14161c); border: 1px solid var(--border); border-radius: 6px;
+  padding: 8px 10px; font-size: 12px; max-height: 180px; overflow: auto; }
+.mac-hist-m { line-height: 1.7; color: var(--text-primary); }
+.mac-hist-m code { color: var(--text-muted); font-size: 11.5px; font-family: ui-monospace, Menlo, monospace; }
+.mac-card { background: var(--bg-secondary); border-radius: 8px; padding: 10px 14px; }
+.mac-hd { display: flex; align-items: center; gap: 10px; }
+.mac-dot { width: 11px; height: 11px; border-radius: 50%; flex: 0 0 auto; border: 1px solid rgba(255,255,255,.25);
+  box-shadow: 0 0 5px rgba(0,0,0,.4); } /* round, so it reads as a color dot not a checkbox */
+.mac-name { color: var(--text-hover); }
+.mac-slot { font-size: 11px; color: var(--text-muted); }
+.mac-actions { margin-left: auto; display: inline-flex; gap: 4px; }
+.mac-actions .btn-icon { width: 30px; height: 30px; } /* match the Spawn Alerts rule-card buttons */
+.mac-badge { font-size: 11px; border-radius: 9px; padding: 2px 9px; border: 1px solid; }
+.mac-badge.mac-ok { border-color: #45e97e; color: #45e97e; }
+.mac-badge.mac-bad { border-color: #e9b445; color: #e9b445; }
+.mac-cmds { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+.mac-cmd { font-size: 11.5px; background: rgba(0,0,0,.3); border-radius: 4px; padding: 1px 7px;
+  color: var(--text-muted); font-family: ui-monospace, Menlo, monospace; }
+.mac-modal-card { width: min(680px, 92vw); max-width: none; text-align: left; padding: 22px 26px;
+  max-height: 90vh; overflow-y: auto; }
+.mac-modal-card h3 { font-size: 17px; font-weight: 700; color: var(--text-hover); margin: 0 0 14px; }
+.mac-namerow { display: flex; gap: 12px; align-items: flex-end; margin-bottom: 12px; }
+.mac-namefield { flex: 1; display: flex; flex-direction: column; }
+.mac-namefield input { width: 100%; max-width: none; }
+.mac-colorfield { display: flex; flex-direction: column; flex: 0 0 auto; }
+.mac-colorpick { width: 48px; height: 38px; padding: 2px; border: 1px solid var(--border);
+  border-radius: 6px; background: var(--bg-input, #14161c); cursor: pointer; }
+.mac-colorpick::-webkit-color-swatch-wrapper { padding: 0; }
+.mac-colorpick::-webkit-color-swatch { border: none; border-radius: 4px; }
+.mac-cmds-label { display: flex; align-items: baseline; gap: 10px; }
+.mac-permlink { font-size: 12px; color: var(--accent-hover); cursor: pointer; }
+.mac-permlink:hover { color: var(--accent); text-decoration: underline; }
+.mac-ta-wrap { position: relative; flex: 1 1 auto; min-height: 0; display: flex; }
+.mac-body-ta { width: 100%; max-width: none; height: 100%; resize: none; min-height: 180px;
+  font-family: ui-monospace, Menlo, monospace; font-size: 13px; line-height: 1.5; }
+.mac-suggest { position: absolute; z-index: 40; left: 0; width: min(360px, 100%);
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.5); max-height: 280px; overflow-y: auto; }
+.mac-shield { color: #45e97e; }
+.mac-shield i { font-size: 10px; }
+.mac-permlist { margin-top: 8px; font-size: 12px; color: var(--text-muted); line-height: 2; }
+.mac-permlist code { margin-right: 5px; }
+.mac-verdict { margin-top: 8px; font-size: 12.5px; min-height: 18px; }
+.mac-verdict.mac-ok { color: #45e97e; }
+.mac-verdict.mac-bad { color: #e9b445; }
 
 /* community notes (resources + schematics detail pages) */
 .cmt-section { margin-top: 0; background: var(--bg-secondary); border-radius: 0 10px 10px 10px;

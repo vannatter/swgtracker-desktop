@@ -19,6 +19,8 @@ const PAGE_LOADERS = {
   inventory: () => loadInventory(),
   alerts: () => loadAlerts(),
   notes: () => loadNotes(),
+  macros: () => loadMacros(),
+  aliases: () => loadAliases(),
   schembuilder: () => loadSchemBuilder(),
   lab: () => loadLab(),
   monitor: () => loadMail(),
@@ -1015,6 +1017,9 @@ async function boot() {
   initScanner();
   initFactories();
   initNotesPage();
+  initMacros();
+  initAliases();
+  initCommunityMacros();
   initSchemBuilder();
   initMyCustomers();
   initDevMode();

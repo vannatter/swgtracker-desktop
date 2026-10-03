@@ -616,6 +616,54 @@ function initStockpile() {
     renderStockpile(`Tagged ${rows.length} resource${rows.length === 1 ? '' : 's'}`);
   });
   $('#stk-bulk-tags').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#stk-bulk-apply').click(); });
+
+  // bulk Remove: strip the entered tag(s) from every selected resource
+  $('#stk-bulk-remove').addEventListener('click', async () => {
+    const drop = $('#stk-bulk-tags').value.split(',').map((t) => t.trim().toLowerCase()).filter(Boolean);
+    if (!drop.length) { toast('Type the tag(s) to remove first', false); return; }
+    const sids = new Set([...stkState.selection].map(String));
+    const rows = stkState.items.filter((i) => sids.has(String(i.stockpile_id)));
+    let failed = 0, touched = 0;
+    for (const i of rows) {
+      const cur = String(i.tags || '').split(',').map((t) => t.trim()).filter(Boolean);
+      const keep = cur.filter((t) => !drop.includes(t.toLowerCase()));
+      if (keep.length === cur.length) continue;
+      const r = await apiFetch('PUT', 'api/stockpile.php',
+        { data: { stockpile_id: safeInt(i.stockpile_id), tags: keep.join(', ') } }).catch(() => ({ ok: false }));
+      if (r.ok) { i.tags = keep.join(', '); touched++; } else failed++;
+    }
+    if (failed) { toast(`${failed} update${failed > 1 ? 's' : ''} failed`, false); return; }
+    $('#stk-bulk-tags').value = '';
+    renderStockpile(touched ? `Removed from ${touched} resource${touched === 1 ? '' : 's'}` : 'None of the selected carry those tags');
+  });
+
+  // bulk Delete: confirm in a dialog, then remove the selected from the stockpile
+  $('#stk-bulk-delete').addEventListener('click', async () => {
+    const sids = [...stkState.selection].map(String);
+    if (!sids.length) return;
+    const n = sids.length;
+    const ok = await confirmDialog({
+      title: `Delete ${n} resource${n === 1 ? '' : 's'}?`,
+      message: `${n === 1 ? 'This resource' : 'These resources'} will be removed from your stockpile. This can't be undone.`,
+      confirmLabel: 'Delete',
+    });
+    if (!ok) return;
+    const rows = stkState.items.filter((i) => sids.includes(String(i.stockpile_id)));
+    let failed = 0;
+    for (const i of rows) {
+      let r; try { r = await api().remove_from_stockpile(i.stockpile_id); } catch (e) { r = { ok: false }; }
+      if (r.ok) {
+        const idx = stkState.items.findIndex((x) => String(x.stockpile_id) === String(i.stockpile_id));
+        if (idx >= 0) stkState.items.splice(idx, 1);
+        stkState.resourceIds.delete(String(i.id));
+      } else failed++;
+    }
+    stkState.selection.clear();
+    stkSyncSelBar();
+    if (typeof refreshAddIcons === 'function') refreshAddIcons();
+    renderStockpile(failed ? `${failed} couldn't be deleted` : `Deleted ${n} resource${n === 1 ? '' : 's'}`);
+  });
+
   $('#stk-sel-clear').addEventListener('click', () => {
     stkState.selection.clear();
     stkSyncSelBar();

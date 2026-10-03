@@ -1537,6 +1537,54 @@ function initMySchematics() {
     renderMysList();
   });
   $('#mys-bulk-tags').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#mys-bulk-apply').click(); });
+
+  // bulk Remove: strip the entered tag(s) from every selected schematic
+  $('#mys-bulk-remove').addEventListener('click', async () => {
+    const drop = $('#mys-bulk-tags').value.split(',').map((t) => t.trim().toLowerCase()).filter(Boolean);
+    if (!drop.length) { toast('Type the tag(s) to remove first', false); return; }
+    const rows = mysState.items.filter((i) => mysState.checked.has(String(i.user_schematic_id)));
+    let failed = 0, touched = 0;
+    for (const i of rows) {
+      const cur = String(i.tags || '').split(',').map((t) => t.trim()).filter(Boolean);
+      const keep = cur.filter((t) => !drop.includes(t.toLowerCase()));
+      if (keep.length === cur.length) continue;
+      const r = await apiFetch('PUT', 'api/my_schematics.php',
+        { data: { user_schematic_id: safeInt(i.user_schematic_id), tags: keep.join(', ') } }).catch(() => ({ ok: false }));
+      if (r.ok) { i.tags = keep.join(', '); touched++; } else failed++;
+    }
+    if (failed) { toast(`${failed} update${failed > 1 ? 's' : ''} failed`, false); return; }
+    toast(touched ? `Removed from ${touched} schematic${touched === 1 ? '' : 's'}` : 'None of the selected carry those tags');
+    $('#mys-bulk-tags').value = '';
+    renderMysList();
+  });
+
+  // bulk Delete: confirm, then remove the selected from My Schematics
+  $('#mys-bulk-delete').addEventListener('click', async () => {
+    const ids = [...mysState.checked].map(String);
+    if (!ids.length) return;
+    const n = ids.length;
+    const ok = await confirmDialog({
+      title: `Remove ${n} schematic${n === 1 ? '' : 's'}?`,
+      message: `${n === 1 ? 'This schematic' : 'These schematics'} will be removed from My Schematics. This can't be undone.`,
+      confirmLabel: 'Remove',
+    });
+    if (!ok) return;
+    const rows = mysState.items.filter((i) => ids.includes(String(i.user_schematic_id)));
+    let failed = 0;
+    for (const i of rows) {
+      let r; try { r = await api().remove_from_my_schematics(i.user_schematic_id); } catch (e) { r = { ok: false }; }
+      if (r.ok) {
+        mysState.items = mysState.items.filter((x) => String(x.user_schematic_id) !== String(i.user_schematic_id));
+      } else failed++;
+    }
+    mysState.schematicIds = new Set(mysState.items.map((i) => String(i.schematic_id)));
+    mysState.checked.clear();
+    refreshMysIcons();
+    if (typeof scdState !== 'undefined' && scdState.id) updateScdMysButton();
+    toast(failed ? `${failed} couldn't be removed` : `Removed ${n} schematic${n === 1 ? '' : 's'}`);
+    loadMySchematics();
+  });
+
   $('#mys-sel-clear').addEventListener('click', () => {
     mysState.checked.clear();
     renderMysList();

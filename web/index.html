@@ -6,7 +6,7 @@
   <title>SWG Tracker Desktop</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.1/css/all.min.css">
-  <link rel="stylesheet" href="css/app.css?v=20261002i">
+  <link rel="stylesheet" href="css/app.css?v=20261003G">
 </head>
 <body>
   <!-- Header -->
@@ -51,6 +51,8 @@
         <li class="nav-item" data-page="factories"><i class="fa-solid fa-industry"></i> Factories
           <span id="nav-fac-pill" class="nav-pill" title="Finished runs ready to collect" hidden></span></li>
         <li class="nav-item" data-page="notes"><i class="fa-solid fa-note-sticky"></i> Notes</li>
+        <li class="nav-item dev-only" data-page="macros" title="Dev preview — in testing"><i class="fa-solid fa-wand-magic-sparkles"></i> Macros <span class="dev-pill">DEV</span></li>
+        <li class="nav-item dev-only" data-page="aliases" title="Dev preview — in testing"><i class="fa-solid fa-terminal"></i> Aliases <span class="dev-pill">DEV</span></li>
         <li class="nav-item" data-page="alerts"><i class="fa-solid fa-bell"></i> Spawn Alerts
           <span id="nav-alerts-pill" class="nav-pill" title="Spawn alert matches you haven't seen" hidden></span></li>
         <li class="nav-item" data-page="monitor"><i class="fa-solid fa-envelope"></i> Mail</li>
@@ -302,8 +304,11 @@
         <div id="stk-selbar" class="inv-selbar" hidden
              title="Comma-separated — added to each selected resource's existing tags, never replacing them">
           <span id="stk-selbar-n" class="inv-selbar-count"></span>
-          <input id="stk-bulk-tags" type="text" class="form-control filter-input inv-bulk-vendor" placeholder="Add tags" autocomplete="off">
+          <input id="stk-bulk-tags" type="text" class="form-control filter-input inv-bulk-vendor" placeholder="Add or remove tags" autocomplete="off">
           <button id="stk-bulk-apply" class="btn btn-sm btn-accent">Apply</button>
+          <button id="stk-bulk-remove" class="btn btn-sm btn-outline-secondary" title="Strip the entered tag(s) from every selected resource">Remove</button>
+          <span class="inv-selbar-sep"></span>
+          <button id="stk-bulk-delete" class="btn btn-sm btn-outline-danger" title="Delete the selected resources from your stockpile"><i class="fa-solid fa-trash-can"></i> Delete</button>
           <button id="stk-sel-clear" class="btn btn-icon" title="Clear selection"><i class="fa-solid fa-xmark"></i></button>
         </div>
 
@@ -337,8 +342,11 @@
         <div id="mys-selbar" class="inv-selbar" hidden
              title="Comma-separated — added to each selected schematic's existing tags, never replacing them">
           <span id="mys-selbar-n" class="inv-selbar-count"></span>
-          <input id="mys-bulk-tags" type="text" class="form-control filter-input inv-bulk-vendor" placeholder="Add tags" autocomplete="off">
+          <input id="mys-bulk-tags" type="text" class="form-control filter-input inv-bulk-vendor" placeholder="Add or remove tags" autocomplete="off">
           <button id="mys-bulk-apply" class="btn btn-sm btn-accent">Apply</button>
+          <button id="mys-bulk-remove" class="btn btn-sm btn-outline-secondary" title="Strip the entered tag(s) from every selected schematic">Remove</button>
+          <span class="inv-selbar-sep"></span>
+          <button id="mys-bulk-delete" class="btn btn-sm btn-outline-danger" title="Remove the selected schematics from My Schematics"><i class="fa-solid fa-trash-can"></i> Delete</button>
           <button id="mys-sel-clear" class="btn btn-icon" title="Clear selection"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <div class="table-wrap">
@@ -396,8 +404,11 @@
         <div id="wish-selbar" class="inv-selbar" hidden
              title="Comma-separated — added to each selected resource's existing tags, never replacing them">
           <span id="wish-selbar-n" class="inv-selbar-count"></span>
-          <input id="wish-bulk-tags" type="text" class="form-control filter-input inv-bulk-vendor" placeholder="Add tags" autocomplete="off">
+          <input id="wish-bulk-tags" type="text" class="form-control filter-input inv-bulk-vendor" placeholder="Add or remove tags" autocomplete="off">
           <button id="wish-bulk-apply" class="btn btn-sm btn-accent">Apply</button>
+          <button id="wish-bulk-remove" class="btn btn-sm btn-outline-secondary" title="Strip the entered tag(s) from every selected resource">Remove</button>
+          <span class="inv-selbar-sep"></span>
+          <button id="wish-bulk-delete" class="btn btn-sm btn-outline-danger" title="Remove the selected resources from your wishlist"><i class="fa-solid fa-trash-can"></i> Delete</button>
           <button id="wish-sel-clear" class="btn btn-icon" title="Clear selection"><i class="fa-solid fa-xmark"></i></button>
         </div>
 
@@ -884,6 +895,8 @@
           <input id="inv-bulk-tags" type="text" class="form-control filter-input inv-bulk-vendor" placeholder="Add tags" autocomplete="off"
                  title="Comma-separated — added to each selected item's existing tags, never replacing them">
           <button id="inv-bulk-apply" class="btn btn-sm btn-accent">Apply</button>
+          <span class="inv-selbar-sep"></span>
+          <button id="inv-bulk-delete" class="btn btn-sm btn-outline-danger" title="Delete the selected items from your inventory"><i class="fa-solid fa-trash-can"></i> Delete</button>
           <button id="inv-sel-clear" class="btn btn-icon" title="Clear selection"><i class="fa-solid fa-xmark"></i></button>
         </div>
 
@@ -1298,6 +1311,151 @@
         </div>
       </section>
 
+      <section id="page-macros" class="page">
+        <div class="page-head">
+          <h1>Macros</h1>
+          <div class="mac-tabs">
+            <button class="mac-tab mac-tab-active" data-mactab="mine">My Macros</button>
+            <button class="mac-tab" data-mactab="community">Community</button>
+          </div>
+          <span id="mac-head-mine" class="mac-head-ctrls head-right">
+            <i class="fa-solid fa-circle-info info-tip"
+               title="Your characters' in-game macros (macros.txt, next to their notes file). Edit with a real editor, copy macros between characters, and see which ones Restoration's anti-AFK will dump. The game reads the file at login and rewrites it at logout — make changes while that character is logged out."></i>
+            <input id="mac-search" type="text" class="form-control filter-input head-search" placeholder="Search macros..."
+                   title="Searches names and commands" autocomplete="off">
+            <select id="mac-tagfilter" class="form-select filter-select" title="Filter groups by tag" hidden></select>
+            <select id="mac-file-pick" class="form-select filter-select"></select>
+            <button id="mac-add" class="btn btn-sm btn-accent"><i class="fa-solid fa-plus"></i> New Macro</button>
+            <button id="mac-history" class="btn btn-icon" title="Version history — roll this character's macros.txt back to an earlier snapshot"><i class="fa-solid fa-clock-rotate-left"></i></button>
+            <button id="mac-reload" class="btn btn-icon" title="Re-read the file from disk"><i class="fa-solid fa-rotate-right"></i></button>
+          </span>
+          <span id="mac-head-community" class="mac-head-ctrls head-right" hidden>
+            <i class="fa-solid fa-circle-info info-tip"
+               title="A shared library of in-game macros. Browse by class or tag, upvote the good ones, and clone any of them straight into your own macros.txt. Share your own so others can use them — you get credited."></i>
+            <input id="cmac-search" type="text" class="form-control filter-input head-search" placeholder="Search macros..."
+                   title="Searches names, descriptions, tags and commands" autocomplete="off">
+            <select id="cmac-class" class="form-select filter-select" title="Filter by class"></select>
+            <select id="cmac-sort" class="form-select filter-select" title="Sort order">
+              <option value="new">Newest</option>
+              <option value="top">Top rated</option>
+            </select>
+            <button id="cmac-share" class="btn btn-sm btn-accent"><i class="fa-solid fa-share-nodes"></i> Share a Macro</button>
+            <button id="cmac-reload" class="btn btn-icon" title="Refresh the library"><i class="fa-solid fa-rotate-right"></i></button>
+          </span>
+        </div>
+
+        <div id="mac-tab-mine">
+        <div id="mac-gamewarn" class="al-empty" hidden><i class="fa-solid fa-triangle-exclamation"></i>
+          Edits land in the game at the character's NEXT login — and the game rewrites this file at logout,
+          so save your changes while that character is logged out or they'll be overwritten.</div>
+        <div id="mac-empty" class="al-empty" hidden></div>
+        <div id="mac-layout" class="mac-layout">
+          <div class="mac-side">
+            <div class="mac-side-head">
+              <span class="mac-side-head-label">Macros</span>
+              <button id="mac-cat-add" class="btn btn-icon mac-cat-addbtn" title="Add a group to organize macros (app only — not saved to the game file)"><i class="fa-solid fa-folder-plus"></i></button>
+            </div>
+            <div id="mac-list" class="mac-list"></div>
+          </div>
+          <div class="mac-main">
+            <div id="mac-detail" class="mac-detail">
+              <div class="mac-ed" hidden>
+                <div class="mac-ed-top">
+                  <input id="mac-ed-name" type="text" class="form-control filter-input mac-ed-name" maxlength="32"
+                         spellcheck="false" autocomplete="off" placeholder="macro name (no spaces)">
+                  <input id="mac-ed-color" type="color" class="mac-colorpick" value="#ffffff" title="Macro color">
+                  <span class="mac-ed-actions">
+                    <button id="mac-ed-copy" class="btn btn-icon" title="Copy to another character"><i class="fa-solid fa-people-arrows"></i></button>
+                    <button id="mac-ed-del" class="btn btn-icon" title="Delete this macro"><i class="fa-solid fa-trash-can"></i></button>
+                    <button id="mac-ed-save" class="btn btn-sm btn-accent"><i class="fa-solid fa-floppy-disk"></i> Save</button>
+                  </span>
+                </div>
+                <div class="mac-ed-split">
+                  <div class="mac-ed-left">
+                    <div class="mac-ta-wrap">
+                      <textarea id="mac-ed-body" class="form-control filter-input mac-body-ta" spellcheck="false"
+                                placeholder="/pause 0.25&#10;/command here&#10;… one per line"></textarea>
+                      <div id="mac-ed-suggest" class="mysd-opts mac-suggest" hidden></div>
+                    </div>
+                    <div id="mac-ed-usage" class="mac-usage" hidden></div>
+                    <div class="mac-ed-footer">
+                      <div id="mac-ed-verdict" class="mac-verdict"></div>
+                      <div id="mac-ed-count" class="mac-count"></div>
+                    </div>
+                  </div>
+                  <div class="mac-ed-palette">
+                    <div class="mac-pal-head">Commands <span class="settings-sub">click to insert at cursor</span></div>
+                    <input id="mac-pal-search" type="text" class="form-control filter-input mac-pal-search" placeholder="Filter commands…" autocomplete="off" spellcheck="false">
+                    <div id="mac-pal-list" class="mac-pal-list"></div>
+                  </div>
+                </div>
+              </div>
+              <div id="mac-ed-none" class="mac-none">Pick a macro on the left, or click <b>New Macro</b>.</div>
+            </div>
+          </div>
+        </div>
+        </div><!-- /#mac-tab-mine -->
+
+        <div id="mac-tab-community" hidden>
+          <div id="cmac-empty" class="al-empty" hidden></div>
+          <div id="cmac-list" class="cmac-list"></div>
+        </div><!-- /#mac-tab-community -->
+      </section>
+
+      <section id="page-aliases" class="page">
+        <div class="page-head">
+          <h1>Aliases</h1>
+          <i class="fa-solid fa-circle-info info-tip"
+             title="Your characters' in-game aliases (aliases.txt, next to macros and notes). An alias turns a short /name into a longer command. The game reads the file at login and rewrites it at logout — edit while that character is logged out."></i>
+          <input id="ali-search" type="text" class="form-control filter-input head-search head-right" placeholder="Search aliases..."
+                 title="Searches names and commands" autocomplete="off">
+          <select id="ali-file-pick" class="form-select filter-select"></select>
+          <button id="ali-add" class="btn btn-sm btn-accent"><i class="fa-solid fa-plus"></i> New Alias</button>
+          <button id="ali-reload" class="btn btn-icon" title="Re-read the file from disk"><i class="fa-solid fa-rotate-right"></i></button>
+        </div>
+        <div id="ali-gamewarn" class="al-empty" hidden><i class="fa-solid fa-triangle-exclamation"></i>
+          Edits land in the game at the character's NEXT login — and the game rewrites this file at logout,
+          so save your changes while that character is logged out or they'll be overwritten.</div>
+        <div id="ali-empty" class="al-empty" hidden></div>
+        <div id="ali-layout" class="mac-layout">
+          <div class="mac-side">
+            <div id="ali-list" class="mac-list"></div>
+          </div>
+          <div class="mac-main">
+            <div id="ali-detail" class="mac-detail">
+              <div class="mac-ed" hidden>
+                <div class="mac-ed-top">
+                  <span class="ali-ed-slash">/</span>
+                  <input id="ali-ed-name" type="text" class="form-control filter-input mac-ed-name" maxlength="32"
+                         spellcheck="false" autocomplete="off" placeholder="alias name (no spaces)">
+                  <span class="mac-ed-actions">
+                    <button id="ali-ed-copy" class="btn btn-icon" title="Copy to another character"><i class="fa-solid fa-people-arrows"></i></button>
+                    <button id="ali-ed-del" class="btn btn-icon" title="Delete this alias"><i class="fa-solid fa-trash-can"></i></button>
+                    <button id="ali-ed-save" class="btn btn-sm btn-accent"><i class="fa-solid fa-floppy-disk"></i> Save</button>
+                  </span>
+                </div>
+                <div class="mac-ed-split">
+                  <div class="mac-ed-left">
+                    <div class="mac-ta-wrap">
+                      <textarea id="ali-ed-body" class="form-control filter-input mac-body-ta" spellcheck="false"
+                                placeholder="the command this alias runs, e.g. /tellpet follow"></textarea>
+                      <div id="ali-ed-suggest" class="mysd-opts mac-suggest" hidden></div>
+                    </div>
+                    <div class="settings-sub">Typing <code>/afk</code> in game will run this command.</div>
+                  </div>
+                  <div class="mac-ed-palette">
+                    <div class="mac-pal-head">Commands <span class="settings-sub">click to insert at cursor</span></div>
+                    <input id="ali-pal-search" type="text" class="form-control filter-input mac-pal-search" placeholder="Filter commands…" autocomplete="off" spellcheck="false">
+                    <div id="ali-pal-list" class="mac-pal-list"></div>
+                  </div>
+                </div>
+              </div>
+              <div id="ali-ed-none" class="mac-none">Pick an alias on the left, or click <b>New Alias</b>.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section id="page-notes" class="page">
         <div class="page-head">
           <h1>Notes</h1>
@@ -1331,7 +1489,7 @@
                         title="Link this note to a game notes file — Push writes it there, and in-game edits sync back first"></select>
                 <button id="note-push" class="btn btn-sm btn-outline-secondary" hidden
                         title="Write this note to its game file (always backsyncs first — in-game changes are offered into the note, never overwritten)"><i class="fa-solid fa-upload"></i> Push</button>
-                <button id="note-save" class="btn btn-sm" disabled>Save</button>
+                <button id="note-save" class="btn btn-sm btn-accent" disabled><i class="fa-solid fa-floppy-disk"></i> Save</button>
                 <button id="note-copy" class="btn btn-icon" title="Copy the note text to the clipboard"><i class="fa-solid fa-copy"></i></button>
                 <button id="note-del" class="btn btn-icon" title="Delete this note"><i class="fa-solid fa-trash-can"></i></button>
               </div>
@@ -1542,6 +1700,91 @@
 
 
   <!-- Add-inventory dialog: name + stocked + threshold, nothing else -->
+  <div id="cmac-modal" class="key-gate" hidden>
+    <div class="key-gate-card sp-card cmac-modal-card">
+      <h2 id="cmac-form-title">Share a macro</h2>
+      <div class="cmac-form-grid">
+        <div class="cmac-field">
+          <label>Name <span class="settings-sub">no spaces — this is the in-game macro name</span></label>
+          <input id="cmac-f-name" type="text" class="form-control filter-input" maxlength="32" spellcheck="false" autocomplete="off" placeholder="afkHeal">
+        </div>
+        <div class="cmac-field">
+          <label>What it does <span class="settings-sub">a line or two so people know what they're cloning</span></label>
+          <textarea id="cmac-f-desc" class="form-control filter-input cmac-desc-ta" maxlength="600" spellcheck="false" placeholder="Keeps your doctor buffing a group on a dump-safe loop…"></textarea>
+        </div>
+        <div class="cmac-field">
+          <label>Commands <span class="settings-sub">one per line</span></label>
+          <textarea id="cmac-f-cmds" class="form-control filter-input cmac-cmds-ta" spellcheck="false" placeholder="/pause 0.25&#10;/healDamage&#10;/macro afkHeal"></textarea>
+          <div id="cmac-f-verdict" class="mac-verdict"></div>
+        </div>
+        <div class="cmac-field">
+          <label>Classes <span class="settings-sub">who is this for?</span></label>
+          <div id="cmac-f-classes" class="cmac-chipset"></div>
+        </div>
+        <div class="cmac-field">
+          <label>Tags <span class="settings-sub">use-cases — type and press Enter</span></label>
+          <div class="cmac-taginput">
+            <div id="cmac-f-tags" class="cmac-chipset cmac-chipset-tags"></div>
+            <input id="cmac-f-tagadd" type="text" class="form-control filter-input" maxlength="24" spellcheck="false" autocomplete="off" placeholder="afk, buffbot, crafting…">
+          </div>
+        </div>
+      </div>
+      <div class="stk-note-actions">
+        <button id="cmac-f-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
+        <button id="cmac-f-save" class="btn btn-sm btn-accent"><i class="fa-solid fa-share-nodes"></i> <span id="cmac-f-savelabel">Share</span></button>
+      </div>
+    </div>
+  </div>
+
+  <div id="mac-cat-modal" class="key-gate" hidden>
+    <div class="key-gate-card al-card mac-cat-modal-card">
+      <h2 id="mac-cat-form-title">New group</h2>
+      <div class="cmac-form-grid">
+        <div class="cmac-field">
+          <label>Name</label>
+          <input id="mac-cat-name" type="text" class="form-control filter-input" maxlength="40" spellcheck="false" autocomplete="off" placeholder="Group name">
+        </div>
+        <div class="cmac-field">
+          <label>Description <span class="settings-sub">optional</span></label>
+          <input id="mac-cat-desc" type="text" class="form-control filter-input" maxlength="120" spellcheck="false" autocomplete="off" placeholder="What this group is for">
+        </div>
+        <div class="cmac-field">
+          <label>Tags <span class="settings-sub">filter groups by these — type and press Enter</span></label>
+          <div class="cmac-taginput">
+            <div id="mac-cat-tags" class="cmac-chipset cmac-chipset-tags"></div>
+            <input id="mac-cat-tagadd" type="text" class="form-control filter-input" maxlength="24" spellcheck="false" autocomplete="off" placeholder="combat, afk, crafting…">
+          </div>
+        </div>
+      </div>
+      <div class="stk-note-actions">
+        <button id="mac-cat-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
+        <button id="mac-cat-save" class="btn btn-sm btn-accent">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="confirm-dialog" class="key-gate" hidden>
+    <div class="key-gate-card confirm-card">
+      <h2 id="confirm-title">Are you sure?</h2>
+      <p id="confirm-msg" class="confirm-msg"></p>
+      <div class="stk-note-actions">
+        <button id="confirm-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
+        <button id="confirm-ok" class="btn btn-sm btn-accent">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="mac-hist-modal" class="key-gate" hidden>
+    <div class="key-gate-card sp-card mac-hist-card">
+      <div class="mac-hist-head">
+        <h2 id="mac-hist-title">Macro history</h2>
+        <button id="mac-hist-x" class="btn btn-icon" title="Close"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <p class="settings-sub" id="mac-hist-sub">Snapshots of this character's macros.txt — the app keeps the last 25, from both in-game saves and your edits here. Restoring rolls the whole file back.</p>
+      <div id="mac-hist-list" class="mac-hist-list"></div>
+    </div>
+  </div>
+
   <div id="cust-note-modal" class="key-gate" hidden>
     <div class="key-gate-card sp-card">
       <h2 id="cust-note-title">Notes</h2>
@@ -2192,29 +2435,33 @@
   </div>
 
   <!-- Classic scripts sharing one top-level scope; app.js boots last. -->
-  <script src="js/class_caps.js?v=20261002i"></script>
-  <script src="js/shared.js?v=20261002i"></script>
-  <script src="js/help.js?v=20261002i"></script>
-  <script src="js/resources.js?v=20261002i"></script>
-  <script src="js/resource.js?v=20261002i"></script>
-  <script src="js/schematics.js?v=20261002i"></script>
-  <script src="js/stockpile.js?v=20261002i"></script>
-  <script src="js/wishlist.js?v=20261002i"></script>
-  <script src="js/myschematics.js?v=20261002i"></script>
-  <script src="js/inventory.js?v=20261002i"></script>
-  <script src="js/sales.js?v=20261002i"></script>
-  <script src="js/insights.js?v=20261002i"></script>
-  <script src="js/purchases.js?v=20261002i"></script>
-  <script src="js/harvesters.js?v=20261002i"></script>
-  <script src="js/factories.js?v=20261002i"></script>
-  <script src="js/customers.js?v=20261002i"></script>
-  <script src="js/characters.js?v=20261002i"></script>
-  <script src="js/settings.js?v=20261002i"></script>
-  <script src="js/alerts.js?v=20261002i"></script>\n  <script src="js/lab.js?v=20261002i"></script>
-  <script src="js/mail.js?v=20261002i"></script>
-  <script src="js/notes.js?v=20261002i"></script>
-  <script src="js/schembuilder.js?v=20261002i"></script>
-  <script src="js/scanner.js?v=20261002i"></script>
-  <script src="js/app.js?v=20261002i"></script>
+  <script src="js/class_caps.js?v=20261003G"></script>
+  <script src="js/shared.js?v=20261003G"></script>
+  <script src="js/help.js?v=20261003G"></script>
+  <script src="js/resources.js?v=20261003G"></script>
+  <script src="js/resource.js?v=20261003G"></script>
+  <script src="js/schematics.js?v=20261003G"></script>
+  <script src="js/stockpile.js?v=20261003G"></script>
+  <script src="js/wishlist.js?v=20261003G"></script>
+  <script src="js/myschematics.js?v=20261003G"></script>
+  <script src="js/inventory.js?v=20261003G"></script>
+  <script src="js/sales.js?v=20261003G"></script>
+  <script src="js/insights.js?v=20261003G"></script>
+  <script src="js/purchases.js?v=20261003G"></script>
+  <script src="js/harvesters.js?v=20261003G"></script>
+  <script src="js/factories.js?v=20261003G"></script>
+  <script src="js/customers.js?v=20261003G"></script>
+  <script src="js/characters.js?v=20261003G"></script>
+  <script src="js/settings.js?v=20261003G"></script>
+  <script src="js/alerts.js?v=20261003G"></script>\n  <script src="js/lab.js?v=20261003G"></script>
+  <script src="js/mail.js?v=20261003G"></script>
+  <script src="js/notes.js?v=20261003G"></script>
+  <script src="js/macro_commands.js?v=20261003G"></script>
+  <script src="js/macros.js?v=20261003G"></script>
+  <script src="js/aliases.js?v=20261003G"></script>
+  <script src="js/community_macros.js?v=20261003G"></script>
+  <script src="js/schembuilder.js?v=20261003G"></script>
+  <script src="js/scanner.js?v=20261003G"></script>
+  <script src="js/app.js?v=20261003G"></script>
 </body>
 </html>

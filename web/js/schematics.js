@@ -470,6 +470,14 @@ function renderSchematicPage(s) {
   $('#scd-components').innerHTML = comps.length ? comps.map((c, i) => {
     const chid = safeInt(c.number) <= 0; // zeroed = community-removed; dev mode can restore
     const verb = c.optional === 'yes' ? 'Optional' : 'Requires';
+    // exact vs similar inline in the phrasing (Danvar): "Requires 2 exact …".
+    // Only meaningful for required components of quantity 2+ — a single component
+    // can't be exact/similar to itself, and optional ones are looted (Danvar).
+    const kind = (c.optional === 'yes' || safeInt(c.number) < 2)
+      ? ''
+      : c.similar === 'yes'
+        ? '<span class="scd-match">similar</span> '
+        : '<span class="scd-match">exact</span> ';
     const items = Array.isArray(c.categoryItems) ? c.categoryItems : [];
     let name;
     if (c.type === 'schematic') {
@@ -483,7 +491,7 @@ function renderSchematicPage(s) {
     const looted = c.looted === 'yes' ? ' <span class="scd-age">(looted)</span>' : '';
     const sub = items.length ? `<div class="scd-catitems" data-catitems="${i}" hidden>${items.map((ci) =>
       `<a role="button" class="scd-complink" data-schem="${escapeHtml(String(ci.schematicId))}">${escapeHtml(ci.schematicName || '')}</a>`).join('')}</div>` : '';
-    return `<div class="scd-line${chid ? ' scd-hiddenrow' : ''}">${verb} <span class="scd-eqty" data-eqty="${escapeHtml(String(c.id ?? ''))}" title="${chid ? 'Removed by a community edit (count 0) — click to set a count and bring it back' : 'Community-editable — click to fix the count'}">${safeInt(c.number)}</span> ${name}${looted}${chid ? ' <span class="scd-hidden-tag">hidden</span>' : ''}</div>${sub}`;
+    return `<div class="scd-line${chid ? ' scd-hiddenrow' : ''}">${verb} <span class="scd-eqty" data-eqty="${escapeHtml(String(c.id ?? ''))}" title="${chid ? 'Removed by a community edit (count 0) — click to set a count and bring it back' : 'Community-editable — click to fix the count'}">${safeInt(c.number)}</span> ${kind}${name}${looted}${chid ? ' <span class="scd-hidden-tag">hidden</span>' : ''}</div>${sub}`;
   }).join('') : '<div class="scd-line">None</div>';
 
   // Formula switches — toggling re-fetches the server-ranked best lists for the

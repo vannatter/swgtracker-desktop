@@ -727,6 +727,28 @@ function initInventory() {
     ['#inv-bulk-stocked', '#inv-bulk-threshold', '#inv-bulk-vendor', '#inv-bulk-tags'].forEach((s) => { $(s).value = ''; });
     loadInventory();
   });
+  // bulk Delete: confirm, then remove the selected items from inventory
+  $('#inv-bulk-delete').addEventListener('click', async () => {
+    const ids = [...invState.checked].map(String);
+    if (!ids.length) return;
+    const n = ids.length;
+    const ok = await confirmDialog({
+      title: `Delete ${n} item${n === 1 ? '' : 's'}?`,
+      message: `${n === 1 ? 'This item' : 'These items'} will be removed from your inventory. This can't be undone.`,
+      confirmLabel: 'Delete',
+    });
+    if (!ok) return;
+    const rows = invState.items.filter((i) => ids.includes(String(i.id)));
+    let failed = 0;
+    for (const i of rows) {
+      let r; try { r = await api().remove_inventory_item(i.id); } catch (e) { r = { ok: false }; }
+      if (!r.ok) failed++;
+    }
+    invState.checked.clear();
+    toast(failed ? `${failed} couldn't be deleted` : `Deleted ${n} item${n === 1 ? '' : 's'}`);
+    loadInventory();
+  });
+
   $('#inv-sel-clear').addEventListener('click', () => {
     invState.checked.clear();
     renderInvRows();

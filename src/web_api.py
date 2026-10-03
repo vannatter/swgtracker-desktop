@@ -1034,10 +1034,11 @@ class WebApi:
     # land on a file that moved since the caller last looked (the game rewrites
     # these files when the in-game notepad closes).
 
-    def _notes_candidates(self):
-        """notes.txt candidates probed from the configured mail folders — the
-        mail dir sits at profiles/<acct>/<galaxy>/mail_<Char>, so we check the
-        char, galaxy, and account levels. Direct path probes only, no scans."""
+    def _notes_candidates(self, filename="notes.txt"):
+        """Per-character game-file candidates (notes.txt, macros.txt) probed
+        from the configured mail folders — the mail dir sits at
+        profiles/<acct>/<galaxy>/mail_<Char>, so we check the char, galaxy,
+        and account levels. Direct path probes only, no scans."""
         from pathlib import Path
         out, seen = [], set()
         for entry in (self.config.get("mail_paths") or []):
@@ -1047,11 +1048,11 @@ class WebApi:
             p = Path(raw).expanduser()
             label = str((entry or {}).get("label", "") or "").strip()
             char = p.name[5:] if p.name.startswith("mail_") else label
-            cands = [p / "notes.txt", p.parent / "notes.txt"]
+            cands = [p / filename, p.parent / filename]
             if char:
-                cands.append(p.parent / char / "notes.txt")
+                cands.append(p.parent / char / filename)
             if p.name.startswith("mail_"):
-                cands.append(p.parent.parent / "notes.txt")
+                cands.append(p.parent.parent / filename)
             for c in cands:
                 try:
                     rc = str(c.expanduser().resolve())
@@ -1062,12 +1063,12 @@ class WebApi:
                     out.append({"path": rc, "char": char or label})
         return out
 
-    def _notes_validate(self, path):
+    def _notes_validate(self, path, filename="notes.txt"):
         """Only discovered candidates may be read or written."""
         from pathlib import Path
         rc = str(Path(str(path)).expanduser().resolve())
-        if rc not in {c["path"] for c in self._notes_candidates()}:
-            raise ValueError("not a discovered notes file")
+        if rc not in {c["path"] for c in self._notes_candidates(filename)}:
+            raise ValueError(f"not a discovered {filename} file")
         return rc
 
     def notes_files(self):
@@ -1130,6 +1131,147 @@ class WebApi:
             p.write_text(text, encoding="utf-8", newline="")
             h = self.local_db.notes_version_add(rc, text, "app")
             return _ok({"conflict": False, "hash": h})
+        except Exception as e:
+            return _err(e)
+
+    # --- Game macros files (profiles/<acct>/<galaxy>/<Char>/macros.txt) ---
+    # Same engine as notes: backsync-first snapshots into notes_file_versions
+    # (keyed by path, so macros ride the same history table), guarded writes.
+    # Format: "version: 0000" header, then "<slot> <name> <icon> <#color>
+    # <commands;...>" per line — parsing lives in the bundle so the editor can
+    # evolve without shell releases.
+
+    def macros_files(self):
+        from pathlib import Path
+        try:
+            rows = []
+            for c in self._notes_candidates("macros.txt"):
+                p = Path(c["path"])
+                row = {"path": c["path"], "char": c["char"], "exists": p.is_file()}
+                if row["exists"]:
+                    try:
+                        text = p.read_text("utf-8", errors="replace")
+                        row["hash"] = self.local_db.notes_version_add(c["path"], text, "game")
+                        row["mtime"] = int(p.stat().st_mtime)
+                        row["size"] = len(text)
+                    except OSError:
+                        row["exists"] = False
+                rows.append(row)
+            return _ok({"files": rows})
+        except Exception as e:
+            return _err(e)
+
+    def macros_file_read(self, path):
+        from pathlib import Path
+        try:
+            rc = self._notes_validate(path, "macros.txt")
+            p = Path(rc)
+            if not p.is_file():
+                return _ok({"path": rc, "exists": False, "content": "", "hash": None})
+            text = p.read_text("utf-8", errors="replace")
+            h = self.local_db.notes_version_add(rc, text, "game")
+            return _ok({"path": rc, "exists": True, "content": text, "hash": h})
+        except Exception as e:
+            return _err(e)
+
+    def macros_file_write(self, path, content, base_hash=None):
+        """Guarded like notes_file_write: snapshot the disk copy, refuse when
+        it moved since base_hash (the game rewrites macros.txt on logout)."""
+        import sys
+        from pathlib import Path
+        try:
+            rc = self._notes_validate(path, "macros.txt")
+            p = Path(rc)
+            if p.is_file():
+                disk = p.read_text("utf-8", errors="replace")
+                disk_hash = self.local_db.notes_version_add(rc, disk, "game")
+                if disk_hash != (base_hash or None):
+                    return _ok({"conflict": True, "content": disk, "hash": disk_hash})
+            elif base_hash:
+                return _ok({"conflict": True, "content": "", "hash": None})
+            if not p.parent.is_dir():
+                return _err(f"folder missing: {p.parent}")
+            text = str(content or "").replace("\r\n", "\n")
+            if sys.platform == "win32":
+                text = text.replace("\n", "\r\n")  # the game writes CRLF
+            p.write_text(text, encoding="utf-8", newline="")
+            h = self.local_db.notes_version_add(rc, text, "app")
+            return _ok({"conflict": False, "hash": h})
+        except Exception as e:
+            return _err(e)
+
+    def macros_file_versions(self, path):
+        try:
+            rc = self._notes_validate(path, "macros.txt")
+            return _ok({"versions": self.local_db.notes_versions(rc)})
+        except Exception as e:
+            return _err(e)
+
+    # --- Aliases (aliases.txt) — same per-character file machinery as macros ---
+
+    def aliases_files(self):
+        from pathlib import Path
+        try:
+            rows = []
+            for c in self._notes_candidates("aliases.txt"):
+                p = Path(c["path"])
+                row = {"path": c["path"], "char": c["char"], "exists": p.is_file()}
+                if row["exists"]:
+                    try:
+                        text = p.read_text("utf-8", errors="replace")
+                        row["hash"] = self.local_db.notes_version_add(c["path"], text, "game")
+                        row["mtime"] = int(p.stat().st_mtime)
+                        row["size"] = len(text)
+                    except OSError:
+                        row["exists"] = False
+                rows.append(row)
+            return _ok({"files": rows})
+        except Exception as e:
+            return _err(e)
+
+    def aliases_file_read(self, path):
+        from pathlib import Path
+        try:
+            rc = self._notes_validate(path, "aliases.txt")
+            p = Path(rc)
+            if not p.is_file():
+                return _ok({"path": rc, "exists": False, "content": "", "hash": None})
+            text = p.read_text("utf-8", errors="replace")
+            h = self.local_db.notes_version_add(rc, text, "game")
+            return _ok({"path": rc, "exists": True, "content": text, "hash": h})
+        except Exception as e:
+            return _err(e)
+
+    def aliases_file_write(self, path, content, base_hash=None):
+        """Guarded like macros_file_write: snapshot the disk copy, refuse when
+        it moved since base_hash (the game rewrites aliases.txt on logout)."""
+        import sys
+        from pathlib import Path
+        try:
+            rc = self._notes_validate(path, "aliases.txt")
+            p = Path(rc)
+            if p.is_file():
+                disk = p.read_text("utf-8", errors="replace")
+                disk_hash = self.local_db.notes_version_add(rc, disk, "game")
+                if disk_hash != (base_hash or None):
+                    return _ok({"conflict": True, "content": disk, "hash": disk_hash})
+            elif base_hash:
+                return _ok({"conflict": True, "content": "", "hash": None})
+            if not p.parent.is_dir():
+                return _err(f"folder missing: {p.parent}")
+            text = str(content or "").replace("\r\n", "\n")
+            if sys.platform == "win32":
+                text = text.replace("\n", "\r\n")  # the game writes CRLF
+            p.write_text(text, encoding="utf-8", newline="")
+            h = self.local_db.notes_version_add(rc, text, "app")
+            return _ok({"conflict": False, "hash": h})
+        except Exception as e:
+            return _err(e)
+
+    def aliases_file_versions(self, path):
+        try:
+            rc = self._notes_validate(path, "aliases.txt")
+            return _ok({"versions": self.local_db.notes_versions(rc)})
         except Exception as e:
             return _err(e)
 

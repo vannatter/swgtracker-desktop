@@ -373,6 +373,54 @@ function initWishlist() {
     renderWishlist();
   });
   $('#wish-bulk-tags').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#wish-bulk-apply').click(); });
+
+  // bulk Remove: strip the entered tag(s) from every selected resource
+  $('#wish-bulk-remove').addEventListener('click', async () => {
+    const drop = $('#wish-bulk-tags').value.split(',').map((t) => t.trim().toLowerCase()).filter(Boolean);
+    if (!drop.length) { toast('Type the tag(s) to remove first', false); return; }
+    const rows = wishState.items.filter((i) => wishState.checked.has(String(i.wishlist_id)));
+    let failed = 0, touched = 0;
+    for (const i of rows) {
+      const cur = String(i.tags || '').split(',').map((t) => t.trim()).filter(Boolean);
+      const keep = cur.filter((t) => !drop.includes(t.toLowerCase()));
+      if (keep.length === cur.length) continue;
+      const r = await apiFetch('PUT', 'api/wishlist.php',
+        { data: { wishlist_id: safeInt(i.wishlist_id), tags: keep.join(', ') } }).catch(() => ({ ok: false }));
+      if (r.ok) { i.tags = keep.join(', '); touched++; } else failed++;
+    }
+    if (failed) { toast(`${failed} update${failed > 1 ? 's' : ''} failed`, false); return; }
+    toast(touched ? `Removed from ${touched} resource${touched === 1 ? '' : 's'}` : 'None of the selected carry those tags');
+    $('#wish-bulk-tags').value = '';
+    renderWishlist();
+  });
+
+  // bulk Delete: confirm, then remove the selected from the wishlist
+  $('#wish-bulk-delete').addEventListener('click', async () => {
+    const ids = [...wishState.checked].map(String);
+    if (!ids.length) return;
+    const n = ids.length;
+    const ok = await confirmDialog({
+      title: `Delete ${n} resource${n === 1 ? '' : 's'}?`,
+      message: `${n === 1 ? 'This resource' : 'These resources'} will be removed from your wishlist. This can't be undone.`,
+      confirmLabel: 'Delete',
+    });
+    if (!ok) return;
+    const rows = wishState.items.filter((i) => ids.includes(String(i.wishlist_id)));
+    let failed = 0;
+    for (const i of rows) {
+      let r; try { r = await api().remove_from_wishlist(i.wishlist_id); } catch (e) { r = { ok: false }; }
+      if (r.ok) {
+        const idx = wishState.items.findIndex((x) => String(x.wishlist_id) === String(i.wishlist_id));
+        if (idx >= 0) wishState.items.splice(idx, 1);
+        wishState.resourceIds.delete(String(i.id));
+      } else failed++;
+    }
+    wishState.checked.clear();
+    if (typeof refreshAddIcons === 'function') refreshAddIcons();
+    toast(failed ? `${failed} couldn't be deleted` : `Deleted ${n} resource${n === 1 ? '' : 's'}`);
+    renderWishlist();
+  });
+
   $('#wish-sel-clear').addEventListener('click', () => {
     wishState.checked.clear();
     renderWishlist();

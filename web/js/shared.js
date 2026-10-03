@@ -953,6 +953,32 @@ function confirmArmLabeled(btn, label = 'Confirm remove?') {
   return false;
 }
 
+// Promise-based confirmation DIALOG — the app's standard for destructive
+// actions (delete / bulk delete). Resolves true on confirm, false otherwise.
+// Prefer this over the inline confirmArm morph for anything irreversible.
+let _confirmResolve = null;
+let _confirmWired = false;
+function confirmDialog(opts = {}) {
+  const o = typeof opts === 'string' ? { message: opts } : opts;
+  const modal = $('#confirm-dialog');
+  if (!modal) return Promise.resolve(window.confirm(o.message || 'Are you sure?'));
+  $('#confirm-title').textContent = o.title || 'Are you sure?';
+  $('#confirm-msg').textContent = o.message || '';
+  $('#confirm-ok').innerHTML = o.confirmLabel
+    ? `<i class="fa-solid fa-trash-can"></i> ${escapeHtml(o.confirmLabel)}`
+    : '<i class="fa-solid fa-trash-can"></i> Delete';
+  if (!_confirmWired) {
+    _confirmWired = true;
+    const close = (val) => { modal.hidden = true; const r = _confirmResolve; _confirmResolve = null; if (r) r(val); };
+    $('#confirm-ok').addEventListener('click', () => close(true));
+    $('#confirm-cancel').addEventListener('click', () => close(false));
+    modal.addEventListener('click', (e) => { if (e.target === modal) close(false); });
+    document.addEventListener('keydown', (e) => { if (!modal.hidden && e.key === 'Escape') close(false); });
+  }
+  modal.hidden = false;
+  return new Promise((resolve) => { _confirmResolve = resolve; });
+}
+
 // ---- rich notes (the Lab's mini-WYSIWYG, shared by every notes dialog) ----
 // contenteditable + a bold/italic/underline/lists toolbar. Values are
 // serialized sanitized HTML; labNotesHtml/labSanitizeHtml/labNotesText

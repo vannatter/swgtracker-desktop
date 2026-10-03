@@ -812,9 +812,15 @@ function initFactories() {
       return;
     }
     const rm = e.target.closest('[data-facremove]');
-    if (rm && (rm.closest('tr')
-      ? confirmArm(rm, 'Click again to remove this factory')
-      : confirmArmLabeled(rm, 'Remove?'))) {
+    if (rm) {
+      const f = facState.items.find((x) => String(x.id) === String(rm.dataset.facremove));
+      const running = f && facStatus(f) === 'running';
+      const ok = await confirmDialog({
+        title: 'Remove factory?',
+        message: `${(f && f.name) || 'This factory'} will be removed from your list${running ? ", and its current run will stop" : ''}. This can't be undone.`,
+        confirmLabel: 'Remove',
+      });
+      if (!ok) return;
       const res = await facPost({ action: 'remove', id: safeInt(rm.dataset.facremove) });
       if (res.ok) loadFactories();
     }

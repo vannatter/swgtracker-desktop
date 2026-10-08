@@ -3,9 +3,71 @@
    sales.js / settings.js (all classic scripts sharing this scope). */
 
 // Pages lazy-load on first visit, matching the Tk tabs' <Map> behavior.
+// Date-driven seasonal logo (auto-reverts, no deploy needed). Halloween logo
+// runs all of October; add other windows here to match the website's banner.
+function seasonalLogoSrc() {
+  const d = new Date();
+  const m = d.getMonth() + 1; // 1-12
+  const day = d.getDate();
+  if (m === 10) return 'icon.halloween.png'; // Oct 1-31
+  if (m === 11) {
+    // Nov 1 through the day after Thanksgiving (4th Thursday). Count Thursdays.
+    let thu = 0, tgDay = 0;
+    for (let i = 1; i <= 30; i++) { if (new Date(d.getFullYear(), 10, i).getDay() === 4 && ++thu === 4) { tgDay = i; break; } }
+    if (tgDay && day <= tgDay + 1) return 'icon.thanksgiving.png';
+  }
+  if (m === 12 && day <= 26) return 'icon.holiday.png'; // Dec 1 through day after Christmas
+  return 'icon.png';
+}
+function applySeasonalLogo() {
+  const src = seasonalLogoSrc();
+  if (src === 'icon.png') return;
+  document.querySelectorAll('.app-logo, .about-logo').forEach((img) => {
+    img.src = src;
+    img.style.display = ''; // in case the default errored out earlier
+  });
+}
+
+// Date-driven holiday accent bar — mirrors the website's holiday_banner()
+// (functions.php): a thin gradient fixed across the top, on/off by itself.
+function holidayBar() {
+  const d = new Date();
+  const m = d.getMonth() + 1, day = d.getDate();
+  const md = m * 100 + day;
+  if (m === 6) return { label: 'Pride Month', grad: 'linear-gradient(90deg,#e40303 0%,#ff8c00 20%,#ffed00 40%,#008026 60%,#24408e 80%,#732982 100%)' };
+  if (md >= 701 && md <= 705) return { label: 'Independence Day', grad: 'linear-gradient(90deg,#b22234 0%,#ffffff 50%,#3c3b6e 100%)' };
+  if (md === 504 || md === 505) return { label: 'May the 4th Be With You', grad: 'linear-gradient(90deg,#2e67f8 0%,#2ff923 33%,#a05cf7 66%,#f72d2d 100%)' };
+  if (md === 213 || md === 214) return { label: "Valentine's Day", grad: 'linear-gradient(90deg,#ff1744 0%,#ff80ab 50%,#ff1744 100%)' };
+  if (md === 317) return { label: "St. Patrick's Day", grad: 'linear-gradient(90deg,#0a5c36 0%,#2fbf71 50%,#f5a623 100%)' };
+  if (md >= 1001 && md <= 1031) return { label: 'Halloween', grad: 'linear-gradient(90deg,#6b2fa0 0%,#39d353 100%)' };
+  if (m === 11) {
+    let thu = 0, tgDay = 0;
+    for (let i = 1; i <= 30; i++) { if (new Date(d.getFullYear(), 10, i).getDay() === 4 && ++thu === 4) { tgDay = i; break; } }
+    if (tgDay && day <= tgDay + 1) return { label: 'Thanksgiving', grad: 'linear-gradient(90deg,#8c3b0c 0%,#d97b29 35%,#f2b705 70%,#7a1f1f 100%)' };
+  }
+  if (md >= 1201 && md <= 1226) return { label: 'Happy Holidays', grad: 'linear-gradient(90deg,#c8102e 0%,#ffffff 50%,#0f7b3f 100%)' };
+  if (md === 1231 || md === 101) return { label: 'Happy New Year', grad: 'linear-gradient(90deg,#bfa14a 0%,#fff3b0 25%,#bfa14a 50%,#fff3b0 75%,#bfa14a 100%)' };
+  return null;
+}
+function applyHolidayBar() {
+  const bar = document.getElementById('holiday-bar');
+  if (!bar) return;
+  const h = holidayBar();
+  if (!h) { bar.hidden = true; return; }
+  bar.style.background = h.grad;
+  bar.title = h.label;
+  bar.hidden = false;
+}
+
 const PAGE_LOADERS = {
   resources: () => loadResources(),
   schematics: () => loadSchematics(),
+  cities: () => loadCities(),
+  guilds: () => loadGuilds(),
+  wealth: () => loadWealth(),
+  gcw: () => loadGcw(),
+  professions: () => loadProfessions(),
+  titles: () => loadTitles(),
   myschematics: () => loadMySchematics(),
   stockpile: () => syncStockpile(),
   wishlist: () => syncWishlist(),
@@ -1020,6 +1082,9 @@ async function boot() {
   initMacros();
   initAliases();
   initCommunityMacros();
+  initGalaxy();
+  applySeasonalLogo();
+  applyHolidayBar();
   initSchemBuilder();
   initMyCustomers();
   initDevMode();

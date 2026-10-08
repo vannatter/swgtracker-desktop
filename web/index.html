@@ -6,9 +6,10 @@
   <title>SWG Tracker Desktop</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.1/css/all.min.css">
-  <link rel="stylesheet" href="css/app.css?v=20261003H">
+  <link rel="stylesheet" href="css/app.css?v=20261007r">
 </head>
 <body>
+  <div id="holiday-bar" class="holiday-bar" hidden></div>
   <!-- Header -->
   <header class="app-header">
     <div class="app-header-brand">
@@ -36,6 +37,13 @@
       <ul class="nav-list">
         <li class="nav-item active" data-page="resources"><i class="fa-solid fa-gem"></i> Resources</li>
         <li class="nav-item" data-page="schematics"><i class="fa-solid fa-scroll"></i> Schematics</li>
+        <li class="nav-group-head" data-navgroup="galaxy" title="Server-wide data"><i class="fa-solid fa-earth-americas"></i> Galaxy <i class="fa-solid fa-caret-down nav-group-caret"></i></li>
+        <li class="nav-item nav-group-item galaxy-item" data-page="cities"><i class="fa-solid fa-city"></i> Cities</li>
+        <li class="nav-item nav-group-item galaxy-item" data-page="guilds"><i class="fa-solid fa-shield-halved"></i> Guilds</li>
+        <li class="nav-item nav-group-item galaxy-item" data-page="wealth"><i class="fa-solid fa-coins"></i> Wealth</li>
+        <li class="nav-item nav-group-item galaxy-item" data-page="gcw"><i class="fa-solid fa-jedi"></i> GCW</li>
+        <li class="nav-item nav-group-item galaxy-item" data-page="professions"><i class="fa-solid fa-users-rectangle"></i> Professions</li>
+        <li class="nav-item nav-group-item galaxy-item" data-page="titles"><i class="fa-solid fa-id-badge"></i> Titles</li>
         <li class="nav-item" data-page="myschematics"><i class="fa-solid fa-screwdriver-wrench"></i> My Schematics
           <span id="nav-mys-pill" class="nav-pill" title="Upgrades available across your schematics" hidden></span></li>
         <li class="nav-item" data-page="stockpile"><i class="fa-solid fa-cubes"></i> My Stockpile</li>
@@ -126,9 +134,21 @@
             <input id="res-pinned-only" type="checkbox"> Pinned
           </label>
         </div>
-        <div id="res-filter-pills" class="res-pills" hidden></div>
+        <div class="res-filterrow">
+          <div id="res-filter-pills" class="res-pills"></div>
+          <div class="res-righttools">
+            <select id="res-sort" class="form-select filter-select res-sort-sel" title="Sort by"></select>
+            <button id="res-sort-dir" type="button" class="res-tool-btn" title="Sort direction"><i class="fa-solid fa-arrow-down-wide-short"></i></button>
+            <div class="res-view-switch" id="res-view-switch" title="View">
+              <button type="button" class="res-view-btn active" data-resview="list" title="List"><i class="fa-solid fa-list"></i></button>
+              <button type="button" class="res-view-btn" data-resview="cards" title="Cards"><i class="fa-solid fa-table-cells-large"></i></button>
+              <button type="button" class="res-view-btn" data-resview="tree" title="Category tree"><i class="fa-solid fa-sitemap"></i></button>
+            </div>
+            <button id="res-cols-btn" type="button" class="res-tool-btn" title="Choose & reorder columns"><i class="fa-solid fa-table-columns"></i></button>
+          </div>
+        </div>
 
-        <div class="table-wrap">
+        <div class="table-wrap" id="res-tablewrap">
           <table class="data-grid" id="res-grid">
             <thead><tr id="res-head"></tr></thead>
             <tbody id="res-body"></tbody>
@@ -136,6 +156,7 @@
           <div id="res-loading" class="grid-loading" hidden><span class="spinner"></span> Loading…</div>
           <div id="res-empty" class="grid-empty" hidden></div>
         </div>
+        <div id="res-cards" class="res-cards" hidden></div>
 
         <div class="pager">
           <span id="res-status" class="pager-status"></span>
@@ -171,12 +192,23 @@
             <div class="rd-herofoot">
               <span id="rd-meta" class="rd-scoreline"></span>
               <span class="rd-planets" id="rd-planets"></span>
+              <span class="rd-planets" id="rd-waypoints"></span>
               <span class="rd-planets" id="rd-stktags"></span>
             </div>
           </div>
         </div>
 
-        <!-- Tabs mirror the site's resource page: Top Uses / Other <type> / Related / Used In -->
+        <!-- Value & Crafting Profile: three charts (histogram / donut / bell curve),
+             collapsible, mirrors the website. Filled lazily from api/resource_profile.php. -->
+        <div id="rd-profile" class="rd-profile collapse-section" hidden>
+          <div class="collapse-head" data-rdprofile-toggle>
+            <span class="collapse-title"><i class="fa-solid fa-flask"></i> Value &amp; Crafting Profile</span>
+            <i class="fa-solid fa-chevron-up collapse-caret"></i>
+          </div>
+          <div class="collapse-body" id="rd-profile-body"></div>
+        </div>
+
+        <!-- Tabs mirror the site's resource page: Top Uses / Other <type> / Related / Used In / Extraction Calculator -->
         <ul class="scd-tabs" id="rd-tabs"></ul>
         <div id="rd-tabnote" class="rd-tabnote" hidden></div>
         <div class="table-wrap scd-table-wrap rd-table-wrap">
@@ -186,6 +218,24 @@
           </table>
           <div id="rd-empty" class="grid-empty" hidden></div>
           <div id="rd-loading" class="grid-loading" hidden><span class="spinner"></span> Loading…</div>
+        </div>
+        <!-- Extraction Calculator pane (shown when the 'calc' tab is active) -->
+        <div id="rd-calc" class="rd-calc" hidden>
+          <div class="rd-calc-inputs">
+            <div class="rd-calc-field">
+              <label for="rd-calc-conc">Concentration (%)</label>
+              <input type="number" id="rd-calc-conc" class="form-control filter-input" value="80" min="1" max="100" autocomplete="off">
+            </div>
+            <div class="rd-calc-field">
+              <label for="rd-calc-harv"># Harvesters</label>
+              <input type="number" id="rd-calc-harv" class="form-control filter-input" value="1" min="1" autocomplete="off">
+            </div>
+            <div class="rd-calc-field">
+              <label for="rd-calc-ber">BER</label>
+              <input type="number" id="rd-calc-ber" class="form-control filter-input" value="14" min="1" autocomplete="off">
+            </div>
+          </div>
+          <div id="rd-calc-results" class="rd-calc-results" hidden></div>
         </div>
         <div id="rd-comments" class="cmt-section" hidden></div>
       </section>
@@ -1506,6 +1556,123 @@
         </div>
       </section>
 
+      <section id="page-cities" class="page">
+        <div class="page-head">
+          <h1>Cities</h1>
+          <i class="fa-solid fa-circle-info info-tip" title="Player cities across the galaxy — population, mayor, taxes and specializations. Click a city for its growth history. Server-wide data from swgtracker.com."></i>
+          <span id="cities-updated" class="gx-updated head-right"></span>
+          <input id="cities-search" type="text" class="form-control filter-input head-search" placeholder="Search city, planet, mayor..." autocomplete="off">
+          <select id="cities-planet" class="form-select filter-select" title="Filter by planet"></select>
+          <button id="cities-reload" class="btn btn-icon" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
+        </div>
+        <div class="gx-aggchart">
+          <div class="gx-aggtabs" id="cities-aggtabs">
+            <button type="button" class="gx-aggtab active" data-aggtab="active">Active Citizens</button>
+            <button type="button" class="gx-aggtab" data-aggtab="cities">Cities</button>
+            <button type="button" class="gx-aggtab" data-aggtab="level">Avg Level</button>
+            <button type="button" class="gx-aggtab" data-aggtab="planet">By Planet</button>
+          </div>
+          <div id="cities-aggbody"></div>
+        </div>
+        <div class="table-wrap">
+          <table class="data-grid" id="cities-grid"><thead><tr id="cities-head"></tr></thead><tbody id="cities-body"></tbody></table>
+          <div id="cities-loading" class="grid-loading" hidden><span class="spinner"></span> Loading…</div>
+          <div id="cities-empty" class="grid-empty" hidden></div>
+        </div>
+      </section>
+
+      <section id="page-guilds" class="page">
+        <div class="page-head">
+          <h1>Guilds</h1>
+          <i class="fa-solid fa-circle-info info-tip" title="Guilds across the galaxy — members, active players, faction and leader. Click a guild for its profile and activity history. Server-wide data from swgtracker.com."></i>
+          <span id="guilds-updated" class="gx-updated head-right"></span>
+          <input id="guilds-search" type="text" class="form-control filter-input head-search" placeholder="Search guild, tag, leader..." autocomplete="off">
+          <select id="guilds-faction" class="form-select filter-select" title="Filter by faction"></select>
+          <button id="guilds-reload" class="btn btn-icon" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
+        </div>
+        <div class="gx-aggchart">
+          <div class="gx-aggtabs" id="guilds-aggtabs">
+            <button type="button" class="gx-aggtab active" data-aggtab="active">Active Members</button>
+            <button type="button" class="gx-aggtab" data-aggtab="members">Total Members</button>
+            <button type="button" class="gx-aggtab" data-aggtab="guilds">Guilds</button>
+            <button type="button" class="gx-aggtab" data-aggtab="faction">By Faction</button>
+          </div>
+          <div id="guilds-aggbody"></div>
+        </div>
+        <div class="table-wrap">
+          <table class="data-grid" id="guilds-grid"><thead><tr id="guilds-head"></tr></thead><tbody id="guilds-body"></tbody></table>
+          <div id="guilds-loading" class="grid-loading" hidden><span class="spinner"></span> Loading…</div>
+          <div id="guilds-empty" class="grid-empty" hidden></div>
+        </div>
+      </section>
+
+      <section id="page-wealth" class="page">
+        <div class="page-head">
+          <h1>Wealth</h1>
+          <i class="fa-solid fa-circle-info info-tip" title="The galaxy's richest characters (anonymized) plus the server's average and median wealth over time. Server-wide data from swgtracker.com."></i>
+          <span id="wealth-updated" class="gx-updated head-right"></span>
+          <button id="wealth-reload" class="btn btn-icon" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
+        </div>
+        <div id="wealth-cards" class="gx-statcards"></div>
+        <!-- One chart, many views: server economy trend + the richest characters' journeys.
+             Collapsible so the leaderboard can take the full height. -->
+        <div class="gx-aggchart" id="wealth-chartwrap">
+          <div class="gx-aggtabs" id="wealth-charttabs">
+            <button type="button" class="gx-aggtab active" data-wtab="avg">Average Wealth</button>
+            <button type="button" class="gx-aggtab" data-wtab="med">Median Wealth</button>
+            <button type="button" class="gx-aggtab" data-wtab="wealth">Richest Journeys</button>
+            <button type="button" class="gx-aggtab" data-wtab="rank">Rank</button>
+            <button type="button" class="gx-aggtab" data-wtab="movement">Movement</button>
+            <button type="button" class="gx-aggcollapse" id="wealth-chartcollapse" title="Collapse charts for more table room"><i class="fa-solid fa-chevron-up"></i></button>
+          </div>
+          <div id="wealth-chartbody"></div>
+        </div>
+        <div class="table-wrap">
+          <table class="data-grid" id="wealth-grid"><thead><tr><th>Rank</th><th>Character</th><th>Credits</th><th>Change</th><th>Movement</th><th></th></tr></thead><tbody id="wealth-body"></tbody></table>
+          <div id="wealth-loading" class="grid-loading" hidden><span class="spinner"></span> Loading…</div>
+          <div id="wealth-empty" class="grid-empty" hidden></div>
+        </div>
+      </section>
+
+      <section id="page-gcw" class="page">
+        <div class="page-head">
+          <h1>Galactic Civil War</h1>
+          <i class="fa-solid fa-circle-info info-tip" title="Active-character faction balance — Imperial vs Rebel — over time (characters logged in within the last 30 days). Server-wide data from swgtracker.com."></i>
+          <span id="gcw-updated" class="gx-updated head-right"></span>
+          <button id="gcw-reload" class="btn btn-icon" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
+        </div>
+        <div id="gcw-cards" class="gx-statcards"></div>
+        <div id="gcw-trend" class="gx-trend"></div>
+        <div id="gcw-empty" class="grid-empty" hidden></div>
+      </section>
+
+      <section id="page-professions" class="page">
+        <div class="page-head">
+          <h1>Professions</h1>
+          <i class="fa-solid fa-circle-info info-tip" title="Server-wide class population — how many characters are mastering each profession, and how that's changed. Server-wide data from swgtracker.com."></i>
+          <span id="prof-updated" class="gx-updated head-right"></span>
+          <input id="prof-search" type="text" class="form-control filter-input head-search" placeholder="Search class..." autocomplete="off">
+          <button id="prof-reload" class="btn btn-icon" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
+        </div>
+        <div id="prof-list" class="gx-prof-list"></div>
+        <div id="prof-empty" class="grid-empty" hidden></div>
+      </section>
+
+      <section id="page-titles" class="page">
+        <div class="page-head">
+          <h1>Player Titles</h1>
+          <i class="fa-solid fa-circle-info info-tip" title="Every player title and the command to set it. Click a command to copy it. Reference data from swgtracker.com."></i>
+          <span id="titles-updated" class="gx-updated head-right"></span>
+          <input id="titles-search" type="text" class="form-control filter-input head-search" placeholder="Search title..." autocomplete="off">
+          <button id="titles-reload" class="btn btn-icon" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
+        </div>
+        <div class="table-wrap">
+          <table class="data-grid" id="titles-grid"><thead><tr id="titles-head"></tr></thead><tbody id="titles-body"></tbody></table>
+          <div id="titles-loading" class="grid-loading" hidden><span class="spinner"></span> Loading…</div>
+          <div id="titles-empty" class="grid-empty" hidden></div>
+        </div>
+      </section>
+
       <section id="page-settings" class="page">
         <div class="page-head"><h1>Settings</h1></div>
 
@@ -1759,6 +1926,30 @@
       <div class="stk-note-actions">
         <button id="mac-cat-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
         <button id="mac-cat-save" class="btn btn-sm btn-accent">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="gx-detail-modal" class="key-gate" hidden>
+    <div class="key-gate-card sp-card gx-detail-card">
+      <div class="mac-hist-head">
+        <h2 id="gx-detail-title">Details</h2>
+        <button id="gx-detail-x" class="btn btn-icon" title="Close"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div id="gx-detail-body"></div>
+    </div>
+  </div>
+
+  <div id="res-cols-modal" class="key-gate" hidden>
+    <div class="key-gate-card rescols-card">
+      <div class="mac-hist-head">
+        <h2>Columns</h2>
+        <button id="res-cols-x" class="btn btn-icon" title="Close"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <p class="settings-sub">Drag to reorder · uncheck to hide. Saved on this machine.</p>
+      <div id="res-cols-list" class="rescols-list"></div>
+      <div class="stk-note-actions">
+        <button id="res-cols-reset" class="btn btn-sm btn-outline-secondary">Reset to default</button>
       </div>
     </div>
   </div>
@@ -2435,33 +2626,34 @@
   </div>
 
   <!-- Classic scripts sharing one top-level scope; app.js boots last. -->
-  <script src="js/class_caps.js?v=20261003H"></script>
-  <script src="js/shared.js?v=20261003H"></script>
-  <script src="js/help.js?v=20261003H"></script>
-  <script src="js/resources.js?v=20261003H"></script>
-  <script src="js/resource.js?v=20261003H"></script>
-  <script src="js/schematics.js?v=20261003H"></script>
-  <script src="js/stockpile.js?v=20261003H"></script>
-  <script src="js/wishlist.js?v=20261003H"></script>
-  <script src="js/myschematics.js?v=20261003H"></script>
-  <script src="js/inventory.js?v=20261003H"></script>
-  <script src="js/sales.js?v=20261003H"></script>
-  <script src="js/insights.js?v=20261003H"></script>
-  <script src="js/purchases.js?v=20261003H"></script>
-  <script src="js/harvesters.js?v=20261003H"></script>
-  <script src="js/factories.js?v=20261003H"></script>
-  <script src="js/customers.js?v=20261003H"></script>
-  <script src="js/characters.js?v=20261003H"></script>
-  <script src="js/settings.js?v=20261003H"></script>
-  <script src="js/alerts.js?v=20261003H"></script>\n  <script src="js/lab.js?v=20261003H"></script>
-  <script src="js/mail.js?v=20261003H"></script>
-  <script src="js/notes.js?v=20261003H"></script>
-  <script src="js/macro_commands.js?v=20261003H"></script>
-  <script src="js/macros.js?v=20261003H"></script>
-  <script src="js/aliases.js?v=20261003H"></script>
-  <script src="js/community_macros.js?v=20261003H"></script>
-  <script src="js/schembuilder.js?v=20261003H"></script>
-  <script src="js/scanner.js?v=20261003H"></script>
-  <script src="js/app.js?v=20261003H"></script>
+  <script src="js/class_caps.js?v=20261007r"></script>
+  <script src="js/shared.js?v=20261007r"></script>
+  <script src="js/help.js?v=20261007r"></script>
+  <script src="js/resources.js?v=20261007r"></script>
+  <script src="js/resource.js?v=20261007r"></script>
+  <script src="js/schematics.js?v=20261007r"></script>
+  <script src="js/stockpile.js?v=20261007r"></script>
+  <script src="js/wishlist.js?v=20261007r"></script>
+  <script src="js/myschematics.js?v=20261007r"></script>
+  <script src="js/inventory.js?v=20261007r"></script>
+  <script src="js/sales.js?v=20261007r"></script>
+  <script src="js/insights.js?v=20261007r"></script>
+  <script src="js/purchases.js?v=20261007r"></script>
+  <script src="js/harvesters.js?v=20261007r"></script>
+  <script src="js/factories.js?v=20261007r"></script>
+  <script src="js/customers.js?v=20261007r"></script>
+  <script src="js/characters.js?v=20261007r"></script>
+  <script src="js/settings.js?v=20261007r"></script>
+  <script src="js/alerts.js?v=20261007r"></script>\n  <script src="js/lab.js?v=20261007r"></script>
+  <script src="js/mail.js?v=20261007r"></script>
+  <script src="js/notes.js?v=20261007r"></script>
+  <script src="js/macro_commands.js?v=20261007r"></script>
+  <script src="js/macros.js?v=20261007r"></script>
+  <script src="js/aliases.js?v=20261007r"></script>
+  <script src="js/community_macros.js?v=20261007r"></script>
+  <script src="js/galaxy.js?v=20261007r"></script>
+  <script src="js/schembuilder.js?v=20261007r"></script>
+  <script src="js/scanner.js?v=20261007r"></script>
+  <script src="js/app.js?v=20261007r"></script>
 </body>
 </html>

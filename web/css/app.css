@@ -3226,3 +3226,353 @@ body.dev-mode .scd-hiddenrow { display: block; opacity: .55; }
 .rd-herofoot .rd-planet:last-child { margin-right: 0; }
 .rd-herofoot .rd-planets { display: inline-flex; align-items: center; gap: 0; }
 .rd-herofoot .rd-planets-label { font-size: 11.5px; color: var(--text-muted); margin-right: 7px; }
+
+/* ===================== Galaxy (server-wide data) ===================== */
+/* collapsible nav section header */
+.nav-group-head { display: flex; align-items: center; gap: 9px; padding: 8px 16px 3px;
+  font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+  color: var(--text-muted); cursor: pointer; user-select: none; }
+.nav-group-head:hover { color: var(--text-primary); }
+.nav-group-head i:first-child { width: 16px; text-align: center; }
+.nav-group-caret { margin-left: auto; font-size: 11px; transition: transform .12s; }
+.nav-group-head.collapsed .nav-group-caret { transform: rotate(-90deg); }
+.nav-group-item { padding-left: 30px; } /* indent group members under the header */
+.app-sidebar.collapsed .nav-group-head { justify-content: center; padding-left: 0; padding-right: 0; }
+.app-sidebar.collapsed .nav-group-caret { display: none; }
+.app-sidebar.collapsed .nav-group-item { padding-left: 16px; }
+
+.gx-updated { font-size: 11.5px; color: var(--text-muted); white-space: nowrap; }
+.gx-muted { color: var(--text-muted); }
+.gx-up { color: #45e97e; }
+.gx-down { color: #e96b6b; }
+.gx-new { color: var(--accent-hover); font-weight: 600; }
+.gx-rank { color: var(--text-muted); }
+.gx-spec { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gx-wp, .gx-cmd { font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: var(--accent-hover); cursor: pointer; }
+.gx-wp:hover, .gx-cmd:hover { color: var(--accent); text-decoration: underline; }
+
+/* stat cards (Wealth, GCW) */
+.gx-statcards { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 14px; }
+.gx-card { flex: 1 1 200px; background: var(--bg-secondary); border: 1px solid var(--border);
+  border-radius: 8px; padding: 12px 16px; min-width: 180px; }
+.gx-card-label { font-size: 11px; font-weight: 600; letter-spacing: .03em; text-transform: uppercase; color: var(--text-muted); }
+.gx-card-val { font-size: 26px; font-weight: 700; color: var(--text-hover); margin-top: 2px; }
+.gx-card-sub { font-size: 11.5px; color: var(--text-muted); margin-top: 2px; }
+.gx-spark { display: block; margin-top: 6px; }
+.gx-imp .gx-card-val { color: #7db3e8; }
+.gx-reb .gx-card-val { color: #e88585; }
+
+/* GCW balance bar + trend */
+.gx-trend { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; }
+.gx-balance { display: flex; height: 22px; border-radius: 6px; overflow: hidden; }
+.gx-balance-imp { background: #5b9bd5; }
+.gx-balance-reb { background: #e05b5b; }
+.gx-balance-legend { display: flex; justify-content: space-between; font-size: 12px; margin-top: 6px; }
+.gx-imp-txt { color: #7db3e8; }
+.gx-reb-txt { color: #e88585; }
+.gx-trend-row { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
+.gx-trend-lbl { flex: 0 0 70px; font-size: 12px; font-weight: 600; }
+
+/* Professions bars — the list scrolls on its own; the page head stays put */
+.gx-prof-list { display: flex; flex-direction: column; gap: 6px; flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 4px; }
+.gx-prof-row { display: flex; align-items: center; gap: 12px; }
+.gx-prof-name { flex: 0 0 150px; font-size: 13px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gx-prof-barwrap { flex: 1 1 auto; background: var(--bg-card); border-radius: 5px; height: 18px; overflow: hidden; min-width: 60px; }
+.gx-prof-bar { height: 100%; border-radius: 5px; min-width: 2px; transition: width .2s; }
+.gx-prof-spark { flex: 0 0 90px; height: 22px; opacity: .85; }
+.gx-prof-spark:empty { visibility: hidden; }
+.gx-prof-count { flex: 0 0 150px; text-align: right; font-size: 12.5px; color: var(--text-primary); white-space: nowrap; }
+.gx-prof-chg { margin-left: 6px; font-size: 11.5px; }
+
+/* Date-driven holiday accent bar (mirrors the website's holiday_banner) */
+.holiday-bar { position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 2147483647; }
+.holiday-bar[hidden] { display: none; }
+
+/* ===================== Resources: view switch + column picker + cards ===================== */
+/* the FILTERS row: pills on the left, view/columns tools flush right */
+.res-filterrow { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; min-height: 26px; }
+.res-filterrow #res-filter-pills { flex: 1 1 auto; margin: 0; }
+.res-filterrow #res-filter-pills[hidden] { display: none; }
+.res-righttools { margin-left: auto; display: inline-flex; gap: 6px; align-items: center; flex: 0 0 auto; }
+.res-view-switch { display: inline-flex; gap: 4px; }
+.res-view-btn { border: 0; background: transparent; color: var(--text-muted); width: 22px; height: 22px;
+  cursor: pointer; font-size: 13px; display: inline-flex; align-items: center; justify-content: center; }
+.res-view-btn:hover { color: var(--text-hover); }
+.res-view-btn.active { color: var(--accent); }
+.res-tool-btn { border: 0; background: transparent; color: var(--text-muted);
+  width: 22px; height: 22px; cursor: pointer; font-size: 13px; margin-left: 4px; }
+.res-tool-btn:hover { color: var(--text-hover); }
+
+/* column picker dialog */
+.rescols-card { width: min(560px, calc(100vw - 80px)); max-width: none; text-align: left; }
+.rescols-card h2 { margin: 0; font-size: 17px; font-weight: 700; color: var(--text-hover); }
+.rescols-list { margin-top: 10px; column-count: 2; column-gap: 14px; }
+.rescol-row { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 6px;
+  background: var(--bg-card); border: 1px solid transparent; cursor: grab; break-inside: avoid; margin-bottom: 4px; }
+.rescol-row:hover { border-color: var(--border); }
+.rescol-dragging { opacity: .45; }
+.rescol-over { outline: 1px dashed var(--accent); outline-offset: -1px; background: rgba(124,45,45,.18); }
+.rescol-grip { color: var(--text-muted); font-size: 12px; }
+.rescol-label { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; margin: 0; cursor: pointer; font-size: 13px; color: var(--text-primary); }
+.rescol-lock { font-size: 10.5px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; }
+
+/* card + grouped views */
+.res-cards { overflow-y: auto; min-height: 0; flex: 1; }
+.res-cards[hidden] { display: none; }
+.res-card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.res-card { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 9px 11px;
+  display: flex; flex-direction: column; gap: 5px; }
+/* left border marks pinned (accent) / stockpiled (green) / wishlisted (pink);
+   the head icons echo stockpile + wishlist so both read even when pinned wins */
+.res-card-pinned { border-left: 3px solid var(--accent); }
+.res-card-stocked { border-left: 3px solid #45e97e; }
+.res-card-wished { border-left: 3px solid #e05b9b; }
+.res-card-mark { font-size: 10px; flex: 0 0 auto; }
+.res-card-stock { color: #45e97e; }
+.res-card-wish { color: #e05b9b; }
+.res-card-head { display: flex; align-items: center; gap: 7px; }
+.res-card-pin, .res-tree-pin { color: var(--text-muted); font-size: 11px; cursor: pointer; flex: 0 0 auto; opacity: .45; transition: opacity .1s, color .1s; }
+.res-card:hover .res-card-pin, .res-tree-item:hover .res-tree-pin { opacity: 1; }
+.res-card-pin:hover, .res-tree-pin:hover { color: var(--text-hover); opacity: 1; }
+.res-card-pin.pinned-star, .res-tree-pin.pinned-star { color: var(--accent); opacity: 1; }
+.res-card-head .res-card-name { flex: 1 1 auto; }
+.res-card-name { font-weight: 700; color: var(--text-hover); font-size: 13.5px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.res-card-name:hover { color: var(--accent-hover); }
+.res-card-type { font-size: 11.5px; color: var(--text-muted); }
+.res-card-days { font-size: 10.5px; color: var(--text-muted); display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.res-card-days.res-card-gone { color: #e96b6b; }
+.res-card-days i { font-size: 10px; }
+/* footer pinned to the card bottom: days-in-spawn left, planets right */
+.res-card-foot { margin-top: auto; padding-top: 6px; border-top: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+/* mini quality bars (replace the stat pills) — two columns to keep cards short */
+.res-card-bars { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 12px; }
+.res-cbar { display: flex; align-items: center; gap: 6px; font-size: 11px; }
+.res-cbar-l { flex: 0 0 24px; color: var(--text-muted); font-weight: 600; }
+.res-cbar-track { flex: 1 1 auto; height: 5px; background: var(--bg-card); border-radius: 3px; overflow: hidden; }
+.res-cbar-fill { display: block; height: 100%; border-radius: 3px; }
+.res-cbar-fill.q-great { background: var(--q-great); }
+.res-cbar-fill.q-good { background: var(--q-good); }
+.res-cbar-fill.q-fair { background: var(--q-fair); }
+.res-cbar-fill.q-better { background: var(--q-better); }
+.res-cbar-fill.q-ok { background: var(--q-ok); }
+.res-cbar-fill.q-poor { background: var(--q-poor); }
+.res-cbar-v { flex: 0 0 34px; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+.res-card-planets { display: inline-flex; flex-wrap: wrap; gap: 2px; justify-content: flex-end; }
+.res-card-planets .planet { font-size: 8.5px; min-width: 13px; height: 13px; line-height: 13px; padding: 0 2px; }
+.res-group { margin-bottom: 16px; }
+.res-group-head { font-size: 12px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; color: var(--text-primary);
+  padding: 6px 2px; border-bottom: 1px solid var(--border); margin-bottom: 10px; }
+.res-group-count { color: var(--text-muted); font-weight: 600; margin-left: 6px; }
+
+/* category tree view */
+.res-treewrap { padding: 0; }
+/* sticky stat-column header */
+.res-tree-header { position: sticky; top: 0; z-index: 2; display: flex; align-items: center;
+  background: var(--bg-input, #14161c); border-bottom: 1px solid var(--border);
+  padding: 5px 10px 5px 8px; font-size: 10.5px; font-weight: 700; letter-spacing: .03em;
+  text-transform: uppercase; color: var(--text-muted); }
+.res-tree-h-name { flex: 0 0 40%; }
+.res-tree-sep { color: var(--text-muted); font-weight: 400; margin: 0 2px; }
+/* category node = full-width clickable header bar with a background */
+.res-tree-node { display: flex; align-items: center; gap: 8px; padding-top: 6px; padding-bottom: 6px; cursor: pointer;
+  background: var(--bg-secondary); border-bottom: 1px solid var(--border); }
+.res-tree-node:hover { background: var(--bg-card); }
+.res-tree-caret { width: 10px; color: var(--text-muted); font-size: 11px; flex: 0 0 auto; }
+.res-tree-name { font-weight: 600; font-size: 12.5px; color: var(--text-primary); flex: 0 1 auto;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.res-tree-unmatched .res-tree-name { color: var(--text-muted); }
+/* count sits right next to the name, not pushed to the far right where it's lost */
+.res-tree-count { font-size: 10.5px; color: var(--text-muted); background: var(--bg-card); border-radius: 9px;
+  padding: 0 8px; flex: 0 0 auto; }
+.res-tree-node:hover .res-tree-count { background: var(--border); }
+/* resource row = name (indented, flexible) + fixed-width stat cells + planets last */
+.res-tree-item { display: flex; align-items: center; font-size: 12.5px; padding: 3px 10px 3px 0;
+  border-bottom: 1px solid rgba(255,255,255,.03); }
+.res-tree-item:hover { background: var(--bg-card); }
+.res-tree-itemlabel { flex: 0 0 40%; min-width: 0; display: inline-flex; align-items: center; gap: 7px; overflow: hidden; }
+.res-tree-item .res-status { font-size: 7px; flex: 0 0 auto; }
+.res-tree-itemname { color: var(--text-primary); cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.res-tree-itemname:hover { color: var(--accent-hover); }
+/* stat cells distribute across the remaining width so the row isn't mostly gap */
+.res-tree-cells { display: flex; align-items: center; flex: 1 1 auto; }
+.res-tree-cell { flex: 1 1 0; min-width: 32px; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+.res-tree-header .res-tree-cell { font-weight: 700; color: var(--text-muted); }
+.res-tree-cell.stat_off { color: var(--text-muted); font-weight: 400; }
+.res-tree-planetscell { flex: 0 0 120px; text-align: right; padding-left: 10px; }
+.res-tree-planetscell .planet { font-size: 10px; }
+
+/* resources sort control (righttools) */
+.res-sort-sel { width: auto; min-width: 118px; max-width: 170px; height: 26px; font-size: 12px; padding: 2px 8px; }
+
+/* resource waypoint popover */
+.res-wpmark { cursor: pointer; }
+.res-wp-pop { position: fixed; z-index: 1000; background: var(--bg-secondary); border: 1px solid var(--border);
+  border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,.5); padding: 8px; min-width: 200px; max-width: 320px; }
+.res-wp-pop[hidden] { display: none; }
+.res-wp-pop-head { font-size: 11px; color: var(--text-muted); font-weight: 600; padding: 2px 6px 6px; }
+.res-wp-pop-row { display: flex; align-items: center; gap: 7px; padding: 5px 6px; border-radius: 5px; cursor: pointer;
+  font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: var(--text-primary); }
+.res-wp-pop-row:hover { background: var(--bg-card); }
+.res-wp-pop-row i { color: var(--accent-green); font-size: 11px; }
+.res-wp-pop-wp { flex: 1 1 auto; }
+.res-wp-pop-conc { color: var(--text-muted); font-size: 11px; }
+
+/* resource-detail waypoint chips */
+#rd-waypoints { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 5px; }
+.rd-wp-chip { font-family: ui-monospace, Menlo, monospace; font-size: 11.5px; color: var(--accent-hover);
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: 5px; padding: 1px 7px; cursor: pointer; }
+.rd-wp-chip:hover { border-color: var(--accent); color: var(--accent); }
+.rd-wp-conc { color: var(--text-muted); }
+
+/* Galaxy: pins + city/guild detail modal */
+.gx-pin { color: var(--text-muted); font-size: 11px; cursor: pointer; opacity: .4; }
+tr:hover .gx-pin { opacity: 1; }
+.gx-pin:hover { color: var(--text-hover); opacity: 1; }
+.gx-pin.pinned-star { color: var(--accent); opacity: 1; }
+.gx-detail-link { color: var(--text-hover); }
+tr.gx-rowlink { cursor: pointer; }
+tr.gx-rowlink:hover { background: var(--row-hover, rgba(255,255,255,0.04)); }
+tr.gx-rowlink:hover .gx-detail-link { color: var(--accent-hover); }
+.key-gate-card.gx-detail-card { width: min(1060px, calc(100vw - 80px)); max-width: none; max-height: calc(100vh - 100px); overflow-y: auto; text-align: left; }
+/* hover cursor + tooltip on charts */
+.gx-chartwrap { position: relative; }
+.gx-linechart .gx-cursor { stroke: var(--text-muted); stroke-width: .6; stroke-dasharray: 3 3; opacity: .7; }
+.gx-tip { position: absolute; z-index: 5; background: var(--bg-input, #14161c); border: 1px solid var(--border);
+  border-radius: 6px; padding: 5px 8px; font-size: 11.5px; pointer-events: none; white-space: nowrap; box-shadow: 0 6px 18px rgba(0,0,0,.4); }
+.gx-tip-label { color: var(--text-muted); font-size: 10.5px; margin-bottom: 3px; }
+.gx-tip-row { display: flex; align-items: center; gap: 5px; color: var(--text-primary); }
+.gx-tip-sw { width: 9px; height: 3px; border-radius: 2px; display: inline-block; }
+.gx-detail-card h2 { margin: 0; font-size: 17px; font-weight: 700; color: var(--text-hover); }
+#gx-detail-body { margin-top: 12px; }
+.gx-detail-stats { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+.gx-dstat { flex: 1 1 90px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 7px; padding: 8px 10px; }
+.gx-dstat-l { font-size: 10.5px; text-transform: uppercase; letter-spacing: .03em; color: var(--text-muted); }
+.gx-dstat-v { font-size: 18px; font-weight: 700; color: var(--text-hover); margin-top: 1px; }
+.gx-dstat-v.gx-dstat-sm { font-size: 13px; font-weight: 600; }
+.gx-chart { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 7px; padding: 10px 12px; margin-bottom: 10px; }
+.gx-chart-h { font-size: 12px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px; }
+.gx-detail-profile { background: var(--bg-card); border: 1px solid var(--border); border-radius: 7px; padding: 10px 12px; margin-bottom: 12px; }
+.gx-prof-bio { font-size: 12.5px; color: var(--text-primary); margin: 0 0 8px; line-height: 1.5; }
+.gx-prof-meta { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; color: var(--text-muted); }
+.gx-prof-meta i { margin-right: 4px; }
+.gx-recruit { color: #45e97e; font-weight: 600; }
+.gx-detail-foot { padding-top: 6px; }
+
+/* Galaxy aggregate chart + line chart + guild extras */
+.gx-aggchart { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; }
+.gx-aggtabs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-bottom: 10px; }
+.gx-aggcollapse { margin-left: auto; border: 1px solid var(--border); background: transparent; color: var(--text-muted); border-radius: 6px; width: 30px; height: 28px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+.gx-aggcollapse:hover { color: var(--text-hover); border-color: var(--accent); }
+.gx-aggcollapse i { font-size: 12px; }
+.gx-aggchart.collapsed #wealth-chartbody { display: none; }
+.gx-aggchart.collapsed .gx-aggtabs { margin-bottom: 0; }
+.gx-aggtab { border: 1px solid var(--border); background: var(--bg-card); color: var(--text-muted);
+  font-size: 12px; border-radius: 6px; padding: 4px 12px; cursor: pointer; }
+.gx-aggtab:hover { color: var(--text-hover); }
+.gx-aggtab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.gx-linechart { display: block; }
+.gx-linechart .gx-grid { stroke: var(--border); stroke-width: .5; opacity: .6; }
+.gx-linechart .gx-ylabel { fill: var(--text-muted); font-size: 9px; text-anchor: end; }
+.gx-legend { display: flex; gap: 14px; justify-content: center; margin-bottom: 4px; font-size: 11.5px; color: var(--text-muted); }
+.gx-legend-item { display: inline-flex; align-items: center; gap: 5px; }
+.gx-legend-sw { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+.gx-movecell { width: 130px; }
+.gx-badge { display: inline-block; font-size: 10.5px; border-radius: 9px; padding: 1px 8px; border: 1px solid var(--border); color: var(--text-muted); }
+.gx-badge-recruit { background: var(--accent); border-color: var(--accent); color: #fff; }
+.gx-badge-sm { font-size: 9.5px; padding: 0 6px; }
+.gx-badges { display: flex; gap: 6px; margin-bottom: 8px; }
+.gx-detail-stats-8 .gx-dstat { flex: 1 1 100px; min-width: 100px; }
+.gx-prof-bio { font-size: 12.5px; color: var(--text-primary); line-height: 1.5; margin: 0 0 6px; }
+.gx-prof-links { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--text-muted); margin-bottom: 12px; }
+.gx-rechist { margin-top: 12px; }
+.gx-rechist-table { width: 100%; font-size: 12px; }
+.gx-rechist-table th { text-align: left; color: var(--text-muted); font-size: 10.5px; text-transform: uppercase; padding: 4px 8px; border-bottom: 1px solid var(--border); }
+.gx-rechist-table th.col-num, .gx-rechist-table td.col-num { text-align: right; }
+.gx-rechist-table td { padding: 5px 8px; border-bottom: 1px solid var(--border); }
+.gx-citytag { color: var(--accent-hover); font-size: 11px; }
+/* Wealth stat cards: big number + "± since last scan" delta (matches the website) */
+#wealth-cards.gx-statcards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 14px; }
+@media (max-width: 900px) { #wealth-cards.gx-statcards { grid-template-columns: repeat(2, 1fr); } }
+.wealth-statcard { position: relative; overflow: hidden; background: var(--bg-secondary); border: 0; border-radius: 10px; padding: 22px 16px 26px; text-align: center; }
+.wealth-spark { position: absolute; left: 0; right: 0; bottom: 0; height: 40px; opacity: .45; pointer-events: none; mask-image: linear-gradient(to top, #000 40%, transparent); -webkit-mask-image: linear-gradient(to top, #000 40%, transparent); }
+.wealth-spark .gx-spark { display: block; }
+.wealth-stat-num { font-size: 30px; font-weight: 700; color: var(--accent); line-height: 1.1; }
+.wealth-stat-label { font-size: 13px; color: var(--text-muted); margin-top: 8px; }
+.wealth-delta { font-size: 17px; font-weight: 600; margin-top: 16px; }
+.wealth-delta-up { color: #45e97e; }
+.wealth-delta-down { color: var(--accent); }
+.wealth-delta-flat { color: var(--text-muted); }
+.wealth-delta-sub { font-size: 12px; font-weight: 400; color: var(--text-muted); margin-top: 2px; }
+.gx-charid { font-family: var(--mono, monospace); font-size: 12px; color: var(--text-primary); }
+.gx-histicon { color: var(--text-muted); cursor: pointer; padding: 3px 6px; border-radius: 4px; }
+.gx-histicon:hover { color: #fff; background: var(--accent); }
+
+/* ===== Resource detail: Value & Crafting Profile + Extraction Calculator ===== */
+.rd-profile { margin: 4px 0 22px; }
+.rd-profile .collapse-head { display:flex; align-items:center; justify-content:space-between; cursor:pointer; user-select:none; padding:6px 2px; }
+.rd-profile .collapse-title { display:flex; align-items:center; gap:7px; color:#cdd6e6; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; }
+.rd-profile .collapse-title .fa { color: var(--accent); }
+.rd-profile .collapse-caret { color: var(--text-muted); transition: transform .2s; }
+.rd-profile.collapsed .collapse-caret { transform: rotate(180deg); }
+.rd-profile.collapsed .collapse-body { display:none; }
+.rd-pgrid { display:grid; gap:10px; }
+.rd-pgrid-2 { grid-template-columns: repeat(2, 1fr); }
+.rd-pgrid-3 { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 900px) { .rd-pgrid-2, .rd-pgrid-3 { grid-template-columns: 1fr; } }
+.rd-pcard { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; display:flex; flex-direction:column; }
+.rd-ptitle { color: var(--accent); font-size: 13px; margin: 0 0 6px; display:flex; align-items:center; gap:6px; }
+.rd-psub { font-size: 12.5px; color: #aeb6c6; margin: 0 0 4px; }
+.rd-pmuted { color: var(--text-muted); font-size: 11px; }
+.rd-plegendnote { list-style:none; padding:0; margin:0 0 8px; font-size:11px; color: var(--text-muted); line-height:1.7; }
+.rd-plegendnote strong { color:#cfd3df; }
+.rd-pchart { margin-top: auto; min-height: 150px; }
+.rd-psvg { display:block; }
+/* hover highlight on bars + slices (Chart.js-style) */
+.rd-pbar { transition: opacity .1s; cursor: default; }
+.rd-psvg:hover .rd-pbar { opacity: .5; }
+.rd-psvg .rd-pbar:hover { opacity: 1; }
+.rd-pslice { transition: filter .1s; cursor: default; }
+.rd-pdonut:hover .rd-pslice { filter: brightness(.6); }
+.rd-pdonut .rd-pslice:hover { filter: brightness(1.12); }
+/* floating tooltip, one per profile section, positioned off the cursor */
+#rd-profile-body { position: relative; }
+.rd-ptip { position: absolute; z-index: 6; pointer-events: none; background: var(--bg-input, #14161c);
+  border: 1px solid var(--border); border-radius: 6px; padding: 6px 9px; font-size: 11.5px;
+  box-shadow: 0 4px 14px rgba(0,0,0,.4); max-width: 230px; }
+.rd-ptip-t { color: var(--text-hover); font-weight: 600; }
+.rd-ptip-b { color: var(--text-muted); margin-top: 2px; }
+.rd-pgridline { stroke: rgba(255,255,255,.06); stroke-width: 1; }
+.rd-paxis { fill: var(--text-muted); font-size: 9px; }
+/* donut + legend side by side */
+.rd-pdonutwrap { display:flex; align-items:center; gap:12px; justify-content:center; flex-wrap:wrap; }
+.rd-pdonut { flex: 0 0 auto; }
+.rd-plegend { list-style:none; padding:0; margin:0; font-size:11px; color:#cfd3df; line-height:1.9; }
+.rd-plegend li { display:flex; align-items:center; gap:6px; white-space:nowrap; }
+.rd-pdot { width:10px; height:10px; border-radius:2px; display:inline-block; flex:0 0 auto; }
+/* bell curve */
+.rd-pbellfill { fill: rgba(67,70,92,.55); stroke:none; }
+.rd-pbellline { fill:none; stroke:#8b93a7; stroke-width:1.5; }
+.rd-pbellguide { stroke: rgba(174,182,198,.25); stroke-width:1; stroke-dasharray:3 3; }
+.rd-pbellmu { stroke: rgba(174,182,198,.45); stroke-width:1; stroke-dasharray:4 4; }
+.rd-pbellmark { stroke: var(--accent); stroke-width:2; }
+.rd-pbelllab { fill: var(--text-muted); font-size:9px; font-weight:600; }
+.rd-pbellself { fill: var(--accent); font-weight:700; }
+
+/* Extraction Calculator pane */
+.rd-calc { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 18px; }
+.rd-calc-inputs { display:flex; gap:14px; align-items:flex-end; flex-wrap:wrap; }
+.rd-calc-field { display:flex; flex-direction:column; gap:4px; flex: 1 1 0; min-width: 160px; }
+.rd-calc-field label { font-size: 12px; color: #aeb6c6; }
+.rd-calc-field input { width: 100%; }
+.rd-calc-results { margin-top: 16px; }
+.rd-calc-head { font-size: 14px; color: var(--text-hover); margin: 0 0 10px; }
+.rd-calc-cards { display:grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+@media (max-width: 700px) { .rd-calc-cards { grid-template-columns: repeat(2, 1fr); } }
+.rd-calc-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 14px; text-align:center; }
+.rd-calc-num { font-size: 20px; font-weight: 700; color: var(--text-hover); }
+.rd-calc-cap { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing:.05em; margin-top: 4px; }
+.rd-calc-despawn { margin: 14px 0 0; padding: 11px 13px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 8px; font-size: 13px; color: #cfd3df; line-height: 1.55; }
+.rd-calc-despawn .fa-hourglass-half { color: var(--accent); margin-right: 5px; }
+.rd-calc-despawn strong { color: var(--text-hover); }
+.rd-calc-caveat { color: var(--text-muted); font-size: 11px; }

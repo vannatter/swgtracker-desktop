@@ -92,11 +92,20 @@ async function invLoadVendorSuggestions() {
 // click picked a DIFFERENT vendor than the one the user aimed at — Philosophy's
 // ~20% "saved the wrong vendor" mystery.
 let invSugHover = false;
+let invSuppressSug = false; // set right after a pick so the list doesn't pop back up
 function invRenderVendorSug() {
   const box = $('#inv-vendor-sug');
+  if (invSuppressSug) { box.hidden = true; return; } // just selected — keep it closed
   if (invSugHover && !box.hidden) return; // frozen under the pointer
   const q = $('#inv-new-vendor').value.trim().toLowerCase();
-  const hits = (invState.vendors || [])
+  // "Bazaar" is always offered (pinned first): Bazaar sales carry no vendor, so
+  // tagging an item's vendor as Bazaar is how it tracks/depletes on those sales.
+  const seen = new Set();
+  const candidates = ['Bazaar', ...(invState.vendors || [])].filter((v) => {
+    const k = v.toLowerCase();
+    if (seen.has(k)) return false; seen.add(k); return true;
+  });
+  const hits = candidates
     .filter((v) => !q || v.toLowerCase().includes(q))
     .slice(0, 8);
   if (!hits.length) { box.hidden = true; return; }
@@ -465,8 +474,8 @@ function initInventory() {
   $('#inv-next').addEventListener('click', () => { if (invState.hasNext) { invState.page++; loadInventory(); } });
   $('#inv-add-open').addEventListener('click', () => openInvDialog());
   // styled vendor suggestions (own dropdown, not native datalist)
-  $('#inv-new-vendor').addEventListener('focus', invRenderVendorSug);
-  $('#inv-new-vendor').addEventListener('input', invRenderVendorSug);
+  $('#inv-new-vendor').addEventListener('focus', () => { invSuppressSug = false; invRenderVendorSug(); });
+  $('#inv-new-vendor').addEventListener('input', () => { invSuppressSug = false; invRenderVendorSug(); });
   $('#inv-vendor-sug').addEventListener('mouseenter', () => { invSugHover = true; });
   $('#inv-vendor-sug').addEventListener('mouseleave', () => { invSugHover = false; invRenderVendorSug(); });
   $('#inv-new-vendor').addEventListener('blur', () => setTimeout(() => { $('#inv-vendor-sug').hidden = true; }, 150));
@@ -474,6 +483,8 @@ function initInventory() {
     const opt = e.target.closest('[data-vendor]');
     if (!opt) return;
     e.preventDefault();
+    invSuppressSug = true; // stop the mouseleave re-render from reopening the list
+    invSugHover = false;
     $('#inv-new-vendor').value = opt.dataset.vendor;
     $('#inv-vendor-sug').hidden = true;
   });

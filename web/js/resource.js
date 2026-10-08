@@ -45,6 +45,27 @@ function rdIsActive(r) {
   return String(r.status ?? '0') === '1';
 }
 
+// community-shared waypoints for this resource — chips you can click to copy
+async function rdRenderWaypoints(r) {
+  const host = document.getElementById('rd-waypoints');
+  if (!host) return;
+  host.innerHTML = '';
+  if (!rdIsActive(r)) return; // the community pool only holds waypoints for active spawns
+  let res;
+  try { res = await apiFetch('GET', 'api/waypoints.php'); } catch (_) { return; }
+  const mine = (((res.ok && res.data && res.data.results) || [])).filter((w) => String(w.resource_id) === String(r.id));
+  if (!mine.length) return;
+  host.innerHTML = '<span class="rd-planets-label"><i class="fa-solid fa-location-dot"></i> Waypoints:</span> '
+    + mine.map((w) => `<span class="rd-wp-chip" data-wpcopy="${escapeHtml(w.waypoint || '')}" title="Click to copy">${escapeHtml(w.waypoint || '')}${w.concentration ? ` <span class="rd-wp-conc">${safeInt(w.concentration)}%</span>` : ''}</span>`).join('');
+  if (!host.dataset.wired) {
+    host.dataset.wired = '1';
+    host.addEventListener('click', (e) => {
+      const chip = e.target.closest('[data-wpcopy]');
+      if (chip) { try { navigator.clipboard.writeText(chip.dataset.wpcopy); toast('Waypoint copied'); } catch (_) { /* ignore */ } }
+    });
+  }
+}
+
 function rdAgeText(r) {
   const ts = safeInt(r.timestamp);
   const added = ts > 0 ? fmtDate(ts) : '';
@@ -145,6 +166,7 @@ function renderResourcePage(data) {
   // filtered to it (stockpile may still be syncing; fills in when it lands)
   document.querySelector('.rd-hero').hidden = false; // data's in — show the finished header
   rdRenderStockTags(r.id);
+  rdRenderWaypoints(r);
   cmtMount('#rd-comments', 'resource', r.id); // community notes live in their own tab
   rdSyncNotesTab();
 
@@ -158,6 +180,316 @@ function renderResourcePage(data) {
   rdTabState.sortField = ''; // fresh resource, natural order
   renderRdTabs();
   renderRdTable();
+  rdSyncNotesTab();
+
+  // Extraction calculator: name this resource + capture spawn timing for the despawn
+  // estimate, then compute live from current inputs (spawn stats fill in with the profile)
+  rdState.calcName = r.name || '';
+  rdState.calcActive = rdIsActive(r);
+  rdState.calcTs = safeInt(r.timestamp);
+  rdState.spawn = null;
+  runExtractionCalc();
+
+  // Value & Crafting Profile charts (lazy; own endpoint, so a slow/older server
+  // just leaves the section hidden rather than blocking the page)
+  rdLoadProfile(r.id);
+}
+
+// Extraction Calculator — rpm = 1.5 · BER · (conc%), scaled by harvesters (site formula).
+// Live: called on any input change and once when a resource loads.
+function runExtractionCalc() {
+  let conc = safeInt($('#rd-calc-conc').value) || 1;
+  if (conc > 100) conc = 100;
+  const harv = Math.max(1, safeInt($('#rd-calc-harv').value) || 1);
+  const ber = Math.max(1, safeInt($('#rd-calc-ber').value) || 1);
+  const rpm = 1.5 * ber * (conc * 0.01);
+  const out = [
+    ['Minute', Math.floor(rpm * harv)],
+    ['Hourly', Math.floor(rpm * 60 * harv)],
+    ['Daily', Math.floor(rpm * 60 * 24 * harv)],
+    ['Weekly', Math.floor(rpm * 60 * 24 * 7 * harv)],
+  ];
+  $('#rd-calc-results').innerHTML =
+    `<p class="rd-calc-head">${harv} harvester${harv > 1 ? 's' : ''} (${ber} BER) on ${conc}% of `
+    + `${escapeHtml(rdState.calcName || 'this resource')} will produce…</p>`
+    + `<div class="rd-calc-cards">${out.map(([label, n]) =>
+      `<div class="rd-calc-card"><div class="rd-calc-num">${fmtNum(n)}</div><div class="rd-calc-cap">${label}</div></div>`).join('')}</div>`
+    + rdDespawnEstimateHtml(rpm * harv);
+  $('#rd-calc-results').hidden = false;
+}
+
+// Rough "how much before it despawns" estimate from this type's historical spawn
+// lifespans (api/resource_profile.php → spawn{}). Only for active spawns with a sample.
+function rdDespawnEstimateHtml(unitsPerMin) {
+  const s = rdState.spawn;
+  if (!rdState.calcActive || !s || !rdState.calcTs) return '';
+  const daysIn = Math.max(0, (Date.now() / 1000 - rdState.calcTs) / 86400);
+  // median is steadier than mean for skewed spawn lifespans; fall back to avg
+  const typical = s.median_days != null ? s.median_days : s.avg_days;
+  const remaining = typical - daysIn;
+  const perDay = unitsPerMin * 60 * 24;
+  const range = (s.min_days != null && s.max_days != null && s.max_days !== s.min_days)
+    ? ` (seen ${Math.round(s.min_days)}–${Math.round(s.max_days)}d)` : '';
+  let line;
+  if (remaining > 0.5) {
+    const rem = Math.round(remaining * 10) / 10;
+    line = `In spawn ~${Math.round(daysIn)}d. ${rdResourceTypeName()} typically despawns around <strong>${typical}d</strong>${range}, so roughly `
+      + `<strong>${rem}d</strong> left — about <strong>${fmtNum(Math.floor(perDay * remaining))}</strong> more units before it despawns.`;
+  } else {
+    line = `In spawn ~${Math.round(daysIn)}d — already past this type's typical ~${typical}d lifespan${range}, so it could despawn any time now.`;
+  }
+  return `<p class="rd-calc-despawn"><i class="fa-solid fa-hourglass-half"></i> ${line}<br>`
+    + `<span class="rd-calc-caveat">Estimate only, from ${s.sample} past spawn${s.sample === 1 ? '' : 's'} of this type — actual despawn is random.</span></p>`;
+}
+
+function rdResourceTypeName() {
+  const tn = ((rdState.data || {}).resource || {}).type_name;
+  return tn ? escapeHtml(tn) : 'This type';
+}
+
+// ---- Value & Crafting Profile (histogram / donut / bell curve) ----
+// Data from api/resource_profile.php (mirrors the website's resource page). The
+// section stays hidden until data arrives and there's something to show.
+
+// Collapse preference persists across reloads/resources: localStorage for the
+// instant read, config.json as the durable store (survives a WebView cache wipe).
+function rdLoadProfilePref() {
+  try { rdState.profileCollapsed = localStorage.getItem('rd-profile-collapsed') === '1'; } catch (_) { rdState.profileCollapsed = false; }
+  (async () => {
+    try {
+      const cfg = await api().get_config();
+      const v = cfg && cfg.ok && cfg.data ? cfg.data.resource_profile_collapsed : undefined;
+      if (v === undefined || !!v === rdState.profileCollapsed) return;
+      rdState.profileCollapsed = !!v;
+      try { localStorage.setItem('rd-profile-collapsed', v ? '1' : '0'); } catch (_) { /* ignore */ }
+      rdApplyProfileCollapsed();
+    } catch (_) { /* no config bridge — localStorage stands */ }
+  })();
+}
+function rdSaveProfileCollapsed(v) {
+  try { localStorage.setItem('rd-profile-collapsed', v ? '1' : '0'); } catch (_) { /* ignore */ }
+  try { api().set_config('resource_profile_collapsed', !!v); } catch (_) { /* ignore */ }
+}
+// Show/hide the whole section per the saved preference. The tabs-row button only
+// appears when there's actually a profile to toggle.
+function rdApplyProfileCollapsed() {
+  const collapsed = !!rdState.profileCollapsed;
+  const has = !!rdState.profileHasData;
+  // the header (title + caret) stays visible when collapsed — only the charts
+  // (.collapse-body) hide, via the .collapsed class
+  const sec = $('#rd-profile');
+  sec.hidden = !has;
+  sec.classList.toggle('collapsed', collapsed);
+}
+function rdToggleProfileCollapsed() {
+  rdState.profileCollapsed = !rdState.profileCollapsed;
+  rdSaveProfileCollapsed(rdState.profileCollapsed);
+  rdApplyProfileCollapsed();
+}
+
+async function rdLoadProfile(id) {
+  rdState.profileHasData = false;
+  $('#rd-profile').hidden = true;
+  $('#rd-profile-body').innerHTML = '';
+  if (!safeInt(id)) return;
+  let res;
+  try { res = await apiFetch('GET', 'api/resource_profile.php', { params: { id } }); }
+  catch (_) { return; }
+  if (String(rdState.id) !== String(id)) return; // navigated away while fetching
+  const p = res && res.data ? res.data : res;
+  if (!p || p.error) return;
+  // spawn-lifespan estimate feeds the extraction calculator — recompute now it's in
+  rdState.spawn = p.spawn || null;
+  runExtractionCalc();
+  const hasDist = p.dist && p.dist.total > 0;
+  const hasProfile = p.breakdown && (p.breakdown.stats || []).length;
+  if (!hasDist && !hasProfile) return;
+  $('#rd-profile-body').innerHTML = rdProfileHtml(p);
+  rdState.profileHasData = true;
+  rdApplyProfileCollapsed(); // honor the remembered collapsed/expanded choice
+}
+
+function rdProfileHtml(p) {
+  const three = !!p.stats;
+  const cards = [];
+
+  // 1) Value to Collect — Score histogram with this resource's bin highlighted
+  const vr = p.value_rating;
+  const rankLine = p.rank
+    ? `<strong>${rdRankLabel(p.rank.rank, p.rank.n)}</strong> for this type`
+    : '';
+  cards.push(`<div class="rd-pcard">
+    <h6 class="rd-ptitle"><i class="fa-solid fa-bullseye"></i> Value to Collect</h6>
+    ${vr !== null && vr !== undefined
+      ? `<p class="rd-psub">Score <span class="${qualityClass(vr)}" style="font-weight:700;font-size:17px;">${vr}</span> <span class="rd-pmuted">/ 100</span></p>
+         ${rankLine ? `<p class="rd-psub rd-pmuted">${rankLine}</p>` : ''}`
+      : `<p class="rd-psub rd-pmuted">Not yet scored for this resource.</p>`}
+    <div class="rd-pchart">${rdHistogramSvg(p.dist)}</div>
+  </div>`);
+
+  // 2) Crafting Stat Profile — donut, slice size = weight, slice color = this resource's quality
+  const bd = p.breakdown;
+  if (bd && (bd.stats || []).length) {
+    cards.push(`<div class="rd-pcard">
+      <h6 class="rd-ptitle"><i class="fa-solid fa-flask"></i> Crafting Stat Profile</h6>
+      <p class="rd-psub">Used by <strong>${fmtNum(bd.schematic_count)}</strong> schematic${bd.schematic_count === 1 ? '' : 's'}</p>
+      <ul class="rd-plegendnote">
+        <li><strong>Slice size</strong> = how much crafters weight the stat</li>
+        <li><strong>Color</strong> = how good this resource is on it (matches cards)</li>
+      </ul>
+      <div class="rd-pchart rd-pdonutwrap">${rdDonutSvg(bd.stats)}${rdDonutLegend(bd.stats)}</div>
+    </div>`);
+  } else {
+    cards.push(`<div class="rd-pcard">
+      <h6 class="rd-ptitle"><i class="fa-solid fa-flask"></i> Crafting Stat Profile</h6>
+      <p class="rd-psub rd-pmuted">No crafting demand data for this class yet.</p>
+    </div>`);
+  }
+
+  // 3) Score Distribution — bell curve with this resource marked (only with enough peers)
+  if (three) {
+    cards.push(`<div class="rd-pcard">
+      <h6 class="rd-ptitle"><i class="fa-solid fa-bell"></i> Score Distribution</h6>
+      <p class="rd-psub rd-pmuted">${(vr !== null && p.rank) ? `Score <strong>${vr}</strong> (${rdRankLabel(p.rank.rank, p.rank.n)})` : `${fmtNum(p.stats.n)} scored`}</p>
+      <div class="rd-pchart">${rdBellSvg(p.stats, vr)}</div>
+    </div>`);
+  }
+
+  return `<div class="rd-pgrid ${three ? 'rd-pgrid-3' : 'rd-pgrid-2'}">${cards.join('')}</div>`
+    + `<div class="rd-ptip" hidden></div>`;
+}
+
+// perf grade for the donut tooltip — same tiers as the site's statColorHex
+function rdPerfGrade(p) {
+  return p >= 96 ? 'maxed' : p >= 90 ? 'great' : p >= 80 ? 'good' : p >= 50 ? 'ok' : 'weak';
+}
+
+// Floating tooltip + hover highlight for the profile charts (bars + donut slices),
+// matching the website's Chart.js hover. Delegated once on #rd-profile-body.
+function rdInitProfileHover() {
+  const host = $('#rd-profile-body');
+  if (!host) return;
+  const tip = () => host.querySelector('.rd-ptip');
+  host.addEventListener('mousemove', (e) => {
+    const el = e.target.closest('[data-tipt]');
+    const t = tip();
+    if (!el || !t) { if (t) t.hidden = true; return; }
+    t.innerHTML = `<div class="rd-ptip-t">${el.getAttribute('data-tipt')}</div>`
+      + `<div class="rd-ptip-b">${el.getAttribute('data-tipb')}</div>`;
+    t.hidden = false;
+    const hb = host.getBoundingClientRect();
+    let x = e.clientX - hb.left + 12;
+    let y = e.clientY - hb.top + 12;
+    // keep the tooltip inside the section
+    const tw = t.offsetWidth, th = t.offsetHeight;
+    if (x + tw > hb.width) x = e.clientX - hb.left - tw - 12;
+    if (y + th > hb.height) y = e.clientY - hb.top - th - 12;
+    t.style.left = Math.max(0, x) + 'px';
+    t.style.top = Math.max(0, y) + 'px';
+  });
+  host.addEventListener('mouseleave', () => { const t = tip(); if (t) t.hidden = true; });
+}
+
+// "top N% of M seen" — mirrors the site's valueRankLabel
+function rdRankLabel(rank, n) {
+  if (!n || !rank) return '';
+  const pct = Math.max(1, Math.round((rank / n) * 100));
+  return `Top ${pct}% of ${fmtNum(n)} seen`;
+}
+
+// Score histogram (10 bins of 10). This resource's bin is red, the rest slate.
+function rdHistogramSvg(dist) {
+  const bins = (dist && dist.bins) || [];
+  const selfBin = dist ? dist.self_bin : null;
+  const w = 300, h = 150, padL = 26, padB = 20, padT = 8, padR = 6;
+  const cw = w - padL - padR, ch = h - padB - padT;
+  const max = Math.max(1, ...bins);
+  const bw = cw / bins.length;
+  // y gridlines (0, mid, max)
+  const grid = [0, 0.5, 1].map((f) => {
+    const y = padT + ch * (1 - f);
+    const val = Math.round(max * f);
+    return `<line x1="${padL}" y1="${y}" x2="${w - padR}" y2="${y}" class="rd-pgridline"/>`
+      + `<text x="${padL - 4}" y="${y + 3}" text-anchor="end" class="rd-paxis">${val}</text>`;
+  }).join('');
+  const bars = bins.map((v, i) => {
+    const bh = ch * (v / max);
+    const x = padL + i * bw;
+    const y = padT + (ch - bh);
+    const fill = i === selfBin ? 'var(--accent)' : '#43465c';
+    const label = `${i * 10}-${(i + 1) * 10}`;
+    const sub = `${v} resource${v === 1 ? '' : 's'}${i === selfBin ? ' · this one' : ''}`;
+    // x labels every other bin to avoid crowding
+    const xlab = (i % 2 === 0)
+      ? `<text x="${x + bw / 2}" y="${h - 6}" text-anchor="middle" class="rd-paxis">${i * 10}</text>` : '';
+    return `<rect class="rd-pbar" x="${x + 1.5}" y="${y}" width="${Math.max(1, bw - 3)}" height="${Math.max(0, bh)}" rx="2" fill="${fill}"`
+      + ` data-tipt="Score ${label}" data-tipb="${escapeHtml(sub)}"></rect>${xlab}`;
+  }).join('');
+  return `<svg class="rd-psvg" viewBox="0 0 ${w} ${h}" width="100%" height="${h}" preserveAspectRatio="none">${grid}${bars}</svg>`;
+}
+
+// Crafting stat donut — slice arc length = weight_pct, fill = this resource's quality color.
+function rdDonutSvg(stats) {
+  const size = 150, cx = size / 2, cy = size / 2, r = 60, inner = 35;
+  const total = stats.reduce((s, x) => s + (x.weight_pct || 0), 0) || 1;
+  let a0 = -Math.PI / 2; // start at 12 o'clock
+  const slices = stats.map((s) => {
+    const frac = (s.weight_pct || 0) / total;
+    const a1 = a0 + frac * Math.PI * 2;
+    const large = (a1 - a0) > Math.PI ? 1 : 0;
+    const x0 = cx + r * Math.cos(a0), y0 = cy + r * Math.sin(a0);
+    const x1 = cx + r * Math.cos(a1), y1 = cy + r * Math.sin(a1);
+    const xi0 = cx + inner * Math.cos(a1), yi0 = cy + inner * Math.sin(a1);
+    const xi1 = cx + inner * Math.cos(a0), yi1 = cy + inner * Math.sin(a0);
+    const d = `M ${x0} ${y0} A ${r} ${r} 0 ${large} 1 ${x1} ${y1} L ${xi0} ${yi0} A ${inner} ${inner} 0 ${large} 0 ${xi1} ${yi1} Z`;
+    a0 = a1;
+    const grade = rdPerfGrade(s.stat_pct);
+    return `<path class="rd-pslice" d="${d}" fill="${s.color || '#777'}" stroke="var(--bg)" stroke-width="2"`
+      + ` data-tipt="${escapeHtml(s.stat)} — ${s.weight_pct}% crafting weight" data-tipb="this resource ${s.stat_pct}% (${grade})"></path>`;
+  }).join('');
+  return `<svg class="rd-pdonut" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}">${slices}</svg>`;
+}
+
+function rdDonutLegend(stats) {
+  return `<ul class="rd-plegend">${stats.map((s) =>
+    `<li><span class="rd-pdot" style="background:${s.color || '#777'}"></span>${escapeHtml(s.stat)} <span class="rd-pmuted">${s.weight_pct}%</span></li>`
+  ).join('')}</ul>`;
+}
+
+// Score bell curve from mean/sd, with μ, ±1σ guides and a red marker for this resource.
+function rdBellSvg(stats, score) {
+  const mean = stats.mean, sd = Math.max(0.5, stats.sd);
+  let xmin = Math.max(0, mean - 3.5 * sd), xmax = Math.min(100, mean + 3.5 * sd);
+  if (xmax - xmin < 12) { xmin = Math.max(0, mean - 8); xmax = Math.min(100, mean + 8); }
+  if (score !== null && score !== undefined) { xmin = Math.max(0, Math.min(xmin, score - 2)); xmax = Math.min(100, Math.max(xmax, score + 2)); }
+  const w = 300, h = 150, padB = 20, padT = 14, padX = 4;
+  const cw = w - padX * 2, ch = h - padB - padT;
+  const N = 120;
+  const sx = (x) => padX + cw * (x - xmin) / (xmax - xmin);
+  const pts = [];
+  for (let k = 0; k <= N; k++) {
+    const x = xmin + (xmax - xmin) * k / N;
+    const y = Math.exp(-0.5 * Math.pow((x - mean) / sd, 2));
+    pts.push([sx(x), padT + ch * (1 - y)]);
+  }
+  const area = `M ${pts[0][0]} ${padT + ch} ` + pts.map((p) => `L ${p[0]} ${p[1]}`).join(' ') + ` L ${pts[pts.length - 1][0]} ${padT + ch} Z`;
+  const line = `M ` + pts.map((p) => `${p[0]} ${p[1]}`).join(' L ');
+  const vline = (val, cls, label, bold) => {
+    if (val === null || val === undefined || val < xmin || val > xmax) return '';
+    const x = sx(val);
+    const lx = Math.max(padX + 14, Math.min(x, w - padX - 14));
+    return `<line x1="${x}" y1="${padT}" x2="${x}" y2="${padT + ch}" class="${cls}"/>`
+      + (label ? `<text x="${lx}" y="${padT - 3}" text-anchor="middle" class="rd-pbelllab ${bold ? 'rd-pbellself' : ''}">${escapeHtml(label)}</text>` : '');
+  };
+  const axis = [xmin, mean, xmax].map((v) =>
+    `<text x="${sx(v)}" y="${h - 5}" text-anchor="middle" class="rd-paxis">${Math.round(v)}</text>`).join('');
+  return `<svg class="rd-psvg" viewBox="0 0 ${w} ${h}" width="100%" height="${h}" preserveAspectRatio="none">`
+    + `<path d="${area}" class="rd-pbellfill"/><path d="${line}" class="rd-pbellline"/>`
+    + vline(mean - sd, 'rd-pbellguide', '-1σ', false)
+    + vline(mean, 'rd-pbellmu', 'μ', false)
+    + vline(mean + sd, 'rd-pbellguide', '+1σ', false)
+    + vline(score, 'rd-pbellmark', (score !== null && score !== undefined) ? 'This: ' + score : '', true)
+    + axis + `</svg>`;
 }
 
 // Stockpile tags on the resource page: only when this resource is in YOUR
@@ -214,6 +546,7 @@ function renderRdTabs() {
     ['other', `Other ${escapeHtml(r.type_name || 'Spawns')} (${(d.similar || []).length})`],
     ['related', `Related Schematics (${(d.related_schematics || []).length})`],
     ['used', `Used In (${(d.used_ins || []).length})`],
+    ['calc', '<i class="fa-solid fa-calculator"></i> Extraction Calculator'],
     ['notes', '<i class="fa-solid fa-comment"></i> Notes'],
   ];
   $('#rd-tabs').innerHTML = tabs.map(([k, label]) =>
@@ -221,12 +554,16 @@ function renderRdTabs() {
   ).join('');
 }
 
-// Notes is a PANE tab, not a table tab — swap the table for the notes section
+// Notes and Extraction Calculator are PANE tabs, not table tabs — swap the table
+// for the matching section. Only one pane is visible at a time.
 function rdSyncNotesTab() {
   const notes = rdTabState.tab === 'notes';
-  document.querySelector('.rd-table-wrap').hidden = notes;
-  if (notes) $('#rd-tabnote').hidden = true; // the rank explainer belongs to the data tabs
+  const calc = rdTabState.tab === 'calc';
+  const pane = notes || calc;
+  document.querySelector('.rd-table-wrap').hidden = pane;
+  if (pane) $('#rd-tabnote').hidden = true; // the rank explainer belongs to the data tabs
   $('#rd-comments').hidden = !notes;
+  $('#rd-calc').hidden = !calc;
 }
 
 function renderRdTable() {
@@ -371,6 +708,9 @@ async function openResourcePage(name) {
   $('#rd-tabs').innerHTML = '';
   $('#rd-head').innerHTML = '';
   $('#rd-body').innerHTML = '';
+  $('#rd-profile').hidden = true;
+  $('#rd-profile-body').innerHTML = '';
+  $('#rd-calc').hidden = true;
   $('#rd-empty').hidden = true;
   showGridLoading('#rd-loading');
 
@@ -462,6 +802,19 @@ function initResourcePage() {
   $('#rd-refresh').addEventListener('click', () => {
     if (rdState.name) openResourcePage(rdState.name);
   });
+
+  // Value & Crafting Profile — the header chevron collapses just the charts (the
+  // header bar stays); the choice is remembered across resources/reloads.
+  rdLoadProfilePref();
+  $('#rd-profile').addEventListener('click', (e) => {
+    if (e.target.closest('[data-rdprofile-toggle]')) rdToggleProfileCollapsed();
+  });
+  rdInitProfileHover();
+
+  // Extraction Calculator — live: recomputes on any change (no button).
+  // rpm = 1.5 · BER · (conc%), scaled by harvesters (site formula).
+  ['#rd-calc-conc', '#rd-calc-harv', '#rd-calc-ber'].forEach((sel) =>
+    $(sel).addEventListener('input', runExtractionCalc));
   // eCPU voting — the site's up/down arrows, ±0.6 with the in-spawn clamp
   $('#rd-cards').addEventListener('click', async (e) => {
     const v = e.target.closest('[data-cpuvote]');
@@ -545,7 +898,7 @@ function initResourcePage() {
     document.querySelectorAll('#rd-tabs [data-rdtab]').forEach((t) =>
       t.classList.toggle('active', t === tab));
     rdSyncNotesTab();
-    if (rdTabState.tab !== 'notes') renderRdTable();
+    if (rdTabState.tab !== 'notes' && rdTabState.tab !== 'calc') renderRdTable();
   });
 
   // Column sorting within a tab

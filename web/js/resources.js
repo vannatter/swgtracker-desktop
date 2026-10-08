@@ -54,7 +54,478 @@ const resState = {
   page: 1, perPage: 50, hasNext: false, pinned: new Set(),
   sortField: '', sortOrder: 'DESC', filters: [], savedSearches: [],
   statusFilter: null, // null = auto (active, or all when filtering); or 'active'/'inactive'/'all'
+  colOrder: null, colHidden: new Set(), // user column layout (persisted to localStorage)
 };
+
+// --- column layout (show/hide + reorder, saved per machine) ---
+// 'name' is locked visible; everything else is user-toggleable. A plain-English
+// label for the stat codes so the column picker reads clearly.
+const RES_COL_LABELS = {
+  name: 'Name', type_name: 'Type', status: 'In spawn', score: 'Score',
+  oq: 'Overall Quality (OQ)', cr: 'Cold Resist (CR)', cd: 'Conductivity (CD)',
+  dr: 'Decay Resist (DR)', hr: 'Heat Resist (HR)', ma: 'Malleability (MA)',
+  sr: 'Shock Resist (SR)', ut: 'Unit Toughness (UT)', fl: 'Flavor (FL)',
+  pe: 'Potential Energy (PE)', planets: 'Planets',
+};
+const RES_COL_LOCKED = new Set(['name']);
+
+function resColLabel(field) { return RES_COL_LABELS[field] || field; }
+function resDefaultColOrder() { return RES_COLUMNS.map((c) => c[1]); }
+
+function resLoadColPref() {
+  try {
+    const p = JSON.parse(localStorage.getItem('res-colpref') || 'null');
+    if (p && Array.isArray(p.order)) {
+      resState.colOrder = p.order;
+      resState.colHidden = new Set(Array.isArray(p.hidden) ? p.hidden : []);
+      return;
+    }
+  } catch (_) { /* fall through to defaults */ }
+  resState.colOrder = resDefaultColOrder();
+  resState.colHidden = new Set();
+}
+function resSaveColPref() {
+  try {
+    localStorage.setItem('res-colpref',
+      JSON.stringify({ order: resState.colOrder, hidden: [...resState.colHidden] }));
+  } catch (_) { /* best effort */ }
+}
+
+// Effective column tuples [label, field, cls] in the user's order, hidden ones
+// dropped. New columns added to RES_COLUMNS later still appear (appended).
+function resCols() {
+  if (!resState.colOrder) resLoadColPref();
+  const byField = new Map(RES_COLUMNS.map((c) => [c[1], c]));
+  const ordered = [];
+  const seen = new Set();
+  for (const f of resState.colOrder) { if (byField.has(f) && !seen.has(f)) { ordered.push(byField.get(f)); seen.add(f); } }
+  for (const c of RES_COLUMNS) { if (!seen.has(c[1])) ordered.push(c); }
+  return ordered.filter((c) => RES_COL_LOCKED.has(c[1]) || !resState.colHidden.has(c[1]));
+}
+
+// the full column list in the user's current order (hidden ones included) —
+// what the picker shows
+function resColsAll() {
+  if (!resState.colOrder) resLoadColPref();
+  const byField = new Map(RES_COLUMNS.map((c) => [c[1], c]));
+  const out = []; const seen = new Set();
+  for (const f of resState.colOrder) { if (byField.has(f) && !seen.has(f)) { out.push(byField.get(f)); seen.add(f); } }
+  for (const c of RES_COLUMNS) { if (!seen.has(c[1])) out.push(c); }
+  return out;
+}
+
+// re-render the grid/cards in place after a column or view change (no refetch)
+function resRerender() {
+  buildResHeader();
+  const rows = resState.lastRows || [];
+  $('#res-body').innerHTML = rows.map(resRowHtml).join('');
+  resWpCounts().then(resAnnotateWaypoints);
+  resApplyView();
+}
+
+// ---- view modes: list (table) | cards | grouped-by-type ----
+function resLoadView() {
+  try { resState.view = localStorage.getItem('res-view') || 'list'; } catch (_) { resState.view = 'list'; }
+  // a persisted tree view needs the bigger page size before the first load
+  if (resState.view === 'tree') { resState.prevPerPage = 50; resState.perPage = 500; }
+  // config is the durable store (survives even if the WebView clears localStorage);
+  // honor it once it answers, re-rendering only if it differs from what we loaded
+  (async () => {
+    try {
+      const cfg = await api().get_config();
+      const v = cfg && cfg.ok && cfg.data && cfg.data.resource_view;
+      if (!v || v === resState.view) return;
+      resState.view = v;
+      try { localStorage.setItem('res-view', v); } catch (_) { /* ignore */ }
+      if (v === 'tree' && resState.perPage !== 500) {
+        resState.prevPerPage = 50; resState.perPage = 500; resState.page = 1; loadResources();
+      } else {
+        resApplyView();
+      }
+    } catch (_) { /* no config bridge — localStorage stands */ }
+  })();
+}
+function resSaveView(v) {
+  try { localStorage.setItem('res-view', v); } catch (_) { /* ignore */ }
+  try { api().set_config('resource_view', v); } catch (_) { /* ignore */ }
+}
+// "N days in spawn" (human) for active rows; despawned rows say so
+function resCardDays(res) {
+  const isActive = String(res.status ?? res.active ?? res.is_active ?? '0') === '1';
+  if (!isActive) return 'Despawned';
+  const ts = safeInt(res.timestamp);
+  if (ts <= 0) return '';
+  const days = Math.max(0, Math.floor((Date.now() / 1000 - ts) / 86400));
+  if (days === 0) return 'In spawn <1 day';
+  return `${days} day${days === 1 ? '' : 's'} in spawn`;
+}
+
+function resCardHtml(res) {
+  const id = res.id ?? '';
+  const isActive = String(res.status ?? res.active ?? res.is_active ?? '0') === '1';
+  const cols = resCols().map((c) => c[1]);
+  const show = (f) => cols.includes(f);
+  // mini quality bars for visible score+stat columns; zeros/blanks hidden
+  const bars = [];
+  for (const [, f] of resCols()) {
+    if (f !== 'score' && !STAT_FIELDS.has(f)) continue;
+    const raw = f === 'score' ? res.score : res[f];
+    const v = safeInt(raw);
+    if (raw == null || v <= 0) continue; // hide anything that's 0 or blank
+    // quality is value vs the stat's CAP (score is already a 0–100 overall score)
+    const pctQ = f === 'score' ? v : (v / (safeInt(res[`${f}_max`]) || 1000)) * 100;
+    const q = qualityClass(pctQ);
+    const width = Math.max(3, Math.min(100, Math.round(pctQ)));
+    bars.push(`<div class="res-cbar">
+      <span class="res-cbar-l">${f === 'score' ? 'Score' : f.toUpperCase()}</span>
+      <span class="res-cbar-track" title="${pctQ.toFixed(0)}% of cap"><span class="res-cbar-fill ${q}" style="width:${width}%"></span></span>
+      <span class="res-cbar-v ${q}">${v}</span>
+    </div>`);
+  }
+  const type = show('type_name') && res.type_name
+    ? (res.type_code
+      ? `<div class="res-card-type"><span class="res-typelink" data-navcat="${escapeHtml(res.type_code)}">${escapeHtml(res.type_name)}</span></div>`
+      : `<div class="res-card-type">${escapeHtml(res.type_name)}</div>`)
+    : '';
+  const days = resCardDays(res);
+  const planets = show('planets') ? `<span class="res-card-planets">${planetsHtml(res)}</span>` : '';
+  const foot = (days || planets)
+    ? `<div class="res-card-foot">
+        ${days ? `<span class="res-card-days ${isActive ? '' : 'res-card-gone'}"><i class="fa-solid fa-clock"></i> ${escapeHtml(days)}</span>` : '<span></span>'}
+        ${planets}
+      </div>`
+    : '';
+  const isPinned = resState.pinned.has(String(id));
+  const isWished = typeof wishState !== 'undefined' && wishState.resourceIds.has(String(id));
+  const isStocked = typeof stkState !== 'undefined' && stkState.resourceIds.has(String(id));
+  const mark = isPinned ? 'res-card-pinned' : isStocked ? 'res-card-stocked' : isWished ? 'res-card-wished' : '';
+  return `<div class="res-card ${mark}" data-id="${id}">
+    <div class="res-card-head">
+      <i class="fa-solid fa-thumbtack res-card-pin ${isPinned ? 'pinned-star' : ''}" data-pin="${escapeHtml(String(id))}" title="Pin"></i>
+      <span class="res-card-name res-name" data-resname="${escapeHtml(res.name || '')}" data-resid="${escapeHtml(String(id))}">${escapeHtml(res.name || '')}</span>
+      ${isStocked ? '<i class="fa-solid fa-cubes res-card-mark res-card-stock" title="In your stockpile"></i>' : ''}
+      ${isWished ? '<i class="fa-solid fa-heart res-card-mark res-card-wish" title="On your wishlist"></i>' : ''}
+      ${show('status') ? `<i class="fa-solid fa-circle res-status ${isActive ? 'on' : 'off'}" title="${isActive ? 'Active — in spawn' : 'Inactive — despawned'}"></i>` : ''}
+    </div>
+    ${type}
+    ${bars.length ? `<div class="res-card-bars">${bars.join('')}</div>` : ''}
+    ${foot}
+  </div>`;
+}
+function resApplyView() {
+  const view = resState.view || 'list';
+  resSyncSort();
+  // the tree sorts by category hierarchy, so the flat sort control doesn't apply
+  const showSort = view !== 'tree';
+  const ss = $('#res-sort'); const sd = $('#res-sort-dir');
+  if (ss) ss.style.display = showSort ? '' : 'none';
+  if (sd) sd.style.display = showSort ? '' : 'none';
+  document.querySelectorAll('#res-view-switch .res-view-btn').forEach((b) => b.classList.toggle('active', b.dataset.resview === view));
+  const tw = $('#res-tablewrap'); const cards = $('#res-cards');
+  const pager = document.querySelector('#page-resources .pager');
+  if (pager) pager.style.display = view === 'tree' ? 'none' : ''; // tree isn't paginated
+  if (view === 'list') { if (tw) tw.style.display = ''; if (cards) { cards.hidden = true; cards.classList.remove('res-treewrap'); } return; }
+  if (tw) tw.style.display = 'none';
+  if (!cards) return;
+  cards.hidden = false;
+  const rows = resState.lastRows || [];
+  if (view === 'tree') { renderResTree(cards, rows); return; }
+  cards.classList.remove('res-treewrap');
+  if (!rows.length) { cards.innerHTML = '<div class="grid-empty">No resources.</div>'; return; }
+  cards.innerHTML = `<div class="res-card-grid">${rows.map(resCardHtml).join('')}</div>`;
+}
+
+// ---- category tree view ----
+// Build (and cache) the class hierarchy as code -> {desc, parent, children, isType}.
+async function resEnsureCatTree() {
+  if (resState.catTree) return resState.catTree;
+  let flat = null; let types = [];
+  try {
+    const res = await api().get_categories();
+    flat = res.ok ? (res.data && res.data.resource_tree_flat) : null;
+    types = (res.ok && res.data && res.data.resource_types) || [];
+  } catch (_) { /* offline */ }
+  if (!flat || !flat.length) return null;
+  const typeName = new Map(types.map((t) => [t.resource_code, t.resource_name || '']));
+  const nodes = new Map();
+  for (const row of flat) {
+    const chain = [];
+    for (let i = 1; i <= 6; i++) { const c = row[`level${i}`], d = row[`level${i}_description`]; if (!c || !d) break; chain.push([c, d]); }
+    chain.forEach(([c, d], i) => { if (!nodes.has(c)) nodes.set(c, { code: c, desc: d, parent: i ? chain[i - 1][0] : null, children: [], isType: false }); });
+    if (chain.length && row.code && !nodes.has(row.code)) {
+      const tn = (typeName.get(row.code) || '').trim();
+      if (tn) nodes.set(row.code, { code: row.code, desc: tn, parent: chain[chain.length - 1][0], children: [], isType: true });
+    }
+  }
+  const roots = [];
+  for (const [code, n] of nodes) { if (n.parent && nodes.has(n.parent)) nodes.get(n.parent).children.push(code); else roots.push(code); }
+  resState.catTree = { nodes, roots };
+  return resState.catTree;
+}
+
+// the score + stat columns currently visible (user's column order), for the
+// tree's fixed stat columns — stats matter more than planets, so planets trails
+function resTreeStatCols() {
+  return resCols().filter(([, f]) => f === 'score' || STAT_FIELDS.has(f));
+}
+function resTreeShowPlanets() { return resCols().some(([, f]) => f === 'planets'); }
+function resTreeColLabel(f) { return f === 'score' ? 'SC' : f.toUpperCase(); }
+
+function resTreeHeaderHtml() {
+  const cells = resTreeStatCols().map(([, f]) => `<span class="res-tree-cell">${resTreeColLabel(f)}</span>`).join('');
+  return `<div class="res-tree-header">
+    <span class="res-tree-h-name">Resource</span>
+    <span class="res-tree-cells">${cells}${resTreeShowPlanets() ? '<span class="res-tree-planetscell">Planets</span>' : ''}</span>
+  </div>`;
+}
+
+function resTreeItemHtml(r, depth) {
+  const isActive = String(r.status ?? r.active ?? r.is_active ?? '0') === '1';
+  const cells = resTreeStatCols().map(([, f]) => {
+    const raw = f === 'score' ? r.score : r[f];
+    const v = safeInt(raw);
+    if (raw == null || v <= 0) return '<span class="res-tree-cell stat_off">—</span>';
+    const pctQ = f === 'score' ? v : (v / (safeInt(r[`${f}_max`]) || 1000)) * 100;
+    return `<span class="res-tree-cell ${qualityClass(pctQ)}">${v}</span>`;
+  }).join('');
+  const planets = resTreeShowPlanets() ? `<span class="res-tree-planetscell">${planetsHtml(r)}</span>` : '';
+  return `<div class="res-tree-item">
+    <span class="res-tree-itemlabel" style="padding-left:${depth * 15 + 12}px">
+      <i class="fa-solid fa-thumbtack res-tree-pin ${resState.pinned.has(String(r.id)) ? 'pinned-star' : ''}" data-pin="${escapeHtml(String(r.id ?? ''))}" title="Pin"></i>
+      <i class="fa-solid fa-circle res-status ${isActive ? 'on' : 'off'}"></i>
+      <span class="res-name res-tree-itemname" data-resname="${escapeHtml(r.name || '')}" data-resid="${escapeHtml(String(r.id ?? ''))}">${escapeHtml(r.name || '')}</span>
+    </span>
+    <span class="res-tree-cells">${cells}${planets}</span>
+  </div>`;
+}
+
+async function renderResTree(container, rows) {
+  if (!resState.treeCollapsed) resState.treeCollapsed = new Set();
+  const tree = await resEnsureCatTree();
+  if (!tree) { container.innerHTML = '<div class="grid-empty">Category tree unavailable offline.</div>'; return; }
+  if (resState.view !== 'tree') return; // navigated away while fetching
+  container.classList.add('res-treewrap');
+  const { nodes, roots } = tree;
+  const byNode = new Map(); const unmatched = new Map();
+  for (const r of rows) {
+    const code = r.type_code;
+    if (code && nodes.has(code)) { if (!byNode.has(code)) byNode.set(code, []); byNode.get(code).push(r); }
+    else { const k = r.type_name || 'Other'; if (!unmatched.has(k)) unmatched.set(k, []); unmatched.get(k).push(r); }
+  }
+  const countCache = new Map();
+  const subCount = (code) => {
+    if (countCache.has(code)) return countCache.get(code);
+    const n = nodes.get(code);
+    let c = (byNode.get(code) || []).length;
+    for (const ch of n.children) c += subCount(ch);
+    countCache.set(code, c); return c;
+  };
+  const byDesc = (a, b) => nodes.get(a).desc.localeCompare(nodes.get(b).desc);
+  const collapsed = resState.treeCollapsed;
+  const liveKids = (code) => nodes.get(code).children.filter((ch) => subCount(ch) > 0).sort(byDesc);
+  const renderNode = (code, depth) => {
+    const cnt = subCount(code);
+    if (!cnt) return ''; // prune branches with no matching in-spawn resources
+    // collapse a linear chain of single-child categories into one breadcrumb row
+    // (SWG class paths are deep; this kills the one-child-per-row sprawl)
+    const labels = [nodes.get(code).desc];
+    let cur = code;
+    while ((byNode.get(cur) || []).length === 0 && liveKids(cur).length === 1) {
+      cur = liveKids(cur)[0];
+      labels.push(nodes.get(cur).desc);
+    }
+    const isCol = collapsed.has(cur);
+    const label = labels.map(escapeHtml).join(' <span class="res-tree-sep">›</span> ');
+    const head = `<div class="res-tree-node" data-treecode="${escapeHtml(cur)}" style="padding-left:${depth * 15 + 8}px">
+      <i class="fa-solid ${isCol ? 'fa-caret-right' : 'fa-caret-down'} res-tree-caret"></i>
+      <span class="res-tree-name">${label}</span>
+      <span class="res-tree-count">${cnt}</span></div>`;
+    if (isCol) return head;
+    const kids = liveKids(cur).map((ch) => renderNode(ch, depth + 1)).join('');
+    const own = (byNode.get(cur) || []).slice().sort((a, b) => safeInt(b.score) - safeInt(a.score))
+      .map((r) => resTreeItemHtml(r, depth + 1)).join('');
+    return head + kids + own;
+  };
+  let body = roots.slice().sort(byDesc).map((c) => renderNode(c, 0)).join('');
+  for (const [name, items] of unmatched) {
+    body += `<div class="res-tree-node res-tree-unmatched" style="padding-left:8px">
+      <span class="res-tree-name">${escapeHtml(name)}</span><span class="res-tree-count">${items.length}</span></div>`;
+    body += items.slice().sort((a, b) => safeInt(b.score) - safeInt(a.score)).map((r) => resTreeItemHtml(r, 1)).join('');
+  }
+  container.innerHTML = body
+    ? resTreeHeaderHtml() + body
+    : '<div class="grid-empty">No resources match.</div>';
+}
+
+// sort control (drives the server sort for every view — the only way to sort
+// cards/tree, which have no column headers)
+const RES_SORT_FIELDS = ['score', 'timestamp', 'oq', 'cr', 'cd', 'dr', 'hr', 'ma', 'sr', 'ut', 'fl', 'pe', 'name', 'type_name'];
+const RES_SORT_LABELS = { timestamp: 'Spawn date' };
+function resPopulateSort() {
+  const sel = $('#res-sort');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Default order</option>'
+    + RES_SORT_FIELDS.map((f) => `<option value="${f}">${escapeHtml(RES_SORT_LABELS[f] || resColLabel(f))}</option>`).join('');
+}
+function resSyncSort() {
+  const sel = $('#res-sort');
+  if (sel) sel.value = resState.sortField || '';
+  const i = document.querySelector('#res-sort-dir i');
+  if (i) i.className = `fa-solid fa-arrow-${resState.sortOrder === 'ASC' ? 'up-short-wide' : 'down-wide-short'}`;
+}
+
+function initResViews() {
+  resLoadView();
+  resPopulateSort();
+  resSyncSort();
+  $('#res-sort').addEventListener('change', () => {
+    resState.sortField = $('#res-sort').value;
+    resState.page = 1;
+    loadResources();
+  });
+  $('#res-sort-dir').addEventListener('click', () => {
+    resState.sortOrder = resState.sortOrder === 'ASC' ? 'DESC' : 'ASC';
+    resState.page = 1;
+    loadResources();
+  });
+  $('#res-view-switch').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-resview]');
+    if (!b) return;
+    const next = b.dataset.resview;
+    const wasTree = resState.view === 'tree';
+    resState.view = next;
+    resSaveView(next);
+    // Tree pulls the whole (filtered) in-spawn set so branches are complete, not
+    // just the current 50-row page; switching away restores normal paging.
+    if (next === 'tree') {
+      resState.prevPerPage = resState.perPage;
+      resState.perPage = 500;
+      resState.page = 1;
+      loadResources();
+      return;
+    }
+    if (wasTree) {
+      resState.perPage = resState.prevPerPage || 50;
+      resState.page = 1;
+      loadResources();
+      return;
+    }
+    resApplyView();
+  });
+  // clicks inside the card/tree container: pin, collapse nodes, open resource pages
+  $('#res-cards').addEventListener('click', async (e) => {
+    const pin = e.target.closest('[data-pin]');
+    if (pin) {
+      e.stopPropagation();
+      try {
+        const res = await api().toggle_pin_resource(pin.dataset.pin);
+        if (res.ok) {
+          resState.pinned = new Set((res.data || []).map(String));
+          const pid = String(pin.dataset.pin);
+          const nowPinned = resState.pinned.has(pid);
+          pin.classList.toggle('pinned-star', nowPinned);
+          const card = pin.closest('.res-card');
+          if (card) {
+            const stocked = typeof stkState !== 'undefined' && stkState.resourceIds.has(pid);
+            const wished = typeof wishState !== 'undefined' && wishState.resourceIds.has(pid);
+            card.classList.remove('res-card-pinned', 'res-card-stocked', 'res-card-wished');
+            const cls = nowPinned ? 'res-card-pinned' : stocked ? 'res-card-stocked' : wished ? 'res-card-wished' : '';
+            if (cls) card.classList.add(cls);
+          }
+        }
+      } catch (_) { /* ignore */ }
+      return;
+    }
+    const typeLink = e.target.closest('[data-navcat]');
+    if (typeLink) { applyCategoryFilter(typeLink.dataset.navcat, typeLink.textContent.trim()); return; }
+    const node = e.target.closest('.res-tree-node[data-treecode]');
+    if (node) {
+      const code = node.dataset.treecode;
+      if (!resState.treeCollapsed) resState.treeCollapsed = new Set();
+      if (resState.treeCollapsed.has(code)) resState.treeCollapsed.delete(code); else resState.treeCollapsed.add(code);
+      renderResTree($('#res-cards'), resState.lastRows || []);
+      return;
+    }
+    const name = e.target.closest('.res-name');
+    if (name) openResourcePage(name.dataset.resname || name.textContent.trim());
+  });
+}
+
+// ---- column picker dialog ----
+function resRenderColsList() {
+  const host = $('#res-cols-list');
+  if (!host) return;
+  host.innerHTML = resColsAll().map(([, field]) => {
+    const locked = RES_COL_LOCKED.has(field);
+    const visible = locked || !resState.colHidden.has(field);
+    return `<div class="rescol-row" draggable="true" data-colfield="${escapeHtml(field)}">
+      <i class="fa-solid fa-grip-vertical rescol-grip"></i>
+      <label class="rescol-label">
+        <input type="checkbox" ${visible ? 'checked' : ''} ${locked ? 'disabled' : ''} data-coltoggle="${escapeHtml(field)}">
+        <span>${escapeHtml(resColLabel(field))}</span>
+      </label>
+      ${locked ? '<span class="rescol-lock">always on</span>' : ''}
+    </div>`;
+  }).join('');
+}
+
+function initResCols() {
+  resLoadColPref();
+  $('#res-cols-btn').addEventListener('click', () => { resRenderColsList(); $('#res-cols-modal').hidden = false; });
+  $('#res-cols-x').addEventListener('click', () => { $('#res-cols-modal').hidden = true; });
+  $('#res-cols-modal').addEventListener('click', (e) => { if (e.target === $('#res-cols-modal')) $('#res-cols-modal').hidden = true; });
+  $('#res-cols-reset').addEventListener('click', () => {
+    resState.colOrder = resDefaultColOrder();
+    resState.colHidden = new Set();
+    resSaveColPref();
+    resRenderColsList();
+    resRerender();
+  });
+  // show/hide
+  $('#res-cols-list').addEventListener('change', (e) => {
+    const cb = e.target.closest('[data-coltoggle]');
+    if (!cb) return;
+    const f = cb.dataset.coltoggle;
+    if (cb.checked) resState.colHidden.delete(f); else resState.colHidden.add(f);
+    resSaveColPref();
+    resRerender();
+  });
+  // drag to reorder
+  let dragField = null;
+  $('#res-cols-list').addEventListener('dragstart', (e) => {
+    const row = e.target.closest('[data-colfield]');
+    if (!row) return;
+    dragField = row.dataset.colfield;
+    e.dataTransfer.effectAllowed = 'move';
+    row.classList.add('rescol-dragging');
+  });
+  $('#res-cols-list').addEventListener('dragend', (e) => {
+    const row = e.target.closest('[data-colfield]');
+    if (row) row.classList.remove('rescol-dragging');
+    document.querySelectorAll('#res-cols-list .rescol-over').forEach((el) => el.classList.remove('rescol-over'));
+  });
+  $('#res-cols-list').addEventListener('dragover', (e) => {
+    const row = e.target.closest('[data-colfield]');
+    if (!row || !dragField || row.dataset.colfield === dragField) return;
+    e.preventDefault();
+    document.querySelectorAll('#res-cols-list .rescol-over').forEach((el) => el.classList.remove('rescol-over'));
+    row.classList.add('rescol-over');
+  });
+  $('#res-cols-list').addEventListener('drop', (e) => {
+    const row = e.target.closest('[data-colfield]');
+    if (!row || !dragField) return;
+    e.preventDefault();
+    const targetField = row.dataset.colfield;
+    const order = resColsAll().map((c) => c[1]).filter((f) => f !== dragField);
+    const at = order.indexOf(targetField);
+    order.splice(at < 0 ? order.length : at, 0, dragField);
+    resState.colOrder = order;
+    dragField = null;
+    resSaveColPref();
+    resRenderColsList();
+    resRerender();
+  });
+}
 
 // active/inactive/all: an explicit user choice wins; otherwise any active filter
 // widens to 'all' (despawned bests matter), plain browsing stays 'active'.
@@ -115,7 +586,7 @@ function buildResHeader() {
     `<th class="pin-cell pin-reset ${resState.sortField ? '' : 'active'}" data-pinsort
        title="Pinned first (default order) — click to reset sort"><i class="fa-solid fa-thumbtack"></i></th>` +
     '<th class="pin-cell"></th><th class="pin-cell"></th>' +
-    RES_COLUMNS.map(([label, field, cls]) => {
+    resCols().map(([label, field, cls]) => {
       const sortable = field !== 'planets' && field !== 'status'; // no server sort column for these
       const arrow = field === resState.sortField ? (resState.sortOrder === 'ASC' ? ' ▲' : ' ▼') : '';
       return `<th class="${cls}"${sortable ? ` data-sort="${field}"` : ''}>${label}${arrow}</th>`;
@@ -219,7 +690,7 @@ function resRowHtml(res) {
   // '1' = currently in spawn; the live-API list rows carry `status` (active/is_active are fallbacks)
   const isActive = String(res.status ?? res.active ?? res.is_active ?? '0') === '1';
 
-  const cells = RES_COLUMNS.map(([, field]) => {
+  const cells = resCols().map(([, field]) => {
     // superscript top-count matches the website: how many schematic formulas
     // rank this spawn top-5 right now — requested by Philosophy/Eponine.
     // data-resname carries the clean name: the cell's TEXT now ends with the
@@ -277,11 +748,13 @@ async function loadResources() {
     planet: $('#res-planet').value,
     category: $('#res-category').value,
     page: resState.page,
+    perpage: Math.min(resState.perPage || 50, 500), // server caps at 500 (tree view uses it)
     sort,
     order,
   };
 
   let res;
+  const stockedIds = $('#res-stocked-only').checked && typeof stkState !== 'undefined' ? [...(stkState.resourceIds || [])] : [];
   if ($('#res-pinned-only').checked && resState.pinned.size) {
     // Pinned view fetches the pinned ids DIRECTLY (status/pages ignored) — the
     // old filter-the-current-page approach lost pins that were despawned or
@@ -294,6 +767,11 @@ async function loadResources() {
       // the client-side pinned filter below still keeps the view honest
       res.data.results = (res.data.results || []);
     }
+  } else if (stockedIds.length) {
+    // Stockpiled filter likewise fetches the stockpiled ids DIRECTLY so despawned
+    // or deep-ranked stockpile resources still show (not just the active page).
+    try { res = await apiFetch('GET', 'api/resources.php', { params: { ids: stockedIds.join(',') } }); }
+    catch (e) { res = { ok: false, error: String(e) }; }
   } else {
     try { res = await api().search_resources(params); }
     catch (e) { res = { ok: false, error: String(e) }; }
@@ -320,6 +798,16 @@ async function loadResources() {
   }
   if ($('#res-stocked-only').checked) {
     rows = rows.filter((r) => stkState.resourceIds.has(String(r.id)));
+    // the id-based stockpile fetch ignores the status/search filters server-side,
+    // so honor them here (pinned intentionally shows everything, so skip then)
+    if (!$('#res-pinned-only').checked) {
+      const st = effectiveStatus();
+      if (st === 'active') rows = rows.filter((r) => String(r.status ?? '0') === '1');
+      else if (st === 'inactive') rows = rows.filter((r) => String(r.status ?? '0') !== '1');
+      const q = $('#res-search').value.trim().toLowerCase();
+      if (q) rows = rows.filter((r) => String(r.name || '').toLowerCase().includes(q)
+        || String(r.type_name || '').toLowerCase().includes(q));
+    }
   }
 
   // Pinned rows float to the top only in the DEFAULT order — an explicit
@@ -352,6 +840,7 @@ async function loadResources() {
     + (data.offline ? ' · offline data' : '');
   if (data.offline) setOffline(true); // don't wait for the next pulse poll
   updateResPager(page);
+  resApplyView(); // reflect the chosen view (cards/grouped) on every load
 }
 
 function showResEmpty(msg) {
@@ -573,15 +1062,51 @@ async function resWpCounts() {
   try {
     const res = await apiFetch('GET', 'api/waypoints.php');
     const m = new Map();
+    const byRes = new Map();
     for (const w of ((res.ok && res.data && res.data.results) || [])) {
       const k = String(w.resource_id);
       m.set(k, (m.get(k) || 0) + 1);
+      if (!byRes.has(k)) byRes.set(k, []);
+      byRes.get(k).push(w);
     }
     resState.wpCounts = m;
+    resState.wpByResource = byRes;
     resState.wpAt = now;
   } catch (_) { /* badges just don't show */ }
   return resState.wpCounts || new Map();
 }
+
+// a small popover listing a resource's shared waypoints — click a line to copy
+function showWpPopover(anchor, resId) {
+  let pop = $('#res-wp-pop');
+  if (!pop) {
+    pop = document.createElement('div');
+    pop.id = 'res-wp-pop';
+    pop.className = 'res-wp-pop';
+    document.body.appendChild(pop);
+    pop.addEventListener('click', (e) => {
+      const line = e.target.closest('[data-wpcopy]');
+      if (line) { try { navigator.clipboard.writeText(line.dataset.wpcopy); toast('Waypoint copied'); } catch (_) { /* ignore */ } }
+    });
+  }
+  const list = (resState.wpByResource && resState.wpByResource.get(String(resId))) || [];
+  if (!list.length) { pop.hidden = true; return; }
+  pop.innerHTML = `<div class="res-wp-pop-head">${list.length} shared waypoint${list.length === 1 ? '' : 's'} <span class="settings-sub">click to copy</span></div>`
+    + list.map((w) => `<div class="res-wp-pop-row" data-wpcopy="${escapeHtml(w.waypoint || '')}">
+        <i class="fa-solid fa-location-dot"></i>
+        <span class="res-wp-pop-wp">${escapeHtml(w.waypoint || '')}</span>
+        ${w.concentration ? `<span class="res-wp-pop-conc">${safeInt(w.concentration)}%</span>` : ''}
+      </div>`).join('');
+  const r = anchor.getBoundingClientRect();
+  pop.hidden = false;
+  // place below the badge, clamped to the viewport
+  const pw = pop.offsetWidth;
+  let left = r.left;
+  if (left + pw > window.innerWidth - 10) left = window.innerWidth - pw - 10;
+  pop.style.left = `${Math.max(10, left)}px`;
+  pop.style.top = `${r.bottom + 6}px`;
+}
+function hideWpPopover() { const p = $('#res-wp-pop'); if (p) p.hidden = true; }
 
 // location-dot badge on rows whose resource has shared waypoints; icon only —
 // the name cell's trailing text must stay clean for the click navigation
@@ -594,14 +1119,18 @@ function resAnnotateWaypoints() {
     if (!n) return;
     const sup = document.createElement('sup');
     sup.className = 'res-wpmark';
-    sup.title = `${n} shared waypoint${n === 1 ? '' : 's'} — “Waypoints → note” collects them`;
+    sup.dataset.wpfor = td.dataset.resid;
+    sup.title = `${n} shared waypoint${n === 1 ? '' : 's'} — click to view (or “Waypoints → note” to collect)`;
     sup.innerHTML = '<i class="fa-solid fa-location-dot"></i>';
     td.appendChild(sup);
   });
 }
 
 function initResources() {
+  resLoadColPref();
   buildResHeader();
+  initResCols();
+  initResViews();
   populateFilters();
   loadSavedSearches();
 
@@ -748,6 +1277,8 @@ function initResources() {
 
   // Pin toggle + add-to-stockpile + name → resource detail page (event delegation)
   $('#res-body').addEventListener('click', async (e) => {
+    const wp = e.target.closest('.res-wpmark[data-wpfor]');
+    if (wp) { e.stopPropagation(); showWpPopover(wp, wp.dataset.wpfor); return; }
     const addCell = e.target.closest('[data-add]');
     if (addCell) { handleAddCellClick(addCell, e); return; }
     const wishCell = e.target.closest('[data-wish]');
@@ -766,6 +1297,11 @@ function initResources() {
     if (typeLink) { applyCategoryFilter(typeLink.dataset.navcat, typeLink.textContent.trim()); return; }
     const nameCell = e.target.closest('td.res-name');
     if (nameCell) openResourcePage(nameCell.dataset.resname || nameCell.textContent.trim());
+  });
+
+  // dismiss the waypoint popover on any outside click / scroll
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#res-wp-pop') && !e.target.closest('.res-wpmark')) hideWpPopover();
   });
 
   initResourcePage();

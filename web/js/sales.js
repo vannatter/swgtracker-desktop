@@ -164,7 +164,12 @@ function salesMarkMissing() {
   if (!salesInvNames) return;
   document.querySelectorAll('#sales-body td.col-name[data-filter]').forEach((td) => {
     const vendors = salesInvNames.get(salesNormItem(td.dataset.filter));
-    const saleVendor = salesNormItem(td.closest('tr')?.children[3]?.dataset.filter);
+    const tr = td.closest('tr');
+    let saleVendor = salesNormItem(tr?.children[3]?.dataset.filter);
+    // Bazaar sales carry no vendor; treat them as the pseudo-vendor "Bazaar" so a
+    // Bazaar-tracked inventory row matches them (Danvar). Vendor-less rows still
+    // catch everything via vendors.has('').
+    if (!saleVendor && (tr?.children[1]?.textContent || '').trim().toLowerCase() === 'bazaar') saleVendor = 'bazaar';
     const missing = !vendors || !(vendors.has('') || vendors.has(saleVendor));
     const ico = td.querySelector('.sales-notinv');
     if (missing && !ico) {
@@ -239,9 +244,13 @@ function initSales() {
     const add = e.target.closest('[data-addinv]');
     if (add) {
       const tr = add.closest('tr');
+      // Bazaar sales have no vendor — prefill "Bazaar" so the row tracks Bazaar
+      // sales as its own pseudo-vendor (matches the matcher's bazaar handling)
+      let vendor = tr?.children[3]?.dataset.filter || '';
+      if (!vendor && (tr?.children[1]?.textContent || '').trim().toLowerCase() === 'bazaar') vendor = 'Bazaar';
       openInvDialog(null, false, {
         item_name: add.closest('td').dataset.filter,       // exact name, padding and all
-        vendor: tr?.children[3]?.dataset.filter || '',     // the sale's vendor column
+        vendor,
       });
       return;
     }

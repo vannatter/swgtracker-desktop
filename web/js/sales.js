@@ -141,6 +141,13 @@ function showSalesEmpty(msg) {
 // cron. So an item tracked only at vendor A still flags its vendor-B sales.
 let salesInvNames = null; // Map normalized item name -> Set of normalized vendors ('' = any), null = not loaded
 
+// Drop the cached inventory index so the next Sales render re-fetches it. Called
+// on each navigation TO the Sales page (not on pagination/filter, which reuse the
+// cache) so inventory changes made elsewhere — the website, another device — are
+// reflected instead of leaving a stale "not in inventory" flag. (Danvar: a Bazaar
+// row added on the site still showed the cart icon until an app restart.)
+function salesInvalidateInvCache() { salesInvNames = null; }
+
 const salesNormItem = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
 
 async function salesLoadInvNames() {

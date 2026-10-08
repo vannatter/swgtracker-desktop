@@ -661,17 +661,39 @@ function renderGcw() {
   $('#gcw-cards').innerHTML = `
     <div class="gx-card gx-imp"><div class="gx-card-label">Imperial</div><div class="gx-card-val">${gxNum(l.imperial)}</div><div class="gx-card-sub">${impPct}% of active</div></div>
     <div class="gx-card gx-reb"><div class="gx-card-label">Rebel</div><div class="gx-card-val">${gxNum(l.rebel)}</div><div class="gx-card-sub">${100 - impPct}% of active</div></div>`;
-  const impSpark = gxSpark(gcwState.results.map((r) => r.imperial), { color: '#5b9bd5', fill: false });
-  const rebSpark = gxSpark(gcwState.results.map((r) => r.rebel), { color: '#e05b5b', fill: false });
-  $('#gcw-trend').innerHTML = `
+  // Dual line chart: Imperial vs Rebel on one set of axes so the crossovers and the
+  // gap between them are visible (the whole point of tracking both factions).
+  const host = $('#gcw-trend');
+  const labels = gcwState.results.map((r) => (r.timestamp ? wealthDateLabel(r.timestamp) : ''));
+  const chart = gxLineChart([
+    { values: gcwState.results.map((r) => r.imperial), color: '#5b9bd5', name: 'Imperial' },
+    { values: gcwState.results.map((r) => r.rebel), color: '#e24350', name: 'Rebel' },
+  ], { h: 260, w: Math.round(host.getBoundingClientRect().width) || 900, labels });
+  host.innerHTML = `
     <div class="gx-balance"><div class="gx-balance-imp" style="width:${impPct}%"></div><div class="gx-balance-reb" style="width:${100 - impPct}%"></div></div>
     <div class="gx-balance-legend"><span class="gx-imp-txt">Imperial ${impPct}%</span><span class="gx-reb-txt">Rebel ${100 - impPct}%</span></div>
-    <div class="gx-trend-row"><span class="gx-trend-lbl gx-imp-txt">Imperial</span>${impSpark}</div>
-    <div class="gx-trend-row"><span class="gx-trend-lbl gx-reb-txt">Rebel</span>${rebSpark}</div>`;
+    ${chart}`;
 }
 
 // ===================== Professions =====================
-const profState = { items: [], total: 0, loaded: false };
+// labels = shared timestamp axis; history[key] = counts aligned to it. The compare
+// chart overlays the selected classes, and a class row opens a per-class detail modal;
+// both honor the selected range (7/30/90 days or All).
+const profState = { items: [], total: 0, labels: [], history: {}, range: '30', compare: new Set(), collapsedGroups: new Set(), loaded: false };
+
+// Profession families (mirrors the website's 7 groups) — the list is organized under
+// these headers, and a whole family can be added to the compare chart as one summed line.
+const PROF_GROUPS = [
+  { key: 'crafter', name: 'Crafter', color: '#A0AB71', keys: ['architect', 'artisan', 'armorsmith', 'weaponsmith', 'shipwright', 'droid_engineer', 'chef', 'merchant', 'tailor'] },
+  { key: 'ranged', name: 'Ranged', color: '#626BA3', keys: ['carbineer', 'sharpshooter', 'sniper', 'pistoleer'] },
+  { key: 'melee', name: 'Melee', color: '#7A6348', keys: ['berserker', 'brawler', 'lancer', 'tkm', 'fencer'] },
+  { key: 'healing', name: 'Healing', color: '#477778', keys: ['combat_medic', 'bio_engineer', 'doctor', 'medic'] },
+  { key: 'space', name: 'Space', color: '#487A5A', keys: ['pilot_imp', 'pilot_rebel', 'pilot_neutral'] },
+  { key: 'hybrid', name: 'Hybrid', color: '#7A484E', keys: ['sl', 'commando', 'creature_handler', 'bounty_hunter', 'scout', 'smuggler'] },
+  { key: 'social', name: 'Social', color: '#624778', keys: ['dancer', 'entertainer', 'musician', 'image_designer'] },
+];
+const profGroupOf = (key) => PROF_GROUPS.find((g) => g.keys.includes(key));
+
 async function loadProfessions() {
   if (profState.loaded) { renderProfessions(); return; }
   let res;
@@ -679,33 +701,147 @@ async function loadProfessions() {
   if (!res.ok) { $('#prof-empty').textContent = res.error || 'Could not load professions.'; $('#prof-empty').hidden = false; return; }
   profState.items = (res.data && res.data.professions) || [];
   profState.total = (res.data && res.data.total) || 0;
+  profState.labels = (res.data && res.data.labels) || [];
+  profState.history = (res.data && res.data.history) || {};
+  // default the compare overlay to the three biggest classes
+  if (!profState.compare.size) {
+    [...profState.items].sort((a, b) => b.count - a.count).slice(0, 3).forEach((p) => profState.compare.add(p.key));
+  }
   profState.loaded = true;
   gxUpdated('#prof-updated', res.data && res.data.last_updated);
   renderProfessions();
 }
+
+// the indices of profState.labels within the selected range (All = everything)
+function profRangeIdx() {
+  const lbls = profState.labels || [];
+  if (profState.range === 'all') return lbls.map((_, i) => i);
+  const days = safeInt(profState.range) || 30;
+  const cutoff = (Date.now() / 1000) - days * 86400;
+  const idx = [];
+  lbls.forEach((ts, i) => { if (ts >= cutoff) idx.push(i); });
+  return idx.length >= 2 ? idx : lbls.map((_, i) => i); // fall back to all if the window is too thin
+}
+const profSeries = (key, idx) => (profState.history[key] || []).filter((_, i) => idx.includes(i));
+
 function renderProfessions() {
+  renderProfCompare();
   const q = ($('#prof-search')?.value || '').trim().toLowerCase();
-  let rows = profState.items.filter((p) => p.count > 0 || !q);
-  if (q) rows = rows.filter((p) => p.name.toLowerCase().includes(q));
-  rows = [...rows].sort((a, b) => b.count - a.count);
-  if (!rows.length) { $('#prof-list').innerHTML = ''; $('#prof-empty').textContent = 'No classes match.'; $('#prof-empty').hidden = false; return; }
+  const all = profState.items.filter((p) => p.count > 0 || !q);
+  const matches = q ? all.filter((p) => p.name.toLowerCase().includes(q)) : all;
+  if (!matches.length) { $('#prof-list').innerHTML = ''; $('#prof-empty').textContent = 'No classes match.'; $('#prof-empty').hidden = false; return; }
   $('#prof-empty').hidden = true;
-  const max = Math.max(1, ...rows.map((p) => p.count));
-  $('#prof-list').innerHTML = rows.map((p) => {
-    const pct = Math.round((p.count / max) * 100);
-    const share = profState.total ? ((p.count / profState.total) * 100).toFixed(1) : '0';
-    const chg = p.change_recent == null || p.change_recent === 0 ? ''
-      : `<span class="${p.change_recent > 0 ? 'gx-up' : 'gx-down'} gx-prof-chg">${p.change_recent > 0 ? '+' : ''}${p.change_recent}</span>`;
-    const spark = (p.history && p.history.length > 1)
-      ? gxSpark(p.history, { w: 90, h: 22, color: p.color, fill: true })
-      : '';
-    return `<div class="gx-prof-row">
-      <div class="gx-prof-name" title="${escapeHtml(p.name)}">${escapeHtml(p.name)}</div>
-      <div class="gx-prof-barwrap"><div class="gx-prof-bar" style="width:${pct}%;background:${escapeHtml(p.color)}"></div></div>
-      <div class="gx-prof-spark" title="Population trend (recent)">${spark}</div>
-      <div class="gx-prof-count">${gxNum(p.count)} <span class="gx-muted">· ${share}%</span> ${chg}</div>
+  const max = Math.max(1, ...all.map((p) => p.count)); // bars scale against the whole server, not per group
+  const byKey = Object.fromEntries(profState.items.map((p) => [p.key, p]));
+
+  // When searching, show a flat ranked list; otherwise group by family (collapsible).
+  if (q) {
+    $('#prof-list').innerHTML = [...matches].sort((a, b) => b.count - a.count).map((p) => profRowHtml(p, max)).join('');
+    return;
+  }
+  const html = PROF_GROUPS.map((g) => {
+    const members = g.keys.map((k) => byKey[k]).filter(Boolean).sort((a, b) => b.count - a.count);
+    if (!members.length) return '';
+    const gTotal = members.reduce((s, p) => s + p.count, 0);
+    const gShare = profState.total ? ((gTotal / profState.total) * 100).toFixed(1) : '0';
+    const collapsed = profState.collapsedGroups.has(g.key);
+    const head = `<div class="gx-prof-grouphead${collapsed ? ' collapsed' : ''}" data-profgroup="${g.key}">
+      <i class="fa-solid fa-chevron-down gx-prof-gcaret"></i>
+      <span class="gx-pdot" style="background:${g.color}"></span>
+      <span class="gx-prof-gname">${g.name}</span>
+      <span class="gx-prof-gcount">${gxNum(gTotal)} <span class="gx-muted">· ${gShare}%</span></span>
+      <i class="fa-solid fa-chart-line gx-prof-gcmp" data-profgroupcompare="${g.key}" title="Add the whole ${g.name} family to the compare chart"></i>
     </div>`;
+    const body = collapsed ? '' : `<div class="gx-prof-gbody">${members.map((p) => profRowHtml(p, max)).join('')}</div>`;
+    return head + body;
   }).join('');
+  $('#prof-list').innerHTML = html;
+}
+
+function profRowHtml(p, max) {
+  const pct = Math.round((p.count / max) * 100);
+  const share = profState.total ? ((p.count / profState.total) * 100).toFixed(1) : '0';
+  const chg = p.change_recent == null || p.change_recent === 0 ? ''
+    : `<span class="${p.change_recent > 0 ? 'gx-up' : 'gx-down'} gx-prof-chg">${p.change_recent > 0 ? '+' : ''}${p.change_recent}</span>`;
+  // new endpoint: history map; older endpoint: per-item p.history — support both
+  const hist = (profState.history[p.key] || p.history || []).filter((v) => v != null);
+  const spark = (hist.length > 1) ? gxSpark(hist.slice(-40), { w: 90, h: 22, color: p.color, fill: true }) : '';
+  const cmp = profState.compare.has(p.key);
+  return `<div class="gx-prof-row">
+    <i class="fa-solid fa-chart-line gx-prof-cmp${cmp ? ' on' : ''}" data-profcompare="${escapeHtml(p.key)}" title="${cmp ? 'Remove from compare chart' : 'Add to compare chart'}" style="${cmp ? `color:${escapeHtml(p.color)}` : ''}"></i>
+    <div class="gx-prof-name gx-prof-detaillink" data-profdetail="${escapeHtml(p.key)}" title="View ${escapeHtml(p.name)} history">${escapeHtml(p.name)}</div>
+    <div class="gx-prof-barwrap"><div class="gx-prof-bar" style="width:${pct}%;background:${escapeHtml(p.color)}"></div></div>
+    <div class="gx-prof-spark" title="Population trend (recent)">${spark}</div>
+    <div class="gx-prof-count">${gxNum(p.count)} <span class="gx-muted">· ${share}%</span> ${chg}</div>
+  </div>`;
+}
+
+// one compare entry → {name, color, series} for an idx window. A key prefixed "g:"
+// is a whole family (its member counts summed); otherwise a single class.
+function profCompareEntry(k, idx, byKey) {
+  if (k.startsWith('g:')) {
+    const g = PROF_GROUPS.find((x) => x.key === k.slice(2));
+    if (!g) return null;
+    const sums = idx.map((i) => g.keys.reduce((s, mk) => s + ((profState.history[mk] || [])[i] || 0), 0));
+    return { name: `${g.name} family`, color: g.color, values: sums };
+  }
+  if (!byKey[k]) return null;
+  return { name: byKey[k].name, color: byKey[k].color, values: profSeries(k, idx) };
+}
+
+// overlay chart of the selected classes/families over the chosen range + removable chips
+function renderProfCompare() {
+  document.querySelectorAll('#prof-rangetabs .gx-aggtab').forEach((b) => b.classList.toggle('active', b.dataset.profrange === profState.range));
+  const chipHost = $('#prof-compare-chips');
+  const host = $('#prof-chartbody');
+  if (!chipHost || !host) return;
+  const byKey = Object.fromEntries(profState.items.map((p) => [p.key, p]));
+  const idxAll = profState.labels.map((_, i) => i);
+  const keys = [...profState.compare].map((k) => ({ k, e: profCompareEntry(k, idxAll, byKey) })).filter((x) => x.e);
+  chipHost.innerHTML = keys.length
+    ? keys.map(({ k, e }) => `<span class="gx-prof-chip" style="border-color:${escapeHtml(e.color)}"><span class="gx-pdot" style="background:${escapeHtml(e.color)}"></span>${escapeHtml(e.name)} <i class="fa-solid fa-xmark" data-profuncompare="${escapeHtml(k)}" title="Remove"></i></span>`).join('')
+    : '<span class="settings-sub">Add a class or a whole family to compare them here — use the chart icon on a row or a group header.</span>';
+  if (!keys.length) { host.innerHTML = ''; return; }
+  if (!profState.labels.length) { host.innerHTML = '<div class="settings-sub">Population history isn\'t available yet — pending a site update.</div>'; return; }
+  const idx = profRangeIdx();
+  const labels = gxDownsample(idx.map((i) => wealthDateLabel(profState.labels[i])));
+  const series = keys.map(({ k }) => {
+    const e = profCompareEntry(k, idx, byKey);
+    return { values: gxDownsample(e.values), color: e.color, name: e.name };
+  });
+  host.innerHTML = gxLineChart(series, { h: 260, w: Math.round(host.getBoundingClientRect().width) || 900, labels });
+}
+
+// per-class history detail modal (reuses the galaxy detail modal shell)
+function openProfDetail(key) {
+  const p = profState.items.find((x) => x.key === key);
+  if (!p) return;
+  const idx = profRangeIdx();
+  const vals = profSeries(key, idx).filter((v) => v != null);
+  const peak = vals.length ? Math.max(...vals) : 0;
+  const low = vals.length ? Math.min(...vals) : 0;
+  const first = vals.length ? vals[0] : 0;
+  const net = p.count - first;
+  const ranked = [...profState.items].sort((a, b) => b.count - a.count);
+  const rank = ranked.findIndex((x) => x.key === key) + 1;
+  const labels = gxDownsample(idx.map((i) => wealthDateLabel(profState.labels[i])));
+  const chart = gxLineChart([{ values: gxDownsample(profSeries(key, idx)), color: p.color, fill: true, name: p.name }],
+    { h: 260, w: 940, labels });
+  $('#gx-detail-title').textContent = `${p.name} — population history`;
+  $('#gx-detail-body').innerHTML = `
+    <div class="gx-detail-stats gx-detail-stats-8">
+      <div class="gx-dstat"><div class="gx-dstat-label">Current</div><div class="gx-dstat-val">${gxNum(p.count)}</div></div>
+      <div class="gx-dstat"><div class="gx-dstat-label">Rank</div><div class="gx-dstat-val">#${rank} of ${profState.items.length}</div></div>
+      <div class="gx-dstat"><div class="gx-dstat-label">Share</div><div class="gx-dstat-val">${profState.total ? ((p.count / profState.total) * 100).toFixed(1) : '0'}%</div></div>
+      <div class="gx-dstat"><div class="gx-dstat-label">Net (range)</div><div class="gx-dstat-val ${net >= 0 ? 'gx-up' : 'gx-down'}">${net >= 0 ? '+' : ''}${gxNum(net)}</div></div>
+      <div class="gx-dstat"><div class="gx-dstat-label">Peak (range)</div><div class="gx-dstat-val">${gxNum(peak)}</div></div>
+      <div class="gx-dstat"><div class="gx-dstat-label">Low (range)</div><div class="gx-dstat-val">${gxNum(low)}</div></div>
+    </div>
+    <div class="gx-chart"><div class="gx-chart-h">Characters mastering ${escapeHtml(p.name)} — ${profRangeLabel()}</div>${chart}</div>`;
+  $('#gx-detail-modal').hidden = false;
+}
+function profRangeLabel() {
+  return profState.range === 'all' ? 'all history' : `last ${profState.range} days`;
 }
 
 // ===================== Titles =====================
@@ -844,6 +980,48 @@ function initGalaxy() {
   // Professions
   $('#prof-search').addEventListener('input', renderProfessions);
   $('#prof-reload').addEventListener('click', () => { profState.loaded = false; loadProfessions(); });
+  // range buttons (7/30/90/All) + collapse toggle
+  $('#prof-rangetabs').addEventListener('click', (e) => {
+    if (e.target.closest('#prof-chartcollapse')) {
+      const wrap = $('#prof-chartwrap'); const on = wrap.classList.toggle('collapsed');
+      $('#prof-chartcollapse').innerHTML = on ? '<i class="fa-solid fa-chevron-down"></i>' : '<i class="fa-solid fa-chevron-up"></i>';
+      return;
+    }
+    const t = e.target.closest('[data-profrange]'); if (!t) return;
+    profState.range = t.dataset.profrange; renderProfCompare();
+  });
+  // compare toggles, group collapse, and open-detail on the list rows
+  $('#prof-list').addEventListener('click', (e) => {
+    const gcmp = e.target.closest('[data-profgroupcompare]');
+    if (gcmp) {
+      const k = 'g:' + gcmp.dataset.profgroupcompare;
+      if (profState.compare.has(k)) profState.compare.delete(k); else profState.compare.add(k);
+      renderProfessions();
+      return;
+    }
+    const ghead = e.target.closest('[data-profgroup]');
+    if (ghead) {
+      const g = ghead.dataset.profgroup;
+      if (profState.collapsedGroups.has(g)) profState.collapsedGroups.delete(g); else profState.collapsedGroups.add(g);
+      renderProfessions();
+      return;
+    }
+    const cmp = e.target.closest('[data-profcompare]');
+    if (cmp) {
+      const k = cmp.dataset.profcompare;
+      if (profState.compare.has(k)) profState.compare.delete(k); else profState.compare.add(k);
+      renderProfessions();
+      return;
+    }
+    const det = e.target.closest('[data-profdetail]');
+    if (det) openProfDetail(det.dataset.profdetail);
+  });
+  // remove a class from the compare chart via its chip
+  $('#prof-compare-chips').addEventListener('click', (e) => {
+    const x = e.target.closest('[data-profuncompare]'); if (!x) return;
+    profState.compare.delete(x.dataset.profuncompare);
+    renderProfessions();
+  });
   // Titles
   $('#titles-search').addEventListener('input', renderTitles);
   $('#titles-reload').addEventListener('click', () => { titlesState.loaded = false; loadTitles(); });

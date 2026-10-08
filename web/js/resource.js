@@ -431,9 +431,23 @@ function rdHistogramSvg(dist) {
 // Crafting stat donut — slice arc length = weight_pct, fill = this resource's quality color.
 function rdDonutSvg(stats) {
   const size = 150, cx = size / 2, cy = size / 2, r = 60, inner = 35;
-  const total = stats.reduce((s, x) => s + (x.weight_pct || 0), 0) || 1;
+  // drop zero-weight stats — a 0% slice is a degenerate arc and adds nothing
+  const parts = stats.filter((s) => (s.weight_pct || 0) > 0);
+  const total = parts.reduce((s, x) => s + (x.weight_pct || 0), 0) || 1;
+  const tip = (s) => `data-tipt="${escapeHtml(s.stat)} — ${s.weight_pct}% crafting weight" data-tipb="this resource ${s.stat_pct}% (${rdPerfGrade(s.stat_pct)})"`;
+
+  // One stat carries all the weight → a single full circle. An SVG arc from a point
+  // back to itself draws nothing, so render a proper ring (outer + inner, even-odd).
+  if (parts.length === 1) {
+    const s = parts[0];
+    const ring = `M ${cx} ${cy - r} A ${r} ${r} 0 1 1 ${cx} ${cy + r} A ${r} ${r} 0 1 1 ${cx} ${cy - r} Z`
+      + ` M ${cx} ${cy - inner} A ${inner} ${inner} 0 1 0 ${cx} ${cy + inner} A ${inner} ${inner} 0 1 0 ${cx} ${cy - inner} Z`;
+    return `<svg class="rd-pdonut" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}">`
+      + `<path class="rd-pslice" d="${ring}" fill="${s.color || '#777'}" fill-rule="evenodd" ${tip(s)}></path></svg>`;
+  }
+
   let a0 = -Math.PI / 2; // start at 12 o'clock
-  const slices = stats.map((s) => {
+  const slices = parts.map((s) => {
     const frac = (s.weight_pct || 0) / total;
     const a1 = a0 + frac * Math.PI * 2;
     const large = (a1 - a0) > Math.PI ? 1 : 0;
@@ -443,9 +457,7 @@ function rdDonutSvg(stats) {
     const xi1 = cx + inner * Math.cos(a0), yi1 = cy + inner * Math.sin(a0);
     const d = `M ${x0} ${y0} A ${r} ${r} 0 ${large} 1 ${x1} ${y1} L ${xi0} ${yi0} A ${inner} ${inner} 0 ${large} 0 ${xi1} ${yi1} Z`;
     a0 = a1;
-    const grade = rdPerfGrade(s.stat_pct);
-    return `<path class="rd-pslice" d="${d}" fill="${s.color || '#777'}" stroke="var(--bg)" stroke-width="2"`
-      + ` data-tipt="${escapeHtml(s.stat)} — ${s.weight_pct}% crafting weight" data-tipb="this resource ${s.stat_pct}% (${grade})"></path>`;
+    return `<path class="rd-pslice" d="${d}" fill="${s.color || '#777'}" stroke="var(--bg)" stroke-width="2" ${tip(s)}></path>`;
   }).join('');
   return `<svg class="rd-pdonut" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}">${slices}</svg>`;
 }

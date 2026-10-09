@@ -394,8 +394,20 @@ async function sbStartFixTakeover(schematicId, name) {
   await sbLoadMeta();         // categories, for the prefill mapping
   await sbOpenDraft(0);       // fresh draft → edit view (sets sbState.cur)
   await sbPrefillFromFix(schematicId, name || '');
+  // Carry over the original submitter's proof screenshots — a takeover is data
+  // cleanup, not a fresh submission, so the reviewer shouldn't have to re-shoot
+  // (they can still remove/replace them). Requested by snickerfritz.
+  try {
+    const st = await apiFetch('GET', 'api/user_schematics.php', { params: { action: 'status', schematic_id: schematicId } });
+    const shots = (st && st.ok && st.data && Array.isArray(st.data.screenshots)) ? st.data.screenshots : [];
+    if (shots.length && sbState.cur && !(sbState.cur.body.screenshots || []).length) {
+      sbState.cur.body.screenshots = shots.slice();
+      sbMarkDirty();
+      sbRenderEditor();
+    }
+  } catch (_) { /* reviewer can still attach their own */ }
   showPage('schembuilder');   // sbState.cur is set, so the loader won't bounce to the list
-  toast('Fix the flagged issues, attach a proof screenshot, then Submit to take it over');
+  toast('Opened with the original proof — fix the flagged issues, then Submit to take it over');
 }
 
 // ---- appearance: associate an existing item's 3D model ----------------------

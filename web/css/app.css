@@ -2740,6 +2740,7 @@ model-viewer::part(default-progress-mask) { display: none; }
 .sb-vb-state { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap;
   border: 1px solid var(--border); color: var(--text-muted); border-radius: 9px; padding: 3px 10px; font-size: 12px; }
 .sb-vb-state.ok { border-color: #45e97e; color: #45e97e; }
+.sb-vb-locknote { align-self: center; font-size: 12px; white-space: nowrap; cursor: default; }
 .sb-vb-shots { display: flex; gap: 6px; }
 .sb-shotthumb { position: relative; display: block; cursor: zoom-in; border-radius: 6px; overflow: hidden;
   border: 1px solid var(--border); transition: border-color .15s ease; }
@@ -3354,6 +3355,9 @@ body.dev-mode .scd-hiddenrow { display: block; opacity: .55; }
 .res-card-pinned { border-left: 3px solid var(--accent); }
 .res-card-stocked { border-left: 3px solid #45e97e; }
 .res-card-wished { border-left: 3px solid #e05b9b; }
+/* hot / top-spawn cards: red side outline + flame (wins the left border when also marked) */
+.res-card-hot { border-left: 3px solid var(--accent); }
+.res-card-flame { color: var(--accent); font-size: 11px; flex: 0 0 auto; }
 .res-card-mark { font-size: 10px; flex: 0 0 auto; }
 .res-card-stock { color: #45e97e; }
 .res-card-wish { color: #e05b9b; }

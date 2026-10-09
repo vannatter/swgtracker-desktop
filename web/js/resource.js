@@ -66,18 +66,23 @@ async function rdRenderWaypoints(r) {
   }
 }
 
+// Returns HTML (safe: dynamic parts escaped) so the spawn age and the Added date
+// carry a precise "Spawned/Added N days, H hours, M minutes ago" hover tooltip.
 function rdAgeText(r) {
   const ts = safeInt(r.timestamp);
   const added = ts > 0 ? fmtDate(ts) : '';
-  let spawn;
+  let spawn = '';
   if (!rdIsActive(r)) {
     const inactiveAt = safeInt(r.inactive_at);
-    spawn = inactiveAt > 0 ? `Despawned ${fmtDate(inactiveAt)}` : 'Despawned';
+    spawn = inactiveAt > 0 ? `Despawned ${escapeHtml(fmtDate(inactiveAt))}` : 'Despawned';
   } else if (ts > 0) {
     const days = Math.max(0, Math.floor((Date.now() / 1000 - ts) / 86400));
-    spawn = days === 0 ? '<1d in spawn' : `${days}d in spawn`;
+    const txt = days === 0 ? '<1d in spawn' : `${days}d in spawn`;
+    spawn = `<span title="${escapeHtml(agoText(r.timestamp))}">${txt}</span>`;
   }
-  return [r.id ? `ID: ${r.id}` : '', added ? `Added ${added}` : '', spawn || '']
+  const addedPart = added
+    ? `Added <span title="${escapeHtml(agoText(r.timestamp, 'Added'))}">${escapeHtml(added)}</span>` : '';
+  return [r.id ? `ID: ${escapeHtml(String(r.id))}` : '', addedPart, spawn]
     .filter(Boolean).join('   ·   ');
 }
 
@@ -118,7 +123,7 @@ function renderResourcePage(data) {
     `<span class="crumb-current">${escapeHtml(r.name || '')}</span>${ext}`,
   ].filter(Boolean).join('<span class="crumb-sep">›</span>');
 
-  $('#rd-meta').innerHTML = escapeHtml(rdAgeText(r));
+  $('#rd-meta').innerHTML = rdAgeText(r);
 
   // Score gets the scorecard's speedometer gauge; eCPU keeps its tiny card
   // but grows the site's up/down vote arrows; stats stay as tiny cards

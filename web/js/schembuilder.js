@@ -387,6 +387,17 @@ async function sbPrefillFromFix(fid, name) {
   sbRenderEditor();
 }
 
+// "Fix & take over" from a flagged community schematic's detail page: open the
+// builder on a fresh draft, prefilled from this schematic as a fix. Submitting it
+// applies immediately (server-side, rep-gated) and re-attributes it to the fixer.
+async function sbStartFixTakeover(schematicId, name) {
+  await sbLoadMeta();         // categories, for the prefill mapping
+  await sbOpenDraft(0);       // fresh draft → edit view (sets sbState.cur)
+  await sbPrefillFromFix(schematicId, name || '');
+  showPage('schembuilder');   // sbState.cur is set, so the loader won't bounce to the list
+  toast('Fix the flagged issues, attach a proof screenshot, then Submit to take it over');
+}
+
 // ---- appearance: associate an existing item's 3D model ----------------------
 // Searches only items that HAVE models (schState.modelIds via schematics.js);
 // publishing symlinks the donor's .glb at this schematic's id server-side.
@@ -612,6 +623,15 @@ async function sbSubmit() {
   let res;
   try { res = await apiFetch('POST', 'api/user_schematics.php', { data: { action: 'submit', id: c.id } }); }
   catch (e) { res = { ok: false, error: String(e) }; }
+  if (res.ok && res.data?.status === 'inherited') {
+    // fix-&-take-over applied in place: jump to the schematic that lives on
+    c.status = 'published';
+    c.schematic_id = safeInt(res.data.schematic_id);
+    toast('Taken over! Your corrected recipe is live and re-verifying — others confirm it from here');
+    sbLoadDrafts();
+    openSchematicPage(String(res.data.schematic_id));
+    return;
+  }
   if (res.ok && res.data?.status === 'published') {
     c.status = 'published';
     c.schematic_id = safeInt(res.data.schematic_id);
@@ -701,14 +721,19 @@ async function sbRenderVerifyBar(schematicId, isCommunity) {
              title="Check the proof screenshots against the details below, then confirm."><i class="fa-solid fa-check"></i> Confirm accurate</button>`)
       + (!st.mine && !st.flagged ? `<button id="scd-flag" class="btn btn-sm btn-outline-secondary"
              title="Something's wrong with this schematic? Flag it and say what needs fixing — the submitter sees your note."><i class="fa-solid fa-flag"></i> Flag as incorrect</button>`
-        : '');
+        : '')
+      // a rep-gated reviewer can fix the flagged issues and take the schematic over
+      // in place, so a mistaken submission the author never fixes doesn't just rot
+      + (st.can_fix ? `<button id="scd-fixtakeover" class="btn btn-sm btn-accent" data-sid="${schematicId}"
+             title="Open it in the builder prefilled, fix the flagged issues, and take it over — it re-verifies from scratch under your name (the original author stays credited)."><i class="fa-solid fa-wrench"></i> Fix &amp; take over</button>`
+        : (st.fix_rep_needed && !st.mine && (st.flags || []).length ? `<span class="sb-vb-locknote stat_off" title="Fixing a flagged schematic unlocks at reputation ${st.fix_rep_needed} — you're at ${Math.floor(st.my_rep || 0)}. Rep grows as you use the tracker.">Fix unlocks at rep ${st.fix_rep_needed}</span>` : ''));
     bar.innerHTML = `${shots ? `<div class="sb-vb-shots">${shots}</div>` : ''}
       <div class="sb-vb-info">
         <div class="sb-vb-title"><i class="fa-solid ${st.fixes ? 'fa-wrench' : 'fa-users'}"></i> ${st.fixes ? 'Community correction' : 'Community schematic'}
           <span class="sb-vb-chip" title="Unconfirmed schematics return to draft after 30 days, ready to fix and resubmit">unverified</span></div>
         <div class="sb-vb-sub">${st.fixes ? `fixes <a role="button" data-openfix="${st.fixes.id}" data-fixname="${escapeHtml(st.fixes.name)}">${escapeHtml(st.fixes.name)}</a> — verifying it REPLACES that schematic's data in place · ` : ''}${st.votes} of ${st.needed} confirmations · 30 days to verify${st.mine
           ? ' · yours — others must confirm it'
-          : st.submitter ? ` · submitted by ${escapeHtml(st.submitter)}` : ''}</div>
+          : st.submitter ? ` · ${st.inherited_from ? `originally by ${escapeHtml(st.inherited_from)} · corrected & maintained by ${escapeHtml(st.submitter)}` : `submitted by ${escapeHtml(st.submitter)}`}` : ''}</div>
       </div>
       <div class="sb-vb-actions">${actions}</div>
       <div id="scd-flagform" class="sb-flagform" hidden>
@@ -741,6 +766,12 @@ function initSchemBuilder() {
   $('#scd-community').addEventListener('click', async (e) => {
     const fx = e.target.closest('[data-openfix]');
     if (fx) { openSchematicPage(fx.dataset.openfix, fx.dataset.fixname); return; }
+    const takeover = e.target.closest('#scd-fixtakeover');
+    if (takeover) {
+      const nm = (scdState.schematic && scdState.schematic.schematicName) || '';
+      sbStartFixTakeover(safeInt(takeover.dataset.sid), nm);
+      return;
+    }
     const shot = e.target.closest('[data-shotview]');
     if (shot) { sbShowShot(shot.dataset.shotview); return; }
     const retract = e.target.closest('#scd-retract');

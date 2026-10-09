@@ -189,19 +189,22 @@ function resCardHtml(res) {
     : '';
   const days = resCardDays(res);
   const planets = show('planets') ? `<span class="res-card-planets">${planetsHtml(res)}</span>` : '';
+  const spawnTip = isActive ? ` title="${escapeHtml(agoText(res.timestamp))}"` : '';
   const foot = (days || planets)
     ? `<div class="res-card-foot">
-        ${days ? `<span class="res-card-days ${isActive ? '' : 'res-card-gone'}"><i class="fa-solid fa-clock"></i> ${escapeHtml(days)}</span>` : '<span></span>'}
+        ${days ? `<span class="res-card-days ${isActive ? '' : 'res-card-gone'}"${spawnTip}><i class="fa-solid fa-clock"></i> ${escapeHtml(days)}</span>` : '<span></span>'}
         ${planets}
       </div>`
     : '';
   const isPinned = resState.pinned.has(String(id));
   const isWished = typeof wishState !== 'undefined' && wishState.resourceIds.has(String(id));
   const isStocked = typeof stkState !== 'undefined' && stkState.resourceIds.has(String(id));
+  const isHot = safeInt(res.topcount) > 0; // top spawn — the list view shows a sub-count
   const mark = isPinned ? 'res-card-pinned' : isStocked ? 'res-card-stocked' : isWished ? 'res-card-wished' : '';
-  return `<div class="res-card ${mark}" data-id="${id}">
+  return `<div class="res-card ${mark}${isHot ? ' res-card-hot' : ''}" data-id="${id}">
     <div class="res-card-head">
       <i class="fa-solid fa-thumbtack res-card-pin ${isPinned ? 'pinned-star' : ''}" data-pin="${escapeHtml(String(id))}" title="Pin"></i>
+      ${isHot ? `<i class="fa-solid fa-fire res-card-flame" title="Hot — top resource for ${safeInt(res.topcount)} schematic${safeInt(res.topcount) === 1 ? '' : 's'}"></i>` : ''}
       <span class="res-card-name res-name" data-resname="${escapeHtml(res.name || '')}" data-resid="${escapeHtml(String(id))}">${escapeHtml(res.name || '')}</span>
       ${isStocked ? '<i class="fa-solid fa-cubes res-card-mark res-card-stock" title="In your stockpile"></i>' : ''}
       ${isWished ? '<i class="fa-solid fa-heart res-card-mark res-card-wish" title="On your wishlist"></i>' : ''}
@@ -292,7 +295,7 @@ function resTreeItemHtml(r, depth) {
   return `<div class="res-tree-item">
     <span class="res-tree-itemlabel" style="padding-left:${depth * 15 + 12}px">
       <i class="fa-solid fa-thumbtack res-tree-pin ${resState.pinned.has(String(r.id)) ? 'pinned-star' : ''}" data-pin="${escapeHtml(String(r.id ?? ''))}" title="Pin"></i>
-      <i class="fa-solid fa-circle res-status ${isActive ? 'on' : 'off'}"></i>
+      <i class="fa-solid fa-circle res-status ${isActive ? 'on' : 'off'}"${isActive ? ` title="${escapeHtml(agoText(r.timestamp))}"` : ''}></i>
       <span class="res-name res-tree-itemname" data-resname="${escapeHtml(r.name || '')}" data-resid="${escapeHtml(String(r.id ?? ''))}">${escapeHtml(r.name || '')}</span>
     </span>
     <span class="res-tree-cells">${cells}${planets}</span>
@@ -697,7 +700,7 @@ function resRowHtml(res) {
     // count digits, so textContent would navigate to "Aqui13"
     if (field === 'name') return `<td class="col-name res-name" data-resname="${escapeHtml(res.name || '')}" data-resid="${escapeHtml(String(id))}">${escapeHtml(res.name || '')}${safeInt(res.topcount) > 0
       ? `<sup class="res-topcount" title="Top resource for ${safeInt(res.topcount)} schematic${safeInt(res.topcount) === 1 ? '' : 's'} — see its Top Uses tab">${safeInt(res.topcount)}</sup>` : ''}</td>`;
-    if (field === 'status') return `<td class="col-status"><i class="fa-solid fa-circle res-status ${isActive ? 'on' : 'off'}" title="${isActive ? 'Active — in spawn' : 'Inactive — despawned'}"></i></td>`;
+    if (field === 'status') return `<td class="col-status"><i class="fa-solid fa-circle res-status ${isActive ? 'on' : 'off'}" title="${isActive ? escapeHtml(agoText(res.timestamp)) : 'Inactive — despawned'}"></i></td>`;
     if (field === 'type_name') {
       const name = escapeHtml(res.type_name || '');
       return res.type_code

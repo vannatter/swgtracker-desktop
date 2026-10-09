@@ -435,6 +435,23 @@ function statCell(v, max) {
 
 const fmtNum = (v) => (Number(v) || 0).toLocaleString();
 
+// Precise "1 day, 3 hours, 42 minutes ago" from a unix timestamp — for hover
+// tooltips on spawn age and dates (the visible text stays coarse). `verb` lets
+// callers say "Spawned …" (default) or "Added …".
+function agoText(ts, verb = 'Spawned') {
+  const t = safeInt(ts);
+  let secs = t > 0 ? Math.floor(Date.now() / 1000 - t) : 0;
+  if (secs < 0) secs = 0;
+  const d = Math.floor(secs / 86400); let rem = secs - d * 86400;
+  const h = Math.floor(rem / 3600); rem -= h * 3600;
+  const m = Math.floor(rem / 60);
+  const parts = [];
+  if (d) parts.push(d + (d === 1 ? ' day' : ' days'));
+  if (h) parts.push(h + (h === 1 ? ' hour' : ' hours'));
+  if (m || !parts.length) parts.push(m + (m === 1 ? ' minute' : ' minutes'));
+  return `${verb} ${parts.join(', ')} ago`;
+}
+
 // Compact amount for tight cells: 4532100 -> "4.5m", 300000 -> "300k", 950 -> "950".
 // Mirrors the 300k/4.5m shorthand used for stockpile amounts.
 function fmtShort(v) {

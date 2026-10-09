@@ -42,14 +42,29 @@ function aliSerialize() {
   return `${out.join('\n')}\n`;
 }
 
+// Version gate (the nav item is no longer dev-only): the full Aliases feature —
+// game-root discovery + "choose aliases.txt" picker — needs the newer shell, so
+// gate on that capability and tell older clients to update rather than break.
 function aliSupported() {
-  return typeof api().aliases_files === 'function';
+  return typeof api().aliases_files === 'function' && typeof api().pick_aliases_file === 'function';
+}
+
+// Native file picker → point the Aliases feature at a specific aliases.txt.
+async function aliPickFile() {
+  if (typeof api().pick_aliases_file !== 'function') { toast('Update the desktop app to set a custom location', false); return; }
+  let res;
+  try { res = await api().pick_aliases_file(); } catch (e) { res = { ok: false, error: String(e) }; }
+  if (res.ok && res.data && res.data.cancelled) return;
+  if (!res.ok) { toast(res.error || 'Could not set the aliases file', false); return; }
+  aliState.path = null; // let loadAliases select the freshly-set file
+  await loadAliases();
+  toast('Aliases file set');
 }
 
 async function loadAliases() {
   const empty = $('#ali-empty');
   if (!aliSupported()) {
-    empty.textContent = 'Managing aliases needs app version 0.13.2 or newer — update the desktop client.';
+    empty.innerHTML = 'Managing aliases needs the latest desktop client — <b>update to the newest version</b> to find your <code>aliases.txt</code> and edit your aliases.';
     empty.hidden = false;
     $('#ali-layout').hidden = true;
     $('#ali-gamewarn').hidden = true;
@@ -64,8 +79,16 @@ async function loadAliases() {
     ? files.map((f) => `<option value="${escapeHtml(f.path)}">${escapeHtml(f.char || f.path)}</option>`).join('')
     : '<option value="">no aliases.txt found</option>';
   if (!files.length) {
-    empty.innerHTML = 'No <b>aliases.txt</b> found next to your mail folders — set up your SWG mail directories in Settings first, and make sure the character has saved an alias in game at least once (<code>/alias</code> then <code>/save</code>).';
+    const canPick = typeof api().pick_aliases_file === 'function';
+    empty.innerHTML = 'No <b>aliases.txt</b> found automatically — it lives in your game <b>root</b> folder '
+      + '(e.g. <code>C:\\Restoration III\\aliases.txt</code>), not next to the mail folders. '
+      + 'Set up your SWG mail directories in Settings, make sure you\'ve saved an alias in game at least once '
+      + '(<code>/alias</code> then <code>/save</code>) — or point straight at the file:'
+      + (canPick ? '<div style="margin-top:12px"><button id="ali-pickfile" class="btn btn-sm btn-accent"><i class="fa-solid fa-folder-open"></i> Choose aliases.txt…</button></div>'
+                 : '<div style="margin-top:8px" class="settings-sub">Update the desktop app to pick a custom location.</div>');
     empty.hidden = false;
+    const btn = empty.querySelector('#ali-pickfile');
+    if (btn) btn.addEventListener('click', aliPickFile);
     $('#ali-layout').hidden = true;
     $('#ali-gamewarn').hidden = true;
     return;
@@ -221,6 +244,7 @@ function initAliases() {
     await aliReadFile();
   });
   $('#ali-reload').addEventListener('click', aliReadFile);
+  $('#ali-pickloc').addEventListener('click', aliPickFile);
   $('#ali-add').addEventListener('click', () => { aliState.editing = 'new'; renderAliDetail(); $('#ali-ed-name').focus(); });
   $('#ali-search').addEventListener('input', renderAliases);
 

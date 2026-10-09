@@ -6,7 +6,7 @@
   <title>SWG Tracker Desktop</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.1/css/all.min.css">
-  <link rel="stylesheet" href="css/app.css?v=20261008b">
+  <link rel="stylesheet" href="css/app.css?v=20261008d">
 </head>
 <body>
   <div id="holiday-bar" class="holiday-bar" hidden></div>
@@ -59,8 +59,8 @@
         <li class="nav-item" data-page="factories"><i class="fa-solid fa-industry"></i> Factories
           <span id="nav-fac-pill" class="nav-pill" title="Finished runs ready to collect" hidden></span></li>
         <li class="nav-item" data-page="notes"><i class="fa-solid fa-note-sticky"></i> Notes</li>
-        <li class="nav-item dev-only" data-page="macros" title="Dev preview — in testing"><i class="fa-solid fa-wand-magic-sparkles"></i> Macros <span class="dev-pill">DEV</span></li>
-        <li class="nav-item dev-only" data-page="aliases" title="Dev preview — in testing"><i class="fa-solid fa-terminal"></i> Aliases <span class="dev-pill">DEV</span></li>
+        <li class="nav-item" data-page="macros" title="Manage your in-game macros (macros.txt)"><i class="fa-solid fa-wand-magic-sparkles"></i> Macros</li>
+        <li class="nav-item" data-page="aliases" title="Manage your in-game aliases (aliases.txt)"><i class="fa-solid fa-terminal"></i> Aliases</li>
         <li class="nav-item" data-page="alerts"><i class="fa-solid fa-bell"></i> Spawn Alerts
           <span id="nav-alerts-pill" class="nav-pill" title="Spawn alert matches you haven't seen" hidden></span></li>
         <li class="nav-item" data-page="monitor"><i class="fa-solid fa-envelope"></i> Mail</li>
@@ -1461,6 +1461,7 @@
                  title="Searches names and commands" autocomplete="off">
           <select id="ali-file-pick" class="form-select filter-select"></select>
           <button id="ali-add" class="btn btn-sm btn-accent"><i class="fa-solid fa-plus"></i> New Alias</button>
+          <button id="ali-pickloc" class="btn btn-icon" title="Choose a different aliases.txt (game root)"><i class="fa-solid fa-folder-open"></i></button>
           <button id="ali-reload" class="btn btn-icon" title="Re-read the file from disk"><i class="fa-solid fa-rotate-right"></i></button>
         </div>
         <div id="ali-gamewarn" class="al-empty" hidden><i class="fa-solid fa-triangle-exclamation"></i>
@@ -2639,34 +2640,34 @@
   </div>
 
   <!-- Classic scripts sharing one top-level scope; app.js boots last. -->
-  <script src="js/class_caps.js?v=20261008b"></script>
-  <script src="js/shared.js?v=20261008b"></script>
-  <script src="js/help.js?v=20261008b"></script>
-  <script src="js/resources.js?v=20261008b"></script>
-  <script src="js/resource.js?v=20261008b"></script>
-  <script src="js/schematics.js?v=20261008b"></script>
-  <script src="js/stockpile.js?v=20261008b"></script>
-  <script src="js/wishlist.js?v=20261008b"></script>
-  <script src="js/myschematics.js?v=20261008b"></script>
-  <script src="js/inventory.js?v=20261008b"></script>
-  <script src="js/sales.js?v=20261008b"></script>
-  <script src="js/insights.js?v=20261008b"></script>
-  <script src="js/purchases.js?v=20261008b"></script>
-  <script src="js/harvesters.js?v=20261008b"></script>
-  <script src="js/factories.js?v=20261008b"></script>
-  <script src="js/customers.js?v=20261008b"></script>
-  <script src="js/characters.js?v=20261008b"></script>
-  <script src="js/settings.js?v=20261008b"></script>
-  <script src="js/alerts.js?v=20261008b"></script>\n  <script src="js/lab.js?v=20261008b"></script>
-  <script src="js/mail.js?v=20261008b"></script>
-  <script src="js/notes.js?v=20261008b"></script>
-  <script src="js/macro_commands.js?v=20261008b"></script>
-  <script src="js/macros.js?v=20261008b"></script>
-  <script src="js/aliases.js?v=20261008b"></script>
-  <script src="js/community_macros.js?v=20261008b"></script>
-  <script src="js/galaxy.js?v=20261008b"></script>
-  <script src="js/schembuilder.js?v=20261008b"></script>
-  <script src="js/scanner.js?v=20261008b"></script>
-  <script src="js/app.js?v=20261008b"></script>
+  <script src="js/class_caps.js?v=20261008d"></script>
+  <script src="js/shared.js?v=20261008d"></script>
+  <script src="js/help.js?v=20261008d"></script>
+  <script src="js/resources.js?v=20261008d"></script>
+  <script src="js/resource.js?v=20261008d"></script>
+  <script src="js/schematics.js?v=20261008d"></script>
+  <script src="js/stockpile.js?v=20261008d"></script>
+  <script src="js/wishlist.js?v=20261008d"></script>
+  <script src="js/myschematics.js?v=20261008d"></script>
+  <script src="js/inventory.js?v=20261008d"></script>
+  <script src="js/sales.js?v=20261008d"></script>
+  <script src="js/insights.js?v=20261008d"></script>
+  <script src="js/purchases.js?v=20261008d"></script>
+  <script src="js/harvesters.js?v=20261008d"></script>
+  <script src="js/factories.js?v=20261008d"></script>
+  <script src="js/customers.js?v=20261008d"></script>
+  <script src="js/characters.js?v=20261008d"></script>
+  <script src="js/settings.js?v=20261008d"></script>
+  <script src="js/alerts.js?v=20261008d"></script>\n  <script src="js/lab.js?v=20261008d"></script>
+  <script src="js/mail.js?v=20261008d"></script>
+  <script src="js/notes.js?v=20261008d"></script>
+  <script src="js/macro_commands.js?v=20261008d"></script>
+  <script src="js/macros.js?v=20261008d"></script>
+  <script src="js/aliases.js?v=20261008d"></script>
+  <script src="js/community_macros.js?v=20261008d"></script>
+  <script src="js/galaxy.js?v=20261008d"></script>
+  <script src="js/schembuilder.js?v=20261008d"></script>
+  <script src="js/scanner.js?v=20261008d"></script>
+  <script src="js/app.js?v=20261008d"></script>
 </body>
 </html>

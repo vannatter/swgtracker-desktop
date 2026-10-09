@@ -1207,13 +1207,80 @@ class WebApi:
         except Exception as e:
             return _err(e)
 
-    # --- Aliases (aliases.txt) — same per-character file machinery as macros ---
+    # --- Aliases (aliases.txt) ---
+    # Unlike notes/macros (per-character, under profiles/<acct>/<galaxy>/), the game
+    # keeps aliases.txt in the GAME ROOT — the folder that *contains* profiles/. So we
+    # derive the root from the mail paths (walk up past the "profiles" segment), and
+    # honor an explicit path from Settings (install layouts vary).
+
+    def _aliases_candidates(self):
+        from pathlib import Path
+        out, seen = [], set()
+
+        def add(path, label):
+            try:
+                rc = str(Path(str(path)).expanduser().resolve())
+            except OSError:
+                return
+            if rc not in seen:
+                seen.add(rc)
+                out.append({"path": rc, "char": label})
+
+        # explicit Settings path wins (and is listed first)
+        cfg = str(self.config.get("aliases_path") or "").strip()
+        if cfg:
+            add(cfg, "custom")
+
+        # derive the game root from each mail folder: …/<root>/profiles/<acct>/<galaxy>/mail_<Char>
+        for entry in (self.config.get("mail_paths") or []):
+            raw = str((entry or {}).get("path", "") or "").strip()
+            if not raw:
+                continue
+            p = Path(raw).expanduser()
+            root = None
+            for anc in [p, *p.parents]:
+                if anc.name.lower() == "profiles":
+                    root = anc.parent
+                    break
+            if root is None and len(p.parents) >= 3:
+                root = p.parents[2]  # fallback: mail_<Char> → galaxy → acct → (root)
+            if root is not None:
+                add(root / "aliases.txt", "game root")
+        return out
+
+    def _aliases_validate(self, path):
+        from pathlib import Path
+        rc = str(Path(str(path)).expanduser().resolve())
+        if rc not in {c["path"] for c in self._aliases_candidates()}:
+            raise ValueError("not a discovered aliases.txt file")
+        return rc
+
+    def aliases_set_path(self, path):
+        """Point the Aliases feature at an explicit aliases.txt (game root; layouts
+        vary). Stored in config; a blank path clears it back to auto-discovery."""
+        from pathlib import Path
+        try:
+            raw = str(path or "").strip()
+            if not raw:
+                self.config.set("aliases_path", "")
+                self.config.save()
+                return self.aliases_files()
+            p = Path(raw).expanduser()
+            if p.name.lower() != "aliases.txt":
+                return _err("Pick your aliases.txt file — the file name must be aliases.txt.")
+            if not p.is_file():
+                return _err(f"No file found at {p}")
+            self.config.set("aliases_path", str(p))
+            self.config.save()
+            return self.aliases_files()
+        except Exception as e:
+            return _err(e)
 
     def aliases_files(self):
         from pathlib import Path
         try:
             rows = []
-            for c in self._notes_candidates("aliases.txt"):
+            for c in self._aliases_candidates():
                 p = Path(c["path"])
                 row = {"path": c["path"], "char": c["char"], "exists": p.is_file()}
                 if row["exists"]:
@@ -1232,7 +1299,7 @@ class WebApi:
     def aliases_file_read(self, path):
         from pathlib import Path
         try:
-            rc = self._notes_validate(path, "aliases.txt")
+            rc = self._aliases_validate(path)
             p = Path(rc)
             if not p.is_file():
                 return _ok({"path": rc, "exists": False, "content": "", "hash": None})
@@ -1248,7 +1315,7 @@ class WebApi:
         import sys
         from pathlib import Path
         try:
-            rc = self._notes_validate(path, "aliases.txt")
+            rc = self._aliases_validate(path)
             p = Path(rc)
             if p.is_file():
                 disk = p.read_text("utf-8", errors="replace")
@@ -1270,7 +1337,7 @@ class WebApi:
 
     def aliases_file_versions(self, path):
         try:
-            rc = self._notes_validate(path, "aliases.txt")
+            rc = self._aliases_validate(path)
             return _ok({"versions": self.local_db.notes_versions(rc)})
         except Exception as e:
             return _err(e)
@@ -1663,6 +1730,21 @@ class WebApi:
             import webview
             res = webview.windows[0].create_file_dialog(webview.FOLDER_DIALOG)
             return _ok(res[0] if res else None)
+        except Exception as e:
+            return _err(e)
+
+    def pick_aliases_file(self):
+        """Native file picker for the aliases.txt location (game root), then save it.
+        Returns the refreshed aliases_files() so the UI can pick it up immediately."""
+        try:
+            import webview
+            res = webview.windows[0].create_file_dialog(
+                webview.OPEN_DIALOG, allow_multiple=False,
+                file_types=("aliases file (*.txt)", "All files (*.*)"))
+            path = res[0] if res else None
+            if not path:
+                return _ok({"cancelled": True})
+            return self.aliases_set_path(path)
         except Exception as e:
             return _err(e)
 

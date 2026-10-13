@@ -253,7 +253,21 @@ function mysdRenderNotes(item) {
     : '<a role="button" class="mysd-notes-add" data-mysdnotes><i class="fa-regular fa-note-sticky"></i> Add notes</a>';
 }
 
-const mysdState = { item: null, analysis: null };
+// Ingredients grid ⇄ Cost Calculator (lazy-rendered on first open)
+function mysdSelectTab(tab) {
+  mysdState.tab = tab === 'cost' ? 'cost' : 'ingredients';
+  document.querySelectorAll('#mysd-tabs [data-mysdtab]').forEach((b) =>
+    b.classList.toggle('active', b.dataset.mysdtab === mysdState.tab));
+  const cost = mysdState.tab === 'cost';
+  $('#mysd-ingredients-pane').hidden = cost;
+  $('#mysd-calc').hidden = !cost;
+  if (cost && mysdState.item && !mysdState.calcRendered) {
+    mysdState.calcRendered = true;
+    if (typeof schemCalcRender === 'function') schemCalcRender($('#mysd-calc-host'), mysdState.item);
+  }
+}
+
+const mysdState = { item: null, analysis: null, tab: 'ingredients', calcRendered: false };
 const mysDetailCache = new Map();   // schematic_id -> {dtoByCode} | null
 const mysResourceCache = new Map(); // resource name -> full record | null
 
@@ -584,7 +598,9 @@ async function openMySchematicPage(item) {
   mysdState.item = item;
   mysdState.analysis = null;
   mysdState.stockedByType = null;
+  mysdState.calcRendered = false; // fresh calc for the new schematic
   showPage('myschematic');
+  mysdSelectTab('ingredients'); // always land on the grid
 
   const title = item.custom_name ? `${item.name} · ${item.custom_name}` : (item.name || '');
   $('#mysd-crumbs').innerHTML =
@@ -794,21 +810,31 @@ function mysdPickRelevant() {
   return set;
 }
 
-async function mysdOpenPicker(ingId) {
-  const item = mysdState.item;
-  const r = (item?.resources || []).find((x) => String(x.id) === String(ingId));
-  if (!r) return;
-  const code = r.resource_type;
+// Open the class-pool resource picker. Normal mode edits a schematic slot (ingId).
+// Callback mode (opts.onPick) prices a what-if in the Cost Calculator without
+// touching the assignment — pass {code, typeName, label, current, weightsList, onPick}.
+async function mysdOpenPicker(ingId, opts = {}) {
+  const cb = typeof opts.onPick === 'function';
+  let code, typeName, label, current;
+  if (cb) {
+    code = String(opts.code || ''); typeName = opts.typeName || ''; label = opts.label || 'Slot'; current = opts.current || '';
+    if (opts.weightsList) mysdState.weightsList = opts.weightsList;
+  } else {
+    const r = (mysdState.item?.resources || []).find((x) => String(x.id) === String(ingId));
+    if (!r) return;
+    code = r.resource_type; typeName = r.type_name || ''; label = r.resource_label || 'Slot'; current = r.resource_name || '';
+  }
+  if (!code) return;
   const modal = $('#mysd-picker-modal');
-  mysdState.picker = { ingId, code, query: '', current: r.resource_name || '',
-                       typeName: r.type_name || '',
+  mysdState.picker = { ingId, code, query: '', current, typeName,
+                       onPick: cb ? opts.onPick : null,
                        activeOnly: localStorage.getItem('mysd_picker_active') === '1' };
   $('#mysd-picker-active').checked = mysdState.picker.activeOnly;
 
   $('#mysd-picker-title').innerHTML =
-    `${escapeHtml(r.resource_label || 'Slot')} <span class="mys-type">${escapeHtml(r.type_name || '')}</span>`;
+    `${escapeHtml(label)} <span class="mys-type">${escapeHtml(typeName)}</span>`;
   $('#mysd-picker-search').value = '';
-  $('#mysd-picker-search').placeholder = `Search any ${r.type_name || 'resource'}…`;
+  $('#mysd-picker-search').placeholder = `Search any ${typeName || 'resource'}…`;
   $('#mysd-picker-head').innerHTML = `<th class="pin-cell"></th><th class="col-name">Resource</th>
     <th>Rate</th>${MYSD_PICK_STATS.map((s) => `<th class="${mysdPickRelevant().has(s) ? '' : 'lab-dim'}">${s.toUpperCase()}</th>`).join('')}
     <th>eCPU</th>`;
@@ -823,7 +849,7 @@ async function mysdOpenPicker(ingId) {
       const res = await classPool(String(code), stockIds);
       (mysdState.poolByType = mysdState.poolByType || {})[code] = (res.ok && res.data) || [];
     } catch (_) { (mysdState.poolByType = mysdState.poolByType || {})[code] = []; }
-    if (modal.hidden || mysdState.picker.ingId !== ingId) return; // closed meanwhile
+    if (modal.hidden || !mysdState.picker || mysdState.picker.code !== code) return; // closed/changed meanwhile
   }
   mysdRenderPicker();
 }
@@ -1222,6 +1248,13 @@ async function saveSlotPicker() {
 function initMySchematics() {
   buildMysHeader();
 
+  // Detail tabs: Ingredients grid vs the Cost Calculator (lazy)
+  $('#mysd-tabs').addEventListener('click', (e) => {
+    const t = e.target.closest('[data-mysdtab]');
+    if (!t) return;
+    mysdSelectTab(t.dataset.mysdtab);
+  });
+
   // Lab-style resource picker modal wiring
   $('#mysd-picker-close').addEventListener('click', mysdClosePicker);
   bindBackdropClose($('#mysd-picker-modal'), () => mysdClosePicker());
@@ -1243,13 +1276,19 @@ function initMySchematics() {
     localStorage.setItem('mysd_picker_active', e.target.checked ? '1' : '0'); // sticky preference
     mysdRenderPicker();
   });
+  // apply a pick — either save it to the schematic's slot, or (calc "what-if"
+  // mode) hand it to the opener's callback without touching the assignment
+  const mysdApplyPick = (name) => {
+    const p = mysdState.picker; if (!p || !name) return;
+    mysdClosePicker();
+    if (typeof p.onPick === 'function') p.onPick(name); else mysdSaveUsing(p.ingId, name);
+  };
   $('#mysd-picker-stock').addEventListener('change', () => {
-    const v = $('#mysd-picker-stock').value;
-    if (v && mysdState.picker) { const p = mysdState.picker; mysdClosePicker(); mysdSaveUsing(p.ingId, v); }
+    const v = $('#mysd-picker-stock').value; if (v) mysdApplyPick(v);
   });
   $('#mysd-picker-body').addEventListener('click', (e) => {
     const row = e.target.closest('[data-pickres]');
-    if (row && mysdState.picker) { const p = mysdState.picker; mysdClosePicker(); mysdSaveUsing(p.ingId, row.dataset.pickres); }
+    if (row) mysdApplyPick(row.dataset.pickres);
   });
 
   $('[data-refresh="myschematics"]').addEventListener('click', () => loadMySchematics());

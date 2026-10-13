@@ -56,7 +56,7 @@ async function rdRenderWaypoints(r) {
   const mine = (((res.ok && res.data && res.data.results) || [])).filter((w) => String(w.resource_id) === String(r.id));
   if (!mine.length) return;
   host.innerHTML = '<span class="rd-planets-label"><i class="fa-solid fa-location-dot"></i> Waypoints:</span> '
-    + mine.map((w) => `<span class="rd-wp-chip" data-wpcopy="${escapeHtml(w.waypoint || '')}" title="Click to copy">${escapeHtml(w.waypoint || '')}${w.concentration ? ` <span class="rd-wp-conc">${safeInt(w.concentration)}%</span>` : ''}</span>`).join('');
+    + mine.map((w) => `<span class="rd-wp-chip" data-wpcopy="${escapeHtml(waypointCopyText(w, r.name))}" title="Click to copy">${escapeHtml(w.waypoint || '')}${w.concentration ? ` <span class="rd-wp-conc">${safeInt(w.concentration)}%</span>` : ''}</span>`).join('');
   if (!host.dataset.wired) {
     host.dataset.wired = '1';
     host.addEventListener('click', (e) => {

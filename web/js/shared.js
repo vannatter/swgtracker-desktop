@@ -491,6 +491,35 @@ function setDateFormat(fmt) {
   localStorage.setItem('dateFormat', appDateFmt);
 }
 
+// Waypoint copy format — how a shared resource waypoint reads on the clipboard.
+// Philosophy/Eponine: append the resource name + concentration so a pasted /wp
+// isn't just bare coords. Configurable in Settings.
+const WAYPOINT_FORMATS = ['coords', 'conc_name', 'name', 'name_conc'];
+let appWaypointFormat = (function () {
+  const v = localStorage.getItem('waypointFormat');
+  return WAYPOINT_FORMATS.includes(v) ? v : 'conc_name'; // default: /wp … 94% Athmifegmenine
+})();
+function setWaypointFormat(fmt) {
+  appWaypointFormat = WAYPOINT_FORMATS.includes(fmt) ? fmt : 'conc_name';
+  localStorage.setItem('waypointFormat', appWaypointFormat);
+}
+// Build the clipboard string for a shared resource waypoint. `w` carries
+// {waypoint, resource_name, concentration}; `resName` overrides the name.
+function waypointCopyText(w, resName) {
+  const base = String((w && w.waypoint) || '').trim();
+  if (!base) return '';
+  const name = String(resName || (w && w.resource_name) || '').trim();
+  const conc = safeInt(w && w.concentration);
+  const concStr = conc > 0 ? `${conc}%` : '';
+  switch (appWaypointFormat) {
+    case 'coords': return base;
+    case 'name': return [base, name].filter(Boolean).join(' ');
+    case 'name_conc': return [base, name, concStr].filter(Boolean).join(' ');
+    case 'conc_name':
+    default: return [base, concStr, name].filter(Boolean).join(' ');
+  }
+}
+
 // Unix seconds OR a server "YYYY-MM-DD HH:MM:SS" string -> Date (null if neither).
 // Server datetimes are UTC but arrive zoneless; WebKit can't parse the space form
 // and a naive parse reads as LOCAL — normalise to T-form and pin to UTC.

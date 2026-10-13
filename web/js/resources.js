@@ -1095,7 +1095,7 @@ function showWpPopover(anchor, resId) {
   const list = (resState.wpByResource && resState.wpByResource.get(String(resId))) || [];
   if (!list.length) { pop.hidden = true; return; }
   pop.innerHTML = `<div class="res-wp-pop-head">${list.length} shared waypoint${list.length === 1 ? '' : 's'} <span class="settings-sub">click to copy</span></div>`
-    + list.map((w) => `<div class="res-wp-pop-row" data-wpcopy="${escapeHtml(w.waypoint || '')}">
+    + list.map((w) => `<div class="res-wp-pop-row" data-wpcopy="${escapeHtml(waypointCopyText(w))}">
         <i class="fa-solid fa-location-dot"></i>
         <span class="res-wp-pop-wp">${escapeHtml(w.waypoint || '')}</span>
         ${w.concentration ? `<span class="res-wp-pop-conc">${safeInt(w.concentration)}%</span>` : ''}
@@ -1165,7 +1165,7 @@ function initResources() {
         toast(msg, false);
         return;
       }
-      const lines = mine.map((w) => `${w.waypoint} ${w.resource_name}${w.concentration ? ` ${w.concentration}%` : ''}`);
+      const lines = mine.map((w) => waypointCopyText(w));
       const r = await notesAddFromText('Resource waypoints', lines.join('\n') + '\n');
       showPage('notes');
       toast(r.merged

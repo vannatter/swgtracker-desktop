@@ -2213,13 +2213,21 @@ tr.row-detail > td { background: var(--bg-tertiary); padding: 0; }
 .mail-label-missing { box-shadow: inset 0 0 0 1px var(--accent); } /* folder saved without its character */
 .set-addpath-row { display: flex; justify-content: flex-end; }
 
-.set-inline-pref { display: flex; align-items: center; gap: 10px; font-size: 13px; margin: 6px 0 10px; }
-.set-inline-pref .form-select { width: auto; }
-.set-datefmt-select { min-width: 250px; } /* fits "International — DD/MM/YY" without clipping */
+/* stacked: full-width label above, full-width dropdown below */
+.set-inline-pref { display: flex; flex-direction: column; align-items: stretch; gap: 5px; font-size: 13px; margin: 10px 0; }
+.set-inline-pref > span:first-child { display: block; }
+.set-inline-pref .form-select { width: 100%; }
+.set-datefmt-select { width: 100%; min-width: 0; }
 
 /* three-way mail disposition in Settings */
 .set-maildisp { display: flex; flex-direction: column; gap: 5px; margin-top: 4px; }
 .set-maildisp-label { font-size: 13px; color: var(--text-muted); }
+.set-wpfmt { display: flex; flex-direction: column; gap: 5px; margin: 10px 0; }
+.set-wpfmt-label { font-size: 13px; }
+.set-wpfmt-eg { font-size: 12px; background: var(--bg-primary); border-radius: 4px;
+  padding: 2px 8px; color: var(--text); white-space: nowrap; }
+.set-wpfmt .set-disp-opt { flex-wrap: wrap; }
+.set-wpfmt .set-disp-opt .settings-sub { margin-left: 2px; }
 .set-disp-opt { display: flex; align-items: center; gap: 7px; font-size: 13px; cursor: pointer;
   white-space: nowrap; /* "Move it to <path>" stays one line — the path chip ellipsizes instead */
   min-height: 34px; } /* uniform row height — tall enough for the Move row's standard browse button */
@@ -3607,3 +3615,68 @@ tr.gx-rowlink:hover .gx-detail-link { color: var(--accent-hover); }
 .rd-calc-despawn .fa-hourglass-half { color: var(--accent); margin-right: 5px; }
 .rd-calc-despawn strong { color: var(--text-hover); }
 .rd-calc-caveat { color: var(--text-muted); font-size: 11px; }
+
+/* ===== My Schematics — detail tabs + Cost Calculator ===== */
+/* anchor the tab bar on a baseline so it doesn't float loose (the active tab sits on the line) */
+#mysd-tabs { border-bottom: 1px solid var(--border); margin: 8px 0 14px; gap: 2px; }
+#mysd-tabs .scd-tab { margin-bottom: -1px; }
+#mysd-tabs .scd-tab.active { border-bottom: 2px solid var(--accent); border-radius: 8px 8px 0 0; }
+.mysd-calc { margin-top: 4px; }
+.mysd-calc-note { font-size: 12px; color: var(--text-muted); margin: 0 0 12px; line-height: 1.5; }
+.sc-loading, .sc-empty { color: var(--text-muted); padding: 24px; text-align: center; }
+.sc-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.sc-table thead th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); padding: 6px 8px; border-bottom: 1px solid var(--border); }
+.sc-table thead th:nth-child(3), .sc-table thead th:nth-child(4), .sc-table thead th:nth-child(5), .sc-table thead th:nth-child(6) { text-align: right; }
+.sc-table td { padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.sc-grouphead td { background: var(--bg-secondary); font-weight: 700; color: var(--text-primary); text-transform: uppercase; font-size: 11px; letter-spacing: .05em; }
+.sc-qty { white-space: nowrap; color: var(--text-muted); width: 56px; vertical-align: top; padding-top: 10px; }
+/* resource column takes the slack; the numeric columns stay compact on the right */
+.sc-name { width: auto; }
+.sc-mycpu { width: 120px; }
+.sc-mysub { width: 110px; }
+.sc-mktcpu { width: 110px; }
+.sc-mktsub { width: 120px; }
+.sc-slot { margin-bottom: 4px; line-height: 1.25; }
+.sc-slot-label { color: var(--text-primary); font-weight: 600; font-size: 12.5px; }
+.sc-slot-type { color: var(--text-muted); font-size: 11px; margin-left: 6px; }
+.sc-mycpu { text-align: right; white-space: nowrap; width: 110px; }
+.sc-mysub, .sc-mktsub { text-align: right; white-space: nowrap; font-weight: 700; }
+.sc-mysub { color: #45e97e; }
+.sc-mktcpu { text-align: right; color: var(--text-muted); white-space: nowrap; }
+.sc-mktsub { color: var(--text-primary); }
+.sc-off { opacity: .4; }
+.sc-muted { color: var(--text-muted); }
+.sc-unit { color: var(--text-muted); font-size: 11px; margin-left: 3px; }
+.sc-myprice, .sc-cprice { width: 64px; text-align: right; background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--border); border-radius: 5px; padding: 3px 6px; font-size: 12px; }
+.sc-comp { width: 100%; max-width: 520px; display: inline-block; }
+.sc-tag { font-size: 9.5px; text-transform: uppercase; letter-spacing: .04em; background: var(--bg-card); color: var(--text-muted); border-radius: 3px; padding: 1px 5px; margin-left: 4px; }
+.sc-tag-mine { background: rgba(69,233,126,.15); color: #45e97e; }
+.sc-loot { background: rgba(226,67,80,.15); color: var(--accent); }
+.sc-expand { cursor: pointer; color: var(--text-muted); user-select: none; }
+.sc-expand:hover { color: var(--text-hover); }
+.sc-resname { color: var(--text-primary); }
+/* resource pick button — fills the resource column (opens the full picker) */
+.sc-pickbtn { display: flex; align-items: center; gap: 8px; width: 100%; max-width: 520px; background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--border); border-radius: 5px; padding: 4px 9px; font-size: 12.5px; cursor: pointer; text-align: left; }
+.sc-pickbtn:hover { border-color: var(--accent); }
+.sc-dd { position: relative; display: inline-block; width: 210px; }
+.sc-dd-btn { display: flex; align-items: center; gap: 8px; width: 100%; background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--border); border-radius: 5px; padding: 4px 9px; font-size: 12.5px; cursor: pointer; text-align: left; }
+.sc-dd-btn:hover { border-color: var(--accent); }
+.sc-dd-cur { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sc-dd-curcpu { flex: 0 0 auto; color: var(--text-muted); font-size: 11px; white-space: nowrap; }
+.sc-dd-btn .fa-caret-down { flex: 0 0 auto; color: var(--text-muted); }
+.sc-dd-menu { position: absolute; z-index: 20; left: 0; top: calc(100% + 3px); min-width: 240px; max-height: 300px; overflow-y: auto; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 7px; box-shadow: 0 8px 24px rgba(0,0,0,.5); padding: 4px; }
+.sc-dd-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 5px 8px; border-radius: 5px; cursor: pointer; }
+.sc-dd-item:hover { background: var(--bg-card); }
+.sc-dd-item.sel { outline: 1px solid var(--accent); }
+.sc-dd-name { color: var(--text-primary); }
+.sc-dd-cpu { color: var(--text-muted); font-size: 11px; white-space: nowrap; }
+/* component breakdown */
+.sc-bd-row > td { background: var(--bg-tertiary); padding: 8px 12px; }
+.sc-bd-title { font-size: 12px; color: var(--text-muted); margin-bottom: 6px; }
+.sc-bd { font-size: 12px; }
+.sc-bd th { font-size: 10px; }
+/* summary */
+.sc-summary { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 12px; }
+.sc-sum-row { display: flex; align-items: center; justify-content: space-between; padding: 5px 0; font-size: 14px; }
+.sc-sum-row b { color: var(--text-hover); }
+.sc-runs { width: 64px; text-align: right; background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--border); border-radius: 5px; padding: 3px 6px; font-size: 13px; margin-left: 6px; }

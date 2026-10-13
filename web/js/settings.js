@@ -11,6 +11,11 @@ function mailDisposition() {
   return v === 'move' && !setState.moveDir ? 'keep' : v; // move needs a destination
 }
 
+function wpFormat() {
+  const checked = document.querySelector('input[name="set-wpfmt"]:checked');
+  return checked ? checked.value : 'conc_name';
+}
+
 // The zip modifier composes with Keep and Move; with Delete there's nothing
 // left to compress, so it greys out (the saved flags survive for switching
 // back). The remove sub-flag only means something while zipping is on.
@@ -128,6 +133,11 @@ async function loadSettings() {
   const df = cfg.date_format === 'intl' ? 'intl' : (cfg.date_format === 'us' ? 'us' : (localStorage.getItem('dateFormat') || 'us'));
   $('#set-datefmt').value = df;
   setDateFormat(df);
+  const wf = WAYPOINT_FORMATS.includes(cfg.waypoint_format) ? cfg.waypoint_format
+    : (localStorage.getItem('waypointFormat') || 'conc_name');
+  const wfRadio = document.querySelector(`input[name="set-wpfmt"][value="${wf}"]`);
+  if (wfRadio) wfRadio.checked = true;
+  setWaypointFormat(wf);
 
   // account-level prefs (server-side — the email crons honor them too)
   loadPrefs(true).then((p) => { $('#set-ignoremust').checked = !!p.ignore_mustafar; });
@@ -199,6 +209,7 @@ async function saveSettings() {
       ['show_notifications', $('#set-notify').checked],
       ['auto_start_monitoring', $('#set-autostart').checked],
       ['date_format', $('#set-datefmt').value],
+      ['waypoint_format', wpFormat()],
       ['mail_disposition', mailDisposition()],
       ['mail_move_dir', setState.moveDir || ''],
       ['mail_zip', $('#set-mailzip').checked],
@@ -225,6 +236,7 @@ async function saveSettings() {
     // cached pages would keep showing dates in the old style until relaunch
     const fmtChanged = ($('#set-datefmt').value === 'intl') !== (appDateFmt === 'intl');
     setDateFormat($('#set-datefmt').value);
+    setWaypointFormat(wpFormat());
     if (fmtChanged && typeof loadedPages !== 'undefined') loadedPages.clear();
 
     // folder re-tied to a different character → migrate its uploaded history

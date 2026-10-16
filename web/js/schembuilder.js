@@ -701,12 +701,10 @@ async function sbRenderVerifyBar(schematicId, isCommunity) {
     return;
   }
   if (st.verified) {
-    bar.innerHTML = `<div class="sb-vb-info">
-        <div class="sb-vb-title"><i class="fa-solid fa-circle-check"></i> Community schematic
-          <span class="sb-vb-chip ok">verified</span></div>
-        <div class="sb-vb-sub">confirmed accurate by fellow crafters${st.submitter ? ` · submitted by ${escapeHtml(st.submitter)}` : ''}</div>
-      </div>`;
-    bar.className = 'sb-verifybar sb-verified scd-community-full';
+    // one quiet line: a green shield, the word, and the credit (the boxed two-liner read as a banner — Dustin)
+    bar.innerHTML = `<i class="fa-solid fa-shield-halved"></i><span class="sb-slim-title">Community approved</span>${st.submitter
+      ? `<span class="sb-slim-credit">· ${st.inherited_from ? `originally by ${escapeHtml(st.inherited_from)}, corrected by ${escapeHtml(st.submitter)}` : `submitted by ${escapeHtml(st.submitter)}`}</span>` : ''}`;
+    bar.className = 'sb-verifybar sb-verified sb-verified-slim scd-community-full';
   } else {
     // no tracking an unvetted recipe — Add to My Schematics unlocks at verified
     const mys = $('#scd-mys');
@@ -731,6 +729,9 @@ async function sbRenderVerifyBar(schematicId, isCommunity) {
               title="Take back your confirmation — only possible while it's still unverified"><i class="fa-solid fa-rotate-left"></i> Undo</button>`
       : `<button id="scd-confirm" class="btn btn-sm btn-outline-secondary"
              title="Check the proof screenshots against the details below, then confirm."><i class="fa-solid fa-check"></i> Confirm accurate</button>`)
+      // admin override: verify outright, no votes needed (Dustin's desktop)
+      + (st.admin ? `<button id="scd-approve" class="btn btn-sm btn-accent"
+             title="Admin override — verify this schematic right now, without waiting for community confirmations"><i class="fa-solid fa-user-shield"></i> Approve now</button>` : '')
       + (!st.mine && !st.flagged ? `<button id="scd-flag" class="btn btn-sm btn-outline-secondary"
              title="Something's wrong with this schematic? Flag it and say what needs fixing — the submitter sees your note."><i class="fa-solid fa-flag"></i> Flag as incorrect</button>`
         : '')
@@ -796,6 +797,16 @@ function initSchemBuilder() {
       toast('Retracted — it\'s gone from the site and search; your draft (if kept) is editable again');
       showPage('schematics');
       loadSchematics();
+      return;
+    }
+    if (e.target.closest('#scd-approve')) {
+      const sid = safeInt($('#scd-community').dataset.sid);
+      let res;
+      try { res = await apiFetch('POST', 'api/user_schematics.php', { data: { action: 'approve', schematic_id: sid } }); }
+      catch (err) { res = { ok: false, error: String(err) }; }
+      if (!res.ok) { toast(res.error || 'Approve failed', false); return; }
+      toast('Approved — schematic verified');
+      openSchematicPage(sid); // the whole page flips: badge, Add to My Schematics, community tabs
       return;
     }
     if (e.target.closest('#scd-unconfirm')) {

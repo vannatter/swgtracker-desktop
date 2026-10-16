@@ -4328,3 +4328,8 @@ tr.gx-rowlink:hover .gx-detail-link { color: var(--accent-hover); }
 .pm-city-row .pm-note { flex: 1 1 auto; }
 .pm-city-row .pm-copy { margin-left: auto; }
 .pm-empty .spinner { width: 12px; height: 12px; vertical-align: -2px; margin-right: 6px; }
+/* verified community schematic: a slim credit line, not a banner */
+.sb-verifybar.sb-verified-slim { border: 0; padding: 2px 0 0; margin: 0 0 12px; gap: 7px; font-size: 12.5px; background: transparent; }
+.sb-verifybar.sb-verified-slim i { color: #45e97e; font-size: 13px; }
+.sb-slim-title { color: var(--text-hover); font-weight: 600; }
+.sb-slim-credit { color: var(--text-muted); }

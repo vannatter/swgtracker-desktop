@@ -48,6 +48,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
 html, body {
   margin: 0;
   height: 100%;
+  overscroll-behavior: none;
   background-color: var(--bg-primary);
   color: var(--text-primary);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
@@ -65,7 +66,7 @@ html, body {
   align-items: center;
   justify-content: space-between;
   padding: 0 15px;
-  border-bottom: 1px solid var(--bg-tertiary);
+  border-bottom: 1px solid rgba(0, 0, 0, .45); /* neutral dark seam — the old green-black read wrong over Home's band */
 }
 .app-header-brand { display: flex; align-items: center; gap: 10px; }
 
@@ -154,11 +155,14 @@ body.offline .app-body { height: calc(100vh - 76px); }
   background: var(--bg-tertiary);
   display: flex;
   flex-direction: column;
-  padding: 10px 0;
+  padding: 0 0 10px; /* flush to the header seam — a gap above Home read as a stray strip (Dustin) */
 }
+/* the first row meets the seam but its label gets a few extra pixels of air */
+.nav-list > .nav-item:first-child { padding-top: 8px; }
 /* the nav scrolls when the window is short — the pulse panel below it is
    always pinned in view, never pushed off the bottom */
-.nav-list { list-style: none; margin: 0; padding: 0; overflow-y: auto; min-height: 0; flex: 0 1 auto; }
+.nav-list { list-style: none; margin: 0; padding: 0; overflow-y: auto; min-height: 0; flex: 0 1 auto;
+  overscroll-behavior: none; } /* no rubber-band bounce at the ends of the menu */
 
 /* icon-only sidebar (toggle at the bottom; state persists) */
 .app-sidebar { transition: width .15s ease, flex-basis .15s ease; }
@@ -278,10 +282,13 @@ body.offline .app-body { height: calc(100vh - 76px); }
 /* ---- Content ----
    Pages fill the window exactly; only the grid (.table-wrap) scrolls.
    Never two nested scrollbars. */
-.app-content { flex: 1 1 auto; overflow: hidden; padding: 20px 24px; }
+/* the content column is full-bleed; each PAGE carries the padding, so a page can
+   run something edge to edge (Home's header colour) with negative margins while
+   everything else stays normally padded (Dustin) */
+.app-content { flex: 1 1 auto; overflow: hidden; padding: 0; }
 .page { display: none; }
 .page.active {
-  display: flex; flex-direction: column;
+  display: flex; flex-direction: column; box-sizing: border-box; padding: 20px 24px;
   height: 100%; min-height: 0; overflow: auto; /* overflow only as a small-window fallback */
   overscroll-behavior: none; /* no rubber-band bounce — sticky bars (settings save) shake with it */
 }
@@ -1481,6 +1488,17 @@ body.dev-mode .dev-pill { display: inline-flex; }
   from { transform: translate3d(-50%, 0, 0); }
   to { transform: translate3d(0, 0, 0); }
 }
+/* while monitoring, a red highlight travels around the button's border: a
+   conic gradient ring (masked to a 1px frame) whose start angle animates */
+@property --mon-a { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+.mon-btn.running::after {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; padding: 1.5px; pointer-events: none; z-index: 2;
+  background: conic-gradient(from var(--mon-a), transparent 0 55%, rgba(226, 67, 80, .25) 70%, var(--accent) 86%, rgba(226, 67, 80, .25) 96%, transparent 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude;
+  animation: mon-ring 2.8s linear infinite;
+}
+@keyframes mon-ring { to { --mon-a: 360deg; } }
 
 /* Mail page — stat cards, kind badges, row action */
 .mm-cards { display: flex; gap: 10px; margin-bottom: 14px; }
@@ -2087,6 +2105,12 @@ tr.row-detail > td { background: var(--bg-tertiary); padding: 0; }
 ::-webkit-scrollbar-track { background: var(--bg-tertiary); }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 5px; }
 ::-webkit-scrollbar-thumb:hover { background: #3a4152; }
+/* the sidebar's own scrollbar: slim and darker than the lit nav row, which
+   shares the default thumb grey (Dustin) */
+.nav-list::-webkit-scrollbar { width: 6px; }
+.nav-list::-webkit-scrollbar-track { background: transparent; }
+.nav-list::-webkit-scrollbar-thumb { background: #1b1e27; border-radius: 3px; }
+.nav-list::-webkit-scrollbar-thumb:hover { background: #262a36; }
 
 /* ---- Harvesters ---- */
 .harv-wrap { background: var(--bg-primary); padding: 2px; }
@@ -3335,8 +3359,12 @@ body.dev-mode .scd-hiddenrow { display: block; opacity: .55; }
 .gx-prof-chg { margin-left: 6px; font-size: 11.5px; }
 
 /* Date-driven holiday accent bar (mirrors the website's holiday_banner) */
-.holiday-bar { position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 2147483647; }
-.holiday-bar[hidden] { display: none; }
+.holiday-bar { display: none; } /* retired: the gradient now sits on the header's bottom edge */
+/* header seam: the holiday gradient while one is on, the neutral line otherwise */
+.app-header { position: relative; }
+.app-header::after { content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; pointer-events: none;
+  background: var(--holiday-seam, none); opacity: 0; }
+body.holiday-on .app-header::after { opacity: 1; }
 
 /* ===================== Resources: view switch + column picker + cards ===================== */
 /* the FILTERS row: pills on the left, view/columns tools flush right */
@@ -3698,10 +3726,13 @@ tr.gx-rowlink:hover .gx-detail-link { color: var(--accent-hover); }
 /* ---- Home (start page) ----------------------------------------------------- */
 /* Flat like the website: a slim uppercase header with a hairline under it, the
    content straight on the page — no boxed-in gray blocks (Dustin). */
-.hm-scroll { padding-right: 4px; }
+.hm-scroll { padding-right: 4px; scrollbar-gutter: stable; }
+.hm-pagehead .hm-headbtns { margin-right: 0; } /* flush to the band's padding edge, like the greeting on the left */
 .hm-sections { display: flex; flex-direction: column; gap: 22px; }
-.hm-head { display: flex; align-items: center; gap: 10px; padding: 0 2px 8px; margin-bottom: 12px; cursor: pointer; user-select: none;
-           border-bottom: 1px solid var(--border);
+.hm-head { display: flex; align-items: center; gap: 10px; padding: 7px 10px 7px 12px; margin-bottom: 12px; cursor: pointer; user-select: none;
+           border-bottom: 1px solid var(--border); border-radius: 6px 6px 0 0;
+           /* a soft wash behind the title that fades out to the right (Dustin) */
+           background: linear-gradient(90deg, rgba(60, 66, 86, .2) 0%, rgba(60, 66, 86, .08) 30%, transparent 65%); /* the cards' blue-grey, very translucent */
            font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--text-hover); }
 .hm-head:hover .hm-title { color: var(--accent-hover); }
 .hm-icon { color: var(--accent); width: 16px; text-align: center; }
@@ -3711,6 +3742,7 @@ tr.gx-rowlink:hover .gx-detail-link { color: var(--accent-hover); }
 .hm-section.collapsed .hm-caret { transform: rotate(-90deg); }
 .hm-section.collapsed .hm-head { margin-bottom: 0; }
 .hm-body { padding: 0 2px; }
+.hm-section.collapsed .hm-head { border-radius: 6px; }
 .hm-loading { color: var(--text-muted); padding: 8px 0; }
 .hm-more { font-size: 11px; padding: 2px 10px; }
 /* hot resources: profession chips + cards (mirrors the website's hot bar) */
@@ -3817,13 +3849,13 @@ tr.gx-rowlink:hover .gx-detail-link { color: var(--accent-hover); }
 .hm-hot-grid-car > .hm-hot-card { width: 210px; }
 .hm-tiles-car > .hm-tile { width: 230px; }
 /* edge fades + arrows show only on a side that still has cards beyond it */
-.hm-carousel-wrap::before, .hm-carousel-wrap::after { content: ''; position: absolute; top: 0; bottom: 4px; width: 72px; z-index: 1; pointer-events: none; opacity: 0; transition: opacity .15s; }
+.hm-carousel-wrap::before, .hm-carousel-wrap::after { content: ''; position: absolute; top: 0; bottom: 4px; width: 72px; z-index: 1; pointer-events: none; opacity: 0; } /* no transition — it flickered on every repaint */
 .hm-carousel-wrap::before { left: 0; background: linear-gradient(to right, var(--bg-primary) 20%, transparent); }
 .hm-carousel-wrap::after { right: 0; background: linear-gradient(to left, var(--bg-primary) 20%, transparent); }
 .hm-carousel-wrap.can-left::before, .hm-carousel-wrap.can-right::after { opacity: 1; }
 .hm-car-btn { position: absolute; top: 50%; transform: translateY(-60%); z-index: 2; width: 30px; height: 30px; border-radius: 50%;
               border: 1px solid var(--border); background: var(--bg-card); color: var(--text-hover); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 12px;
-              opacity: 0; pointer-events: none; transition: opacity .15s; box-shadow: 0 2px 8px rgba(0,0,0,.35); }
+              opacity: 0; pointer-events: none; box-shadow: 0 2px 8px rgba(0,0,0,.35); }
 .hm-carousel-wrap.can-left .hm-car-left, .hm-carousel-wrap.can-right .hm-car-right { opacity: 1; pointer-events: auto; }
 .hm-car-btn:hover { color: var(--accent-hover); border-color: var(--accent); }
 .hm-car-left { left: 6px; } .hm-car-right { right: 6px; }
@@ -3849,3 +3881,36 @@ tr.gx-rowlink:hover .gx-detail-link { color: var(--accent-hover); }
 .planet-pop-chip.off { opacity: .35; filter: grayscale(.6); }
 .planet-pop-chip.off:hover, .planet-pop-chip:hover { opacity: 1; filter: none; outline: 1px solid var(--text-muted); }
 .planet-pop-chip.busy { pointer-events: none; opacity: .6; }
+
+/* Home header: a long holiday greeting wraps on the left; the buttons stay top-right */
+.hm-pagehead { align-items: flex-start; flex-wrap: nowrap; }
+.hm-headtext { flex: 1 1 auto; min-width: 0; display: flex; align-items: flex-start; gap: 10px; }
+.hm-headtext h1 { white-space: normal; overflow-wrap: anywhere; line-height: 1.15; top: 0; font-size: 26px; font-weight: 700; }
+.hm-greet-tip { font-size: 14px; vertical-align: middle; margin-left: 4px; position: relative; top: -2px; } /* trails the last word, wraps with it */
+.hm-headbtns { flex: none; display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.hm-headbtns .btn-icon { margin-left: 0; }
+.hm-foot { padding: 18px 2px 6px; text-align: right; }
+
+/* Home first load: the page is the spinner and nothing else */
+#page-home { position: relative; }
+.hm-loading-full { background: transparent; }
+#page-home:not(.hm-booting) > .hm-loading-full { display: none; }
+#page-home.hm-booting > .hm-pagehead, #page-home.hm-booting > .hm-scroll { visibility: hidden; }
+
+/* Home header colour: blows out of the page padding to the full content width and
+   fades down into the page */
+/* colours: the app's own accents (red → page → the muted green) at low opacity;
+   while a seasonal stripe is up (--home-band, set by applyHolidayBar) the band
+   wears that gradient instead, so Home matches the rest of the app's dressing */
+/* default: accent red on the left easing into the app's navy — no green, which
+   read as Christmas next to the red (Dustin) */
+:root { --home-band: linear-gradient(100deg, var(--accent) 0%, var(--bg-primary) 50%, #303a66 100%); }
+.hm-pagehead { margin: -20px -24px 14px; padding: 26px 24px 20px; position: relative; flex: none; overflow: hidden; }
+.hm-pagehead::before { content: ''; position: absolute; inset: 0; pointer-events: none; background: var(--home-band); opacity: .28; }
+.hm-pagehead::after { content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(180deg, transparent 25%, var(--bg-primary) 100%); }
+.hm-pagehead > * { position: relative; z-index: 1; }
+.hm-headtext h1 { color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, .35); }
+.hm-pick-types { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.hm-pick-card { max-width: 720px; }
+.hm-pick-type { min-height: 92px; }

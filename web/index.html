@@ -104,17 +104,22 @@
       </div>
       <!-- Home page: the start page — Hot Resources / At a Glance (the website's
            landing page), Recent Spawns and Announcements, each toggleable + reorderable -->
-      <section id="page-home" class="page active">
-        <div class="page-head">
-          <h1 id="home-greet">Welcome back</h1>
-          <i class="fa-solid fa-circle-info info-tip"
-             title="Your start page. Customize picks which sections show, what's inside them and in what order; click a section header to collapse it. The greeting follows the Settings timezone."></i>
-          <span id="home-updated" class="page-hint-inline settings-sub"></span>
-          <button id="home-customize" class="btn btn-sm btn-outline-secondary head-right" title="Show, hide and reorder the sections"><i class="fa-solid fa-sliders"></i> Customize</button>
-          <button id="home-refresh" class="btn btn-icon" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
+      <section id="page-home" class="page active hm-booting">
+        <!-- first load: just the spinner, nothing else, until the greeting and sections are ready -->
+        <div id="home-loading" class="grid-loading hm-loading-full"><span class="spinner"></span></div>
+        <div class="page-head hm-pagehead">
+          <div class="hm-headtext">
+            <h1><span id="home-greet"></span> <i class="fa-solid fa-circle-info info-tip hm-greet-tip"
+               title="Your start page. Customize picks which sections show, what's inside them and in what order; click a section header to collapse it. The greeting follows the Settings timezone."></i></h1>
+          </div>
+          <div class="hm-headbtns">
+            <button id="home-customize" class="btn btn-icon" title="Customize — show, hide and reorder the sections, hide what's inside them, add widgets"><i class="fa-solid fa-sliders"></i></button>
+            <button id="home-refresh" class="btn btn-icon" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
+          </div>
         </div>
         <div class="table-wrap hm-scroll">
           <div id="home-sections" class="hm-sections"></div>
+          <div class="hm-foot"><span id="home-updated" class="settings-sub"></span></div>
         </div>
       </section>
 

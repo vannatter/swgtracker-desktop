@@ -53,10 +53,13 @@ function applyHolidayBar() {
   const bar = document.getElementById('holiday-bar');
   if (!bar) return;
   const h = holidayBar();
-  if (!h) { bar.hidden = true; return; }
-  bar.style.background = h.grad;
-  bar.title = h.label;
-  bar.hidden = false;
+  // the holiday gradient lives on the header's bottom edge (not a strip pinned
+  // to the top of the window — Dustin) and Home's band wears it too
+  document.documentElement.style.setProperty('--home-band', h ? h.grad : '');
+  document.documentElement.style.setProperty('--holiday-seam', h ? h.grad : '');
+  document.body.classList.toggle('holiday-on', !!h);
+  bar.hidden = true;                 // the old top strip stays retired
+  if (h) bar.title = h.label;
 }
 
 const PAGE_LOADERS = {

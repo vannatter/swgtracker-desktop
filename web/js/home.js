@@ -31,6 +31,14 @@ const HOME_WIDGETS = {
   schematic: { name: 'Schematic', icon: 'fa-scroll', hint: 'the best resource in spawn for each of its slots', search: 'Search schematics…' },
   class: { name: 'Profession', icon: 'fa-user-group', hint: 'population and trend for one class', search: 'Search classes…' },
   inv_restock: { name: 'My Inventory restock', icon: 'fa-boxes-stacked', hint: 'how many of your tracked items need restocking', search: null },
+  factories: { name: 'Factories', icon: 'fa-industry', hint: 'runs in progress, finished runs to collect, and what’s due next', search: null },
+  harvesters: { name: 'Harvesters', icon: 'fa-oil-well', hint: 'full hoppers, and how the rest are filling', search: null },
+  sales: { name: 'Sales', icon: 'fa-tags', hint: 'credits and sales over a window, with the trend', search: null,
+    options: [[7, 'Last 7 days'], [30, 'Last 30 days'], [90, 'Last 90 days'], [0, 'All time']].map(([d, l]) => ({ label: l, params: { days: d, name: l } })) },
+  purchases: { name: 'Purchases', icon: 'fa-cart-shopping', hint: 'what you spent over a window', search: null,
+    options: [[7, 'Last 7 days'], [30, 'Last 30 days'], [90, 'Last 90 days'], [180, 'Last 180 days']].map(([d, l]) => ({ label: l, params: { days: d, name: l } })) },
+  stockpile: { name: 'Stockpile resource', icon: 'fa-cubes', hint: 'how much of one stockpiled resource you hold, and whether it’s still in spawn', search: 'Search your stockpile…' },
+  wishlist: { name: 'Wishlist in spawn', icon: 'fa-heart', hint: 'which of your wished-for resources are spawning right now', search: null },
 };
 const HOME_TTL = 5 * 60 * 1000;   // a visit inside this window re-renders without refetching
 
@@ -105,11 +113,21 @@ function homeToday() {
   try {
     const f = new Intl.DateTimeFormat('en-US', { timeZone: appTimeZone || undefined, year: 'numeric', month: 'numeric', day: 'numeric', weekday: 'short', hour: 'numeric', hour12: false });
     const p = Object.fromEntries(f.formatToParts(now).filter((x) => x.type !== 'literal').map((x) => [x.type, x.value]));
-    return { y: +p.year, m: +p.month, d: +p.day, dow: DOW.indexOf(p.weekday), hour: (+p.hour) % 24 };
+    return { y: +p.year, m: +p.month, d: +p.day, dow: DOW.indexOf(p.weekday), hour: (+p.hour) % 24, date: now };
   } catch (_) {
-    return { y: now.getFullYear(), m: now.getMonth() + 1, d: now.getDate(), dow: now.getDay(), hour: now.getHours() };
+    return { y: now.getFullYear(), m: now.getMonth() + 1, d: now.getDate(), dow: now.getDay(), hour: now.getHours(), date: now };
   }
 }
+// today's month/day in another calendar (hebrew, chinese, islamic-umalqura,
+// persian) — Intl does the conversion; {m, d, month} with month = its name
+function homeCal(t, calendar) {
+  const f = new Intl.DateTimeFormat(`en-u-ca-${calendar}`, { timeZone: appTimeZone || undefined, month: 'long', day: 'numeric' });
+  const p = Object.fromEntries(f.formatToParts(t.date || new Date()).filter((x) => x.type !== 'literal').map((x) => [x.type, x.value]));
+  const fn = new Intl.DateTimeFormat(`en-u-ca-${calendar}`, { timeZone: appTimeZone || undefined, month: 'numeric', day: 'numeric' });
+  const pn = Object.fromEntries(fn.formatToParts(t.date || new Date()).filter((x) => x.type !== 'literal').map((x) => [x.type, x.value]));
+  return { m: parseInt(pn.month, 10), d: parseInt(pn.day, 10), month: String(p.month || ''), leap: /bis|leap/i.test(String(pn.month)) };
+}
+const homeEasterOffset = (t, days) => { const e = homeEaster(t.y); const base = Date.UTC(t.y, e.m - 1, e.d) + days * 86400000; const x = new Date(base); return t.m === x.getUTCMonth() + 1 && t.d === x.getUTCDate(); };
 // calendar helpers (all UTC-safe arithmetic on y/m/d)
 const homeDow = (y, m, d) => new Date(Date.UTC(y, m - 1, d)).getUTCDay();
 const homeNthDow = (y, m, dow, n) => 1 + ((7 + dow - homeDow(y, m, 1)) % 7) + (n - 1) * 7;   // nth <dow> of month
@@ -125,8 +143,8 @@ const on = (m, d) => (t) => t.m === m && t.d === d;
 const HOME_HOLIDAYS = [
   // ---- Star Wars days ----
   [on(5, 4), 'May the Fourth be with you{n}!'],
-  [on(5, 5), 'Revenge of the Fifth{n}. Stay on the light side of the Bazaar.'],
-  [on(5, 25), 'A New Hope premiered this day in 1977{n}. Happy Star Wars Day!'],
+  [on(5, 5), 'Revenge of the Fifth{n} — and Happy Cinco de Mayo. Stay on the light side of the Bazaar.'],
+  [on(5, 25), 'A New Hope premiered this day in 1977{n}. Happy Star Wars Day — and don’t forget your towel.'],
   [on(5, 21), 'The Empire Strikes Back premiered this day in 1980{n}. No, I am your crafter.'],
   [on(5, 19), 'Happy Empire Day{n}! (or Remembrance Day — we don’t judge factions here)'],
   [on(11, 17), 'Happy Life Day{n}! Hug a Wookiee.'],
@@ -135,9 +153,22 @@ const HOME_HOLIDAYS = [
   [on(10, 27), 'Jump to Lightspeed launched this day in 2004{n}. Go fly something.'],
   [on(11, 15), 'The NGE dropped this day in 2005{n}. We don’t talk about it.'],
   [on(12, 15), 'The live servers closed this day in 2011{n}. The galaxy lives on.'],
-  [on(10, 31), 'Happy Halloween{n}! The Galactic Moon Festival awaits.'],
   // ---- fixed-date holidays ----
+  [on(10, 31), 'Happy Halloween{n}! The Galactic Moon Festival awaits.'],
+  [on(11, 1), 'Happy Día de los Muertos{n}. Pour one out for the despawned.'],
   [on(1, 1), 'Happy New Year{n}! Fresh spawns, fresh start.'],
+  [on(1, 26), 'Happy Australia Day{n}!'],
+  [on(3, 8), 'Happy International Women’s Day{n}!'],
+  [on(4, 25), 'Lest we forget{n} — ANZAC Day.'],
+  [on(6, 19), 'Happy Juneteenth{n}.'],
+  [on(6, 21), 'Happy summer solstice{n} — the longest harvest day of the year.'],
+  [on(9, 8), 'Happy Star Trek Day{n}. Wrong franchise, still welcome.'],
+  [on(9, 22), 'Happy Hobbit Day{n}. Second breakfast, then resources.'],
+  [on(10, 21), 'Happy Back to the Future Day{n}. Great Scott, look at those spawns.'],
+  [on(11, 5), 'Remember, remember the fifth of November{n}.'],
+  [on(12, 21), 'Happy winter solstice{n} — the galaxy’s longest night.'],
+  [(t) => t.m === 12 && t.d >= 27 && t.d <= 30, 'Happy Kwanzaa{n}!'],
+  [(t) => t.y && t.m === 9 && t.d === (new Date(Date.UTC(t.y, 1, 29)).getUTCMonth() === 1 ? 12 : 13), 'Happy Programmers’ Day{n} — day 256 of the year.'],
   [on(2, 2), 'Happy Groundhog Day{n}. Same resources as yesterday? Same resources as yesterday.'],
   [on(2, 14), 'Happy Valentine’s Day{n}! Nothing says love like a 1000 OQ hide.'],
   [on(2, 29), 'Happy Leap Day{n} — a day that despawns for four years.'],
@@ -160,6 +191,19 @@ const HOME_HOLIDAYS = [
   [on(12, 31), 'Happy New Year’s Eve{n}! One last restock before midnight.'],
   // ---- moveable feasts ----
   [(t) => { const e = homeEaster(t.y); return t.m === e.m && t.d === e.d; }, 'Happy Easter{n}! Eggs are Dathomirian this year.'],
+  [(t) => homeEasterOffset(t, -2), 'Good Friday{n}.'],
+  [(t) => { const c = homeCal(t, 'chinese'); return c.m === 1 && c.d === 1 && !c.leap; }, 'Happy Lunar New Year{n}!'],
+  [(t) => homeEasterOffset(t, -47), 'Happy Mardi Gras{n}! Laissez les bons spawns rouler.'],
+  [(t) => { const c = homeCal(t, 'persian'); return c.m === 1 && c.d === 1; }, 'Happy Nowruz{n}!'],
+  [(t) => { const c = homeCal(t, 'hebrew'); return (c.month === 'Kislev' && c.d >= 25) || (c.month === 'Tevet' && c.d <= 2); }, 'Happy Hanukkah{n}!'],
+  [(t) => { const c = homeCal(t, 'hebrew'); return c.month === 'Nisan' && c.d >= 15 && c.d <= 22; }, 'Happy Passover{n}!'],
+  [(t) => { const c = homeCal(t, 'hebrew'); return c.month === 'Tishri' && c.d >= 1 && c.d <= 2; }, 'Shana Tova{n}! Happy Rosh Hashanah.'],
+  [(t) => { const c = homeCal(t, 'islamic-umalqura'); return c.m === 9 && c.d === 1; }, 'Ramadan Mubarak{n}.'],
+  [(t) => { const c = homeCal(t, 'islamic-umalqura'); return c.m === 10 && c.d === 1; }, 'Eid Mubarak{n}! Eid al-Fitr.'],
+  [(t) => { const c = homeCal(t, 'islamic-umalqura'); return c.m === 12 && c.d === 10; }, 'Eid Mubarak{n}! Eid al-Adha.'],
+  [(t) => t.m === 1 && t.dow === 1 && t.d === homeNthDow(t.y, 1, 1, 3), 'Happy Martin Luther King Jr. Day{n}.'],
+  [(t) => t.m === 2 && t.dow === 1 && t.d === homeNthDow(t.y, 2, 1, 3), 'Happy Presidents’ Day{n}.'],
+  [(t) => t.m === 10 && t.dow === 1 && t.d === homeNthDow(t.y, 10, 1, 2), 'Happy Canadian Thanksgiving{n}! (and Indigenous Peoples’ Day in the US)'],
   [(t) => t.m === 11 && t.dow === 4 && t.d === homeNthDow(t.y, 11, 4, 4), 'Happy Thanksgiving{n}! Pass the Dantooine Domesticated Meat.'],
   [(t) => t.m === 11 && t.dow === 5 && t.d === homeNthDow(t.y, 11, 4, 4) + 1, 'Happy Black Friday{n}. Vendor prices, sadly, are not on sale.'],
   [(t) => t.m === 5 && t.dow === 0 && t.d === homeNthDow(t.y, 5, 0, 2), 'Happy Mother’s Day{n}! Call her — after this spawn.'],
@@ -189,12 +233,18 @@ async function loadHome(force = false) {
   const fresh = homeState.loadedAt && Date.now() - homeState.loadedAt < HOME_TTL;
   if (!force && (fresh || homeState.loading)) { renderHome(); return; }
   homeState.loading = true;
-  if (force) homeState.wdata = {};  // custom widgets refetch too
-  loadPrefs().then(() => { const g = $('#home-greet'); if (g) g.textContent = homeGreeting(); });
-  renderHome();                       // skeleton / last data while the fetches run
+  if (force) { homeState.wdata = {}; homeState.stkRows = null; }  // custom widgets refetch too
+  // first paint AND a manual refresh: one spinner, nothing else, for at least
+  // half a second so a fast reload still visibly happened (Dustin). Background
+  // re-pulls (a section switched on in Customize) keep the page on screen.
+  const page = $('#page-home');
+  homeState.booting = !homeState.loadedAt || force === true;
+  if (homeState.booting) page.classList.add('hm-booting');
+  else renderHome();
   const l = homeLayout();
   const want = (k) => !l.hidden.has(k);
-  const jobs = [];
+  const jobs = [loadPrefs()];            // the greeting needs the account name
+  if (homeState.booting) jobs.push(new Promise((r) => setTimeout(r, 500)));
   if (want('hot') || want('glance')) {
     jobs.push(apiFetch('GET', 'api/home.php')
       .then((r) => { homeState.dash = r.ok ? r.data : null; homeState.dashErr = r.ok ? null : (r.error || 'failed to load'); })
@@ -213,11 +263,14 @@ async function loadHome(force = false) {
   await Promise.all(jobs);
   homeState.loadedAt = Date.now();
   homeState.loading = false;
+  homeState.booting = false;
   renderHome();
+  page.classList.remove('hm-booting');
 }
 
 // ---- render ---------------------------------------------------------------------
 function renderHome() {
+  if (homeState.booting) return;   // the spinner owns the page until the load lands
   const l = homeLayout();
   const col = homeCollapsed();
   const g = $('#home-greet'); if (g) g.textContent = homeGreeting();
@@ -444,6 +497,44 @@ function homeWidgetTileHtml(w) {
       return homeTile(label, `<span class="hm-link" data-hmgo="inventory">${n ? `${fmtNum(n)} item${n === 1 ? '' : 's'} to restock` : 'Nothing to restock'}</span>`,
         neg ? `${fmtNum(neg)} oversold` : 'every tracked item is above its threshold', '', '', attrs);
     }
+    case 'factories': {
+      const parts = [];
+      if (d.done) parts.push(`<span class="hm-live">${d.done} ready to collect</span>`);
+      if (d.running) parts.push(`${d.running} running`);
+      if (d.paused) parts.push(`${d.paused} paused`);
+      return homeTile(label, `<span class="hm-link" data-hmgo="factories">${d.total ? (d.done ? `${d.done} run${d.done === 1 ? '' : 's'} done` : d.running ? `${d.running} running` : 'All idle') : 'No factories yet'}</span>`,
+        parts.join(' · ') || (d.total ? `${d.total} idle` : 'add one on the Factories page'),
+        d.nextName ? `${escapeHtml(d.nextName)} done ${escapeHtml(fmtAgo(d.nextDue))}` : '', '', attrs);
+    }
+    case 'harvesters': {
+      return homeTile(label, `<span class="hm-link" data-hmgo="harvesters">${d.total ? (d.full ? `<span class="hm-live">${d.full} full hopper${d.full === 1 ? '' : 's'}</span>` : 'Hoppers filling') : 'No harvesters yet'}</span>`,
+        d.total ? `${d.total} harvester${d.total === 1 ? '' : 's'} · average hopper ${d.avg}%` : 'add one on the Harvesters page',
+        d.soonName ? `${escapeHtml(d.soonName)} full ${escapeHtml(fmtAgo(d.soonAt))}` : '', '', attrs);
+    }
+    case 'sales': {
+      const k = d.kpis || {};
+      const trend = (d.trend || []).map((b) => safeInt(b.total));
+      return homeTile(`${label} · ${escapeHtml(w.params.name || '')}`, `<span class="hm-link" data-hmgo="sales">${fmtNum(safeInt(k.total_revenue))} cr</span>`,
+        `${fmtNum(safeInt(k.total_sales))} sale${safeInt(k.total_sales) === 1 ? '' : 's'} · ${fmtNum(safeInt(k.unique_buyers))} buyer${safeInt(k.unique_buyers) === 1 ? '' : 's'}`,
+        k.avg_sale ? `avg ${fmtNum(safeInt(k.avg_sale))} cr` : '', spark(trend, 'var(--accent-green, #45e97e)'), attrs);
+    }
+    case 'purchases': {
+      return homeTile(`${label} · ${escapeHtml(w.params.name || '')}`, `<span class="hm-link" data-hmgo="purchases">${fmtNum(safeInt(d.total))} cr</span>`,
+        d.average ? `about ${fmtNum(safeInt(d.average))} cr a day` : 'nothing bought in this window', '', '', attrs);
+    }
+    case 'stockpile': {
+      const r = d.row || {};
+      const live = String(r.status ?? '0') === '1';
+      return homeTile(label, homeResLink(r.name || w.params.name), escapeHtml(r.type_name || ''),
+        `${fmtNum(safeInt(r.stock))} units · ${live ? '<span class="hm-live">in spawn</span>' : '<span class="stat_off">despawned</span>'}`,
+        `<div class="hm-hot-planets">${planetsHtml(r)}</div>`, attrs);
+    }
+    case 'wishlist': {
+      const n = (d.live || []).length;
+      const names = (d.live || []).slice(0, 3).map((r) => `<span class="res-name" data-resname="${escapeHtml(r.name)}">${escapeHtml(r.name)}</span>`).join(', ');
+      return homeTile(label, `<span class="hm-link" data-hmgo="wishlist">${n ? `${n} in spawn now` : 'None in spawn'}</span>`,
+        n ? names + (n > 3 ? ` and ${n - 3} more` : '') : `${d.total ? `${d.total} wished for, none spawning` : 'your wishlist is empty'}`, '', '', attrs);
+    }
     default: return '';
   }
 }
@@ -471,8 +562,60 @@ async function homeWidgetFetch(w) {
       const rows = (r.data && r.data.results) || [];
       return { ok: true, data: { count: rows.length, negative: rows.filter((i) => safeInt(i.stocked) < 0).length } };
     }
+    case 'factories': {
+      const r = await apiFetch('GET', 'api/factories.php');
+      if (!r.ok) return r;
+      const rows = (r.data && (r.data.factories || r.data.results)) || [];
+      const by = { idle: 0, paused: 0, running: 0, done: 0 };
+      let nextDue = null, nextName = '';
+      rows.forEach((f) => {
+        const st = facStatus(f); by[st] = (by[st] || 0) + 1;
+        if (st === 'running') { const due = facDue(f); if (nextDue === null || due < nextDue) { nextDue = due; nextName = f.name || f.product || ''; } }
+      });
+      return { ok: true, data: { total: rows.length, ...by, nextDue, nextName } };
+    }
+    case 'harvesters': {
+      const r = await apiFetch('GET', 'api/harvesters.php');
+      if (!r.ok) return r;
+      const rows = (r.data && (r.data.harvesters || r.data.results)) || [];
+      let full = 0, pctSum = 0, pctN = 0, soonAt = null, soonName = '';
+      rows.forEach((h) => {
+        const hp = harvHopper(h); if (!hp) return;
+        pctSum += hp.pct; pctN++;
+        if (hp.pct >= 99.9) full++;
+        else if (hp.fullAt && (soonAt === null || hp.fullAt < soonAt)) { soonAt = hp.fullAt; soonName = h.name || h.resource_name || h.harvester_type || ''; }
+      });
+      return { ok: true, data: { total: rows.length, full, avg: pctN ? Math.round(pctSum / pctN) : 0, soonAt, soonName } };
+    }
+    case 'sales': return apiFetch('GET', 'api/sales.php', { params: { action: 'stats', days: safeInt(p.days) } });
+    case 'purchases': {
+      const r = await apiFetch('GET', 'api/purchases.php', { params: { perpage: 1, page: 1 } });
+      if (!r.ok) return r;
+      const s = (r.data && r.data.summaries) || {};
+      const win = s[String(safeInt(p.days))] || s[safeInt(p.days)] || {};
+      return { ok: true, data: { total: safeInt(win.total), average: safeInt(win.average) } };
+    }
+    case 'stockpile': {
+      const rows = await homeStockpileRows();
+      const row = rows.find((x) => String(x.stockpile_id) === String(p.stockpile_id));
+      return row ? { ok: true, data: { row } } : { ok: false, error: 'no longer in your stockpile' };
+    }
+    case 'wishlist': {
+      const r = await apiFetch('GET', 'api/wishlist.php', { params: { perpage: 500, page: 1 } });
+      if (!r.ok) return r;
+      const rows = (r.data && r.data.results) || [];
+      return { ok: true, data: { total: rows.length, live: rows.filter((x) => String(x.status ?? '0') === '1') } };
+    }
     default: return { ok: false, error: 'unknown widget' };
   }
+}
+
+// the stockpile rows, fetched once per load for the picker and the widget
+async function homeStockpileRows() {
+  if (homeState.stkRows) return homeState.stkRows;
+  const r = await apiFetch('GET', 'api/stockpile.php', { params: { perpage: 500, page: 1 } });
+  homeState.stkRows = (r.ok && r.data && r.data.results) || [];
+  return homeState.stkRows;
 }
 
 // start fetches for any visible widget without fresh data; each tile swaps in
@@ -576,12 +719,16 @@ function homePickerSync() {
       <i class="fa-solid ${d.icon}"></i><span class="hm-pick-type-name">${escapeHtml(d.name)}</span><span class="hm-pick-type-hint">${escapeHtml(d.hint)}</span></button>`).join('');
   const def = HOME_WIDGETS[type];
   const needsSearch = !!def.search;
-  $('#home-widget-step').hidden = !needsSearch;
+  const hasOptions = Array.isArray(def.options);
+  $('#home-widget-step').hidden = !needsSearch && !hasOptions;
+  $('#home-widget-search').hidden = !needsSearch;
   $('#home-widget-search').placeholder = def.search || '';
   $('#home-widget-search').value = '';
-  $('#home-widget-results').innerHTML = needsSearch ? '<div class="settings-sub hm-pick-empty">Type at least two letters to search.</div>' : '';
-  $('#home-widget-addnow').hidden = needsSearch;
-  homeState.picker.results = [];
+  $('#home-widget-addnow').hidden = needsSearch || hasOptions;
+  homeState.picker.results = hasOptions ? def.options : [];
+  $('#home-widget-results').innerHTML = hasOptions
+    ? def.options.map((it, i) => `<div class="hm-pick" data-hmpick="${i}"><i class="fa-solid ${def.icon}"></i><span>${escapeHtml(it.label)}</span><i class="fa-solid fa-plus hm-pick-add"></i></div>`).join('')
+    : needsSearch ? '<div class="settings-sub hm-pick-empty">Type at least two letters to search.</div>' : '';
 }
 let homePickerTimer = null;
 async function homePickerSearch() {
@@ -604,6 +751,10 @@ async function homePickerSearch() {
     } else if (type === 'schematic') {
       const r = await apiFetch('GET', 'api/schematics.php', { params: { search: q, perpage: 12, page: 1 } });
       items = ((r.ok && r.data && r.data.results) || []).map((s) => ({ label: s.name, params: { id: safeInt(s.id), name: s.name } }));
+    } else if (type === 'stockpile') {
+      const rows = await homeStockpileRows();
+      items = rows.filter((x) => String(x.name || '').toLowerCase().includes(q.toLowerCase()) || String(x.type_name || '').toLowerCase().includes(q.toLowerCase()))
+        .slice(0, 12).map((x) => ({ label: `${x.name} · ${x.type_name || ''} · ${fmtNum(safeInt(x.stock))} units`, params: { stockpile_id: x.stockpile_id, name: x.name } }));
     } else if (type === 'class') {
       if (!homeState.profData) { const r = await apiFetch('GET', 'api/professions.php'); if (r.ok) homeState.profData = r.data || {}; }
       items = ((homeState.profData && homeState.profData.professions) || []).filter((p) => p.name.toLowerCase().includes(q.toLowerCase()))
@@ -661,7 +812,7 @@ function initHome() {
       const k = show.dataset.hmshow;
       const needs = show.checked && ((k === 'spawns' && !homeState.spawns) || (k === 'announce' && homeState.ann == null)
         || ((k === 'hot' || k === 'glance') && !homeState.dash));
-      if (needs) loadHome(true); else renderHome();
+      if (needs) loadHome('quiet'); else renderHome();
       return;
     }
     const hot = e.target.closest('[data-hmhot]');
@@ -672,7 +823,7 @@ function initHome() {
     if (n) {
       l[n.dataset.hmn] = Number(n.value);
       homeSaveLayout();
-      if (n.dataset.hmn === 'spawnsN') loadHome(true); else renderHome();
+      if (n.dataset.hmn === 'spawnsN') loadHome('quiet'); else renderHome();
     }
   });
   list.addEventListener('click', (e) => {
@@ -743,14 +894,6 @@ function initHome() {
 
   $('#home-sections').addEventListener('scroll', (e) => { if (e.target.classList && e.target.classList.contains('hm-carousel')) homeSyncCarousel(e.target); }, true);
   window.addEventListener('resize', homeSyncCarousels);
-  // a mouse wheel over a carousel scrolls it sideways (trackpads already do)
-  $('#home-sections').addEventListener('wheel', (e) => {
-    const strip = e.target.closest('.hm-carousel');
-    if (!strip || Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
-    if ((e.deltaY < 0 && strip.scrollLeft <= 0) || (e.deltaY > 0 && strip.scrollLeft + strip.clientWidth >= strip.scrollWidth - 1)) return; // at an end — let the page scroll
-    e.preventDefault();
-    strip.scrollLeft += e.deltaY;
-  }, { passive: false });
 
   wirePlanetEdit('#home-sections', () => homeState.spawns);
   // one delegated handler: section collapse, hot chips, name links, jump buttons, card pins

@@ -71,6 +71,7 @@ const PAGE_LOADERS = {
   guilds: () => loadGuilds(),
   wealth: () => loadWealth(),
   gcw: () => loadGcw(),
+  pulse: () => loadPulsePage(),
   professions: () => loadProfessions(),
   titles: () => loadTitles(),
   myschematics: () => loadMySchematics(),
@@ -1099,6 +1100,7 @@ async function boot() {
   initAliases();
   initCommunityMacros();
   initGalaxy();
+  initPulsePage();
   applySeasonalLogo();
   applyHolidayBar();
   initSchemBuilder();

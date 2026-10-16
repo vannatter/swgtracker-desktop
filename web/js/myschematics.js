@@ -510,9 +510,22 @@ async function loadMySchematics() {
   showGridLoading('#mys-loading');
   $('#mys-empty').hidden = true;
 
+  // The API pages at 100 (500 max); the list used to fetch page 1 only, which
+  // silently capped anyone past 100 schematics. Pull every page.
+  const fetchAll = async () => {
+    const all = [];
+    for (let page = 1; page <= 40; page++) {
+      const r = await api().get_my_schematics({ page, perpage: 500 });
+      if (!r.ok || !r.data) return page === 1 ? r : { ok: true, data: { results: all } };
+      const rows = r.data.results || [];
+      all.push(...rows);
+      if (rows.length < 500) break;
+    }
+    return { ok: true, data: { results: all } };
+  };
   let res, groups;
   try {
-    [res, groups] = await Promise.all([api().get_my_schematics({}), grpList('myschem'), loadPrefs()]);
+    [res, groups] = await Promise.all([fetchAll(), grpList('myschem'), loadPrefs()]);
   } catch (e) { res = { ok: false, error: String(e) }; groups = mysState.groups; }
   mysState.groups = groups || [];
 

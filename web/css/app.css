@@ -3977,3 +3977,33 @@ tr.gx-rowlink:hover .gx-detail-link { color: var(--accent-hover); }
 .top-tree-formula { flex: 1; min-width: 0; color: var(--text-muted); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .top-tree-score { width: 34px; text-align: right; font-weight: 700; }
 .top-tree-planets .planet { font-size: 9px; }
+
+/* ---- Server Pulse page ---- */
+/* one row of identical pills: the range tabs, then from – to and Go in the same style */
+.pulse-toolrow { gap: 0; justify-content: flex-end; } /* the range controls sit flush right, like the grid tools elsewhere */
+.pulse-toolrow .gx-aggtabs { margin-bottom: 0; }
+.pulse-custom { display: inline-flex; align-items: center; gap: 4px; }
+.pulse-sep { width: 1px; height: 18px; background: var(--border); margin: 0 10px; }
+.pulse-dash { color: var(--text-muted); font-size: 12px; padding: 0 2px; }
+/* Mac WebKit paints a date input's separators in its own grey and won't let CSS at
+   them, so the digits wear that same grey (it matches the inactive tabs anyway)
+   and brighten only while the field is focused */
+.pulse-date { width: 128px; height: 27px; line-height: 1; color: var(--text-muted); -webkit-text-fill-color: var(--text-muted); color-scheme: dark; font-family: inherit; }
+.pulse-date:focus { color: var(--text-hover); -webkit-text-fill-color: var(--text-hover); outline: none; border-color: var(--text-muted); }
+.pulse-date::-webkit-calendar-picker-indicator { opacity: .5; }
+.pulse-section { flex: none; }
+#pulse-cards-section .gx-statcards { margin-bottom: 0; }
+.pulse-section .hm-head { margin-bottom: 10px; }
+.pulse-section.collapsed .hm-head { margin-bottom: 0; }
+.pulse-section .hm-count { text-transform: none; letter-spacing: 0; }
+.pulse-section .hm-headright { text-transform: none; letter-spacing: 0; }
+.pulse-live-dot { vertical-align: middle; }
+#pulse-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.pulse-peak { color: var(--text-muted); font-size: 12px; }
+.pulse-scroll { display: flex; flex-direction: column; gap: 12px; }
+.pulse-charts { display: flex; flex-direction: column; gap: 12px; }
+.pulse-block-title { font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--text-hover); margin-bottom: 8px; display: flex; align-items: baseline; gap: 8px; }
+.pulse-block-title .settings-sub { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.pulse-live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); display: inline-block; margin-right: 8px; box-shadow: 0 0 0 0 rgba(226, 67, 80, .6); animation: pulse-live-ping 2.4s ease-out infinite; }
+@keyframes pulse-live-ping { 0% { box-shadow: 0 0 0 0 rgba(226, 67, 80, .6); } 70% { box-shadow: 0 0 0 8px rgba(226, 67, 80, 0); } 100% { box-shadow: 0 0 0 0 rgba(226, 67, 80, 0); } }
+.pulse-live-now { margin-left: auto; font-size: 16px; font-weight: 700; color: var(--text-hover); text-transform: none; letter-spacing: 0; }

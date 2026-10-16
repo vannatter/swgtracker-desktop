@@ -1035,3 +1035,133 @@ function initGalaxy() {
   $('#titles-reload').addEventListener('click', () => { titlesState.loaded = false; loadTitles(); });
   gxSortClick(titlesState, '#titles-head', renderTitles);
 }
+
+
+// ===================== Server Pulse (the website's pulse.php) =====================
+// Logged-in characters over a range, daily active accounts, the monthly average,
+// and the today / 7-day / 30-day KPIs — api/pulse_history.php, same thresholds
+// as the site. Ranges 1M/3M/6M/1Y/All, or a custom from/to.
+const pulseState = { range: '6m', from: '', to: '', data: null, loaded: false, loading: false, collapsed: null };
+function pulseCollapsed() {
+  if (!pulseState.collapsed) {
+    let c = [];
+    try { c = JSON.parse(localStorage.getItem('pulse_collapsed') || '[]'); } catch (_) {}
+    pulseState.collapsed = new Set(Array.isArray(c) ? c : []);
+  }
+  return pulseState.collapsed;
+}
+
+async function loadPulsePage(force = false) {
+  if (pulseState.loaded && !force) { renderPulsePage(); return; }
+  if (pulseState.loading) return;
+  pulseState.loading = true;
+  $('#pulse-loading').hidden = false; $('#pulse-empty').hidden = true;
+  const params = pulseState.from && pulseState.to ? { from: pulseState.from, to: pulseState.to } : { range: pulseState.range };
+  let res;
+  try { res = await apiFetch('GET', 'api/pulse_history.php', { params }); } catch (e) { res = { ok: false, error: String(e) }; }
+  pulseState.loading = false;
+  $('#pulse-loading').hidden = true;
+  if (!res.ok || !res.data) {
+    $('#pulse-empty').textContent = String(res.error || '').includes('404')
+      ? 'Server Pulse needs the site update (api/pulse_history.php) — it lights up once swgtracker.com deploys.'
+      : `Error: ${res.error || 'failed to load'}`;
+    $('#pulse-empty').hidden = false;
+    $('#pulse-cards').innerHTML = ''; $('#pulse-charts').innerHTML = '';
+    return;
+  }
+  pulseState.data = res.data;
+  pulseState.loaded = true;
+  gxUpdated('#pulse-updated', res.data.generated);
+  renderPulsePage();
+}
+
+function renderPulsePage() {
+  const d = pulseState.data;
+  if (!d) return;
+  document.querySelectorAll('#pulse-rangetabs .gx-aggtab').forEach((b) => b.classList.toggle('active', d.range !== 'custom' && b.dataset.pulserange === pulseState.range));
+  const k = d.kpis || {};
+  // the Wealth page's stat cards: big number, label, delta vs the prior window, a faint sparkline
+  const sp = d.spark || {};
+  const deltaHtml = (cur, prev, vs) => {
+    if (!prev) return `<div class="wealth-delta wealth-delta-flat">—<div class="wealth-delta-sub">${vs}</div></div>`;
+    const diff = cur - prev;
+    const cls = diff > 0 ? 'wealth-delta-up' : diff < 0 ? 'wealth-delta-down' : 'wealth-delta-flat';
+    return `<div class="wealth-delta ${cls}">${diff > 0 ? '+' : ''}${gxNum(diff)}<div class="wealth-delta-sub">${vs}</div></div>`;
+  };
+  const spark = (vals, color) => {
+    const sv = gxDownsample((vals || []).filter((v) => v != null), 48);
+    const svg = sv.length > 1 ? gxSpark(sv, { w: 240, h: 40, color, fill: true }) : '';
+    return svg ? `<div class="wealth-spark">${svg}</div>` : '';
+  };
+  const card = (num, label, peak, cur, prev, vs, trend, color) =>
+    `<div class="wealth-statcard"><div class="wealth-stat-num">${gxNum(num)}</div><div class="wealth-stat-label">${label} <span class="pulse-peak">· peak ${gxNum(peak)}</span></div>${deltaHtml(cur, prev, vs)}${spark(trend, color)}</div>`;
+  $('#pulse-cards').innerHTML =
+    card(k.today_avg, 'logged in today, on average', k.today_max, k.today_avg, k.yesterday_avg, 'vs yesterday', sp.today, 'var(--accent)')
+    + card(k.seven_avg, 'logged in over 7 days, on average', k.seven_max, k.seven_avg, k.prev_seven_avg, 'vs the week before', sp.seven, '#45e97e')
+    + card(k.thirty_avg, 'logged in over 30 days, on average', k.thirty_max, k.thirty_avg, k.prev_thirty_avg, 'vs the month before', sp.thirty, 'var(--accent)');
+  const w = Math.round(($('#pulse-charts').getBoundingClientRect().width || 900) - 36);
+  const pulse = d.pulse || [], daily = d.daily || [], monthly = d.monthly || [];
+  const col = pulseCollapsed();
+  $('#pulse-cards-section').classList.toggle('collapsed', col.has('cards'));
+  $('#pulse-cards-section .hm-body').hidden = col.has('cards');
+  const block = (key, title, sub, chart, right = '') => `<section class="hm-section pulse-section${col.has(key) ? ' collapsed' : ''}" data-pulsesec="${key}">
+      <div class="hm-head" data-pulsetoggle="${key}"><i class="fa-solid fa-chart-line hm-icon"></i><span class="hm-title">${title}</span><span class="hm-count">${sub}</span><span class="hm-headright">${right}</span><i class="fa-solid fa-chevron-down hm-caret"></i></div>
+      <div class="hm-body"${col.has(key) ? ' hidden' : ''}><div class="gx-trend pulse-block">${chart}</div></div>
+    </section>`;
+  const fmtDay = (ts) => wealthDateLabel(ts);
+  // the headline: live, last 7 days, every sample — labels carry the day and time
+  const live = d.live || { points: [], now: 0, step: 0 };
+  const lp = live.points || [];
+  const stepMin = live.step ? Math.max(1, Math.round(live.step / 60)) : 10;
+  const fmtLive = (ts) => { const x = new Date(ts * 1000); return `${x.toLocaleDateString([], { month: 'short', day: 'numeric' })} ${x.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`; };
+  const liveBlock = block('live', '<span class="pulse-live-dot"></span>Active characters', `live · last 7 days · every ${stepMin} minutes`,
+    lp.length > 1 ? gxLineChart([{ values: lp.map((x) => x[1]), color: 'var(--accent)', name: 'Logged in', fill: true }], { h: 240, w, labels: lp.map((x) => fmtLive(x[0])) }) : '<div class="settings-sub">no samples yet</div>',
+    `<span class="pulse-live-now">${gxNum(live.now)} <span class="settings-sub">online now</span></span>`);
+  $('#pulse-charts').innerHTML = [liveBlock,
+    block('history', 'Logged in characters', pulse.length ? (d.bucket >= 86400 ? 'daily average and daily peak' : d.bucket >= 3600 ? 'hourly average and peak' : '10-minute samples') : '',
+      pulse.length > 1 ? gxLineChart([
+          { values: pulse.map((p) => p.peak), color: 'rgba(226, 67, 80, .45)', name: 'Peak' },
+          { values: pulse.map((p) => p.online), color: 'var(--accent)', name: 'Average', fill: true },
+        ], { h: 220, w, labels: pulse.map((p) => fmtDay(p.ts)) })
+        : '<div class="settings-sub">no samples in this range</div>'),
+    block('accounts', 'Active accounts', 'accounts seen each day',
+      daily.length > 1 ? gxLineChart([{ values: daily.map((x) => x.total), color: '#5b9bd5', name: 'Active accounts', fill: true }], { h: 200, w, labels: daily.map((x) => x.date || fmtDay(x.ts)) })
+        : '<div class="settings-sub">no daily data in this range</div>'),
+    block('monthly', 'Monthly average', 'average logged in per month',
+      monthly.length > 1 ? gxLineChart([{ values: monthly.map((m) => m.avg), color: '#45e97e', name: 'Monthly average', fill: true }], { h: 180, w, labels: monthly.map((m) => m.month) })
+        : '<div class="settings-sub">not enough months in this range</div>'),
+  ].join('');
+  $('#pulse-empty').hidden = !!(pulse.length || daily.length || monthly.length);
+  if (!(pulse.length || daily.length || monthly.length)) $('#pulse-empty').textContent = 'No pulse data in this range.';
+}
+
+// the live chart follows the app's 3-minute pulse tick while the page is open
+setInterval(() => {
+  if (document.getElementById('page-pulse')?.classList.contains('active') && pulseState.loaded && !pulseState.loading) loadPulsePage(true);
+}, 3 * 60 * 1000);
+
+function initPulsePage() {
+  $('#pulse-rangetabs').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-pulserange]');
+    if (!b) return;
+    pulseState.range = b.dataset.pulserange; pulseState.from = ''; pulseState.to = '';
+    $('#pulse-from').value = ''; $('#pulse-to').value = '';
+    loadPulsePage(true);
+  });
+  $('#pulse-go').addEventListener('click', () => {
+    const f = $('#pulse-from').value, t = $('#pulse-to').value;
+    if (!f || !t || f > t) { toast('Pick a From and To date, From first', false); return; }
+    pulseState.from = f; pulseState.to = t;
+    loadPulsePage(true);
+  });
+  $('#pulse-reload').addEventListener('click', () => loadPulsePage(true));
+  $('#page-pulse .pulse-scroll').addEventListener('click', (e) => {
+    const head = e.target.closest('[data-pulsetoggle]');
+    if (!head) return;
+    const col = pulseCollapsed(); const k = head.dataset.pulsetoggle;
+    if (col.has(k)) col.delete(k); else col.add(k);
+    try { localStorage.setItem('pulse_collapsed', JSON.stringify([...col])); } catch (_) {}
+    renderPulsePage();
+  });
+  window.addEventListener('resize', () => { if (document.getElementById('page-pulse')?.classList.contains('active') && pulseState.data) renderPulsePage(); });
+}

@@ -40,6 +40,7 @@
         <li class="nav-item" data-page="schematics"><i class="fa-solid fa-scroll"></i> Schematics</li>
         <li class="nav-item" data-page="topspawns"><i class="fa-solid fa-ranking-star"></i> Top Spawns</li>
         <li class="nav-group-head" data-navgroup="galaxy" title="Server-wide data"><i class="fa-solid fa-earth-americas"></i> Galaxy <i class="fa-solid fa-caret-down nav-group-caret"></i></li>
+        <li class="nav-item nav-group-item galaxy-item" data-page="pulse"><i class="fa-solid fa-heart-pulse"></i> Pulse</li>
         <li class="nav-item nav-group-item galaxy-item" data-page="cities"><i class="fa-solid fa-city"></i> Cities</li>
         <li class="nav-item nav-group-item galaxy-item" data-page="guilds"><i class="fa-solid fa-shield-halved"></i> Guilds</li>
         <li class="nav-item nav-group-item galaxy-item" data-page="wealth"><i class="fa-solid fa-coins"></i> Wealth</li>
@@ -1702,6 +1703,41 @@
           <table class="data-grid" id="wealth-grid"><thead><tr><th>Rank</th><th>Character</th><th>Credits</th><th>Change</th><th>Movement</th><th></th></tr></thead><tbody id="wealth-body"></tbody></table>
           <div id="wealth-loading" class="grid-loading" hidden><span class="spinner"></span> Loading…</div>
           <div id="wealth-empty" class="grid-empty" hidden></div>
+        </div>
+      </section>
+
+      <!-- Pulse: the website's Server Pulse page — population over a range -->
+      <section id="page-pulse" class="page">
+        <div class="page-head">
+          <h1>Server Pulse</h1>
+          <i class="fa-solid fa-circle-info info-tip" title="Population snapshot for Restoration: characters logged in over the range, daily active accounts, and the monthly average. Server-wide data from swgtracker.com."></i>
+          <span id="pulse-updated" class="gx-updated head-right"></span>
+          <button id="pulse-reload" class="btn btn-icon" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
+        </div>
+        <div class="res-filterrow pulse-toolrow">
+          <div class="gx-aggtabs" id="pulse-rangetabs">
+            <button type="button" class="gx-aggtab" data-pulserange="1m">1M</button>
+            <button type="button" class="gx-aggtab" data-pulserange="3m">3M</button>
+            <button type="button" class="gx-aggtab active" data-pulserange="6m">6M</button>
+            <button type="button" class="gx-aggtab" data-pulserange="1y">1Y</button>
+            <button type="button" class="gx-aggtab" data-pulserange="all">All</button>
+          </div>
+          <span class="pulse-custom">
+            <span class="pulse-sep"></span>
+            <input id="pulse-from" type="date" class="gx-aggtab pulse-date" title="From">
+            <span class="pulse-dash">–</span>
+            <input id="pulse-to" type="date" class="gx-aggtab pulse-date" title="To">
+            <button type="button" id="pulse-go" class="gx-aggtab" title="Show this date range">Go</button>
+          </span>
+        </div>
+        <div class="table-wrap pulse-scroll">
+          <section class="hm-section pulse-section" id="pulse-cards-section">
+            <div class="hm-head" data-pulsetoggle="cards"><i class="fa-solid fa-gauge-high hm-icon"></i><span class="hm-title">At a glance</span><span class="hm-count">today · 7 days · 30 days</span><span class="hm-headright"></span><i class="fa-solid fa-chevron-down hm-caret"></i></div>
+            <div class="hm-body"><div id="pulse-cards" class="gx-statcards"></div></div>
+          </section>
+          <div id="pulse-charts" class="pulse-charts"></div>
+          <div id="pulse-loading" class="grid-loading" hidden><span class="spinner"></span> Loading…</div>
+          <div id="pulse-empty" class="grid-empty" hidden></div>
         </div>
       </section>
 

@@ -3425,7 +3425,9 @@ body.holiday-on .app-header::after { opacity: 1; }
 .res-card-days i { font-size: 10px; }
 /* footer pinned to the card bottom: days-in-spawn left, planets right */
 .res-card-foot { margin-top: auto; padding-top: 6px; border-top: 1px solid var(--border);
-  display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  display: flex; align-items: center; justify-content: space-between; gap: 6px 8px; flex-wrap: wrap; } /* a crowded planet row wraps under the age, never overflows */
+.res-card-foot .res-card-days { flex: none; }
+.res-card-foot .res-card-planets { flex: 1 1 auto; min-width: 0; }
 /* mini quality bars (replace the stat pills) — two columns to keep cards short */
 .res-card-bars { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 12px; }
 .res-cbar { display: flex; align-items: center; gap: 6px; font-size: 11px; }
@@ -3914,3 +3916,64 @@ tr.gx-rowlink:hover .gx-detail-link { color: var(--accent-hover); }
 .hm-pick-types { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .hm-pick-card { max-width: 720px; }
 .hm-pick-type { min-height: 92px; }
+
+/* ---- Top Spawns ------------------------------------------------------------ */
+.top-rank-select { width: auto; }
+.top-must.active { color: var(--accent); }
+.top-breakdown { flex: none; margin-bottom: 10px; }
+.top-breakdown-section { flex: none; margin-bottom: 12px; }   /* the gap the grid keeps, open or collapsed */
+.top-breakdown-section .hm-head { margin-bottom: 10px; }
+.top-breakdown-section.collapsed .hm-head { margin-bottom: 0; }
+.top-charts { display: grid; grid-template-columns: 1.35fr 1.35fr 1fr; gap: 10px; }
+.top-hotrow { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+.top-breakdown .rd-pcard { padding: 10px 14px 8px; }
+.top-breakdown .rd-ptitle { font-size: 12.5px; }
+/* horizontal bars: HTML rows (labels stay crisp), gridlines + ticks positioned by % */
+.top-hbars { margin-top: 4px; }
+.top-plot { position: relative; display: flex; flex-direction: column; gap: 3px; }
+.top-row { display: grid; grid-template-columns: 110px 1fr; align-items: center; gap: 8px; position: relative; z-index: 1; cursor: pointer; border-radius: 3px; }
+.top-row:hover .top-label { color: var(--text-hover); } .top-row:hover .top-fill { background: var(--accent-hover); }
+.top-row.active .top-fill { background: #fff; } .top-row.active .top-label { color: #fff; font-weight: 700; }
+.top-label { font-size: 11px; color: var(--text-primary); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.top-track { height: 12px; position: relative; }
+.top-fill { display: block; height: 100%; background: var(--accent); border-radius: 2px; min-width: 2px; }
+.top-gridlayer { position: absolute; left: 118px; right: 0; top: 0; bottom: 0; pointer-events: none; } /* 110px label column + 8px gap */
+.top-gridline { position: absolute; top: 0; bottom: 0; width: 1px; background: rgba(255,255,255,.07); }
+.top-axis { display: grid; grid-template-columns: 110px 1fr; gap: 8px; margin-top: 4px; }
+.top-axisarea { position: relative; height: 14px; }
+.top-tick { position: absolute; top: 0; transform: translateX(-50%); font-size: 9.5px; color: var(--text-muted); }
+.top-donutwrap { min-height: 0; margin-top: 2px; flex: 1; align-items: center; }
+.top-slice { cursor: pointer; } .top-slice.active { stroke: #fff; stroke-width: 2; }
+.top-legend-item { cursor: pointer; } .top-legend-item:hover, .top-legend-item.active { color: #fff; }
+.top-hotcard .top-hotlist { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; }
+.top-hot { color: var(--text-primary); cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
+/* rank fade: #1 full and bold, each step after a little fainter and lighter */
+.top-hot-0 { color: var(--text-hover); font-weight: 700; font-size: 14px; }
+.top-hot-1 { font-weight: 600; opacity: .9; }
+.top-hot-2 { font-weight: 600; opacity: .72; }
+.top-hot-3 { font-weight: 500; opacity: .56; }
+.top-hot-4 { font-weight: 500; opacity: .42; }
+.top-hot:hover { color: var(--accent-hover); opacity: 1; }
+.top-hot-n { font-size: 10.5px; font-weight: 600; color: var(--text-muted); background: rgba(255,255,255,.07); border-radius: 999px; padding: 0 6px; line-height: 16px; }
+.top-hot-0 .top-hot-n { color: var(--accent); }
+.top-schem { cursor: pointer; font-weight: 600; } .top-schem:hover { color: var(--accent-hover); }
+.top-cat { cursor: pointer; } .top-cat:hover { color: var(--accent-hover); text-decoration: underline; }
+.top-formula { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.top-more { margin: 12px auto; display: block; }
+#top-grid tbody td.stat.q-great { color: var(--q-great); } #top-grid tbody td.stat.q-good { color: var(--q-good); }
+#top-grid tbody td.stat.q-fair { color: var(--q-fair); } #top-grid tbody td.stat.q-ok { color: var(--q-ok); }
+
+/* Top Spawns: cards + tree */
+.top-toolrow { margin-bottom: 8px; flex: none; }
+.top-toolrow-spacer { flex: 1; }
+.top-card-rank { font-size: 11px; font-weight: 800; padding: 1px 6px; border-radius: 4px; background: rgba(255,255,255,.07); }
+.top-card-schem { font-size: 12px; color: var(--text-muted); } .top-card-schem .top-schem { color: var(--text-primary); }
+.top-card-cat { font-size: 10px; margin-left: 4px; padding: 0 5px; border-radius: 3px; background: rgba(255,255,255,.07); color: var(--text-muted); }
+.top-card-formula { font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.top-tree-item { display: flex; align-items: center; gap: 10px; padding: 4px 8px 4px 0; font-size: 12.5px; border-bottom: 1px solid rgba(255,255,255,.04); }
+.top-tree-item:hover { background: var(--bg-card); }
+.top-tree-name { font-weight: 600; cursor: pointer; } .top-tree-name:hover { color: var(--accent-hover); }
+.top-tree-type { color: var(--text-muted); font-size: 12px; }
+.top-tree-formula { flex: 1; min-width: 0; color: var(--text-muted); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.top-tree-score { width: 34px; text-align: right; font-weight: 700; }
+.top-tree-planets .planet { font-size: 9px; }

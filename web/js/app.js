@@ -65,6 +65,7 @@ function applyHolidayBar() {
 const PAGE_LOADERS = {
   home: () => loadHome(),
   resources: () => loadResources(),
+  topspawns: () => loadTopSpawns(),
   schematics: () => loadSchematics(),
   cities: () => loadCities(),
   guilds: () => loadGuilds(),
@@ -1087,6 +1088,7 @@ async function boot() {
   initSettings();
   initAlerts();
   initHome();
+  initTopSpawns();
   initPlanetPop();
   initLab();
   initMail();

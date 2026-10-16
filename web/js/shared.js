@@ -337,6 +337,74 @@ const PLANET_FULL = {
   planet_yavin4: 'Yavin IV', planet_kashyyyk: 'Kashyyyk', planet_mustafar: 'Mustafar',
 };
 
+// ---- column layout for a grid: user order + hidden set, persisted per grid ----
+// The Resources grid grew its own version first (resCols / initResCols); this is
+// the same idea packaged so other grids (Top Spawns) get it in a few lines.
+//   const cols = makeColLayout({ key: 'top-colpref', columns: TOP_COLUMNS, locked: ['name'] });
+//   cols.visible()  -> [label, field, cls, tip] tuples in order, hidden dropped
+//   cols.all()      -> every column in order (for the picker)
+//   wireColPicker(cols, { btn, modal, list, reset, close, rerender })
+function makeColLayout({ key, columns, locked = [] }) {
+  const lockedSet = new Set(locked);
+  const st = { order: null, hidden: new Set() };
+  const load = () => {
+    try {
+      const p = JSON.parse(localStorage.getItem(key) || 'null');
+      if (p && Array.isArray(p.order)) { st.order = p.order; st.hidden = new Set(Array.isArray(p.hidden) ? p.hidden : []); return; }
+    } catch (_) { /* defaults */ }
+    st.order = columns.map((c) => c[1]); st.hidden = new Set();
+  };
+  const save = () => { try { localStorage.setItem(key, JSON.stringify({ order: st.order, hidden: [...st.hidden] })); } catch (_) {} };
+  const all = () => {
+    if (!st.order) load();
+    const byField = new Map(columns.map((c) => [c[1], c]));
+    const out = []; const seen = new Set();
+    for (const f of st.order) { if (byField.has(f) && !seen.has(f)) { out.push(byField.get(f)); seen.add(f); } }
+    for (const c of columns) { if (!seen.has(c[1])) out.push(c); }   // columns added later still appear
+    return out;
+  };
+  return {
+    key, columns, lockedSet, state: st, load, save, all,
+    visible: () => all().filter((c) => lockedSet.has(c[1]) || !st.hidden.has(c[1])),
+    isVisible: (f) => lockedSet.has(f) || !st.hidden.has(f),
+    reset: () => { st.order = columns.map((c) => c[1]); st.hidden = new Set(); save(); },
+    toggle: (f, on) => { if (on) st.hidden.delete(f); else st.hidden.add(f); save(); },
+    move: (field, beforeField) => {
+      const order = all().map((c) => c[1]).filter((f) => f !== field);
+      const at = order.indexOf(beforeField);
+      order.splice(at < 0 ? order.length : at, 0, field);
+      st.order = order; save();
+    },
+  };
+}
+function wireColPicker(cols, { btn, modal, list, reset, close, rerender }) {
+  const render = () => {
+    $(list).innerHTML = cols.all().map(([label, field]) => {
+      const locked = cols.lockedSet.has(field);
+      return `<div class="rescol-row" draggable="true" data-colfield="${escapeHtml(field)}">
+        <i class="fa-solid fa-grip-vertical rescol-grip"></i>
+        <label class="rescol-label"><input type="checkbox" ${cols.isVisible(field) ? 'checked' : ''} ${locked ? 'disabled' : ''} data-coltoggle="${escapeHtml(field)}"><span>${escapeHtml(label)}</span></label>
+        ${locked ? '<span class="rescol-lock">always on</span>' : ''}
+      </div>`;
+    }).join('');
+  };
+  $(btn).addEventListener('click', () => { render(); $(modal).hidden = false; });
+  $(close).addEventListener('click', () => { $(modal).hidden = true; });
+  $(modal).addEventListener('click', (e) => { if (e.target === $(modal)) $(modal).hidden = true; });
+  $(reset).addEventListener('click', () => { cols.reset(); render(); rerender(); });
+  $(list).addEventListener('change', (e) => {
+    const cb = e.target.closest('[data-coltoggle]');
+    if (!cb) return;
+    cols.toggle(cb.dataset.coltoggle, cb.checked); rerender();
+  });
+  let dragField = null;
+  const el = $(list);
+  el.addEventListener('dragstart', (e) => { const row = e.target.closest('[data-colfield]'); if (!row) return; dragField = row.dataset.colfield; e.dataTransfer.effectAllowed = 'move'; row.classList.add('rescol-dragging'); });
+  el.addEventListener('dragend', (e) => { const row = e.target.closest('[data-colfield]'); if (row) row.classList.remove('rescol-dragging'); el.querySelectorAll('.rescol-over').forEach((x) => x.classList.remove('rescol-over')); });
+  el.addEventListener('dragover', (e) => { const row = e.target.closest('[data-colfield]'); if (!row || !dragField || row.dataset.colfield === dragField) return; e.preventDefault(); el.querySelectorAll('.rescol-over').forEach((x) => x.classList.remove('rescol-over')); row.classList.add('rescol-over'); });
+  el.addEventListener('drop', (e) => { const row = e.target.closest('[data-colfield]'); if (!row || !dragField) return; e.preventDefault(); cols.move(dragField, row.dataset.colfield); dragField = null; render(); rerender(); });
+}
+
 // ---- planet editing: the website's "+" on the Planets column, in the app ----
 // planetsEditHtml = the badges plus a "+" chip; clicking it opens a popover of
 // all twelve planets to toggle (api/resources.php PUT {planets}). The caller
@@ -401,8 +469,10 @@ function wirePlanetEdit(containerSel, rows) {
     e.stopPropagation();
     const row = (rows() || []).find((x) => String(x.id) === plus.dataset.planetedit);
     if (!row) return;
+    // resolve the badge host NOW: the first repaint replaces the "+" chip, so a
+    // lookup from it on the second toggle would find nothing (add-then-remove bug)
+    const host = plus.closest('.col-planets, .res-card-planets, .rd-planets-list');
     openPlanetPop(plus, row, () => {
-      const host = plus.closest('.col-planets, .res-card-planets, .rd-planets-list');
       if (host) host.innerHTML = host.classList.contains('rd-planets-list') ? rdPlanetsListHtml(row) : planetsEditHtml(row);
     });
   });

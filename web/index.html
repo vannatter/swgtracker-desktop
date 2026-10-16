@@ -38,6 +38,7 @@
         <li class="nav-item active" data-page="home"><i class="fa-solid fa-house"></i> Home</li>
         <li class="nav-item" data-page="resources"><i class="fa-solid fa-gem"></i> Resources</li>
         <li class="nav-item" data-page="schematics"><i class="fa-solid fa-scroll"></i> Schematics</li>
+        <li class="nav-item" data-page="topspawns"><i class="fa-solid fa-ranking-star"></i> Top Spawns</li>
         <li class="nav-group-head" data-navgroup="galaxy" title="Server-wide data"><i class="fa-solid fa-earth-americas"></i> Galaxy <i class="fa-solid fa-caret-down nav-group-caret"></i></li>
         <li class="nav-item nav-group-item galaxy-item" data-page="cities"><i class="fa-solid fa-city"></i> Cities</li>
         <li class="nav-item nav-group-item galaxy-item" data-page="guilds"><i class="fa-solid fa-shield-halved"></i> Guilds</li>
@@ -120,6 +121,44 @@
         <div class="table-wrap hm-scroll">
           <div id="home-sections" class="hm-sections"></div>
           <div class="hm-foot"><span id="home-updated" class="settings-sub"></span></div>
+        </div>
+      </section>
+
+      <!-- Top Spawns page: the website's top.php — active resources ranking top-5 for a schematic -->
+      <section id="page-topspawns" class="page">
+        <div class="page-head">
+          <h1>Top Spawns</h1>
+          <i class="fa-solid fa-circle-info info-tip"
+             title="Every active resource that currently ranks in a schematic's top 5, with the schematic, formula and rank. Click a chart slice to filter; click a resource or schematic name to open it. Stat columns that are blank for everything on screen hide themselves."></i>
+          <span id="top-count" class="page-hint-inline settings-sub"></span>
+          <select id="top-category" class="form-select filter-select head-filter"><option value="">All categories</option></select>
+          <select id="top-rank" class="form-select filter-select top-rank-select" title="Only ranks at or above this">
+            <option value="">Any rank</option><option value="1">Rank 1</option><option value="2">Rank ≤ 2</option><option value="3">Rank ≤ 3</option><option value="4">Rank ≤ 4</option><option value="5">Rank ≤ 5</option>
+          </select>
+          <input id="top-search" type="text" class="form-control filter-input head-search" placeholder="Search resource, type, schematic, section…" autocomplete="off">
+          <button id="top-mustafar" class="btn btn-icon top-must" title="Hide Mustafarian resources"><i class="fa-solid fa-fire-flame-simple"></i></button>
+          <button id="top-reload" class="btn btn-icon" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
+        </div>
+        <section class="hm-section top-breakdown-section" id="top-breakdown-section">
+          <div class="hm-head" id="top-charts-toggle"><i class="fa-solid fa-chart-pie hm-icon"></i><span class="hm-title">Breakdown</span><span class="hm-headright"></span><i class="fa-solid fa-chevron-down hm-caret"></i></div>
+          <div id="top-breakdown" class="top-breakdown hm-body"></div>
+        </section>
+        <!-- grid tools: view + columns, flush right above the grid like Resources -->
+        <div class="res-filterrow top-toolrow">
+          <span class="top-toolrow-spacer"></span>
+          <div class="res-view-switch" id="top-view-switch" title="View">
+            <button type="button" class="res-view-btn active" data-topview="list" title="List"><i class="fa-solid fa-list"></i></button>
+            <button type="button" class="res-view-btn" data-topview="cards" title="Cards"><i class="fa-solid fa-table-cells-large"></i></button>
+            <button type="button" class="res-view-btn" data-topview="tree" title="Category › schematic tree"><i class="fa-solid fa-sitemap"></i></button>
+          </div>
+          <button id="top-cols-btn" type="button" class="res-tool-btn" title="Choose & reorder columns"><i class="fa-solid fa-table-columns"></i></button>
+        </div>
+        <div class="table-wrap">
+          <table class="data-grid res-grid" id="top-grid"><thead><tr id="top-head"></tr></thead><tbody id="top-body"></tbody></table>
+          <div id="top-cards" class="top-cards" hidden></div>
+          <button id="top-more" class="btn btn-sm btn-outline-secondary top-more" hidden>Show more</button>
+          <div id="top-loading" class="grid-loading" hidden><span class="spinner"></span> Loading…</div>
+          <div id="top-empty" class="grid-empty" hidden></div>
         </div>
       </section>
 
@@ -397,8 +436,6 @@
           <span id="stk-status" class="pager-status"></span>
         </div>
         <div id="stk-schem-pop" class="stk-schem-pop" hidden></div>
-        <!-- planet add/remove popover (shared by every resource grid, card and the resource page) -->
-        <div id="planet-pop" class="stk-schem-pop planet-pop" hidden></div>
       </section>
 
       <!-- My Schematics page (crafting list; write ops pending API deploy) -->
@@ -2010,6 +2047,20 @@
     </div>
   </div>
 
+  <div id="top-cols-modal" class="key-gate" hidden>
+    <div class="key-gate-card rescols-card">
+      <div class="mac-hist-head">
+        <h2>Top Spawns columns</h2>
+        <button id="top-cols-x" class="btn btn-icon" title="Close"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <p class="settings-sub">Drag to reorder · uncheck to hide. Saved on this machine. Cards show the stats you keep visible.</p>
+      <div id="top-cols-list" class="rescols-list"></div>
+      <div class="stk-note-actions">
+        <button id="top-cols-reset" class="btn btn-sm btn-outline-secondary">Reset to default</button>
+      </div>
+    </div>
+  </div>
+
   <div id="res-cols-modal" class="key-gate" hidden>
     <div class="key-gate-card rescols-card">
       <div class="mac-hist-head">
@@ -2335,6 +2386,10 @@
       </div>
     </div>
   </div>
+
+  <!-- planet add/remove popover — document level so it shows on every page
+       (grids, cards, the resource page, Home), not just where it was first placed -->
+  <div id="planet-pop" class="stk-schem-pop planet-pop" hidden></div>
 
   <!-- Home customize dialog: which sections show, and in what order -->
   <div id="home-cfg-modal" class="key-gate" hidden>
@@ -2771,6 +2826,7 @@
   <script src="js/galaxy.js?v=20261012a"></script>
   <script src="js/schembuilder.js?v=20261012a"></script>
   <script src="js/scanner.js?v=20261012a"></script>
+  <script src="js/topspawns.js?v=20261012a"></script>
   <script src="js/home.js?v=20261012a"></script>
   <script src="js/app.js?v=20261012a"></script>
 </body>

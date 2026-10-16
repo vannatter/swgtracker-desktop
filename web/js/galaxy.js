@@ -886,34 +886,7 @@ function renderTitles() {
 function initGalaxy() {
   gxInitChartHover();
   // collapsible nav group
-  const head = document.querySelector('.nav-group-head[data-navgroup="galaxy"]');
-  if (head) {
-    const apply = (collapsed) => {
-      head.classList.toggle('collapsed', collapsed);
-      document.querySelectorAll('.galaxy-item').forEach((el) => { el.style.display = collapsed ? 'none' : ''; });
-    };
-    head.addEventListener('click', () => {
-      const c = !head.classList.contains('collapsed');
-      apply(c);
-      // localStorage is the instant path; config is durable (WKWebView can drop
-      // localStorage across restarts, which left the group re-expanding on launch)
-      try { localStorage.setItem('galaxy-collapsed', c ? '1' : ''); } catch (e) { /* ignore */ }
-      try { api().set_config('galaxy_collapsed', c); } catch (e) { /* ignore */ }
-    });
-    let ls = false;
-    try { ls = localStorage.getItem('galaxy-collapsed') === '1'; } catch (e) { /* ignore */ }
-    if (ls) apply(true);
-    // honor the durable copy once it answers (it wins over a cleared localStorage)
-    (async () => {
-      try {
-        const cfg = await api().get_config();
-        const v = cfg && cfg.ok && cfg.data ? cfg.data.galaxy_collapsed : undefined;
-        if (v === undefined || !!v === head.classList.contains('collapsed')) return;
-        apply(!!v);
-        try { localStorage.setItem('galaxy-collapsed', v ? '1' : ''); } catch (e) { /* ignore */ }
-      } catch (e) { /* no config bridge — localStorage stands */ }
-    })();
-  }
+  // (the sidebar group folds via initNavGroups in app.js)
 
   // copy-on-click for waypoints + commands (delegated, whole Galaxy)
   document.addEventListener('click', (e) => {

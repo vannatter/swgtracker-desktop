@@ -6,7 +6,7 @@
   <title>SWG Tracker Desktop</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.1/css/all.min.css">
-  <link rel="stylesheet" href="css/app.css?v=20261012a">
+  <link rel="stylesheet" href="css/app.css?v=20261016a">
 </head>
 <body>
   <div id="holiday-bar" class="holiday-bar" hidden></div>
@@ -21,6 +21,12 @@
       <span id="dev-pill" class="dev-pill" title="Dev mode is on — 10-click the logo to hide"><i class="fa-solid fa-glasses"></i> DEV</span>
     </div>
     <div class="app-header-controls">
+      <div class="gs-wrap" id="gs-wrap">
+        <button id="gs-btn" class="btn btn-icon gs-btn" type="button" title="Search (S)"><i class="fa-solid fa-magnifying-glass"></i></button>
+        <input id="gs-input" type="text" class="gs-input" placeholder="Search resources, schematics, guilds, cities, beasts, pages…" autocomplete="off" spellcheck="false">
+        <button id="gs-close" class="gs-close" type="button" title="Close"><i class="fa-solid fa-xmark"></i></button>
+        <div id="gs-results" class="gs-results" hidden></div>
+      </div>
       <button id="update-chip" class="update-chip" hidden></button>
       <button id="bell-btn" class="btn btn-icon bell-btn" title="Notifications">
         <i class="fa-solid fa-bell"></i><span id="bell-badge" class="bell-badge" hidden></span>
@@ -36,46 +42,67 @@
     <nav class="app-sidebar">
       <ul class="nav-list">
         <li class="nav-item active" data-page="home"><i class="fa-solid fa-house"></i> Home</li>
-        <li class="nav-item" data-page="resources"><i class="fa-solid fa-gem"></i> Resources</li>
-        <li class="nav-item" data-page="schematics"><i class="fa-solid fa-scroll"></i> Schematics</li>
-        <li class="nav-item" data-page="topspawns"><i class="fa-solid fa-ranking-star"></i> Top Spawns</li>
-        <li class="nav-group-head" data-navgroup="galaxy" title="Server-wide data"><i class="fa-solid fa-earth-americas"></i> Galaxy <i class="fa-solid fa-caret-down nav-group-caret"></i></li>
-        <li class="nav-item nav-group-item galaxy-item" data-page="pulse"><i class="fa-solid fa-heart-pulse"></i> Pulse</li>
-        <li class="nav-item nav-group-item galaxy-item" data-page="cities"><i class="fa-solid fa-city"></i> Cities</li>
-        <li class="nav-item nav-group-item galaxy-item" data-page="guilds"><i class="fa-solid fa-shield-halved"></i> Guilds</li>
-        <li class="nav-item nav-group-item galaxy-item" data-page="wealth"><i class="fa-solid fa-coins"></i> Wealth</li>
-        <li class="nav-item nav-group-item galaxy-item" data-page="gcw"><i class="fa-solid fa-jedi"></i> GCW</li>
-        <li class="nav-item nav-group-item galaxy-item" data-page="professions"><i class="fa-solid fa-users-rectangle"></i> Professions</li>
-        <li class="nav-item nav-group-item galaxy-item" data-page="titles"><i class="fa-solid fa-id-badge"></i> Titles</li>
-        <li class="nav-item" data-page="myschematics"><i class="fa-solid fa-screwdriver-wrench"></i> My Schematics
-          <span id="nav-mys-pill" class="nav-pill" title="Upgrades available across your schematics" hidden></span></li>
-        <li class="nav-item" data-page="stockpile"><i class="fa-solid fa-cubes"></i> My Stockpile</li>
-        <li class="nav-item" data-page="wishlist"><i class="fa-solid fa-heart"></i> My Wishlist</li>
-        <li class="nav-item" data-page="sales"><i class="fa-solid fa-tags"></i> My Sales</li>
-        <li class="nav-item" data-page="insights"><i class="fa-solid fa-chart-line"></i> Sales Insights</li>
-        <li class="nav-item" data-page="customers"><i class="fa-solid fa-users"></i> My Customers</li>
-        <li class="nav-item" data-page="purchases"><i class="fa-solid fa-cart-shopping"></i> My Purchases</li>
-        <li class="nav-item" data-page="inventory"><i class="fa-solid fa-warehouse"></i> My Inventory</li>
-        <li class="nav-item" data-page="characters"><i class="fa-solid fa-user-group"></i> Characters</li>
-        <li class="nav-item" data-page="harvesters"><i class="fa-solid fa-tractor"></i> Harvesters
-          <span id="nav-harv-pill" class="nav-pill" title="Full hoppers waiting to be emptied" hidden></span></li>
-        <li class="nav-item" data-page="factories"><i class="fa-solid fa-industry"></i> Factories
-          <span id="nav-fac-pill" class="nav-pill" title="Finished runs ready to collect" hidden></span></li>
-        <li class="nav-item" data-page="notes"><i class="fa-solid fa-note-sticky"></i> Notes</li>
-        <li class="nav-item" data-page="macros" title="Manage your in-game macros (macros.txt)"><i class="fa-solid fa-wand-magic-sparkles"></i> Macros</li>
-        <li class="nav-item" data-page="aliases" title="Manage your in-game aliases (aliases.txt)"><i class="fa-solid fa-terminal"></i> Aliases</li>
-        <li class="nav-item" data-page="alerts"><i class="fa-solid fa-bell"></i> Spawn Alerts
+        <li class="nav-group-head" data-navgroup="crafting" title="Resources, schematics and what to craft"><i class="fa-solid fa-hammer"></i> Crafting <i class="fa-solid fa-caret-down nav-group-caret"></i><span class="nav-group-dot" hidden></span></li>
+        <li class="nav-item nav-group-item" data-page="resources" data-group="crafting"><i class="fa-solid fa-gem"></i> Resources</li>
+        <li class="nav-item nav-group-item" data-page="schematics" data-group="crafting"><i class="fa-solid fa-scroll"></i> Schematics</li>
+        <li class="nav-item nav-group-item" data-page="topspawns" data-group="crafting"><i class="fa-solid fa-ranking-star"></i> Top Spawns</li>
+        <li class="nav-item nav-group-item" data-page="alerts" data-group="crafting"><i class="fa-solid fa-bell"></i> Spawn Alerts
           <span id="nav-alerts-pill" class="nav-pill" title="Spawn alert matches you haven't seen" hidden></span></li>
-        <li class="nav-item" data-page="monitor"><i class="fa-solid fa-envelope"></i> Mail</li>
-        <li class="nav-item" data-page="lab"><i class="fa-solid fa-flask"></i> Laboratory</li>
-        <li class="nav-item" data-page="scanner"><i class="fa-solid fa-expand"></i> Scanner</li>
+        <li class="nav-item nav-group-item" data-page="lab" data-group="crafting"><i class="fa-solid fa-flask"></i> Laboratory</li>
+        <li class="nav-group-head" data-navgroup="galaxy" title="Server-wide data"><i class="fa-solid fa-earth-americas"></i> Galaxy <i class="fa-solid fa-caret-down nav-group-caret"></i><span class="nav-group-dot" hidden></span></li>
+        <li class="nav-item nav-group-item" data-page="pulse" data-group="galaxy"><i class="fa-solid fa-heart-pulse"></i> Pulse</li>
+        <li class="nav-item nav-group-item" data-page="cities" data-group="galaxy"><i class="fa-solid fa-city"></i> Cities</li>
+        <li class="nav-item nav-group-item" data-page="planetmap" data-group="galaxy"><i class="fa-solid fa-map-location-dot"></i> Planet Maps</li>
+        <li class="nav-item nav-group-item" data-page="guilds" data-group="galaxy"><i class="fa-solid fa-shield-halved"></i> Guilds</li>
+        <li class="nav-item nav-group-item" data-page="wealth" data-group="galaxy"><i class="fa-solid fa-coins"></i> Wealth</li>
+        <li class="nav-item nav-group-item" data-page="gcw" data-group="galaxy"><i class="fa-solid fa-jedi"></i> GCW</li>
+        <li class="nav-item nav-group-item" data-page="professions" data-group="galaxy"><i class="fa-solid fa-users-rectangle"></i> Professions</li>
+        <li class="nav-item nav-group-item" data-page="titles" data-group="galaxy"><i class="fa-solid fa-id-badge"></i> Titles</li>
+        <li class="nav-item nav-group-item" data-page="restree" data-group="galaxy"><i class="fa-solid fa-sitemap"></i> Resource Tree</li>
+        <li class="nav-group-head" data-navgroup="beasts" title="Beast Master data"><i class="fa-solid fa-paw"></i> Beasts <i class="fa-solid fa-caret-down nav-group-caret"></i><span class="nav-group-dot" hidden></span></li>
+        <li class="nav-item nav-group-item" data-page="pets" data-group="beasts"><i class="fa-solid fa-dog"></i> Pets</li>
+        <li class="nav-item nav-group-item" data-page="creatures" data-group="beasts"><i class="fa-solid fa-dragon"></i> Creatures</li>
+        <li class="nav-item nav-group-item" data-page="specials" data-group="beasts"><i class="fa-solid fa-bolt"></i> Specials</li>
+        <li class="nav-item nav-group-item" data-page="hydro" data-group="beasts"><i class="fa-solid fa-vial"></i> Hydro Calc</li>
+        <li class="nav-item nav-group-item" data-page="incubator" data-group="beasts"><i class="fa-solid fa-egg"></i> Incubator Calc</li>
+        <li class="nav-item nav-group-item" data-page="mutation" data-group="beasts"><i class="fa-solid fa-dna"></i> Mutation Calc</li>
+        <li class="nav-group-head" data-navgroup="mystuff" title="Your schematics, stockpile and wishlist"><i class="fa-solid fa-box-open"></i> My Stuff <i class="fa-solid fa-caret-down nav-group-caret"></i><span class="nav-group-dot" hidden></span></li>
+        <li class="nav-item nav-group-item" data-page="myschematics" data-group="mystuff"><i class="fa-solid fa-screwdriver-wrench"></i> My Schematics
+          <span id="nav-mys-pill" class="nav-pill" title="Upgrades available across your schematics" hidden></span></li>
+        <li class="nav-item nav-group-item" data-page="stockpile" data-group="mystuff"><i class="fa-solid fa-cubes"></i> My Stockpile</li>
+        <li class="nav-item nav-group-item" data-page="wishlist" data-group="mystuff"><i class="fa-solid fa-heart"></i> My Wishlist</li>
+        <li class="nav-group-head" data-navgroup="vendors" title="Sales, customers, purchases and vendor stock"><i class="fa-solid fa-tags"></i> Sales <i class="fa-solid fa-caret-down nav-group-caret"></i><span class="nav-group-dot" hidden></span></li>
+        <li class="nav-item nav-group-item" data-page="sales" data-group="vendors"><i class="fa-solid fa-tags"></i> My Sales</li>
+        <li class="nav-item nav-group-item" data-page="insights" data-group="vendors"><i class="fa-solid fa-chart-line"></i> Sales Insights</li>
+        <li class="nav-item nav-group-item" data-page="customers" data-group="vendors"><i class="fa-solid fa-users"></i> My Customers</li>
+        <li class="nav-item nav-group-item" data-page="purchases" data-group="vendors"><i class="fa-solid fa-cart-shopping"></i> My Purchases</li>
+        <li class="nav-item nav-group-item" data-page="inventory" data-group="vendors"><i class="fa-solid fa-warehouse"></i> My Inventory</li>
+        <li class="nav-group-head" data-navgroup="structures" title="Harvesters and factories"><i class="fa-solid fa-building"></i> Structures <i class="fa-solid fa-caret-down nav-group-caret"></i><span class="nav-group-dot" hidden></span></li>
+        <li class="nav-item nav-group-item" data-page="harvesters" data-group="structures"><i class="fa-solid fa-tractor"></i> Harvesters
+          <span id="nav-harv-pill" class="nav-pill" title="Full hoppers waiting to be emptied" hidden></span></li>
+        <li class="nav-item nav-group-item" data-page="factories" data-group="structures"><i class="fa-solid fa-industry"></i> Factories
+          <span id="nav-fac-pill" class="nav-pill" title="Finished runs ready to collect" hidden></span></li>
+        <li class="nav-group-head" data-navgroup="tools" title="Characters, mail, notes, macros, aliases and the scanner"><i class="fa-solid fa-toolbox"></i> Tools <i class="fa-solid fa-caret-down nav-group-caret"></i><span class="nav-group-dot" hidden></span></li>
+        <li class="nav-item nav-group-item" data-page="characters" data-group="tools"><i class="fa-solid fa-user-group"></i> Characters</li>
+        <li class="nav-item nav-group-item" data-page="monitor" data-group="tools"><i class="fa-solid fa-envelope"></i> Mail</li>
+        <li class="nav-item nav-group-item" data-page="notes" data-group="tools"><i class="fa-solid fa-note-sticky"></i> Notes</li>
+        <li class="nav-item nav-group-item" data-page="macros" data-group="tools" title="Manage your in-game macros (macros.txt)"><i class="fa-solid fa-wand-magic-sparkles"></i> Macros</li>
+        <li class="nav-item nav-group-item" data-page="aliases" data-group="tools" title="Manage your in-game aliases (aliases.txt)"><i class="fa-solid fa-terminal"></i> Aliases</li>
+        <li class="nav-item nav-group-item" data-page="scanner" data-group="tools"><i class="fa-solid fa-expand"></i> Scanner</li>
         <li class="nav-item" data-page="settings"><i class="fa-solid fa-gear"></i> Settings</li>
         <li class="nav-item" data-page="about"><i class="fa-solid fa-circle-info"></i> About</li>
       </ul>
 
       <div class="sidebar-spacer"></div>
 
-      <button id="side-collapse" class="btn btn-icon side-collapse" title="Collapse menu"><i class="fa-solid fa-angles-left"></i></button>
+      <div class="side-foot">
+        <div class="nav-search">
+        <i class="fa-solid fa-magnifying-glass nav-search-ico"></i>
+        <input id="nav-search" type="text" class="nav-search-input" placeholder="Find a page…" autocomplete="off" spellcheck="false">
+        <button id="nav-search-x" class="nav-search-x" type="button" title="Clear" hidden><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <button id="side-collapse" class="btn btn-icon side-collapse" title="Collapse menu"><i class="fa-solid fa-angles-left"></i></button>
+      </div>
 
       <!-- collapsed-mode stand-in for the pulse panel: pulsing dot, hover for numbers -->
       <div id="pulse-mini" class="pulse-mini"><span class="pulse-mini-dot"></span></div>
@@ -298,6 +325,21 @@
             </div>
           </div>
           <div id="rd-calc-results" class="rd-calc-results" hidden></div>
+        </div>
+        <!-- Locations pane (the 'locations' tab): this resource's community waypoints on a planet map -->
+        <div id="rd-locations" class="rd-locations" hidden>
+          <div class="rd-loc-tools">
+            <select id="rd-loc-planet" class="form-select filter-select" title="Planet"></select>
+            <span id="rd-loc-count" class="settings-sub"></span>
+            <span class="rd-loc-spacer"></span>
+            <button id="rd-loc-add" class="btn btn-sm btn-accent" title="Share where you found it — or click the map"><i class="fa-solid fa-plus"></i> Add waypoint</button>
+            <button id="rd-loc-fullmap" class="btn btn-sm btn-outline-secondary" title="Open Planet Maps filtered to this resource"><i class="fa-solid fa-map-location-dot"></i> Open full map</button>
+          </div>
+          <div id="rd-loc-hint" class="grid-empty" hidden></div>
+          <div class="rd-loc-body">
+            <div id="rd-map" class="pm-map rd-loc-map"></div>
+            <div id="rd-wp-list" class="pm-list rd-loc-list"></div>
+          </div>
         </div>
         <div id="rd-comments" class="cmt-section" hidden></div>
       </section>
@@ -1792,9 +1834,204 @@
         </div>
       </section>
 
+      <!-- Planet Maps: the website's map.php — resource waypoints + concentration heatmap per planet -->
+      <section id="page-planetmap" class="page">
+        <div class="page-head">
+          <h1>Planet Maps</h1>
+          <i class="fa-solid fa-circle-info info-tip" title="Resource concentration waypoints shared by the community, drawn on each planet with a glow for how rich the spot is, plus player cities. Pick a planet, narrow to one resource, click a pin or a row for its waypoint, and click anywhere on the map to share a spot of your own."></i>
+          <span id="pm-filternote" class="pm-filternote" hidden></span>
+          <select id="pm-planet" class="form-select filter-select head-filter" title="Planet"></select>
+          <select id="pm-resource" class="form-select filter-select pm-resource" title="Only this resource's waypoints"><option value="">All resources</option></select>
+          <button id="pm-add" class="btn btn-sm btn-accent" title="Share a resource concentration waypoint"><i class="fa-solid fa-plus"></i> Add waypoint</button>
+          <button id="pm-sidebtn" class="btn btn-icon pm-sidebtn" title="Hide the side panel"><i class="fa-solid fa-table-columns"></i></button>
+          <button id="pm-reload" class="btn btn-icon" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
+        </div>
+        <div id="pm-hint" class="grid-empty" hidden></div>
+        <div class="pm-layout">
+          <div class="pm-mapwrap"><div id="pm-map" class="pm-map"></div></div>
+          <div id="pm-splitter" class="pm-splitter" title="Drag to resize the panel · double-click to reset"></div>
+          <aside class="pm-side">
+            <section class="hm-section pm-section" id="pm-wp-section">
+              <div class="hm-head" data-pmtoggle="wp"><i class="fa-solid fa-location-dot hm-icon"></i><span class="hm-title">Waypoints</span><span class="hm-count" id="pm-wp-count"></span><span class="hm-headright"><a role="button" id="pm-wp-copyall" class="pm-copyall" data-pmcopyall="pm-wp-list" title="Copy every waypoint shown, one per line" hidden><i class="fa-regular fa-clone"></i> Copy all</a></span><i class="fa-solid fa-chevron-down hm-caret"></i></div>
+              <div class="hm-body"><div id="pm-wp-list" class="pm-list"></div></div>
+            </section>
+            <section class="hm-section pm-section" id="pm-city-section">
+              <div class="hm-head" data-pmtoggle="city"><i class="fa-solid fa-landmark hm-icon"></i><span class="hm-title">Cities</span><span class="hm-count" id="pm-city-count"></span><span class="hm-headright"></span><i class="fa-solid fa-chevron-down hm-caret"></i></div>
+              <div class="hm-body"><div id="pm-city-list" class="pm-list"></div></div>
+            </section>
+          </aside>
+        </div>
+      </section>
+
+      <!-- Resource Tree: the website's restree.php — resource classes with their stat caps -->
+      <section id="page-restree" class="page">
+        <div class="page-head">
+          <h1>Resource Tree</h1>
+          <i class="fa-solid fa-circle-info info-tip" title="Every resource class in its family tree with the stat caps it spawns within: min–max, a single value when fixed, — when the class doesn't use that stat. Click a row to expand it; the filter icon shows that class on Resources."></i>
+          <input id="restree-search" type="text" class="form-control filter-input head-search" placeholder="Filter classes (name or code)..." autocomplete="off">
+          <button id="restree-expand" class="btn btn-sm btn-outline-secondary" title="Expand every class">Expand all</button>
+          <button id="restree-collapse" class="btn btn-sm btn-outline-secondary" title="Back to the top-level families">Collapse all</button>
+        </div>
+        <div class="table-wrap">
+          <table class="data-grid" id="restree-grid"><thead><tr id="restree-head"></tr></thead><tbody id="restree-body"></tbody></table>
+          <div id="restree-empty" class="grid-empty" hidden></div>
+        </div>
+      </section>
+
+      <!-- Beasts: the website's Beast Master section (pets.php / creatures.php / specials.php + detail pages + calculators) -->
+      <section id="page-pets" class="page">
+        <div class="page-head">
+          <h1>Pets</h1>
+          <i class="fa-solid fa-circle-info info-tip" title="Every Beast Master pet on Restoration — family, bonus group, source, supplement, mutation colours, mount and flight. Click a pet for its stat bonuses, specials, mutation chain, DNA sources and 3D model. Server-wide data from swgtracker.com."></i>
+          <input id="pets-search" type="text" class="form-control filter-input head-search" placeholder="Search pet or family..." autocomplete="off">
+          <button id="pets-reload" class="btn btn-icon" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
+        </div>
+        <div class="res-filterrow beast-filterrow">
+          <select id="pets-family" class="form-select filter-select beast-sel" title="Family"></select>
+          <select id="pets-bonus" class="form-select filter-select beast-sel" title="Bonus group"></select>
+          <select id="pets-source" class="form-select filter-select beast-sel" title="Source"></select>
+          <select id="pets-supplement" class="form-select filter-select beast-sel" title="Supplement"></select>
+          <select id="pets-color" class="form-select filter-select beast-sel" title="Mutation colour"></select>
+          <button id="pets-mount" type="button" class="btn btn-icon beast-tog" title="Only mountable pets"><i class="fa-solid fa-horse"></i></button>
+          <button id="pets-fly" type="button" class="btn btn-icon beast-tog" title="Only flying pets"><i class="fa-solid fa-feather-pointed"></i></button>
+          <label class="pin-toggle ms-auto"><input id="pets-pinned-only" type="checkbox"> Pinned</label>
+          <div class="res-view-switch" id="pets-view-switch" title="View">
+            <button type="button" class="res-view-btn active" data-beastview="list" title="List"><i class="fa-solid fa-list"></i></button>
+            <button type="button" class="res-view-btn" data-beastview="cards" title="Cards (3D models)"><i class="fa-solid fa-table-cells-large"></i></button>
+          </div>
+        </div>
+        <div class="table-wrap" id="pets-tablewrap">
+          <table class="data-grid" id="pets-grid"><thead><tr id="pets-head"></tr></thead><tbody id="pets-body"></tbody></table>
+          <div id="pets-loading" class="grid-loading" hidden><span class="spinner"></span> Loading…</div>
+          <div id="pets-empty" class="grid-empty" hidden></div>
+        </div>
+        <div id="pets-cards" class="sch-cards beast-cards-grid" hidden></div>
+        <div class="pager">
+          <span id="pets-status" class="pager-status"></span>
+          <div class="pager-nav">
+            <button id="pets-prev" class="btn btn-sm btn-outline-secondary" disabled>&lsaquo; Prev</button>
+            <button id="pets-next" class="btn btn-sm btn-outline-secondary" disabled>Next &rsaquo;</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="page-creatures" class="page">
+        <div class="page-head">
+          <h1>Creatures</h1>
+          <i class="fa-solid fa-circle-info info-tip" title="Tameable creatures across the galaxy — pet type, planets, difficulty, damage and whether their DNA can be extracted. Click a creature for its location, harvestable resources, specials and 3D model. Server-wide data from swgtracker.com."></i>
+          <input id="creatures-search" type="text" class="form-control filter-input head-search" placeholder="Search creature, pet type, location..." autocomplete="off">
+          <button id="creatures-reload" class="btn btn-icon" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
+        </div>
+        <div class="res-filterrow beast-filterrow">
+          <select id="creatures-planet" class="form-select filter-select beast-sel" title="Planet"></select>
+          <select id="creatures-difficulty" class="form-select filter-select beast-sel" title="Difficulty"></select>
+          <select id="creatures-pettype" class="form-select filter-select beast-sel" title="Pet type"></select>
+          <select id="creatures-damage" class="form-select filter-select beast-sel" title="Damage type"></select>
+          <select id="creatures-dna" class="form-select filter-select beast-sel" title="DNA extraction">
+            <option value="">Any DNA</option><option value="yes">Extractable</option><option value="no">Not extractable</option>
+          </select>
+          <label class="pin-toggle ms-auto"><input id="creatures-pinned-only" type="checkbox"> Pinned</label>
+          <div class="res-view-switch" id="creatures-view-switch" title="View">
+            <button type="button" class="res-view-btn active" data-beastview="list" title="List"><i class="fa-solid fa-list"></i></button>
+            <button type="button" class="res-view-btn" data-beastview="cards" title="Cards (3D models)"><i class="fa-solid fa-table-cells-large"></i></button>
+          </div>
+        </div>
+        <div class="table-wrap" id="creatures-tablewrap">
+          <table class="data-grid" id="creatures-grid"><thead><tr id="creatures-head"></tr></thead><tbody id="creatures-body"></tbody></table>
+          <div id="creatures-loading" class="grid-loading" hidden><span class="spinner"></span> Loading…</div>
+          <div id="creatures-empty" class="grid-empty" hidden></div>
+        </div>
+        <div id="creatures-cards" class="sch-cards beast-cards-grid" hidden></div>
+        <div class="pager">
+          <span id="creatures-status" class="pager-status"></span>
+          <div class="pager-nav">
+            <button id="creatures-prev" class="btn btn-sm btn-outline-secondary" disabled>&lsaquo; Prev</button>
+            <button id="creatures-next" class="btn btn-sm btn-outline-secondary" disabled>Next &rsaquo;</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="page-specials" class="page">
+        <div class="page-head">
+          <h1>Specials</h1>
+          <i class="fa-solid fa-circle-info info-tip" title="Beast Master special abilities — every rank with its training requirement, action cost, refresh and effect. Click a special to see which pets and creatures have it. Server-wide data from swgtracker.com."></i>
+          <input id="specials-search" type="text" class="form-control filter-input head-search" placeholder="Search special or effect..." autocomplete="off">
+          <button id="specials-reload" class="btn btn-icon" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
+        </div>
+        <div class="res-filterrow beast-filterrow">
+          <select id="specials-type" class="form-select filter-select beast-sel" title="Type"></select>
+          <select id="specials-rank" class="form-select filter-select beast-sel" title="Rank"></select>
+          <label class="pin-toggle ms-auto"><input id="specials-pinned-only" type="checkbox"> Pinned</label>
+        </div>
+        <div class="table-wrap">
+          <table class="data-grid" id="specials-grid"><thead><tr id="specials-head"></tr></thead><tbody id="specials-body"></tbody></table>
+          <div id="specials-loading" class="grid-loading" hidden><span class="spinner"></span> Loading…</div>
+          <div id="specials-empty" class="grid-empty" hidden></div>
+        </div>
+        <div class="pager">
+          <span id="specials-status" class="pager-status"></span>
+          <div class="pager-nav">
+            <button id="specials-prev" class="btn btn-sm btn-outline-secondary" disabled>&lsaquo; Prev</button>
+            <button id="specials-next" class="btn btn-sm btn-outline-secondary" disabled>Next &rsaquo;</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="page-pet" class="page">
+        <div class="rd-head"><nav class="crumbs" id="pet-crumbs"></nav></div>
+        <div class="table-wrap beast-detail-wrap">
+          <div id="pet-body" class="beast-detail"></div>
+          <div id="pet-loading" class="grid-loading" hidden><span class="spinner"></span> Loading…</div>
+          <div id="pet-empty" class="grid-empty" hidden></div>
+        </div>
+      </section>
+
+      <section id="page-creature" class="page">
+        <div class="rd-head"><nav class="crumbs" id="creature-crumbs"></nav></div>
+        <div class="table-wrap beast-detail-wrap">
+          <div id="creature-body" class="beast-detail"></div>
+          <div id="creature-loading" class="grid-loading" hidden><span class="spinner"></span> Loading…</div>
+          <div id="creature-empty" class="grid-empty" hidden></div>
+        </div>
+      </section>
+
+      <section id="page-special" class="page">
+        <div class="rd-head"><nav class="crumbs" id="special-crumbs"></nav></div>
+        <div class="table-wrap beast-detail-wrap">
+          <div id="special-body" class="beast-detail"></div>
+          <div id="special-loading" class="grid-loading" hidden><span class="spinner"></span> Loading…</div>
+          <div id="special-empty" class="grid-empty" hidden></div>
+        </div>
+      </section>
+
+      <section id="page-hydro" class="page">
+        <div class="page-head">
+          <h1>Hydrolase Calculator</h1>
+          <i class="fa-solid fa-circle-info info-tip" title="Hydrolase enzyme refining: put in your hardware and consumable stats to estimate the purity and mutagen range each stage (Centrifuge, Processor, Re-Processor) will produce, and the chance of hitting your target purity."></i>
+        </div>
+        <div class="table-wrap beast-calc-wrap"><div id="hy-root" class="beast-calc"></div></div>
+      </section>
+
+      <section id="page-incubator" class="page">
+        <div class="page-head">
+          <h1>Incubator Calculator</h1>
+          <i class="fa-solid fa-circle-info info-tip" title="Estimate the DPS/Armor bonus and lyase attribute bonus for each of your three incubation sessions, and whether the pet hits the 2.2% cap at egg formation."></i>
+        </div>
+        <div class="table-wrap beast-calc-wrap"><div id="inc-root" class="beast-calc"></div></div>
+      </section>
+
+      <section id="page-mutation" class="page">
+        <div class="page-head">
+          <h1>Mutation Calculator</h1>
+          <i class="fa-solid fa-circle-info info-tip" title="Per-session mutation chance from DNA quality, isomerase enzymes, hydrolase mutagen, incubator quality and the Fervent Mutation expertise — capped at 18%."></i>
+        </div>
+        <div class="table-wrap beast-calc-wrap"><div id="mut-root" class="beast-calc"></div></div>
+      </section>
+
       <section id="page-settings" class="page">
         <div class="page-head"><h1>Settings</h1></div>
 
+        <div class="settings-scroll">
         <div class="settings-grid">
         <div class="settings-section">
           <h2>SWGTracker.com API Key</h2>
@@ -1905,6 +2142,12 @@
         </div>
 
         <div class="settings-section">
+          <h2>Keyboard shortcuts <span class="settings-sub">Click a key, then press the key or combo you want. Plain letters work anywhere you aren't typing; combos with ⌘/Ctrl/Alt work even inside a field. Backspace while armed removes one.</span></h2>
+          <div id="set-shortcuts" class="sc-list"></div>
+          <div class="set-addpath-row"><button id="set-shortcuts-reset" class="btn btn-sm btn-outline-secondary" type="button">Reset all to defaults</button></div>
+        </div>
+
+        <div class="settings-section">
           <h2>Offline Data <span class="settings-sub">Resources &amp; schematics keep working without a connection</span></h2>
           <div id="set-ds-status" class="settings-hint">Checking…</div>
           <button id="set-ds-sync" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-rotate"></i> Sync now</button>
@@ -1975,6 +2218,7 @@
           </div>
         </div>
 
+        </div>
         </div>
 
         <div class="settings-actions">
@@ -2561,6 +2805,50 @@
     </div>
   </div>
 
+  <div id="wp-add-modal" class="key-gate" hidden>
+    <div class="key-gate-card sp-card inv-add-card wp-add-card">
+      <h2>Share a waypoint</h2>
+      <div class="settings-hint">Where a resource is spawning and how rich the spot is — everyone sees it on the planet map and the resource's page.</div>
+      <div id="wp-add-resfixed" class="wp-add-resfixed" hidden><span class="settings-sub">Resource</span> <b id="wp-add-resname"></b></div>
+      <div id="wp-add-resfield" class="inv-add-field">
+        <label class="sp-field-label">Resource</label>
+        <input id="wp-add-res" type="text" class="form-control filter-input" list="wp-add-reslist" placeholder="Resource name (exact)" autocomplete="off">
+        <datalist id="wp-add-reslist"></datalist>
+      </div>
+      <div class="inv-add-field">
+        <label class="sp-field-label">Quick entry <span class="settings-sub">paste a /way line — "/way tatooine -2549 0 -6627 85" (last number = %)</span></label>
+        <input id="wp-add-quick" type="text" class="form-control filter-input" placeholder="/way tatooine -2549 0 -6627 85 note" autocomplete="off">
+      </div>
+      <div class="inv-add-row">
+        <div class="inv-add-field">
+          <label class="sp-field-label">Planet</label>
+          <select id="wp-add-planet" class="form-select filter-select"></select>
+        </div>
+        <div class="inv-add-field wp-add-xy">
+          <label class="sp-field-label">X</label>
+          <input id="wp-add-x" type="number" class="form-control filter-input" min="-8192" max="8192" step="1" placeholder="X" autocomplete="off">
+        </div>
+        <div class="inv-add-field wp-add-xy">
+          <label class="sp-field-label">Y</label>
+          <input id="wp-add-y" type="number" class="form-control filter-input" min="-8192" max="8192" step="1" placeholder="Y" autocomplete="off">
+        </div>
+        <div class="inv-add-field wp-add-xy">
+          <label class="sp-field-label">%</label>
+          <input id="wp-add-conc" type="number" class="form-control filter-input" min="1" max="100" placeholder="%" autocomplete="off">
+        </div>
+      </div>
+      <div class="inv-add-field">
+        <label class="sp-field-label">Note <span class="settings-sub">optional</span></label>
+        <input id="wp-add-note" type="text" class="form-control filter-input" maxlength="255" placeholder="e.g. south of the starport" autocomplete="off">
+      </div>
+      <div class="inv-add-actions">
+        <span id="wp-add-status" class="key-gate-status"></span>
+        <button id="wp-add-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
+        <button id="wp-add-save" class="btn btn-sm btn-accent"><i class="fa-solid fa-location-dot"></i> Share waypoint</button>
+      </div>
+    </div>
+  </div>
+
   <div id="stk-add-modal" class="key-gate" hidden>
     <div class="key-gate-card sp-card inv-add-card">
       <h2>Add to Stockpile</h2>
@@ -2835,9 +3123,9 @@
   <script src="js/class_caps.js?v=20261012a"></script>
   <script src="js/shared.js?v=20261012a"></script>
   <script src="js/help.js?v=20261012a"></script>
-  <script src="js/resources.js?v=20261012a"></script>
-  <script src="js/resource.js?v=20261012a"></script>
-  <script src="js/schematics.js?v=20261012a"></script>
+  <script src="js/resources.js?v=20261016a"></script>
+  <script src="js/resource.js?v=20261016a"></script>
+  <script src="js/schematics.js?v=20261016a"></script>
   <script src="js/stockpile.js?v=20261012a"></script>
   <script src="js/wishlist.js?v=20261012a"></script>
   <script src="js/myschematics.js?v=20261012a"></script>
@@ -2859,11 +3147,18 @@
   <script src="js/macros.js?v=20261012a"></script>
   <script src="js/aliases.js?v=20261012a"></script>
   <script src="js/community_macros.js?v=20261012a"></script>
-  <script src="js/galaxy.js?v=20261012a"></script>
+  <script src="js/galaxy.js?v=20261016a"></script>
   <script src="js/schembuilder.js?v=20261012a"></script>
   <script src="js/scanner.js?v=20261012a"></script>
   <script src="js/topspawns.js?v=20261012a"></script>
+  <script src="js/restree_data.js?v=20261016a"></script>
+  <script src="js/restree.js?v=20261016a"></script>
+  <script src="js/planetmap.js?v=20261016a"></script>
+  <script src="js/gsearch.js?v=20261016a"></script>
+  <script src="js/shortcuts.js?v=20261016a"></script>
+  <script src="js/beasts.js?v=20261016a"></script>
+  <script src="js/beastcalc.js?v=20261016a"></script>
   <script src="js/home.js?v=20261012a"></script>
-  <script src="js/app.js?v=20261012a"></script>
+  <script src="js/app.js?v=20261016a"></script>
 </body>
 </html>

@@ -161,8 +161,10 @@ body.offline .app-body { height: calc(100vh - 76px); }
 .nav-list > .nav-item:first-child { padding-top: 8px; }
 /* the nav scrolls when the window is short — the pulse panel below it is
    always pinned in view, never pushed off the bottom */
-.nav-list { list-style: none; margin: 0; padding: 0; overflow-y: auto; min-height: 0; flex: 0 1 auto;
+.nav-list { list-style: none; margin: 0; padding: 0; overflow-y: scroll; min-height: 0; flex: 0 1 auto;
   overscroll-behavior: none; } /* no rubber-band bounce at the ends of the menu */
+/* overflow-y: SCROLL, not auto: the 6px lane is always there (its track is transparent, the thumb
+   only shows when there's something to scroll), so folding a folder never nudges the menu sideways (Dustin) */
 
 /* icon-only sidebar (toggle at the bottom; state persists) */
 .app-sidebar { transition: width .15s ease, flex-basis .15s ease; }
@@ -1865,14 +1867,15 @@ tr.row-detail > td { background: var(--bg-tertiary); padding: 0; }
 /* Floating action bar: pinned to the bottom of the settings page (sticky in
    the page's own scroll), with content sliding underneath it. margin-top:auto
    keeps it at the bottom even when the page is short. */
+/* the columns scroll in their own area; the Save bar is a real footer under them,
+   outside the scroll, so nothing can ever show beneath it */
+.page.active > .settings-scroll.settings-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; margin: 0 -24px; padding: 0 24px; }
 .settings-actions {
-  display: flex; align-items: center; gap: 12px;
-  position: sticky; bottom: 0; margin-top: auto;
+  display: flex; align-items: center; gap: 12px; flex: 0 0 auto;
   background: var(--bg-primary);
   border-top: 1px solid var(--border);
-  /* no bottom padding — .app-content's own 20px sits below, so 20px top
-     padding puts the buttons on the bar's midline */
-  padding: 20px 0 0;
+  padding: 14px 24px 0;
+  margin: 0 -24px 0;
 }
 /* uniform button height (matches .btn-sm elsewhere) — bootstrap's defaults
    render the accent and outline variants a few px apart */
@@ -4007,3 +4010,321 @@ tr.gx-rowlink:hover .gx-detail-link { color: var(--accent-hover); }
 .pulse-live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); display: inline-block; margin-right: 8px; box-shadow: 0 0 0 0 rgba(226, 67, 80, .6); animation: pulse-live-ping 2.4s ease-out infinite; }
 @keyframes pulse-live-ping { 0% { box-shadow: 0 0 0 0 rgba(226, 67, 80, .6); } 70% { box-shadow: 0 0 0 8px rgba(226, 67, 80, 0); } 100% { box-shadow: 0 0 0 0 rgba(226, 67, 80, 0); } }
 .pulse-live-now { margin-left: auto; font-size: 16px; font-weight: 700; color: var(--text-hover); text-transform: none; letter-spacing: 0; }
+
+/* ---- Res Tree page (resource classes + stat caps) ---- */
+#restree-grid td.rt-name { white-space: nowrap; }
+#restree-grid thead th.rt-name-h { padding-left: 12px; }
+#restree-grid tbody tr.rt-row:has(.rt-toggle) { cursor: pointer; }
+.rt-indent { display: inline-block; }
+.rt-toggle { background: none; border: none; color: var(--text-muted); width: 18px; padding: 0; margin-right: 6px; cursor: pointer; font-size: 14px; line-height: 1; vertical-align: middle; transition: transform .15s, color .15s; }
+.rt-row:hover .rt-toggle { color: var(--text-hover); }
+.rt-toggle[aria-expanded="true"] { transform: rotate(90deg); color: var(--text-hover); }
+.rt-leaf { display: inline-block; width: 18px; margin-right: 6px; }
+.rt-row[data-depth="0"] .rt-label { color: var(--text-hover); font-weight: 700; }
+.rt-code { color: var(--text-muted); font-size: 11px; margin-left: 6px; }
+.rt-filter { color: var(--text-muted); margin-left: 8px; font-size: 11px; opacity: 0; cursor: pointer; transition: opacity .12s, color .12s; }
+.rt-row:hover .rt-filter { opacity: 1; }
+.rt-filter:hover { color: var(--accent); }
+#restree-grid td.rt-na { color: #3a3d46; }
+
+/* ---- Planet Maps (Leaflet planet image maps + waypoints) ---- */
+.page.active > .pm-layout.pm-layout { flex: 1 1 auto; min-height: 0; } /* the map fills what the page has left */
+.pm-layout { display: flex; gap: 12px; min-height: 0; }
+.pm-mapwrap { flex: 1 1 auto; min-width: 0; min-height: 0; }
+.pm-map { height: 100%; width: 100%; background: var(--bg-primary); border-radius: 8px; border: 0; } /* the page's own colour, no frame (Dustin) */
+.pm-side { flex: 0 0 330px; display: flex; flex-direction: column; gap: 10px; min-height: 0; min-width: 0; overflow-y: auto; overflow-x: hidden; } /* min-width 0: a flex item otherwise refuses to shrink below its longest row */
+/* the sections flow: each is as tall as its rows, Cities starts right under Waypoints, and the
+   panel scrolls as one — the headers stick to the top while you scroll (Dustin: no empty halves) */
+.pm-section { display: flex; flex-direction: column; flex: 0 0 auto; min-height: 0; }
+.pm-section.collapsed .hm-body { display: none; }
+.pm-section .hm-head { margin-bottom: 8px; position: sticky; top: 0; z-index: 2; background: var(--bg-primary); }
+.pm-section .hm-body { flex: 0 0 auto; padding: 0; }
+.pm-copyall { font-size: 11px; color: var(--accent); cursor: pointer; }
+.pm-copyall:hover { color: var(--accent-hover); }
+.pm-copyall i { margin-right: 3px; }
+.page-head .pm-resource { max-width: 220px; }
+.pm-filternote { font-size: 12px; color: var(--text-muted); font-style: italic; }
+/* waypoint / city rows */
+.pm-list { background: var(--bg-primary); border: 1px solid var(--border); border-radius: 6px; }
+.pm-empty { padding: 14px; color: var(--text-muted); font-size: 13px; text-align: center; }
+.pm-row { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--border); font-size: 12px; cursor: pointer; }
+.pm-row:last-child { border-bottom: 0; }
+.pm-row:hover { background: var(--bg-secondary); }
+.pm-pct { font-weight: 700; min-width: 36px; }
+.pm-name { color: var(--text-primary); min-width: 0; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pm-row .pm-name[data-wpres]:hover { color: var(--text-hover); text-decoration: underline; }
+.pm-note { color: var(--text-muted); font-style: italic; font-size: 11px; }
+.pm-row .pm-note { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pm-cmd { color: #9fb3c8; background: var(--bg-tertiary); padding: 2px 6px; border-radius: 3px; margin-left: auto; white-space: nowrap; font-size: 11px; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.pm-copy { color: var(--accent); cursor: pointer; }
+.pm-copy:hover { color: var(--accent-hover); }
+.pm-drop { color: var(--text-muted); cursor: pointer; }
+.pm-drop:hover, .pm-drop.confirm-del { color: var(--accent); }
+.pm-city-ico { color: #aab2c0; margin-right: 2px; }
+/* pins + glow */
+.pm-pin { background: none; border: none; text-align: center; }
+.pm-pin i { font-size: 22px; line-height: 22px; text-shadow: 0 0 3px #000, 0 1px 2px #000; }
+.pm-city-pin { background: none; border: none; text-align: center; }
+.pm-city-pin i { font-size: 15px; line-height: 16px; color: #aab2c0; text-shadow: 0 0 3px #000, 0 1px 2px #000; }
+.pm-glow-icon { background: none !important; border: none !important; }
+.pm-glow { border-radius: 50%; mix-blend-mode: screen; pointer-events: none; }
+/* leaflet controls, popups + legend in the app's dark theme */
+.leaflet-container { background: var(--bg-tertiary); font-family: inherit; }
+.pm-toggle a { padding: 4px 10px !important; font-size: 12px; text-decoration: none; display: block; white-space: nowrap; width: auto !important; height: auto !important; line-height: 1.4; }
+.pm-toggle b { color: var(--accent); }
+.leaflet-bar { border: 1px solid var(--border) !important; box-shadow: 0 2px 8px rgba(0, 0, 0, .5) !important; }
+.leaflet-bar a, .pm-toggle a { background: var(--bg-secondary) !important; color: #9fb3c8 !important; border-bottom: 1px solid var(--border) !important; }
+.leaflet-bar a:hover, .pm-toggle a:hover { background: #2b2e3e !important; color: #fff !important; }
+.leaflet-bar a.leaflet-disabled { background: #181a24 !important; color: #555 !important; }
+.leaflet-popup-content-wrapper, .leaflet-popup-tip { background: #1b1e27 !important; color: #ddd !important; box-shadow: 0 2px 12px rgba(0, 0, 0, .6) !important; }
+.leaflet-popup-content-wrapper { border: 1px solid #2e3142 !important; border-radius: 6px !important; }
+.leaflet-popup-content { margin: 10px 12px !important; color: #ddd !important; font-size: 12px; line-height: 1.5; }
+.leaflet-container a.leaflet-popup-close-button { color: #888 !important; }
+.leaflet-container a.leaflet-popup-close-button:hover { color: #fff !important; }
+.pm-popup b { color: #fff; }
+.pm-popup .pm-poplink { cursor: pointer; }
+.pm-popup .pm-poplink:hover { color: var(--accent-hover); text-decoration: underline; }
+.pm-popup .pm-pop-pct { font-weight: 700; color: var(--accent); }
+.pm-popup code { background: #222; color: #eee; padding: 1px 4px; border-radius: 3px; font-size: 11px; }
+.pm-popup .pm-copy { margin-left: 4px; }
+.pm-popup .pm-drop-link { color: var(--accent); font-size: 11px; }
+.pm-legend { padding: 6px 8px; background: rgba(20, 22, 29, .85); color: #ccc; font-size: 11px; border-radius: 4px; line-height: 1.4; }
+.pm-legend-bar { height: 8px; width: 120px; border-radius: 4px; margin: 3px 0; background: linear-gradient(90deg, #3b6cff, #26c281, #f2c14e, #f0892f, #e24350); }
+.pm-legend-ends { display: flex; justify-content: space-between; }
+/* resource page: Locations tab */
+.rd-locations { display: flex; flex-direction: column; gap: 10px; flex: 1 1 auto; min-height: 0; }
+.rd-loc-tools { display: flex; align-items: center; gap: 10px; }
+.rd-loc-spacer { flex: 1 1 auto; }
+.rd-loc-body { display: flex; gap: 12px; flex: 1 1 auto; min-height: 380px; }
+.rd-loc-map { flex: 1 1 auto; min-width: 0; min-height: 380px; }
+.rd-loc-list { flex: 0 0 300px; overflow: auto; min-height: 0; }
+/* add-waypoint dialog */
+.wp-add-card { max-width: 520px; }
+.wp-add-resfixed { margin-top: 12px; font-size: 13px; }
+.wp-add-card .inv-add-field { margin-top: 0; }
+.wp-add-card .inv-add-row .wp-add-xy { flex: 0 0 90px; }
+.wp-add-card .inv-add-row .wp-add-xy:last-child { flex: 0 0 70px; }
+.wp-add-card .inv-add-actions #wp-add-status { margin-right: auto; }
+/* ---- Beasts (pets, creatures, specials, calculators) ---- */
+.beast-filterrow { flex-wrap: wrap; gap: 8px; }
+.beast-sel { max-width: none; width: auto; min-width: 0; padding-right: 30px; } /* size to the longest option, never clip the 'All …' label */
+.beast-sel-sm { max-width: none; width: auto; }
+.beast-tog.active { color: var(--accent); }
+.beast-yes { color: #5cb85c; }
+.beast-small { font-size: 12px; color: var(--text-muted); }
+.beast-planets .planet { font-size: 10px; padding: 1px 6px; margin-right: 3px; }
+.beast-effect { max-width: 420px; white-space: normal; }
+.stype-off { color: var(--accent); }
+.stype-def { color: #5b9bd5; }
+.stype-spc { color: #f0ad4e; }
+.beast-row td { vertical-align: middle; }
+/* detail pages */
+.beast-detail-wrap { overflow: auto; padding: 0 2px 20px; }
+.beast-top { display: flex; gap: 16px; align-items: flex-start; }
+.beast-main { flex: 1 1 auto; min-width: 0; }
+.beast-namerow { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.beast-name { font-size: 22px; font-weight: 700; color: var(--text-hover); margin: 0 0 12px; }
+.beast-namerow .beast-name { margin-bottom: 0; }
+.beast-stype { font-size: 15px; font-weight: 600; }
+.beast-stats .gx-dstat { flex: 1 1 120px; min-width: 120px; }
+.beast-stat-link { cursor: pointer; }
+.beast-stat-link:hover { border-color: var(--accent); }
+.beast-stat-link:hover .gx-dstat-v { color: var(--accent-hover); }
+.beast-stat .gx-dstat-v a { color: var(--accent-hover); cursor: pointer; text-decoration: none; }
+.beast-stat .gx-dstat-v a:hover { text-decoration: underline; }
+.beast-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.beast-card { flex: none; min-width: 0; }
+.beast-card h6 { color: var(--accent); }
+.beast-card h6 + h6, .beast-card .beast-p + h6, .beast-card .bchip + h6, .beast-card .settings-sub + h6 { margin-top: 12px; }
+.beast-card-wide { grid-column: 1 / -1; }
+.beast-p { font-size: 13px; color: var(--text-primary); margin: 0 0 6px; }
+.beast-meta { margin-top: 8px; }
+.beast-kv { width: 100%; font-size: 13px; border-collapse: collapse; margin-bottom: 6px; }
+.beast-kv td { padding: 3px 0; border-bottom: 1px solid var(--border); }
+.beast-kv-l { color: var(--text-muted); }
+.beast-kv-v { text-align: right; font-weight: 700; color: var(--text-hover); white-space: nowrap; width: 1%; }
+.beast-mut { width: 100%; font-size: 13px; border-collapse: collapse; }
+.beast-mut th { text-align: left; color: var(--text-muted); font-size: 10.5px; text-transform: uppercase; padding: 4px 10px 6px 0; border-bottom: 1px solid var(--border); }
+.beast-mut td { padding: 5px 10px 5px 0; vertical-align: middle; }
+.beast-mut a { color: var(--text-primary); cursor: pointer; text-decoration: none; }
+.beast-mut a:hover { color: var(--text-hover); text-decoration: underline; }
+.beast-mutcolor { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.beast-mutcolor:hover { color: var(--text-hover); text-decoration: underline; }
+.beast-cube { display: inline-block; width: 11px; height: 11px; border-radius: 2px; border: 1px solid rgba(255,255,255,.18); }
+.bchip { display: inline-block; background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border); border-radius: 4px;
+         padding: 2px 10px; margin: 2px 4px 2px 0; font-size: 13px; cursor: pointer; user-select: none; }
+.bchip:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+.bchip i { font-size: 11px; margin-right: 2px; }
+.beast-model-col { flex: 0 0 320px; }
+.beast-model { position: relative; width: 320px; height: 360px; background: transparent; overflow: hidden; } /* the model floats on the page, no card behind it (Dustin) */
+.beast-model swg-creature { width: 100%; height: 100%; background: transparent; display: block; }
+.beast-model-none { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+                    color: var(--text-muted); font-size: 12px; }
+.beast-model-none i { font-size: 34px; opacity: .5; }
+/* special detail: three folding sections */
+.beast-fold { margin-bottom: 18px; }
+.beast-fold .hm-body { padding: 0; }
+.beast-fold.collapsed .hm-body { display: none; }
+.beast-fold .hm-headright { display: flex; align-items: center; }
+.beast-subq { max-width: 200px; font-size: 12px; padding: 2px 8px; height: 26px; }
+.beast-subgrid thead th { position: static; }
+.beast-rank-hl td { background: rgba(226, 67, 80, .12); }
+.beast-rank-arrow { color: var(--accent); margin-left: 4px; }
+.beast-none { padding: 10px; }
+/* calculators */
+.beast-calc-wrap { overflow: auto; padding: 0 2px 20px; }
+.bc-row { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; margin-bottom: 12px; }
+.bc-card { flex: 1 1 420px; min-width: 0; }
+.bc-narrow { flex: 0 1 460px; }
+.bc-card h6 { color: var(--accent); }
+.bc-h6-gap { margin-top: 14px !important; }
+.bc-output-card { background: rgba(226, 67, 80, .06); border: 1px solid rgba(226, 67, 80, .28); }
+.bc-scroll { overflow-x: auto; }
+.bc-grid { display: grid; gap: 8px 10px; align-items: center; }
+.inc-grid { grid-template-columns: minmax(170px, 1.6fr) repeat(3, minmax(78px, 1fr)); max-width: 640px; }
+.mut-grid { grid-template-columns: minmax(180px, 1.6fr) minmax(90px, 1fr); max-width: 420px; }
+.hy-grid { grid-template-columns: 160px 1fr 22px 1fr; max-width: 440px; }
+.bc-colh { color: var(--accent); font-weight: 600; font-size: 13px; text-align: center; }
+.bc-colh-sm { color: var(--text-muted); font-size: 11px; letter-spacing: .04em; text-transform: uppercase; }
+.bc-sec { grid-column: 1 / -1; color: var(--accent); font-weight: 600; font-size: 14px; margin-top: 8px; }
+.bc-span { grid-column: 1 / -1; margin-top: -4px; color: var(--text-muted); }
+.bc-l { color: var(--text-muted); font-size: 13px; }
+.bc-l small, .bc-span small { display: block; font-size: 11px; color: var(--text-muted); opacity: .8; }
+.bc-u { color: var(--text-muted); font-size: 12px; text-align: center; }
+.bc-in { width: 100%; background: var(--bg-input); color: var(--text-hover); border: 1px solid var(--border); border-radius: 4px; padding: 3px 8px; font-size: 13px; }
+.bc-in:hover { border-color: #4a4e66; }
+.bc-in:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px rgba(226, 67, 80, .2); }
+.bc-copy { background: var(--accent-dark); color: var(--text-hover); border: 0; border-radius: 4px; font-size: 12px; padding: 4px 6px; width: 100%; white-space: nowrap; }
+.bc-copy:hover { background: var(--accent); color: #fff; }
+.bc-copy i { margin: 0 3px; }
+.bc-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 0; }
+.bc-table th { text-align: left; color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: .03em; padding: 4px 8px; border-bottom: 1px solid var(--border); }
+.bc-table td { padding: 5px 8px; border-bottom: 1px solid var(--border); vertical-align: middle; color: var(--text-primary); }
+.bc-table tr:hover td { background: rgba(255,255,255,.03); }
+.bc-muted, .bc-muted small { color: var(--text-muted); }
+.bc-table small { font-size: 11px; }
+.bc-verdict { font-size: 18px; margin-top: 14px; color: var(--text-primary); }
+.bc-verdict b { font-size: 20px; }
+.bc-verdict-sub { margin-top: 4px; color: var(--text-primary); }
+.bc-verdict-sub b { color: var(--text-hover); }
+.bc-note { font-size: 12px; color: var(--text-muted); margin: 10px 0 0; }
+.bc-help p, .bc-help ul { font-size: 13px; color: var(--text-primary); margin: 0 0 8px; }
+.bc-help .bc-last { margin-bottom: 0; }
+.bc-help code { background: var(--bg-input); color: var(--text-hover); padding: 1px 5px; border-radius: 3px; font-size: 12px; }
+/* beast model: the recolor flyout opens to the LEFT (the model column hugs the page's right edge) */
+.beast-model-col { position: relative; }
+.beast-model-col .scd-recolor-panel { left: auto; right: calc(100% + 10px); width: 400px; }
+/* viewer buttons sit in the model's top-right corner (Dustin) */
+.beast-model .scd-mv-expand { top: 8px; right: 8px; bottom: auto; z-index: 5; }
+.beast-model .scd-mv-recolor { top: 8px; right: 44px; bottom: auto; z-index: 5; }
+/* beast card grids fill the page like the table does; the pager stays pinned under them */
+.page.active > .beast-cards-grid.beast-cards-grid { flex: 1 1 auto; min-height: 0; align-content: start; }
+.beast-tile { cursor: pointer; }
+.beast-tile .sch-card-cat .planet { margin-left: 2px; }
+.beast-filterrow .res-view-switch { margin-left: 10px; }
+/* card model snapshots (a live viewer only under the cursor) */
+.sch-card-thumb { width: 100%; height: 150px; object-fit: contain; display: block; pointer-events: none; }
+/* sidebar group heads: a dot when a folded group hides an item with a pill, and the
+   accent when it hides the page you're on */
+.nav-group-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); margin-left: 6px; flex: 0 0 auto; box-shadow: 0 0 0 2px rgba(226, 67, 80, .25); }
+.nav-group-dot[hidden] { display: none; }
+.nav-group-head.has-active { color: var(--text-hover); }
+.nav-group-head.has-active i:first-child { color: var(--accent); }
+.app-sidebar.collapsed .nav-group-dot { position: absolute; top: 6px; right: 10px; margin: 0; }
+.app-sidebar.collapsed .nav-group-head { position: relative; }
+/* sidebar search */
+.nav-search { display: flex; align-items: center; gap: 6px; margin: 8px 10px 4px; padding: 0 6px; height: 28px; background: transparent; border: 0; border-radius: 6px; } /* no box: a search glyph and a bare field on the sidebar's own colour (Dustin) */
+.nav-search:focus-within .nav-search-ico { color: var(--text-hover); }
+.nav-search-ico { color: var(--text-muted); font-size: 11px; }
+.nav-search-input { flex: 1 1 auto; min-width: 0; background: transparent; border: 0; outline: none; color: var(--text-hover); font-size: 12px; }
+.nav-search-input::placeholder { color: var(--text-muted); }
+.nav-search-x { border: 0; background: transparent; color: var(--text-muted); cursor: pointer; padding: 0 2px; font-size: 12px; }
+.nav-search-x:hover { color: var(--text-hover); }
+.nav-search-x[hidden] { display: none; }
+.app-sidebar.collapsed .nav-search { display: none; }
+.app-sidebar.nav-searching .nav-item.nav-hit { color: var(--text-hover); }
+.app-sidebar.nav-searching .nav-group-head { pointer-events: none; opacity: .75; }
+.app-sidebar.nav-searching .nav-group-caret { visibility: hidden; }
+/* the search lives at the foot of the menu, beside the collapse button (Dustin) */
+.side-foot { display: flex; align-items: center; gap: 4px; margin: 4px 10px 8px; flex: 0 0 auto; }
+.side-foot .nav-search { flex: 1 1 auto; min-width: 0; margin: 0; }
+.side-foot .btn-icon.side-collapse { margin: 0; }
+.app-sidebar.collapsed .side-foot { margin: 0 auto 8px; justify-content: center; }
+/* Settings › Keyboard shortcuts */
+.sc-list { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; }
+.sc-group { font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin: 10px 0 3px; }
+.sc-row { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 3px 0; }
+.sc-label { flex: 1 1 auto; min-width: 0; color: var(--text-primary); }
+.sc-label .settings-sub { margin-left: 6px; }
+.sc-chip { min-width: 64px; padding: 2px 10px; font-size: 12px; font-weight: 600; color: var(--text-hover); background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; }
+.sc-chip:hover { border-color: var(--text-muted); }
+.sc-chip-empty { color: var(--text-muted); font-weight: 400; }
+.sc-row.capturing .sc-chip { border-color: var(--accent); color: var(--accent); box-shadow: 0 0 0 2px rgba(226, 67, 80, .2); }
+.sc-row .btn-icon { width: 24px; height: 24px; background: transparent; color: var(--text-muted); }
+.sc-row .btn-icon:hover { color: var(--text-hover); background: transparent; }
+/* the header buttons keep their size — the search lane beside them must never squeeze the bell */
+.app-header-controls > button { flex: 0 0 auto; }
+/* header fit: when the window is narrow the brand's subtitle and the search lane give ground
+   first (never the bell or the mail button), so nothing runs off the right edge */
+.app-header { gap: 12px; }
+.app-header-brand { flex: 1 1 auto; min-width: 0; overflow: hidden; }
+.app-titles { min-width: 0; overflow: hidden; }
+.app-subtitle { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.app-header-controls { flex: 0 1 auto; min-width: 0; }
+.app-header-controls .mon-btn { flex: 0 0 auto; white-space: nowrap; }
+
+/* ---- global search (top bar): the bell's twin — a magnifier in a square. Open, the square
+   grows leftward into a wide field while the glass rides its left edge; closed, it shrinks back. ---- */
+.gs-wrap { position: relative; flex: 0 0 auto; width: 34px; height: 34px; margin-right: 2px; background: var(--bg-input); border-radius: 6px;
+  transition: width .4s cubic-bezier(.2, .8, .2, 1); }
+.gs-wrap.open { width: min(560px, 46vw); }
+.gs-btn { position: absolute; left: 0; top: 0; background: transparent; color: var(--text-primary); } /* same weight as the bell's glyph */
+.gs-btn:hover, .gs-wrap.open .gs-btn { background: transparent; color: var(--text-hover); }
+.gs-input { position: absolute; left: 34px; right: 30px; top: 0; height: 34px; min-width: 0; background: transparent; border: 0; outline: none;
+  color: var(--text-hover); font-size: 13px; opacity: 0; pointer-events: none; transition: opacity .2s ease .14s; }
+.gs-input::placeholder { color: var(--text-muted); }
+.gs-wrap.open .gs-input { opacity: 1; pointer-events: auto; }
+.gs-close { position: absolute; right: 2px; top: 0; width: 28px; height: 34px; border: 0; background: transparent; color: var(--text-muted); cursor: pointer;
+  font-size: 12px; opacity: 0; pointer-events: none; transition: opacity .2s ease .18s; }
+.gs-close:hover { color: var(--text-hover); }
+.gs-wrap.open .gs-close { opacity: 1; pointer-events: auto; }
+.gs-results { position: absolute; top: calc(100% + 6px); left: 0; right: 0; max-height: min(70vh, 560px); overflow-y: auto; z-index: 1200;
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 14px 40px rgba(0, 0, 0, .55); padding: 6px 0; }
+.gs-results[hidden] { display: none; }
+.gs-cat { font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); padding: 8px 14px 3px; }
+.gs-item { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 6px 14px; cursor: pointer; font-size: 13px; }
+.gs-item:hover, .gs-item.active { background: var(--bg-secondary); }
+.gs-item-ico { color: var(--text-muted); font-size: 12px; text-align: center; }
+.gs-name { color: var(--text-hover); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gs-name .gs-dot { font-size: 8px; margin-left: 8px; vertical-align: middle; }
+.gs-detail { color: var(--text-muted); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 45%; }
+.gs-empty { padding: 12px 14px; color: var(--text-muted); font-size: 12.5px; }
+.gs-err { color: var(--accent); }
+.gs-loading { display: flex; justify-content: center; padding: 8px; }
+.gs-loading .spinner { width: 14px; height: 14px; }
+/* a page's keyboard shortcut: a tiny key cap at the right of its row, only while you hover
+   it (always-on read as clutter — Dustin) */
+.nav-key { margin-left: auto; font-size: 9px; font-weight: 700; line-height: 14px; min-width: 14px; text-align: center; padding: 0 4px;
+  color: var(--text-muted); border: 1px solid var(--border); border-radius: 4px; background: rgba(255, 255, 255, .03); letter-spacing: .02em;
+  opacity: 0; transition: opacity .12s; }
+.nav-item:hover .nav-key { opacity: 1; }
+.nav-key + .nav-pill { margin-left: 6px; }
+.nav-item .nav-pill { margin-left: auto; } /* a counter pill keeps its right-hand seat; the key cap sits just before it */
+.nav-item .nav-key ~ .nav-pill, .nav-item .nav-pill ~ .nav-key { margin-left: 6px; }
+.app-sidebar.collapsed .nav-key { display: none; }
+/* planet map: the dark stage must win over Leaflet's own stylesheet whatever the load order */
+.pm-map.leaflet-container, .leaflet-container { background: var(--bg-primary) !important; }
+/* side panel: a drag handle between map and panel, and a hidden state */
+.pm-splitter { flex: 0 0 6px; margin: 0 -3px; border-radius: 3px; cursor: col-resize; background: transparent; transition: background .12s; }
+.pm-splitter:hover, .pm-splitter.dragging { background: var(--border); }
+.pm-layout.side-hidden .pm-side, .pm-layout.side-hidden .pm-splitter { display: none; }
+.pm-layout { gap: 8px; }
+.page-head .pm-sidebtn.active { color: var(--accent); }
+/* Leaflet's panes and controls carry z-indexes up to 1000 — keep them in a stacking
+   context of their own so dialogs (the Add waypoint sheet) always sit above the map */
+.pm-map { position: relative; z-index: 0; isolation: isolate; }
+.key-gate { z-index: 5000; }
+.pm-city-name { flex: 0 0 auto; color: var(--text-hover); }
+.pm-city-row .pm-note { flex: 1 1 auto; }
+.pm-city-row .pm-copy { margin-left: auto; }
+.pm-empty .spinner { width: 12px; height: 12px; vertical-align: -2px; margin-right: 6px; }

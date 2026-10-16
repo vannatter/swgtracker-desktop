@@ -677,9 +677,12 @@ async function populateCategoryTree() {
   if (!html) return; // offline — keep fallback options
   const sel = $('#res-category');
   const keep = sel.value; // don't clobber an in-flight selection
+  const keepLabel = sel.options[sel.selectedIndex]?.text || keep;
   sel.innerHTML = html;
   sel.value = keep;
-  if (sel.value !== keep) sel.value = ''; // old fallback code vanished — reset cleanly
+  // a code injected by applyCategoryFilter (leaf type, tree class) isn't in the
+  // tree — re-add it rather than silently dropping a filter the grid is showing
+  if (keep && sel.value !== keep) { sel.add(new Option(keepLabel, keep)); sel.value = keep; }
 }
 
 function planetsHtml(res) {
@@ -729,7 +732,12 @@ function resRowHtml(res) {
   </tr>`;
 }
 
+let resLoadSeq = 0;
 async function loadResources() {
+  // a first visit that arrives with a filter (Resource Tree, Home, a resource's
+  // type link) fires the page's plain load and the filtered one back to back —
+  // only the newest request may paint, or the unfiltered page lands last
+  const seq = ++resLoadSeq;
   showGridLoading('#res-loading');
   $('#res-empty').hidden = true;
 
@@ -782,6 +790,7 @@ async function loadResources() {
     catch (e) { res = { ok: false, error: String(e) }; }
   }
 
+  if (seq !== resLoadSeq) return;
   $('#res-loading').hidden = true;
 
   if (!res.ok) {

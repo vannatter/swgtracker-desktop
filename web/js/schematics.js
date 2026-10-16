@@ -95,47 +95,129 @@ function renderSchRows() {
   }
 }
 
-// Card models mount ONLY while scrolled into view and unmount when they
-// leave: every <swg-creature> owns a WebGL context and browsers cap ~8-16
-// live contexts per page — a grid of 20 mounted all at once rendered NOTHING
-// (every context evicted). The viewer disposes its renderer on removal, so
-// swap-in/swap-out is safe and the visible row stays under the cap.
-let schCardMvObserver = null;
-const SCH_MV_CAP = 10;        // safe under the ~16 context limit, leaving room for detail/zoom viewers
-let schMvLive = [];           // mounted hosts, oldest first
-function schMvUnmount(host) {
-  if (host.querySelector('swg-creature')) {
-    host.innerHTML = '<i class="fa-solid fa-cube sch-card-nomodel" title="Hover to view the model"></i>';
-  }
-  schMvLive = schMvLive.filter((h) => h !== host);
+// Card models: every <swg-creature> owns a WebGL context and browsers cap
+// ~16 live contexts per page, so a wide window (15+ cards on screen) can never
+// run them all at once — the old "mount while visible" approach left the
+// overflow as cubes and evicted the oldest when you hovered (Dustin). Now each
+// card's model is mounted ONCE, snapshotted into a static image after its first
+// frames, and unmounted — a couple of contexts in flight at a time, every visible
+// card ends up with its picture, and only the card under the cursor runs live.
+const MV_THUMB_MAX = 400;                 // snapshots kept this session (≈40KB each)
+const mvThumbs = new Map();               // src url -> data url ('' = failed, no retry)
+const mvThumbQueue = [];                  // hosts waiting for a snapshot
+let mvThumbBusy = 0;
+const MV_THUMB_PARALLEL = 2;
+let mvLiveHost = null;                    // the one hovered card running a real viewer
+const mvCardSrc = (host) => host.dataset.mvsrc || `https://swgtracker.com/items/${encodeURIComponent(host.dataset.mvlazy)}.glb`;
+function mvCardViewer(host, autoRotate) {
+  const color = host.dataset.mvcolor ? ` default-color="${escapeHtml(host.dataset.mvcolor)}"` : '';
+  host.innerHTML = `<swg-creature src="${escapeHtml(mvCardSrc(host))}" no-picker${autoRotate ? ' auto-rotate' : ' auto-rotate="false"'} fit="0.92"${color}></swg-creature>`;
+  return host.querySelector('swg-creature');
 }
+function mvShowThumb(host) {
+  const src = mvCardSrc(host);
+  const url = mvThumbs.get(src);
+  if (url) host.innerHTML = `<img class="sch-card-thumb" src="${url}" alt="" draggable="false">`;
+  else host.innerHTML = `<i class="fa-solid fa-cube sch-card-nomodel"${url === '' ? ' title="This model could not be rendered"' : ''}></i>`;
+}
+function mvRemember(src, url) {
+  if (mvThumbs.size >= MV_THUMB_MAX) mvThumbs.delete(mvThumbs.keys().next().value); // oldest out
+  mvThumbs.set(src, url);
+}
+// snapshot one card: mount, wait for the model + a few rendered frames, read the
+// canvas (same frame as the viewer's own render, so the buffer is still there)
+function mvSnapshot(host) {
+  const src = mvCardSrc(host);
+  if (!host.isConnected || mvThumbs.has(src)) { mvShowThumb(host); return Promise.resolve(); }
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (url) => {
+      if (done) return; done = true;
+      mvRemember(src, url);
+      if (host !== mvLiveHost) mvShowThumb(host);
+      resolve();
+    };
+    const mv = mvCardViewer(host, false);
+    const timer = setTimeout(() => finish(''), 20000);
+    mv.addEventListener('swg-error', () => { clearTimeout(timer); finish(''); });
+    mv.addEventListener('swg-load', () => {
+      let frames = 0;
+      const tick = () => {
+        if (done) return;
+        if (++frames < 4) { requestAnimationFrame(tick); return; }
+        clearTimeout(timer);
+        try {
+          const canvas = mv.shadowRoot && mv.shadowRoot.querySelector('canvas');
+          if (!canvas || !canvas.width) { finish(''); return; }
+          // downscale to the card's size so 400 of these stay a few MB
+          const scale = Math.min(1, 320 / canvas.width);
+          const out = document.createElement('canvas');
+          out.width = Math.round(canvas.width * scale); out.height = Math.round(canvas.height * scale);
+          out.getContext('2d').drawImage(canvas, 0, 0, out.width, out.height);
+          finish(out.toDataURL('image/png'));
+        } catch (_) { finish(''); }
+      };
+      requestAnimationFrame(tick);
+    });
+  });
+}
+function mvPumpThumbs() {
+  while (mvThumbBusy < MV_THUMB_PARALLEL && mvThumbQueue.length) {
+    const host = mvThumbQueue.shift();
+    if (!host.isConnected || host.dataset.mvstate !== 'queued') continue;
+    host.dataset.mvstate = 'shooting';
+    mvThumbBusy++;
+    mvSnapshot(host).then(() => { delete host.dataset.mvstate; mvThumbBusy--; mvPumpThumbs(); });
+  }
+}
+// a card scrolled in: show its picture, or queue a snapshot for it
 function schMvMount(host) {
   if (!host || host.querySelector('swg-creature')) return;
-  // over the cap: recycle the OLDEST mounted card — without this, the browser
-  // evicted contexts itself and the first row went permanently blank
-  while (schMvLive.length >= SCH_MV_CAP) schMvUnmount(schMvLive[0]);
-  const id = host.dataset.mvlazy;
-  host.innerHTML = `<swg-creature src="https://swgtracker.com/items/${encodeURIComponent(id)}.glb" no-picker auto-rotate fit="0.92"></swg-creature>`;
-  schMvLive.push(host);
+  if (mvThumbs.has(mvCardSrc(host))) { mvShowThumb(host); return; }
+  if (host.dataset.mvstate) return;
+  host.dataset.mvstate = 'queued';
+  mvThumbQueue.push(host);
+  mvPumpThumbs();
 }
-function schObserveCardModels() {
-  if (!schCardMvObserver) {
-    schCardMvObserver = new IntersectionObserver((entries) => {
+// a card scrolled out (or the page hid): drop a live viewer, keep the picture
+function schMvUnmount(host) {
+  if (host.dataset.mvstate === 'queued') { delete host.dataset.mvstate; }
+  if (host === mvLiveHost) { mvLiveHost = null; mvShowThumb(host); }
+}
+// hover: the real, spinning viewer — one at a time
+function mvHoverLive(host) {
+  if (host === mvLiveHost || host.dataset.mvstate === 'shooting') return;
+  if (mvLiveHost) { const prev = mvLiveHost; mvLiveHost = null; mvShowThumb(prev); }
+  if (!mvThumbs.get(mvCardSrc(host))) return; // no picture yet (or failed) — nothing to animate
+  mvLiveHost = host;
+  mvCardViewer(host, true);
+}
+// one observer per card container (Schematics, Pets, Creatures)
+const mvCardObservers = new Map();
+function mvObserveCards(sel) {
+  let ob = mvCardObservers.get(sel);
+  if (!ob) {
+    ob = new IntersectionObserver((entries) => {
       for (const en of entries) {
         if (en.isIntersecting) schMvMount(en.target);
         else schMvUnmount(en.target);
       }
     }, { rootMargin: '120px 0px' });
-    // cards beyond the cap sit as cubes — hovering one swaps it in
-    $('#sch-cards').addEventListener('mouseover', (e) => {
+    mvCardObservers.set(sel, ob);
+    const el = $(sel);
+    el.addEventListener('mouseover', (e) => {
       const host = e.target.closest('[data-mvlazy]');
-      if (host && !host.querySelector('swg-creature')) schMvMount(host);
+      if (host) mvHoverLive(host);
+      else if (mvLiveHost && !e.target.closest('.sch-card, .beast-tile')) { const prev = mvLiveHost; mvLiveHost = null; mvShowThumb(prev); }
     });
+    el.addEventListener('mouseleave', () => { if (mvLiveHost) { const prev = mvLiveHost; mvLiveHost = null; mvShowThumb(prev); } });
   }
-  schCardMvObserver.disconnect();
-  schMvLive = [];
-  document.querySelectorAll('#sch-cards [data-mvlazy]').forEach((el) => schCardMvObserver.observe(el));
+  ob.disconnect();
+  if (mvLiveHost && mvLiveHost.closest(sel)) mvLiveHost = null;
+  mvThumbQueue.length = 0;
+  document.querySelectorAll(`${sel} [data-mvlazy]`).forEach((el) => { delete el.dataset.mvstate; ob.observe(el); });
 }
+function schObserveCardModels() { mvObserveCards('#sch-cards'); }
 
 // card view: the site's 3D grid, app-side — models lazy-load as they scroll in
 function schCardHtml(schem, idx) {
@@ -633,13 +715,15 @@ function scdRenderModel(id) {
 }
 
 // full-screen model modal — drag to orbit, scroll to zoom, ✕ or backdrop closes
-function scdModelZoom(url) {
+// opts: { defaultColor: "r,g,b" (the beast's default tint), onLoad(mv) (re-apply saved
+// colours — defaults to the current schematic's) }
+function scdModelZoom(url, opts = {}) {
   const ov = document.createElement('div');
   ov.className = 'sb-lightbox scd-mv-zoom';
-  ov.innerHTML = `<swg-creature src="${escapeHtml(url)}" no-picker auto-rotate fit="0.92"></swg-creature>
+  ov.innerHTML = `<swg-creature src="${escapeHtml(url)}" no-picker auto-rotate fit="0.92"${opts.defaultColor ? ` default-color="${escapeHtml(opts.defaultColor)}"` : ''}></swg-creature>
     <button class="btn btn-icon scd-mv-close" title="Close"><i class="fa-solid fa-xmark"></i></button>`;
   const mv = ov.querySelector('swg-creature');
-  mv.addEventListener('swg-load', () => scdApplySavedColors(mv, scdState.id));
+  mv.addEventListener('swg-load', () => (opts.onLoad ? opts.onLoad(mv) : scdApplySavedColors(mv, scdState.id)));
   ov.addEventListener('click', (e) => {
     if (e.target === ov || e.target.closest('.scd-mv-close')) ov.remove();
   });
@@ -666,12 +750,20 @@ function scdSlotLabel(name) {
   return 'Color';
 }
 function scdOpenRecolorPop() {
-  const card = $('#scd-modelcard');
+  mvOpenRecolorPanel({ card: $('#scd-modelcard'), mv: scdState.modelEl, slots: scdState.modelSlots || [], key: scdColorKey(scdState.id) });
+}
+// The recolor flyout, shared by the schematic card and the pet/creature pages.
+//   card  — the positioned element the panel docks to
+//   mv    — the <swg-creature> being recoloured
+//   slots — [{ idx, slot: { name, palette: [[r,g,b], …] } }] (the viewer's swg-ready slots,
+//           or a synthetic one for a beast's whole-model palette)
+//   key   — localStorage key for the saved picks
+//   apply(slotIdx, rgb) / reset() — override the per-slot calls (beasts tint the whole model)
+function mvOpenRecolorPanel({ card, mv, slots, key, apply, reset }) {
   let pop = document.getElementById('scd-recolor-pop');
-  if (pop) { pop.remove(); return; }   // palette button toggles
-  const slots = scdState.modelSlots || [];
+  if (pop) { const same = pop.parentElement === card; pop.remove(); if (same) return; }   // palette button toggles
   if (!slots.length || !card) return;
-  const id = scdState.id;
+  const loadSaved = () => { try { return JSON.parse(localStorage.getItem(key)) || {}; } catch (_) { return {}; } };
   // friendly labels, numbered only when a type repeats (site convention)
   const totals = {};
   slots.forEach((u) => { const b = scdSlotLabel(u.slot.name); totals[b] = (totals[b] || 0) + 1; });
@@ -681,7 +773,7 @@ function scdOpenRecolorPop() {
     seen[b] = (seen[b] || 0) + 1;
     return totals[b] > 1 ? `${b} ${seen[b]}` : b;
   });
-  const saved = scdLoadColors(id);
+  const saved = loadSaved();
   // a docked side panel INSIDE the model card — the model stays visible on
   // the left and previews every pick live; one tab per recolorable region
   pop = document.createElement('div');
@@ -714,8 +806,8 @@ function scdOpenRecolorPop() {
     }
     if (e.target.closest('[data-palclose]')) { pop.remove(); return; }
     if (e.target.closest('[data-palreset]')) {
-      scdState.modelEl?.resetColor?.();
-      try { localStorage.removeItem(scdColorKey(id)); } catch (_) { /* fine */ }
+      if (reset) reset(); else mv?.resetColor?.();
+      try { localStorage.removeItem(key); } catch (_) { /* fine */ }
       pop.querySelectorAll('.scd-swatch.active').forEach((x) => x.classList.remove('active'));
       return;
     }
@@ -725,10 +817,10 @@ function scdOpenRecolorPop() {
     const rgb = sw.dataset.palrgb.split(',').map(Number);
     sw.closest('.scd-palgrid').querySelectorAll('.scd-swatch').forEach((x) => x.classList.remove('active'));
     sw.classList.add('active');
-    scdState.modelEl?.recolorSlot?.(slot, rgb);
-    const cur = scdLoadColors(id);
+    if (apply) apply(slot, rgb); else mv?.recolorSlot?.(slot, rgb);
+    const cur = loadSaved();
     cur[slot] = rgb;
-    try { localStorage.setItem(scdColorKey(id), JSON.stringify(cur)); } catch (_) { /* fine */ }
+    try { localStorage.setItem(key, JSON.stringify(cur)); } catch (_) { /* fine */ }
   });
   // "True dark" tuning (site parity — recolor-tune.js): same localStorage key,
   // so the viewer honours it on every future load by itself; live changes here

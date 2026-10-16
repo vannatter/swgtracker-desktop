@@ -177,6 +177,7 @@ function renderResourcePage(data) {
   document.querySelector('.rd-hero').hidden = false; // data's in — show the finished header
   rdRenderStockTags(r.id);
   rdRenderWaypoints(r);
+  rdLocationsReset(r); // the Locations tab's planet picker + map follow the new resource
   cmtMount('#rd-comments', 'resource', r.id); // community notes live in their own tab
   rdSyncNotesTab();
 
@@ -569,6 +570,7 @@ function renderRdTabs() {
     ['related', `Related Schematics (${(d.related_schematics || []).length})`],
     ['used', `Used In (${(d.used_ins || []).length})`],
     ['calc', '<i class="fa-solid fa-calculator"></i> Extraction Calculator'],
+    ['locations', '<i class="fa-solid fa-map-location-dot"></i> Locations'],
     ['notes', '<i class="fa-solid fa-comment"></i> Notes'],
   ];
   $('#rd-tabs').innerHTML = tabs.map(([k, label]) =>
@@ -581,11 +583,14 @@ function renderRdTabs() {
 function rdSyncNotesTab() {
   const notes = rdTabState.tab === 'notes';
   const calc = rdTabState.tab === 'calc';
-  const pane = notes || calc;
+  const loc = rdTabState.tab === 'locations';
+  const pane = notes || calc || loc;
   document.querySelector('.rd-table-wrap').hidden = pane;
   if (pane) $('#rd-tabnote').hidden = true; // the rank explainer belongs to the data tabs
   $('#rd-comments').hidden = !notes;
   $('#rd-calc').hidden = !calc;
+  $('#rd-locations').hidden = !loc;
+  if (loc) rdInitLocations(); // Leaflet needs a visible container — build/re-measure now
 }
 
 function renderRdTable() {
@@ -733,6 +738,7 @@ async function openResourcePage(name) {
   $('#rd-profile').hidden = true;
   $('#rd-profile-body').innerHTML = '';
   $('#rd-calc').hidden = true;
+  $('#rd-locations').hidden = true;
   $('#rd-empty').hidden = true;
   showGridLoading('#rd-loading');
 
@@ -921,7 +927,7 @@ function initResourcePage() {
     document.querySelectorAll('#rd-tabs [data-rdtab]').forEach((t) =>
       t.classList.toggle('active', t === tab));
     rdSyncNotesTab();
-    if (rdTabState.tab !== 'notes' && rdTabState.tab !== 'calc') renderRdTable();
+    if (!['notes', 'calc', 'locations'].includes(rdTabState.tab)) renderRdTable();
   });
 
   // Column sorting within a tab

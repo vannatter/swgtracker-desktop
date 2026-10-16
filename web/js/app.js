@@ -72,8 +72,14 @@ const PAGE_LOADERS = {
   wealth: () => loadWealth(),
   gcw: () => loadGcw(),
   pulse: () => loadPulsePage(),
+  restree: () => loadRestree(),
+  planetmap: () => loadPlanetMap(),
   professions: () => loadProfessions(),
   titles: () => loadTitles(),
+  pets: () => loadPets(),
+  creatures: () => loadCreatures(),
+  specials: () => loadSpecials(),
+  hydro: () => {}, incubator: () => {}, mutation: () => {}, // calculators build themselves at boot (initBeastCalcs)
   myschematics: () => loadMySchematics(),
   stockpile: () => syncStockpile(),
   wishlist: () => syncWishlist(),
@@ -127,7 +133,103 @@ function syncNavTips() {
   });
 }
 
+// Sidebar groups (Crafting, Galaxy, Beasts, My Stuff, Vendors, Structures, Tools):
+// each head folds its items. localStorage is the instant path, config the durable
+// one (WKWebView can drop localStorage across restarts). A folded group shows a
+// dot when a hidden item carries a pill (full hoppers, upgrades…) or is the open page.
+function navGroupApply(head, collapsed) {
+  head.classList.toggle('collapsed', collapsed);
+  const searching = ($('#nav-search')?.value || '').trim() !== '';
+  if (!searching) document.querySelectorAll(`.nav-item[data-group="${head.dataset.navgroup}"]`).forEach((el) => { el.style.display = collapsed ? 'none' : ''; });
+  syncNavGroupDots();
+}
+function syncNavGroupDots() {
+  document.querySelectorAll('.nav-group-head').forEach((head) => {
+    const items = [...document.querySelectorAll(`.nav-item[data-group="${head.dataset.navgroup}"]`)];
+    const collapsed = head.classList.contains('collapsed');
+    const active = items.some((i) => i.classList.contains('active'));
+    const pills = items.some((i) => { const p = i.querySelector('.nav-pill'); return p && !p.hidden; });
+    head.classList.toggle('has-active', collapsed && active);
+    const dot = head.querySelector('.nav-group-dot');
+    const want = !(collapsed && pills);
+    if (dot && dot.hidden !== want) dot.hidden = want; // never rewrite: the observer below would see it and loop
+  });
+}
+function initNavGroups() {
+  document.querySelectorAll('.nav-group-head[data-navgroup]').forEach((head) => {
+    const name = head.dataset.navgroup;
+    head.addEventListener('click', () => {
+      const c = !head.classList.contains('collapsed');
+      navGroupApply(head, c);
+      try { localStorage.setItem(`${name}-collapsed`, c ? '1' : ''); } catch (e) { /* ignore */ }
+      try { api().set_config(`${name}_collapsed`, c); } catch (e) { /* ignore */ }
+    });
+    let ls = false;
+    try { ls = localStorage.getItem(`${name}-collapsed`) === '1'; } catch (e) { /* ignore */ }
+    if (ls) navGroupApply(head, true);
+  });
+  // honor the durable copies once they answer (they win over a cleared localStorage)
+  (async () => {
+    let cfg;
+    try { cfg = await api().get_config(); } catch (e) { return; }
+    if (!cfg || !cfg.ok || !cfg.data) return;
+    document.querySelectorAll('.nav-group-head[data-navgroup]').forEach((head) => {
+      const v = cfg.data[`${head.dataset.navgroup}_collapsed`];
+      if (v === undefined || !!v === head.classList.contains('collapsed')) return;
+      navGroupApply(head, !!v);
+      try { localStorage.setItem(`${head.dataset.navgroup}-collapsed`, v ? '1' : ''); } catch (e) { /* ignore */ }
+    });
+  })();
+  // pills come and go on their own schedule (attention sweeps) — keep the dots honest
+  new MutationObserver((muts) => {
+    if (muts.some((m) => m.target.classList && m.target.classList.contains('nav-pill'))) syncNavGroupDots();
+  }).observe(document.querySelector('.nav-list'), { attributes: true, attributeFilter: ['hidden'], subtree: true });
+}
+
+// Sidebar search: type to filter the menu by page (or folder) name. Matches show
+// even inside folded folders; folders with no match hide; Enter opens the first
+// match; Esc or × clears; "/" anywhere outside a field jumps to the box.
+function navSearchApply() {
+  const box = $('#nav-search');
+  const q = (box.value || '').trim().toLowerCase();
+  $('#nav-search-x').hidden = !q;
+  document.querySelector('.app-sidebar').classList.toggle('nav-searching', !!q);
+  const heads = {};
+  document.querySelectorAll('.nav-group-head').forEach((h) => {
+    const label = [...h.childNodes].filter((n) => n.nodeType === Node.TEXT_NODE).map((n) => n.textContent).join(' ').trim().toLowerCase();
+    heads[h.dataset.navgroup] = { el: h, label, hits: 0 };
+  });
+  document.querySelectorAll('.app-sidebar .nav-item').forEach((item) => {
+    const label = [...item.childNodes].filter((n) => n.nodeType === Node.TEXT_NODE).map((n) => n.textContent).join(' ').replace(/\s+/g, ' ').trim().toLowerCase();
+    const grp = item.dataset.group ? heads[item.dataset.group] : null;
+    const hit = !q || label.includes(q) || (grp && grp.label.includes(q));
+    if (q) item.style.display = hit ? '' : 'none';
+    else item.style.display = grp && grp.el.classList.contains('collapsed') ? 'none' : ''; // back to the folds
+    item.classList.toggle('nav-hit', !!q && hit);
+    if (grp && hit) grp.hits++;
+  });
+  Object.values(heads).forEach((g) => { g.el.style.display = q && !g.hits ? 'none' : ''; });
+}
+function initNavSearch() {
+  const box = $('#nav-search');
+  if (!box) return;
+  box.addEventListener('input', navSearchApply);
+  box.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { box.value = ''; navSearchApply(); box.blur(); return; }
+    if (e.key === 'Enter') {
+      const first = [...document.querySelectorAll('.app-sidebar .nav-item')].find((i) => i.style.display !== 'none' && i.classList.contains('nav-hit'));
+      if (first) { showPage(first.dataset.page); box.value = ''; navSearchApply(); box.blur(); }
+    }
+  });
+  $('#nav-search-x').addEventListener('click', () => { box.value = ''; navSearchApply(); box.focus(); });
+  // the / shortcut (configurable) lives in shortcuts.js
+}
+
 function initNav() {
+  initNavGroups();
+  initNavSearch();
+  initGlobalSearch();
+  initShortcuts();
   // Scope to the sidebar — Bootstrap tab markup also uses .nav-item (see scd-tabs).
   document.querySelectorAll('.app-sidebar .nav-item').forEach((item) => {
     item.addEventListener('click', () => showPage(item.dataset.page));
@@ -206,9 +308,13 @@ function showPage(key, opts = {}) {
   if (!opts.internal && from && from !== key) { navBack.push(from); navForward.length = 0; }
   updateNavArrows();
   // Sub-pages (detail views) keep their parent sidebar item lit.
-  const navKey = { schematic: 'schematics', resource: 'resources', myschematic: 'myschematics', schembuilder: 'schematics' }[key] || key;
+  const navKey = { schematic: 'schematics', resource: 'resources', myschematic: 'myschematics', schembuilder: 'schematics',
+    pet: 'pets', creature: 'creatures', special: 'specials' }[key] || key;
   document.querySelectorAll('.nav-item').forEach((n) => n.classList.toggle('active', n.dataset.page === navKey));
+  syncNavGroupDots();
   document.querySelectorAll('.page').forEach((p) => p.classList.toggle('active', p.id === `page-${key}`));
+  // pages that size themselves from their container (Leaflet maps) re-measure on every visit
+  document.dispatchEvent(new CustomEvent('page:show', { detail: { key } }));
   // live-state pages reload on every visit, not just the first — mail uploads
   // and cron inventory depletion both move underneath a cached render
   const ALWAYS_RELOAD = new Set(['monitor', 'inventory', 'characters', 'home']); // home throttles itself (5 min)
@@ -1101,6 +1207,12 @@ async function boot() {
   initCommunityMacros();
   initGalaxy();
   initPulsePage();
+  initRestree();
+  initPlanetMaps();
+  initRdLocations();
+  initWaypointAddDialog();
+  initBeasts();
+  initBeastCalcs();
   applySeasonalLogo();
   applyHolidayBar();
   initSchemBuilder();

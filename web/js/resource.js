@@ -570,7 +570,7 @@ function renderRdTabs() {
     ['related', `Related Schematics (${(d.related_schematics || []).length})`],
     ['used', `Used In (${(d.used_ins || []).length})`],
     ['calc', '<i class="fa-solid fa-calculator"></i> Extraction Calculator'],
-    ['locations', '<i class="fa-solid fa-map-location-dot"></i> Locations'],
+    // ['locations', '<i class="fa-solid fa-map-location-dot"></i> Locations'], // built, parked for now (Dustin) — the pane + planetmap.js wiring stay in place
     ['notes', '<i class="fa-solid fa-comment"></i> Notes'],
   ];
   $('#rd-tabs').innerHTML = tabs.map(([k, label]) =>

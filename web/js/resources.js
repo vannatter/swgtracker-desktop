@@ -188,7 +188,7 @@ function resCardHtml(res) {
       : `<div class="res-card-type">${escapeHtml(res.type_name)}</div>`)
     : '';
   const days = resCardDays(res);
-  const planets = show('planets') ? `<span class="res-card-planets">${planetsHtml(res)}</span>` : '';
+  const planets = show('planets') ? `<span class="res-card-planets">${planetsEditHtml(res)}</span>` : '';
   const spawnTip = isActive ? ` title="${escapeHtml(agoText(res.timestamp))}"` : '';
   const foot = (days || planets)
     ? `<div class="res-card-foot">
@@ -302,11 +302,11 @@ function resTreeItemHtml(r, depth) {
   </div>`;
 }
 
-async function renderResTree(container, rows) {
+async function renderResTree(container, rows, opts = {}) {
   if (!resState.treeCollapsed) resState.treeCollapsed = new Set();
   const tree = await resEnsureCatTree();
   if (!tree) { container.innerHTML = '<div class="grid-empty">Category tree unavailable offline.</div>'; return; }
-  if (resState.view !== 'tree') return; // navigated away while fetching
+  if (resState.view !== 'tree' && !opts.force) return; // navigated away while fetching (Home forces its own tree)
   container.classList.add('res-treewrap');
   const { nodes, roots } = tree;
   const byNode = new Map(); const unmatched = new Map();
@@ -583,10 +583,9 @@ function absorbTypedTokens() {
   return $('#res-search').value.trim();
 }
 
-function buildResHeader() {
-  const head = $('#res-head');
-  head.innerHTML =
-    `<th class="pin-cell pin-reset ${resState.sortField ? '' : 'active'}" data-pinsort
+// the list header — Home's Recent Spawns reuses it (sort arrows stay the page's)
+function resHeaderHtml() {
+  return `<th class="pin-cell pin-reset ${resState.sortField ? '' : 'active'}" data-pinsort
        title="Pinned first (default order) — click to reset sort"><i class="fa-solid fa-thumbtack"></i></th>` +
     '<th class="pin-cell"></th><th class="pin-cell"></th>' +
     resCols().map(([label, field, cls]) => {
@@ -594,6 +593,9 @@ function buildResHeader() {
       const arrow = field === resState.sortField ? (resState.sortOrder === 'ASC' ? ' ▲' : ' ▼') : '';
       return `<th class="${cls}"${sortable ? ` data-sort="${field}"` : ''}>${label}${arrow}</th>`;
     }).join('');
+}
+function buildResHeader() {
+  $('#res-head').innerHTML = resHeaderHtml();
 }
 
 function populateFilters() {
@@ -707,7 +709,7 @@ function resRowHtml(res) {
         ? `<td class="col-text res-type"><span class="res-typelink" data-navcat="${escapeHtml(res.type_code)}">${name}</span></td>`
         : `<td class="col-text res-type">${name}</td>`;
     }
-    if (field === 'planets') return `<td class="col-text col-planets">${planetsHtml(res)}</td>`;
+    if (field === 'planets') return `<td class="col-text col-planets">${planetsEditHtml(res)}</td>`;
     if (field === 'score') {
       const v = res.score; // 0–100, null when unscored
       return v == null ? '<td class="stat stat_off">—</td>'
@@ -1278,6 +1280,9 @@ function initResources() {
   $('#res-prev').addEventListener('click', () => { if (resState.page > 1) { resState.page--; loadResources(); } });
   $('#res-next').addEventListener('click', () => { if (resState.hasNext) { resState.page++; loadResources(); } });
 
+  // planet "+" chips in the list and the cards (the tree reuses the cards)
+  wirePlanetEdit('#res-body', () => resState.lastRows);
+  wirePlanetEdit('#res-cards', () => resState.lastRows);
   // Pin toggle + add-to-stockpile + name → resource detail page (event delegation)
   $('#res-body').addEventListener('click', async (e) => {
     const wp = e.target.closest('.res-wpmark[data-wpfor]');

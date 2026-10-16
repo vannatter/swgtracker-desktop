@@ -132,6 +132,18 @@ async function loadSettings() {
   syncZipToggle();
   const df = cfg.date_format === 'intl' ? 'intl' : (cfg.date_format === 'us' ? 'us' : (localStorage.getItem('dateFormat') || 'us'));
   $('#set-datefmt').value = df;
+  // timezone: every IANA zone the webview knows, device zone first
+  const tzSel = $('#set-tz');
+  if (tzSel && !tzSel.dataset.filled) {
+    let zones = [];
+    try { zones = Intl.supportedValuesOf('timeZone'); } catch (_) { zones = ['America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'Europe/London', 'Europe/Berlin', 'Australia/Sydney', 'UTC']; }
+    let device = '';
+    try { device = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (_) {}
+    tzSel.innerHTML = `<option value="">Device clock${device ? ` (${escapeHtml(device)})` : ''}</option>`
+      + zones.map((z) => `<option value="${escapeHtml(z)}">${escapeHtml(z.replace(/_/g, ' '))}</option>`).join('');
+    tzSel.dataset.filled = '1';
+  }
+  if (tzSel) tzSel.value = typeof cfg.timezone === 'string' && [...tzSel.options].some((o) => o.value === cfg.timezone) ? cfg.timezone : (appTimeZone || '');
   setDateFormat(df);
   const wf = WAYPOINT_FORMATS.includes(cfg.waypoint_format) ? cfg.waypoint_format
     : (localStorage.getItem('waypointFormat') || 'conc_name');
@@ -140,7 +152,11 @@ async function loadSettings() {
   setWaypointFormat(wf);
 
   // account-level prefs (server-side — the email crons honor them too)
-  loadPrefs(true).then((p) => { $('#set-ignoremust').checked = !!p.ignore_mustafar; });
+  loadPrefs(true).then((p) => {
+    $('#set-ignoremust').checked = !!p.ignore_mustafar;
+    const u = $('#set-username');
+    if (u) { u.value = p.name || ''; u.dataset.orig = p.name || ''; }
+  });
 
   refreshDatasetStatus();
 }
@@ -209,6 +225,7 @@ async function saveSettings() {
       ['show_notifications', $('#set-notify').checked],
       ['auto_start_monitoring', $('#set-autostart').checked],
       ['date_format', $('#set-datefmt').value],
+      ['timezone', $('#set-tz') ? $('#set-tz').value : ''],
       ['waypoint_format', wpFormat()],
       ['mail_disposition', mailDisposition()],
       ['mail_move_dir', setState.moveDir || ''],
@@ -224,6 +241,17 @@ async function saveSettings() {
       if (!res.ok) throw new Error(res.error || `failed to save ${key}`);
     }
 
+    // username lives on the account (users.name) — same Save button, server-side
+    const uEl = $('#set-username');
+    if (uEl && uEl.value.trim() !== (uEl.dataset.orig || '')) {
+      const name = uEl.value.trim();
+      if (name.length < 2 || name.length > 40) throw new Error('Username must be 2–40 characters');
+      const res = await apiFetch('PUT', 'api/prefs.php', { data: { name } });
+      if (!res.ok) throw new Error(res.error || 'Could not save the username — site update pending?');
+      appPrefs.name = (res.data && res.data.prefs && res.data.prefs.name) || name;
+      uEl.value = appPrefs.name; uEl.dataset.orig = appPrefs.name;
+      if (typeof renderHome === 'function' && typeof homeState !== 'undefined' && homeState.loadedAt) renderHome(); // greeting
+    }
     // account-level pref rides the same Save button but lives server-side
     const wantMust = $('#set-ignoremust').checked ? 1 : 0;
     if (wantMust !== (appPrefs.ignore_mustafar ? 1 : 0)) {
@@ -234,8 +262,10 @@ async function saveSettings() {
     }
     // a changed date format must invalidate every already-rendered page —
     // cached pages would keep showing dates in the old style until relaunch
-    const fmtChanged = ($('#set-datefmt').value === 'intl') !== (appDateFmt === 'intl');
+    const fmtChanged = ($('#set-datefmt').value === 'intl') !== (appDateFmt === 'intl')
+      || ($('#set-tz') && $('#set-tz').value !== appTimeZone);
     setDateFormat($('#set-datefmt').value);
+    if ($('#set-tz')) setTimeZone($('#set-tz').value);
     setWaypointFormat(wpFormat());
     if (fmtChanged && typeof loadedPages !== 'undefined') loadedPages.clear();
 

@@ -17,7 +17,7 @@ const INV_COLUMNS = [
 // has no `notes`, so a sortable notes header would silently sort by item_name.
 const invState = { page: 1, perPage: 100, hasNext: false, sortField: 'item_name', sortOrder: 'ASC', items: [],
                    noteFor: null,   // inventory id open in the notes dialog
-                   groups: [], grpCollapsed: new Set(), tagFilter: null,
+                   groups: [], grpCollapsed: new Set(), tagFilter: null, tagEdit: null,
                    checked: new Set(),    // checkbox selection — bulk edit / multi-drag filing
                    lastSel: null,         // last-toggled checkbox (anchor for shift-click ranges)
                    selected: new Set() }; // click-marked rows (Veizyr) — survive re-renders and window switches
@@ -117,7 +117,9 @@ function invRenderVendorSug() {
 function invRowHtml(item, idx) {
   const stocked = safeInt(item.stocked);
   const threshold = safeInt(item.threshold);
-  const stockCls = stocked < 0 ? 'inv-neg' : stocked <= threshold ? 'inv-low' : '';
+  // threshold 0 = this item never warns — not low, not oversold (special /
+  // seasonal schematics that sit at 0 on purpose — Veizyr)
+  const stockCls = threshold <= 0 ? '' : stocked < 0 ? 'inv-neg' : stocked <= threshold ? 'inv-low' : '';
   const iid = String(item.id);
   const notePreview = labNotesText(item.notes);   // rich notes -> plain text for the tooltip
   const hasNotes = !!notePreview;
@@ -128,7 +130,9 @@ function invRowHtml(item, idx) {
       ? `<i class="fa-solid fa-triangle-exclamation inv-warnico" title="${stocked < 0 ? 'Oversold — stock is negative' : 'At or below restock threshold'}"></i>` : ''}${fmtNum(stocked)}</td>
     <td class="col-name res-name"><span class="stk-tagslot">${tagged
       ? `<i class="fa-solid fa-tag stk-tagind" data-invtaghover="${idx}"></i>` : ''}</span>${escapeHtml(item.item_name || '')}</td>
-    <td class="stat inv-edit" data-edit="threshold" data-idx="${idx}" title="Click to edit">${fmtNum(threshold)}</td>
+    <td class="stat inv-edit${threshold > 0 ? '' : ' inv-nowarn'}" data-edit="threshold" data-idx="${idx}" title="${threshold > 0
+        ? 'Click to edit — set to 0 to turn off this item’s low-stock and oversold warnings'
+        : 'Warnings are off for this item (threshold 0) — click to set a threshold'}">${fmtNum(threshold)}</td>
     <td class="col-text">${escapeHtml(item.vendor || '') || '<span class="stat_off">—</span>'}</td>
     <td class="col-num">${item.match_price != null && item.match_price !== '' ? fmtNum(item.match_price) : '<span class="stat_off">—</span>'}</td>
     <td class="stat ${safeInt(item.sales_count) ? 'inv-sales' : ''}" ${safeInt(item.sales_count) ? `data-sales="${idx}" title="Click to see the matched sales"` : ''}>${safeInt(item.sales_count) ? fmtNum(item.sales_count) : '<span class="stat_off">—</span>'}</td>
@@ -178,9 +182,76 @@ function renderInvRows() {
   tagbar.innerHTML = allTags.length
     ? '<span class="fac-tagbar-label"><i class="fa-solid fa-tags"></i></span>'
       + allTags.map((t) => `<span class="fac-tag${invState.tagFilter === t ? ' active' : ''}"
-          data-invtag="${escapeHtml(t)}">${escapeHtml(t)}</span>`).join('')
+          data-invtag="${escapeHtml(t)}">${escapeHtml(t)}<i class="fa-solid fa-pen inv-tag-pen" data-invtagedit="${escapeHtml(t)}"
+          title="Rename or remove this tag everywhere"></i></span>`).join('')
     : '';
   invSyncSelAll(); // selection bar + header checkbox track every repaint
+}
+
+// ---- tag dialog: rename a tag (fix a typo) or strip it from every item ----
+// The tag bar only knows this page's items, so the dialog pulls the whole
+// inventory (one-offs included — they keep their tags) before touching anything.
+
+async function invFetchAllItems() {
+  const all = [];
+  for (const extra of [{}, { inventory_type: 'one_off' }]) {
+    for (let page = 1; page < 40; page++) {
+      let res;
+      try { res = await api().get_inventory({ ...extra, page, perpage: 500 }); } catch (_) { res = { ok: false }; }
+      const rows = (res.ok && res.data && res.data.results) || [];
+      all.push(...rows);
+      if (rows.length < 500) break;
+    }
+  }
+  return all;
+}
+
+async function invOpenTagDialog(tag) {
+  invState.tagEdit = { tag, items: null };
+  $('#inv-tag-title').textContent = tag;
+  $('#inv-tag-name').value = tag;
+  $('#inv-tag-count').textContent = 'Counting items…';
+  $('#inv-tag-modal').hidden = false;
+  $('#inv-tag-name').focus();
+  $('#inv-tag-name').select();
+  const items = (await invFetchAllItems()).filter((i) => invTags(i).some((t) => t.toLowerCase() === tag.toLowerCase()));
+  if (!invState.tagEdit || invState.tagEdit.tag !== tag) return; // dialog moved on
+  invState.tagEdit.items = items;
+  $('#inv-tag-count').textContent = `On ${fmtNum(items.length)} item${items.length === 1 ? '' : 's'} — changes apply to all of them`;
+}
+
+async function invApplyTagEdit(remove) {
+  const ed = invState.tagEdit;
+  if (!ed) return;
+  const next = remove ? '' : $('#inv-tag-name').value.replace(/,/g, ' ').trim();
+  if (!remove && !next) { toast('Type the new tag name first', false); return; }
+  if (!remove && next === ed.tag) { $('#inv-tag-modal').hidden = true; return; }
+  if (!ed.items) { toast('Still counting items — one moment', false); return; }
+  if (remove) {
+    const n = ed.items.length;
+    const ok = await confirmDialog({
+      title: `Remove tag “${ed.tag}”?`,
+      message: `It comes off ${n === 1 ? 'the one item' : `all ${fmtNum(n)} items`} carrying it. The items themselves stay put.`,
+      confirmLabel: 'Remove tag',
+    });
+    if (!ok) return;
+  }
+  $('#inv-tag-modal').hidden = true;
+  const results = await Promise.all(ed.items.map((i) => {
+    const keep = invTags(i).filter((t) => t.toLowerCase() !== ed.tag.toLowerCase());
+    const tags = (remove ? keep : mergeTags(keep.join(', '), next).split(',').map((t) => t.trim()).filter(Boolean)).join(', ');
+    return apiFetch('PUT', 'api/inventory.php', { data: { inventory_id: safeInt(i.id), tags } })
+      .catch((e) => ({ ok: false, error: String(e) }));
+  }));
+  const failed = results.filter((r) => !r.ok).length;
+  const n = ed.items.length - failed;
+  if (invState.tagFilter && invState.tagFilter.toLowerCase() === ed.tag.toLowerCase()) invState.tagFilter = remove ? null : next;
+  invState.tagEdit = null;
+  toast(failed
+    ? `${failed} of ${ed.items.length} item${ed.items.length === 1 ? '' : 's'} failed to update`
+    : remove ? `Removed “${ed.tag}” from ${fmtNum(n)} item${n === 1 ? '' : 's'}`
+             : `Renamed “${ed.tag}” to “${next}” on ${fmtNum(n)} item${n === 1 ? '' : 's'}`, !failed);
+  loadInventory();
 }
 
 // ---- notes dialog: hover the icon to preview, click to edit (matches the
@@ -237,8 +308,9 @@ async function invNotifySweep() {
     next[id] = s;
     if (!(id in prev)) continue;              // first sight — record, never announce
     const p = safeInt(prev[id]);
+    if (t <= 0) continue;                     // threshold 0 = warnings off for this item
     const crossedNeg = p >= 0 && s < 0;
-    const crossedLow = !crossedNeg && s >= 0 && t > 0 && s <= t && p > t;
+    const crossedLow = !crossedNeg && s >= 0 && s <= t && p > t;
     if (!crossedNeg && !crossedLow) continue;
     const key = `inv:${id}:${crossedNeg ? 'neg' : 'low'}`;
     if (fired[key] && now - fired[key] < 86400) continue;
@@ -597,11 +669,19 @@ function initInventory() {
       invState.groups[invState.groups.length - 1], renderInvRows);
   });
   $('#inv-tagbar').addEventListener('click', (e) => {
+    const pen = e.target.closest('[data-invtagedit]');
+    if (pen) { invOpenTagDialog(pen.dataset.invtagedit); return; }
     const tag = e.target.closest('[data-invtag]');
     if (!tag) return;
     invState.tagFilter = invState.tagFilter === tag.dataset.invtag ? null : tag.dataset.invtag;
     renderInvRows();
   });
+  // tag rename / remove-everywhere dialog (opened from a chip's pencil)
+  $('#inv-tag-rename').addEventListener('click', () => invApplyTagEdit(false));
+  $('#inv-tag-remove').addEventListener('click', () => invApplyTagEdit(true));
+  $('#inv-tag-cancel').addEventListener('click', () => { $('#inv-tag-modal').hidden = true; invState.tagEdit = null; });
+  $('#inv-tag-name').addEventListener('keydown', (e) => { if (e.key === 'Enter') invApplyTagEdit(false); });
+  bindBackdropClose($('#inv-tag-modal'), () => { $('#inv-tag-modal').hidden = true; invState.tagEdit = null; });
 
   // tag indicator popover — identical to stockpile's (same popover element +
   // hide timers); chips filter this list

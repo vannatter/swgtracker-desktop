@@ -60,6 +60,7 @@ function applyHolidayBar() {
 }
 
 const PAGE_LOADERS = {
+  home: () => loadHome(),
   resources: () => loadResources(),
   schematics: () => loadSchematics(),
   cities: () => loadCities(),
@@ -105,6 +106,22 @@ document.addEventListener('focusin', (e) => {
   }
 });
 
+// Collapsed-sidebar tooltips: the item's label on one line, with a live counter
+// as "Factories (1)". Only while icons stand alone — expanded labels don't need
+// repeating on hover. Clear data-tip too: the tooltip layer migrates title ->
+// data-tip on hover.
+function syncNavTips() {
+  const on = document.querySelector('.app-sidebar')?.classList.contains('collapsed');
+  document.querySelectorAll('.app-sidebar .nav-item').forEach((item) => {
+    if (!on) { item.removeAttribute('title'); delete item.dataset.tip; return; }
+    const label = [...item.childNodes].filter((n) => n.nodeType === Node.TEXT_NODE).map((n) => n.textContent).join(' ').replace(/\s+/g, ' ').trim();
+    const pill = item.querySelector('.nav-pill');
+    const count = pill && !pill.hidden ? String(pill.textContent).trim() : '';
+    item.title = count ? `${label} (${count})` : label;
+    delete item.dataset.tip;
+  });
+}
+
 function initNav() {
   // Scope to the sidebar — Bootstrap tab markup also uses .nav-item (see scd-tabs).
   document.querySelectorAll('.app-sidebar .nav-item').forEach((item) => {
@@ -114,16 +131,7 @@ function initNav() {
   const sidebar = document.querySelector('.app-sidebar');
   const applyCollapsed = (on) => {
     sidebar.classList.toggle('collapsed', on);
-    // tooltips only when icons stand alone — labels don't need repeating on hover.
-    // Clear data-tip too: the tooltip layer migrates title -> data-tip on hover.
-    document.querySelectorAll('.app-sidebar .nav-item').forEach((item) => {
-      if (on) {
-        item.title = item.textContent.trim();
-      } else {
-        item.removeAttribute('title');
-        delete item.dataset.tip;
-      }
-    });
+    syncNavTips();
     $('#side-collapse i').className = `fa-solid ${on ? 'fa-angles-right' : 'fa-angles-left'}`;
     $('#side-collapse').title = on ? 'Expand menu' : 'Collapse menu';
     localStorage.setItem('sidebar-collapsed', on ? '1' : '');
@@ -198,7 +206,7 @@ function showPage(key, opts = {}) {
   document.querySelectorAll('.page').forEach((p) => p.classList.toggle('active', p.id === `page-${key}`));
   // live-state pages reload on every visit, not just the first — mail uploads
   // and cron inventory depletion both move underneath a cached render
-  const ALWAYS_RELOAD = new Set(['monitor', 'inventory', 'characters']);
+  const ALWAYS_RELOAD = new Set(['monitor', 'inventory', 'characters', 'home']); // home throttles itself (5 min)
   if (PAGE_LOADERS[key] && (!loadedPages.has(key) || ALWAYS_RELOAD.has(key))) {
     loadedPages.add(key);
     PAGE_LOADERS[key]();
@@ -1015,7 +1023,7 @@ function startData() {
   loadedPages.add('myschematics');
   loadMySchematics(); // wrench marks on the Schematics page need the crafting list
 
-  showPage('resources'); // triggers the first load via PAGE_LOADERS
+  showPage('home'); // the start page — triggers its first load via PAGE_LOADERS
   fetchPulse();
   setInterval(fetchPulse, 3 * 60 * 1000); // every 3 min, matching the Tk app
   navAttnSweep();
@@ -1050,6 +1058,7 @@ async function navAttnSweep() {
     p.hidden = n <= 0;
     p.title = tip;
   };
+  syncNavTips(); // collapsed-sidebar tooltips carry the count — "Factories (1)"
   set('#nav-harv-pill', harvFull,
     `${harvFull} full hopper${harvFull === 1 ? '' : 's'} — extraction is stopped until emptied`);
   set('#nav-fac-pill', facDone,
@@ -1074,6 +1083,8 @@ async function boot() {
   initInventory();
   initSettings();
   initAlerts();
+  initHome();
+  initPlanetPop();
   initLab();
   initMail();
   initScanner();

@@ -380,6 +380,7 @@ async function loadGuilds() {
   if (!res.ok) { $('#guilds-empty').textContent = res.error || 'Could not load guilds.'; $('#guilds-empty').hidden = false; return; }
   if (agg) agg.hidden = false;
   guildsState.items = (res.data && res.data.results) || [];
+  gxUpdated('#guilds-updated', res.data && res.data.last_updated); // same stamp as Cities (Dustin)
   guildsState.aggregate = (res.data && res.data.aggregate) || null;
   guildsState.factions = (res.data && res.data.factions) || [];
   guildsState.loaded = true;
@@ -689,10 +690,17 @@ const PROF_GROUPS = [
   { key: 'melee', name: 'Melee', color: '#7A6348', keys: ['berserker', 'brawler', 'lancer', 'tkm', 'fencer'] },
   { key: 'healing', name: 'Healing', color: '#477778', keys: ['combat_medic', 'bio_engineer', 'doctor', 'medic'] },
   { key: 'space', name: 'Space', color: '#487A5A', keys: ['pilot_imp', 'pilot_rebel', 'pilot_neutral'] },
-  { key: 'hybrid', name: 'Hybrid', color: '#7A484E', keys: ['sl', 'commando', 'creature_handler', 'bounty_hunter', 'scout', 'smuggler'] },
+  { key: 'hybrid', name: 'Hybrid', color: '#7A484E', keys: ['sl', 'commando', 'creature_handler', 'bounty_hunter', 'scout', 'ranger', 'smuggler'] },
   { key: 'social', name: 'Social', color: '#624778', keys: ['dancer', 'entertainer', 'musician', 'image_designer'] },
 ];
 const profGroupOf = (key) => PROF_GROUPS.find((g) => g.keys.includes(key));
+// A class the endpoint adds before this map learns it (Ranger, 2026-10-15) must
+// still be listed — it lands in a trailing "Other" family instead of vanishing.
+function profGroupsFor(items) {
+  const known = new Set(PROF_GROUPS.flatMap((g) => g.keys));
+  const extra = items.map((p) => p.key).filter((k) => !known.has(k));
+  return extra.length ? [...PROF_GROUPS, { key: 'other', name: 'Other', color: '#777', keys: extra }] : PROF_GROUPS;
+}
 
 async function loadProfessions() {
   if (profState.loaded) { renderProfessions(); return; }
@@ -739,7 +747,7 @@ function renderProfessions() {
     $('#prof-list').innerHTML = [...matches].sort((a, b) => b.count - a.count).map((p) => profRowHtml(p, max)).join('');
     return;
   }
-  const html = PROF_GROUPS.map((g) => {
+  const html = profGroupsFor(profState.items).map((g) => {
     const members = g.keys.map((k) => byKey[k]).filter(Boolean).sort((a, b) => b.count - a.count);
     if (!members.length) return '';
     const gTotal = members.reduce((s, p) => s + p.count, 0);
@@ -780,7 +788,7 @@ function profRowHtml(p, max) {
 // is a whole family (its member counts summed); otherwise a single class.
 function profCompareEntry(k, idx, byKey) {
   if (k.startsWith('g:')) {
-    const g = PROF_GROUPS.find((x) => x.key === k.slice(2));
+    const g = profGroupsFor(profState.items).find((x) => x.key === k.slice(2));
     if (!g) return null;
     const sums = idx.map((i) => g.keys.reduce((s, mk) => s + ((profState.history[mk] || [])[i] || 0), 0));
     return { name: `${g.name} family`, color: g.color, values: sums };

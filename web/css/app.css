@@ -432,8 +432,10 @@ td.col-actions .btn-icon.open { color: var(--accent); }
 .data-grid tbody tr.pinned > td { border-bottom: 1px solid rgba(0, 0, 0, .28); }
 .data-grid tbody tr.pinned:hover, .data-grid tbody tr.activeResource:hover { filter: brightness(.88); }
 /* Resources page: the status dot carries "active" now — drop the row tint (keep pinned) */
-#res-grid tbody tr.activeResource { background: transparent; }
-#res-grid tbody tr.activeResource.pinned { background: var(--row-pinned); }
+/* the Resources grid (and Home's Recent Spawns copy of it) shows actives only, so
+   the live-spawn tint would paint every row green — off there, pins still show */
+#res-grid tbody tr.activeResource, .hm-tablewrap .res-grid tbody tr.activeResource { background: transparent; }
+#res-grid tbody tr.activeResource.pinned, .hm-tablewrap .res-grid tbody tr.activeResource.pinned { background: var(--row-pinned); }
 #res-grid tbody tr.activeResource:hover { background: rgba(0, 0, 0, .22); filter: none; }
 
 .res-name { color: var(--text-hover); font-weight: 600; }
@@ -489,6 +491,12 @@ td.col-actions .btn-icon.open { color: var(--accent); }
 .inv-low { color: var(--q-good) !important; }
 /* shape, not just color: restock rows are hard to spot by tint alone */
 .inv-warnico { font-size: 10px; margin-right: 5px; opacity: .9; }
+.inv-nowarn { color: var(--text-muted); }   /* threshold 0 — warning muted on purpose */
+/* tag-bar pencil: hidden until the chip is hovered, so the cloud stays clean */
+#inv-tagbar .inv-tag-pen { margin-left: 6px; font-size: 9px; opacity: 0; transition: opacity .12s; }
+#inv-tagbar .fac-tag:hover .inv-tag-pen { opacity: .6; }
+#inv-tagbar .inv-tag-pen:hover { opacity: 1 !important; color: var(--accent-hover); }
+.inv-tag-count { margin-top: -6px; min-height: 16px; }
 .inv-scope { flex: none; width: 138px; }
 /* Sales: sold item matches nothing in My Inventory — click adds it */
 .sales-notinv { color: var(--q-good); font-size: 12px; margin-left: 6px; cursor: pointer; }
@@ -3249,9 +3257,15 @@ body.dev-mode .scd-hiddenrow { display: block; opacity: .55; }
 .nav-group-caret { margin-left: auto; font-size: 11px; transition: transform .12s; }
 .nav-group-head.collapsed .nav-group-caret { transform: rotate(-90deg); }
 .nav-group-item { padding-left: 30px; } /* indent group members under the header */
-.app-sidebar.collapsed .nav-group-head { justify-content: center; padding-left: 0; padding-right: 0; }
+/* collapsed: the group header is its icon only (no half-clipped "GALAXY"), group
+   members sit dead-center like every other item, and a counter pill rides the
+   icon's corner so it takes no width (Dustin) */
+.app-sidebar.collapsed .nav-group-head { justify-content: center; padding-left: 0; padding-right: 2px; font-size: 0; gap: 0; }
+.app-sidebar.collapsed .nav-group-head i:first-child { font-size: 14px; }
 .app-sidebar.collapsed .nav-group-caret { display: none; }
-.app-sidebar.collapsed .nav-group-item { padding-left: 16px; }
+.app-sidebar.collapsed .nav-group-item { padding-left: 0; }
+.app-sidebar.collapsed .nav-item { position: relative; }
+.app-sidebar.collapsed .nav-item .nav-pill { position: absolute; top: 0; right: 6px; margin: 0; font-size: 9px; line-height: 13px; min-width: 13px; height: 13px; padding: 0 3px; }
 
 .gx-updated { font-size: 11.5px; color: var(--text-muted); white-space: nowrap; }
 .gx-muted { color: var(--text-muted); }
@@ -3680,3 +3694,158 @@ tr.gx-rowlink:hover .gx-detail-link { color: var(--accent-hover); }
 .sc-sum-row { display: flex; align-items: center; justify-content: space-between; padding: 5px 0; font-size: 14px; }
 .sc-sum-row b { color: var(--text-hover); }
 .sc-runs { width: 64px; text-align: right; background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--border); border-radius: 5px; padding: 3px 6px; font-size: 13px; margin-left: 6px; }
+
+/* ---- Home (start page) ----------------------------------------------------- */
+/* Flat like the website: a slim uppercase header with a hairline under it, the
+   content straight on the page — no boxed-in gray blocks (Dustin). */
+.hm-scroll { padding-right: 4px; }
+.hm-sections { display: flex; flex-direction: column; gap: 22px; }
+.hm-head { display: flex; align-items: center; gap: 10px; padding: 0 2px 8px; margin-bottom: 12px; cursor: pointer; user-select: none;
+           border-bottom: 1px solid var(--border);
+           font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--text-hover); }
+.hm-head:hover .hm-title { color: var(--accent-hover); }
+.hm-icon { color: var(--accent); width: 16px; text-align: center; }
+.hm-count { font-size: 11px; font-weight: 600; color: var(--text-muted); letter-spacing: 0; }
+.hm-headright { margin-left: auto; text-transform: none; letter-spacing: 0; font-weight: 400; }
+.hm-caret { color: var(--text-muted); font-size: 11px; transition: transform .15s; }
+.hm-section.collapsed .hm-caret { transform: rotate(-90deg); }
+.hm-section.collapsed .hm-head { margin-bottom: 0; }
+.hm-body { padding: 0 2px; }
+.hm-loading { color: var(--text-muted); padding: 8px 0; }
+.hm-more { font-size: 11px; padding: 2px 10px; }
+/* hot resources: profession chips + cards (mirrors the website's hot bar) */
+.hm-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+.hm-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 4px 12px; border-radius: 999px; cursor: pointer;
+           border: 1px solid var(--border); background: transparent; color: var(--text-muted); }
+.hm-chip:hover { color: var(--text-hover); }
+.hm-chip.active { border-color: var(--chip); color: var(--text-hover); box-shadow: inset 0 0 0 1px var(--chip); }
+.hm-chip-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--chip); }
+.hm-chip-n { font-size: 10px; opacity: .7; }
+.hm-hot-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+.hm-hot-card { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; background: var(--bg-secondary); }
+.hm-hot-card.is-new { border-color: rgba(226, 67, 80, .45); }
+.hm-hot-top { display: flex; align-items: center; gap: 6px; }
+.hm-new { font-size: 9px; font-weight: 800; letter-spacing: .06em; padding: 1px 5px; border-radius: 4px; background: var(--accent); color: #fff; }
+.hm-hot-name { font-weight: 700; font-size: 14px; color: var(--text-hover); }
+.hm-hot-type { font-size: 12px; color: var(--text-muted); margin: 2px 0 6px; }
+.hm-hot-meta { display: flex; gap: 12px; font-size: 11px; color: var(--text-muted); margin-bottom: 6px; }
+.hm-hot-planets .planet { font-size: 9px; }
+/* at a glance tiles */
+.hm-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; }
+.hm-tile { border: 1px solid var(--border); border-radius: 8px; padding: 14px 12px 12px; background: var(--bg-secondary); text-align: center; min-height: 118px;
+           display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+.hm-tile-label { font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); }
+.hm-tile-value { font-size: 17px; font-weight: 700; color: var(--text-hover); width: 100%; }
+.hm-tile-value .res-name, .hm-schem { cursor: pointer; }
+.hm-tile-value .res-name:hover, .hm-schem:hover { color: var(--accent-hover); }
+.hm-tile-sub { font-size: 12px; color: var(--text-muted); }
+.hm-badge { font-size: 11px; padding: 2px 9px; border-radius: 5px; background: rgba(255,255,255,.08); color: var(--text-muted); margin-top: 4px; }
+.hm-mini { width: 100%; }
+.hm-mini .gx-legend { display: none; }
+.hm-mini .gx-chartwrap svg { height: 70px; }
+.hm-gcw-now, .hm-pulse-now { display: flex; gap: 12px; font-size: 12px; justify-content: center; }
+.hm-imp { color: #e24350; font-weight: 700; } .hm-reb { color: #5b8def; font-weight: 700; }
+.hm-pulse-now span { color: var(--text-muted); }
+.hm-tablewrap { max-height: none; overflow: visible; overflow-x: auto; }
+.hm-scroll { overflow-x: hidden; }
+/* customize dialog: drag a row to reorder */
+.hm-cfg-card { max-width: 520px; }
+.hm-cfg-sub { margin: -6px 0 12px; }
+.hm-cfg-list { display: flex; flex-direction: column; gap: 6px; }
+.hm-cfg-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-secondary); cursor: grab; }
+.hm-cfg-row:active { cursor: grabbing; }
+.hm-cfg-row.off { opacity: .55; }
+.hm-cfg-row.dragging { opacity: .35; }
+.hm-cfg-row.drop-before { box-shadow: 0 -2px 0 0 var(--accent); }
+.hm-cfg-row.drop-after { box-shadow: 0 2px 0 0 var(--accent); }
+.hm-cfg-grip { color: var(--text-muted); font-size: 12px; }
+.hm-cfg-text { flex: 1; min-width: 0; }
+.hm-cfg-name { font-weight: 600; color: var(--text-hover); }
+
+/* Home: widgets, picker, richer customize rows, spawn view switch */
+.hm-link { cursor: pointer; } .hm-link:hover { color: var(--accent-hover); }
+.hm-live { color: var(--accent-green, #45e97e); font-weight: 600; }
+.hm-slots { width: 100%; text-align: left; display: flex; flex-direction: column; gap: 3px; margin-top: 4px; font-size: 12px; }
+.hm-slot-type { color: var(--text-muted); } .hm-slot .res-name { cursor: pointer; font-weight: 600; } .hm-slot .res-name:hover { color: var(--accent-hover); }
+.hm-slot-q { color: var(--q-good); font-weight: 600; }
+.hm-tile-label i { margin-right: 4px; opacity: .8; }
+.hm-view { margin-right: 8px; }
+.hm-headright { display: flex; align-items: center; gap: 6px; }
+.hm-spawn-tree { min-height: 40px; }
+.hm-cfg-row { flex-direction: column; align-items: stretch; gap: 0; padding: 0; }
+.hm-cfg-main { display: flex; align-items: center; gap: 10px; padding: 8px 10px; }
+.hm-cfg-sub { padding: 0 10px 10px 44px; display: flex; flex-direction: column; gap: 8px; }
+/* option checkboxes line up in two clean columns, not a ragged cloud (Dustin) */
+.hm-cfg-opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 18px; }
+.hm-cfg-opt { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-primary); cursor: pointer; min-width: 0; }
+.hm-cfg-opt input { flex: none; margin: 0; }
+.hm-cfg-opt span, .hm-cfg-opt i { flex: none; }
+.hm-cfg-opt .hm-chip-dot { width: 7px; height: 7px; }
+.hm-cfg-widgets { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; border-top: 1px dashed var(--border); padding-top: 8px; }
+.hm-cfg-widget { width: 100%; }
+.hm-cfg-widget .hm-cfg-del { margin-left: auto; padding: 0 6px; color: var(--text-muted); }
+.hm-cfg-widget .hm-cfg-del:hover { color: var(--accent-hover); }
+.hm-cfg-inline { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-primary); }
+.hm-cfg-sel { width: auto; padding: 2px 26px 2px 8px; font-size: 12px; }
+/* widget picker: a tile per type, then the search */
+.hm-pick-card { max-width: 620px; }
+.hm-pick-types { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
+.hm-pick-type { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; padding: 10px 12px; cursor: pointer;
+                border: 1px solid var(--border); border-radius: 8px; background: var(--bg-secondary); color: var(--text-primary); min-height: 84px; }
+.hm-pick-type:hover { border-color: var(--text-muted); color: var(--text-hover); }
+.hm-pick-type.active { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); color: var(--text-hover); background: rgba(226, 67, 80, .08); }
+.hm-pick-type > i { color: var(--accent); font-size: 15px; }
+.hm-pick-type-name { font-weight: 700; font-size: 13px; }
+.hm-pick-type-hint { font-size: 11px; color: var(--text-muted); line-height: 1.3; }
+.hm-pick-step { display: flex; flex-direction: column; gap: 8px; }
+.hm-pick-results { max-height: 240px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; border: 1px solid var(--border); border-radius: 6px; padding: 4px; background: var(--bg-primary); }
+.hm-pick { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 5px; cursor: pointer; font-size: 13px; }
+.hm-pick > i:first-child { color: var(--text-muted); width: 14px; text-align: center; }
+.hm-pick > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hm-pick-add { opacity: 0; color: var(--accent); }
+.hm-pick:hover { background: rgba(255,255,255,.06); color: var(--text-hover); }
+.hm-pick:hover .hm-pick-add { opacity: 1; }
+.hm-pick-empty { padding: 8px 6px; }
+.set-tz-select { max-width: 320px; }
+.hm-cfg-optname { flex: 1 1 auto !important; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Home carousels: one scroll-snapped row with arrows at each end */
+.hm-carousel-wrap { position: relative; }
+.hm-carousel { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x proximity; padding: 2px 2px 4px; scrollbar-width: none; }
+.hm-carousel::-webkit-scrollbar { display: none; }   /* arrows + wheel/trackpad move it — no bar */
+.hm-carousel > * { flex: 0 0 auto; scroll-snap-align: start; }
+.hm-hot-grid-car > .hm-hot-card { width: 210px; }
+.hm-tiles-car > .hm-tile { width: 230px; }
+/* edge fades + arrows show only on a side that still has cards beyond it */
+.hm-carousel-wrap::before, .hm-carousel-wrap::after { content: ''; position: absolute; top: 0; bottom: 4px; width: 72px; z-index: 1; pointer-events: none; opacity: 0; transition: opacity .15s; }
+.hm-carousel-wrap::before { left: 0; background: linear-gradient(to right, var(--bg-primary) 20%, transparent); }
+.hm-carousel-wrap::after { right: 0; background: linear-gradient(to left, var(--bg-primary) 20%, transparent); }
+.hm-carousel-wrap.can-left::before, .hm-carousel-wrap.can-right::after { opacity: 1; }
+.hm-car-btn { position: absolute; top: 50%; transform: translateY(-60%); z-index: 2; width: 30px; height: 30px; border-radius: 50%;
+              border: 1px solid var(--border); background: var(--bg-card); color: var(--text-hover); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 12px;
+              opacity: 0; pointer-events: none; transition: opacity .15s; box-shadow: 0 2px 8px rgba(0,0,0,.35); }
+.hm-carousel-wrap.can-left .hm-car-left, .hm-carousel-wrap.can-right .hm-car-right { opacity: 1; pointer-events: auto; }
+.hm-car-btn:hover { color: var(--accent-hover); border-color: var(--accent); }
+.hm-car-left { left: 6px; } .hm-car-right { right: 6px; }
+/* section headers stay one slim line: every control in them is icon-sized */
+.hm-head { min-height: 30px; }
+.hm-head .res-view-switch { margin: 0; }
+.hm-jump { font-size: 11px; }
+/* the confirm dialog can be raised from inside another modal (Home's Reset) — it must float above it */
+#confirm-dialog { z-index: 320; }
+.set-username-row { margin-top: 12px; }
+.set-username { max-width: 260px; }
+
+/* planet editing: the "+" chip after a resource's planet badges, and its popover */
+.planet.planet-add { background: transparent; border: 1px dashed var(--text-muted); color: var(--text-muted); cursor: pointer; opacity: .7; }
+.planet.planet-add:hover { opacity: 1; color: var(--text-hover); border-color: var(--text-hover); }
+.planet.planet-add i { font-size: 8px; }
+.rd-planet.planet-add i { font-size: 10px; }
+.planet-pop { width: 330px; padding: 10px 12px 12px; }
+.planet-pop-title { font-size: 12px; font-weight: 600; color: var(--text-hover); margin-bottom: 8px; }
+.planet-pop-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.planet-pop-chip { display: flex !important; align-items: center; gap: 7px; cursor: pointer; font-size: 10px; padding: 4px 8px; border-radius: 4px; width: auto; }
+.planet-pop-chip .planet-pop-name { font-size: 12px; font-weight: 600; letter-spacing: 0; color: var(--text-hover); }
+.planet-pop-chip.off { opacity: .35; filter: grayscale(.6); }
+.planet-pop-chip.off:hover, .planet-pop-chip:hover { opacity: 1; filter: none; outline: 1px solid var(--text-muted); }
+.planet-pop-chip.busy { pointer-events: none; opacity: .6; }

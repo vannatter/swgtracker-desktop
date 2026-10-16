@@ -35,7 +35,8 @@
     <!-- Sidebar -->
     <nav class="app-sidebar">
       <ul class="nav-list">
-        <li class="nav-item active" data-page="resources"><i class="fa-solid fa-gem"></i> Resources</li>
+        <li class="nav-item active" data-page="home"><i class="fa-solid fa-house"></i> Home</li>
+        <li class="nav-item" data-page="resources"><i class="fa-solid fa-gem"></i> Resources</li>
         <li class="nav-item" data-page="schematics"><i class="fa-solid fa-scroll"></i> Schematics</li>
         <li class="nav-group-head" data-navgroup="galaxy" title="Server-wide data"><i class="fa-solid fa-earth-americas"></i> Galaxy <i class="fa-solid fa-caret-down nav-group-caret"></i></li>
         <li class="nav-item nav-group-item galaxy-item" data-page="cities"><i class="fa-solid fa-city"></i> Cities</li>
@@ -101,8 +102,24 @@
         <span class="ann-naggo">View them <i class="fa-solid fa-arrow-right"></i></span>
         <button class="btn btn-icon" id="ann-naghide" title="Hide until new matches arrive"><i class="fa-solid fa-xmark"></i></button>
       </div>
+      <!-- Home page: the start page — Hot Resources / At a Glance (the website's
+           landing page), Recent Spawns and Announcements, each toggleable + reorderable -->
+      <section id="page-home" class="page active">
+        <div class="page-head">
+          <h1 id="home-greet">Welcome back</h1>
+          <i class="fa-solid fa-circle-info info-tip"
+             title="Your start page. Customize picks which sections show, what's inside them and in what order; click a section header to collapse it. The greeting follows the Settings timezone."></i>
+          <span id="home-updated" class="page-hint-inline settings-sub"></span>
+          <button id="home-customize" class="btn btn-sm btn-outline-secondary head-right" title="Show, hide and reorder the sections"><i class="fa-solid fa-sliders"></i> Customize</button>
+          <button id="home-refresh" class="btn btn-icon" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
+        </div>
+        <div class="table-wrap hm-scroll">
+          <div id="home-sections" class="hm-sections"></div>
+        </div>
+      </section>
+
       <!-- Resources page -->
-      <section id="page-resources" class="page active">
+      <section id="page-resources" class="page">
         <div class="page-head">
           <h1>Resources</h1>
           <button id="res-wp-note" class="btn btn-sm btn-outline-secondary head-right"
@@ -375,6 +392,8 @@
           <span id="stk-status" class="pager-status"></span>
         </div>
         <div id="stk-schem-pop" class="stk-schem-pop" hidden></div>
+        <!-- planet add/remove popover (shared by every resource grid, card and the resource page) -->
+        <div id="planet-pop" class="stk-schem-pop planet-pop" hidden></div>
       </section>
 
       <!-- My Schematics page (crafting list; write ops pending API deploy) -->
@@ -555,7 +574,7 @@
         <div class="table-wrap" id="al-announce-wrap" hidden>
           <table class="data-grid">
             <thead><tr>
-              <th class="col-text">When</th><th class="col-name">Resource</th><th class="col-text">What</th>
+              <th class="col-text">When</th><th class="col-name">Resource</th><th class="col-text">Type</th><th class="col-text">What</th>
             </tr></thead>
             <tbody id="al-announcements"></tbody>
           </table>
@@ -916,7 +935,7 @@
         <div class="page-head">
           <h1>My Inventory</h1>
           <i class="fa-solid fa-circle-info info-tip"
-             title="Crafted-item stock. Click a Stocked or Threshold number to edit it."></i>
+             title="Crafted-item stock. Click a Stocked or Threshold number to edit it. A threshold of 0 turns off that item's warnings (low stock and oversold) — handy for specials you only stock sometimes."></i>
           <select id="inv-filter" class="form-select filter-select head-filter">
             <option value="">All items</option>
             <option value="restock">Needs restock</option>
@@ -948,7 +967,7 @@
           <input id="inv-bulk-stocked" type="number" class="form-control filter-input inv-bulk-num" placeholder="Stocked" min="0"
                  title="Leave blank to keep each item's current stocked count — restock alerts re-arm on their own">
           <input id="inv-bulk-threshold" type="number" class="form-control filter-input inv-bulk-num" placeholder="Threshold" min="0"
-                 title="Leave blank to keep each item's current threshold">
+                 title="Leave blank to keep each item's current threshold — 0 turns that item's warnings off">
           <input id="inv-bulk-vendor" type="text" class="form-control filter-input inv-bulk-vendor" placeholder="Vendor" autocomplete="off"
                  title="Leave blank to keep each item's current vendor — handy after renaming a vendor">
           <input id="inv-bulk-tags" type="text" class="form-control filter-input inv-bulk-vendor" placeholder="Add tags" autocomplete="off"
@@ -1685,7 +1704,6 @@
         <div class="page-head">
           <h1>Player Titles</h1>
           <i class="fa-solid fa-circle-info info-tip" title="Every player title and the command to set it. Click a command to copy it. Reference data from swgtracker.com."></i>
-          <span id="titles-updated" class="gx-updated head-right"></span>
           <input id="titles-search" type="text" class="form-control filter-input head-search" placeholder="Search title..." autocomplete="off">
           <button id="titles-reload" class="btn btn-icon" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
         </div>
@@ -1711,6 +1729,10 @@
             </button>
           </div>
           <div id="set-apikey-hint" class="settings-hint"></div>
+          <div class="set-inline-pref set-username-row">
+            <span>Username <span class="settings-sub">on your notes and the Home greeting</span></span>
+            <input id="set-username" type="text" class="form-control filter-input set-username" maxlength="40" placeholder="loads with your key" autocomplete="off" spellcheck="false">
+          </div>
         </div>
 
         <div class="settings-section">
@@ -1776,6 +1798,10 @@
               <option value="us">US — MM/DD/YY</option>
               <option value="intl">International — DD/MM/YY</option>
             </select>
+          </div>
+          <div class="set-inline-pref">
+            <span>Timezone <span class="settings-sub">dates and the Home greeting</span></span>
+            <select id="set-tz" class="form-select filter-select set-datefmt-select set-tz-select"></select>
           </div>
           <div class="set-wpfmt">
             <div class="set-wpfmt-label">Waypoint copy format
@@ -2069,7 +2095,7 @@
           <input id="inv-new-stocked" type="number" class="form-control filter-input" value="10" min="0">
         </div>
         <div class="inv-add-field">
-          <label class="sp-field-label">Low-stock threshold</label>
+          <label class="sp-field-label">Low-stock threshold <span class="settings-sub">0 = never warn</span></label>
           <input id="inv-new-threshold" type="number" class="form-control filter-input" value="1" min="0">
         </div>
       </div>
@@ -2301,6 +2327,51 @@
       <div class="inv-add-actions">
         <button id="char-modal-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
         <button id="char-modal-confirm" class="btn btn-sm btn-accent"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Home customize dialog: which sections show, and in what order -->
+  <div id="home-cfg-modal" class="key-gate" hidden>
+    <div class="key-gate-card sp-card stk-note-card hm-cfg-card">
+      <h2><i class="fa-solid fa-sliders"></i> Customize Home</h2>
+      <p class="settings-sub hm-cfg-sub">Tick the sections you want and drag them into order. Inside each one, untick what you'll never care about — or add your own widgets to At a Glance. Saved on this device.</p>
+      <div id="home-cfg-list" class="hm-cfg-list"></div>
+      <div class="stk-note-actions">
+        <button id="home-cfg-reset" class="btn btn-sm btn-outline-secondary" title="Show every section in the default order">Reset</button>
+        <button id="home-cfg-done" class="btn btn-sm btn-accent"><i class="fa-solid fa-check"></i> Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Home widget picker: pin a guild, city, resource, schematic, class or your restock count to At a Glance -->
+  <div id="home-widget-modal" class="key-gate" hidden>
+    <div class="key-gate-card sp-card stk-note-card hm-pick-card">
+      <h2><i class="fa-solid fa-plus"></i> Add a widget</h2>
+      <p class="settings-sub hm-cfg-sub">Pick what to pin to At a Glance, then find the one you want.</p>
+      <div id="home-widget-type" class="hm-pick-types"></div>
+      <div id="home-widget-step" class="hm-pick-step">
+        <input id="home-widget-search" type="text" class="form-control filter-input stk-note-tagsin" placeholder="Search…" spellcheck="false">
+        <div id="home-widget-results" class="hm-pick-results"></div>
+      </div>
+      <div class="stk-note-actions">
+        <button id="home-widget-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
+        <button id="home-widget-addnow" class="btn btn-sm btn-accent" hidden><i class="fa-solid fa-plus"></i> Add</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tag dialog: fix a misspelled tag everywhere, or strip it from every item -->
+  <div id="inv-tag-modal" class="key-gate" hidden>
+    <div class="key-gate-card sp-card stk-note-card">
+      <h2><i class="fa-solid fa-tag"></i> <span id="inv-tag-title"></span></h2>
+      <div id="inv-tag-count" class="settings-sub inv-tag-count"></div>
+      <label class="fac-label stk-note-tagslabel">Rename to</label>
+      <input id="inv-tag-name" type="text" class="form-control filter-input stk-note-tagsin" maxlength="60" spellcheck="false">
+      <div class="stk-note-actions">
+        <button id="inv-tag-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
+        <button id="inv-tag-remove" class="btn btn-sm btn-outline-danger" title="Strip this tag from every item that carries it"><i class="fa-solid fa-trash-can"></i> Remove everywhere</button>
+        <button id="inv-tag-rename" class="btn btn-sm btn-accent"><i class="fa-solid fa-check"></i> Rename</button>
       </div>
     </div>
   </div>
@@ -2684,7 +2755,8 @@
   <script src="js/customers.js?v=20261012a"></script>
   <script src="js/characters.js?v=20261012a"></script>
   <script src="js/settings.js?v=20261012a"></script>
-  <script src="js/alerts.js?v=20261012a"></script>\n  <script src="js/lab.js?v=20261012a"></script>
+  <script src="js/alerts.js?v=20261012a"></script>
+  <script src="js/lab.js?v=20261012a"></script>
   <script src="js/mail.js?v=20261012a"></script>
   <script src="js/notes.js?v=20261012a"></script>
   <script src="js/macro_commands.js?v=20261012a"></script>
@@ -2694,6 +2766,7 @@
   <script src="js/galaxy.js?v=20261012a"></script>
   <script src="js/schembuilder.js?v=20261012a"></script>
   <script src="js/scanner.js?v=20261012a"></script>
+  <script src="js/home.js?v=20261012a"></script>
   <script src="js/app.js?v=20261012a"></script>
 </body>
 </html>

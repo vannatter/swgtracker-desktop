@@ -309,7 +309,7 @@ async function cmtLoad(host) {
 
 // ---- account-level preferences (api/prefs.php, synced server-side so the
 // email crons honor them too) ----------------------------------------------
-const appPrefs = { ignore_mustafar: 0, _loaded: false };
+const appPrefs = { ignore_mustafar: 0, name: '', _loaded: false }; // name = site username (greeting)
 
 async function loadPrefs(force = false) {
   if (appPrefs._loaded && !force) return appPrefs;
@@ -336,6 +336,77 @@ const PLANET_FULL = {
   planet_rori: 'Rori', planet_talus: 'Talus', planet_tatooine: 'Tatooine',
   planet_yavin4: 'Yavin IV', planet_kashyyyk: 'Kashyyyk', planet_mustafar: 'Mustafar',
 };
+
+// ---- planet editing: the website's "+" on the Planets column, in the app ----
+// planetsEditHtml = the badges plus a "+" chip; clicking it opens a popover of
+// all twelve planets to toggle (api/resources.php PUT {planets}). The caller
+// hands over the row object so toggles patch it in place and repaint.
+function planetsEditHtml(res) {
+  const id = res.id ?? '';
+  return `${planetsHtml(res)}<span class="planet planet-add" data-planetedit="${escapeHtml(String(id))}" title="Add or remove the planets this resource spawns on"><i class="fa-solid fa-plus"></i></span>`;
+}
+const planetPop = { res: null, onChange: null, busy: false };
+function planetPopRender() {
+  const r = planetPop.res; const pop = $('#planet-pop');
+  if (!r || !pop) return;
+  pop.innerHTML = `<div class="planet-pop-title">${escapeHtml(r.name || '')} <span class="settings-sub">— click a planet to toggle it</span></div>
+    <div class="planet-pop-grid">${PLANET_KEYS.map((key) => {
+      const on = String(r[key] ?? '0') === '1';
+      return `<span class="planet planet-pop-chip ${planetClass(key)}${on ? '' : ' off'}" data-planetkey="${key}" title="${PLANET_FULL[key]}${on ? ' — spawning here, click to remove' : ' — click to add'}">${PLANET_FULL[key][0]}<span class="planet-pop-name">${escapeHtml(PLANET_FULL[key])}</span></span>`;
+    }).join('')}</div>`;
+}
+function openPlanetPop(anchor, res, onChange) {
+  const pop = $('#planet-pop');
+  if (!pop || !res) return;
+  planetPop.res = res; planetPop.onChange = onChange || null;
+  planetPopRender();
+  pop.hidden = false;
+  const a = anchor.getBoundingClientRect();
+  pop.style.left = `${Math.max(8, Math.min(a.left, window.innerWidth - pop.offsetWidth - 8))}px`;
+  pop.style.top = a.bottom + pop.offsetHeight + 8 < window.innerHeight ? `${a.bottom + 6}px` : `${a.top - pop.offsetHeight - 6}px`;
+}
+function closePlanetPop() { const pop = $('#planet-pop'); if (pop) pop.hidden = true; planetPop.res = null; planetPop.onChange = null; }
+function initPlanetPop() {
+  const pop = $('#planet-pop');
+  if (!pop) return;
+  pop.addEventListener('click', async (e) => {
+    const chip = e.target.closest('[data-planetkey]');
+    if (!chip || planetPop.busy || !planetPop.res) return;
+    const r = planetPop.res; const key = chip.dataset.planetkey;
+    const next = String(r[key] ?? '0') === '1' ? 0 : 1;
+    planetPop.busy = true; chip.classList.add('busy');
+    let res;
+    try { res = await apiFetch('PUT', 'api/resources.php', { data: { id: safeInt(r.id), planets: { [key]: next } } }); }
+    catch (err) { res = { ok: false, error: String(err) }; }
+    planetPop.busy = false;
+    if (!res.ok || !res.data || !res.data.success) {
+      toast(res.data?.error || res.error || 'Could not update the planet — site update pending?', false);
+      planetPopRender(); return;
+    }
+    r[key] = String(next);
+    planetPopRender();
+    if (planetPop.onChange) planetPop.onChange(r);
+  });
+  document.addEventListener('mousedown', (e) => { if (!pop.hidden && !e.target.closest('#planet-pop, [data-planetedit]')) closePlanetPop(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePlanetPop(); });
+}
+// one delegated opener for every grid/card/page: a "+" chip inside any
+// container, with the row looked up by id through `rows()`
+function wirePlanetEdit(containerSel, rows) {
+  const el = $(containerSel);
+  if (!el) return;
+  el.addEventListener('click', (e) => {
+    const plus = e.target.closest('[data-planetedit]');
+    if (!plus) return;
+    e.stopPropagation();
+    const row = (rows() || []).find((x) => String(x.id) === plus.dataset.planetedit);
+    if (!row) return;
+    openPlanetPop(plus, row, () => {
+      const host = plus.closest('.col-planets, .res-card-planets, .rd-planets-list');
+      if (host) host.innerHTML = host.classList.contains('rd-planets-list') ? rdPlanetsListHtml(row) : planetsEditHtml(row);
+    });
+  });
+}
 
 // Resource stat fields (shared by the resources + stockpile grids)
 const STAT_FIELDS = new Set(['oq', 'cr', 'cd', 'dr', 'hr', 'ma', 'sr', 'ut', 'fl', 'pe', 'rating']);
@@ -491,6 +562,15 @@ function setDateFormat(fmt) {
   localStorage.setItem('dateFormat', appDateFmt);
 }
 
+// Timezone preference — '' = the device clock. Drives every absolute date the
+// app shows (fmtDate) and the Home greeting's time of day. Settings.
+let appTimeZone = localStorage.getItem('timeZone') || '';
+function setTimeZone(tz) {
+  appTimeZone = String(tz || '');
+  try { new Intl.DateTimeFormat('en-US', { timeZone: appTimeZone || undefined }); } catch (_) { appTimeZone = ''; } // unknown id → device clock
+  localStorage.setItem('timeZone', appTimeZone);
+}
+
 // Waypoint copy format — how a shared resource waypoint reads on the clipboard.
 // Philosophy/Eponine: append the resource name + concentration so a pasted /wp
 // isn't just bare coords. Configurable in Settings.
@@ -542,10 +622,9 @@ function parseAnyDate(dt) {
 function fmtDate(ts) {
   const d = parseAnyDate(ts);
   if (!d) return String(ts ?? '');
-  return d.toLocaleString(appDateFmt === 'intl' ? 'en-GB' : 'en-US', {
-    month: '2-digit', day: '2-digit', year: '2-digit',
-    hour: 'numeric', minute: '2-digit',
-  });
+  const opts = { month: '2-digit', day: '2-digit', year: '2-digit', hour: 'numeric', minute: '2-digit' };
+  if (appTimeZone) opts.timeZone = appTimeZone;
+  return d.toLocaleString(appDateFmt === 'intl' ? 'en-GB' : 'en-US', opts);
 }
 
 // Show a grid's loading overlay. The overlay is absolutely positioned inside

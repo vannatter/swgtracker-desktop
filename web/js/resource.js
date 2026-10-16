@@ -86,6 +86,14 @@ function rdAgeText(r) {
     .filter(Boolean).join('   ·   ');
 }
 
+// full-name planet badges for the detail page, with the add/remove "+"
+function rdPlanetsListHtml(r) {
+  const planets = Object.entries(PLANET_FULL)
+    .filter(([key]) => String(r[key] ?? '0') === '1')
+    .map(([key, label]) => `<span class="planet rd-planet ${planetClass(key)}">${label}</span>`);
+  return `${planets.join('') || '<span class="stat_off">no planets recorded</span> '}<span class="planet rd-planet planet-add" data-planetedit="${escapeHtml(String(r.id ?? ''))}" title="Add or remove the planets this resource spawns on"><i class="fa-solid fa-plus"></i></span>`;
+}
+
 function renderResourcePage(data) {
   const r = data.resource || {};
   rdState.id = safeInt(r.id);
@@ -160,12 +168,9 @@ function renderResourcePage(data) {
     ? `#${r.score_rank} of ${r.score_of} · top ${100 - safeInt(r.score_percentile)}%`
     : '';
 
-  // Planet badges
-  const planets = Object.entries(PLANET_FULL)
-    .filter(([key]) => String(r[key] ?? '0') === '1')
-    .map(([key, label]) => `<span class="planet rd-planet ${planetClass(key)}">${label}</span>`);
-  $('#rd-planets').innerHTML = planets.length
-    ? `<span class="rd-planets-label">${rdIsActive(r) ? 'Spawning on:' : 'Last seen on:'}</span> ${planets.join('')}` : '';
+  // Planet badges + the "+" to fix them (the website's Planets column +)
+  rdState.res = r;
+  $('#rd-planets').innerHTML = `<span class="rd-planets-label">${rdIsActive(r) ? 'Spawning on:' : 'Last seen on:'}</span> <span class="rd-planets-list">${rdPlanetsListHtml(r)}</span>`;
 
   // your stockpile tags for this resource — click one to open My Stockpile
   // filtered to it (stockpile may still be syncing; fills in when it lands)
@@ -863,6 +868,7 @@ function initResourcePage() {
     openResEditDialog();
   });
   $('#res-edit-cancel').addEventListener('click', () => { $('#res-edit-modal').hidden = true; });
+  wirePlanetEdit('#rd-planets', () => (rdState.res ? [rdState.res] : []));
   $('#res-edit-modal').addEventListener('click', (e) => {
     if (e.target.id === 'res-edit-modal') $('#res-edit-modal').hidden = true;
   });

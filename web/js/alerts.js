@@ -152,18 +152,26 @@ async function alSaveFeed(kind) {
   loadAlerts(); // re-sync the card either way
 }
 
+// Announcement rows — shared with the Home page's Announcements section. The
+// Type column shows WHAT spawned, not just its name (Philosophy/Eponine); an
+// older server that doesn't send type_name just leaves the cell blank.
+function alAnnounceRowsHtml(list) {
+  return list.map((a) => `
+    <tr>
+      <td class="col-text">${fmtAgoTip(safeInt(a.created))}</td>
+      <td class="col-name res-name" data-res="${escapeHtml(a.resource_name)}">${escapeHtml(a.resource_name)}</td>
+      <td class="col-text res-type">${a.type_name ? escapeHtml(a.type_name) : '<span class="stat_off">—</span>'}</td>
+      <td class="col-text">${escapeHtml(a.detail || '')}${a.kind === 'hot' ? ' <span class="scd-age">· hot</span>' : ' <span class="scd-age">· top rank</span>'}</td>
+    </tr>`).join('');
+}
+
 function renderAlAnnouncements() {
   const list = alState.announcements || [];
   const supported = Array.isArray(alState.announcements);
   $('#al-announce-head').hidden = !supported;
   $('#al-announce-wrap').hidden = !supported;
   if (!supported) return;
-  $('#al-announcements').innerHTML = list.map((a) => `
-    <tr>
-      <td class="col-text">${fmtAgoTip(safeInt(a.created))}</td>
-      <td class="col-name res-name" data-res="${escapeHtml(a.resource_name)}">${escapeHtml(a.resource_name)}</td>
-      <td class="col-text">${escapeHtml(a.detail || '')}${a.kind === 'hot' ? ' <span class="scd-age">· hot</span>' : ' <span class="scd-age">· top rank</span>'}</td>
-    </tr>`).join('');
+  $('#al-announcements').innerHTML = alAnnounceRowsHtml(list);
   $('#al-announce-empty').hidden = !!list.length;
   // tab badge: announcements newer than the last time the tab was opened
   if (!$('#al-pane-community').hidden) {

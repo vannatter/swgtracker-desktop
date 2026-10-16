@@ -173,7 +173,11 @@ def main() -> int:
 
     bundle_label = None
     if ui:
-        r = run(sys.executable, "build/publish_bundle.py", "--deploy", check=False)
+        # the uploader needs `requests`: use the project venv's python when it exists, so a
+        # shell whose `python3` is some other interpreter (ServBay's) can't break the deploy
+        venv_py = ROOT / "venv" / "bin" / "python"
+        py = str(venv_py) if venv_py.exists() else sys.executable
+        r = run(py, "build/publish_bundle.py", "--deploy", check=False)
         tail = [l for l in (r.stdout + r.stderr).splitlines() if "DEPLOYED" in l or "•" in l]
         print("\n".join(tail) if tail else "bundle deploy FAILED:\n" + r.stdout + r.stderr)
         if "DEPLOYED" not in r.stdout:

@@ -42,14 +42,15 @@
     <nav class="app-sidebar">
       <ul class="nav-list">
         <li class="nav-item active" data-page="home"><i class="fa-solid fa-house"></i> Home</li>
-        <li class="nav-group-head" data-navgroup="crafting" title="Resources, schematics and what to craft"><i class="fa-solid fa-hammer"></i> Crafting <i class="fa-solid fa-caret-down nav-group-caret"></i><span class="nav-group-dot" hidden></span></li>
+        <li class="nav-group-head" data-navgroup="crafting"><i class="fa-solid fa-hammer"></i> Crafting <i class="fa-solid fa-caret-down nav-group-caret"></i><span class="nav-group-dot" hidden></span></li>
         <li class="nav-item nav-group-item" data-page="resources" data-group="crafting"><i class="fa-solid fa-gem"></i> Resources</li>
         <li class="nav-item nav-group-item" data-page="schematics" data-group="crafting"><i class="fa-solid fa-scroll"></i> Schematics</li>
-        <li class="nav-item nav-group-item" data-page="topspawns" data-group="crafting"><i class="fa-solid fa-ranking-star"></i> Top Spawns</li>
+        <li class="nav-item nav-group-item" data-page="topspawns" data-group="crafting"><i class="fa-solid fa-ranking-star"></i> Top Spawns
+          <span id="nav-top-pill" class="nav-pill" title="Resources new to the top spawns since you last looked" hidden></span></li>
         <li class="nav-item nav-group-item" data-page="alerts" data-group="crafting"><i class="fa-solid fa-bell"></i> Spawn Alerts
           <span id="nav-alerts-pill" class="nav-pill" title="Spawn alert matches you haven't seen" hidden></span></li>
         <li class="nav-item nav-group-item" data-page="lab" data-group="crafting"><i class="fa-solid fa-flask"></i> Laboratory</li>
-        <li class="nav-group-head" data-navgroup="galaxy" title="Server-wide data"><i class="fa-solid fa-earth-americas"></i> Galaxy <i class="fa-solid fa-caret-down nav-group-caret"></i><span class="nav-group-dot" hidden></span></li>
+        <li class="nav-group-head" data-navgroup="galaxy"><i class="fa-solid fa-earth-americas"></i> Galaxy <i class="fa-solid fa-caret-down nav-group-caret"></i><span class="nav-group-dot" hidden></span></li>
         <li class="nav-item nav-group-item" data-page="pulse" data-group="galaxy"><i class="fa-solid fa-heart-pulse"></i> Pulse</li>
         <li class="nav-item nav-group-item" data-page="cities" data-group="galaxy"><i class="fa-solid fa-city"></i> Cities</li>
         <li class="nav-item nav-group-item" data-page="planetmap" data-group="galaxy"><i class="fa-solid fa-map-location-dot"></i> Planet Maps</li>
@@ -59,30 +60,30 @@
         <li class="nav-item nav-group-item" data-page="professions" data-group="galaxy"><i class="fa-solid fa-users-rectangle"></i> Professions</li>
         <li class="nav-item nav-group-item" data-page="titles" data-group="galaxy"><i class="fa-solid fa-id-badge"></i> Titles</li>
         <li class="nav-item nav-group-item" data-page="restree" data-group="galaxy"><i class="fa-solid fa-sitemap"></i> Resource Tree</li>
-        <li class="nav-group-head" data-navgroup="beasts" title="Beast Master data"><i class="fa-solid fa-paw"></i> Beasts <i class="fa-solid fa-caret-down nav-group-caret"></i><span class="nav-group-dot" hidden></span></li>
+        <li class="nav-group-head" data-navgroup="beasts"><i class="fa-solid fa-paw"></i> Beasts <i class="fa-solid fa-caret-down nav-group-caret"></i><span class="nav-group-dot" hidden></span></li>
         <li class="nav-item nav-group-item" data-page="pets" data-group="beasts"><i class="fa-solid fa-dog"></i> Pets</li>
         <li class="nav-item nav-group-item" data-page="creatures" data-group="beasts"><i class="fa-solid fa-dragon"></i> Creatures</li>
         <li class="nav-item nav-group-item" data-page="specials" data-group="beasts"><i class="fa-solid fa-bolt"></i> Specials</li>
         <li class="nav-item nav-group-item" data-page="hydro" data-group="beasts"><i class="fa-solid fa-vial"></i> Hydro Calc</li>
         <li class="nav-item nav-group-item" data-page="incubator" data-group="beasts"><i class="fa-solid fa-egg"></i> Incubator Calc</li>
         <li class="nav-item nav-group-item" data-page="mutation" data-group="beasts"><i class="fa-solid fa-dna"></i> Mutation Calc</li>
-        <li class="nav-group-head" data-navgroup="mystuff" title="Your schematics, stockpile and wishlist"><i class="fa-solid fa-box-open"></i> My Stuff <i class="fa-solid fa-caret-down nav-group-caret"></i><span class="nav-group-dot" hidden></span></li>
+        <li class="nav-group-head" data-navgroup="mystuff"><i class="fa-solid fa-box-open"></i> My Stuff <i class="fa-solid fa-caret-down nav-group-caret"></i><span class="nav-group-dot" hidden></span></li>
         <li class="nav-item nav-group-item" data-page="myschematics" data-group="mystuff"><i class="fa-solid fa-screwdriver-wrench"></i> My Schematics
           <span id="nav-mys-pill" class="nav-pill" title="Upgrades available across your schematics" hidden></span></li>
         <li class="nav-item nav-group-item" data-page="stockpile" data-group="mystuff"><i class="fa-solid fa-cubes"></i> My Stockpile</li>
         <li class="nav-item nav-group-item" data-page="wishlist" data-group="mystuff"><i class="fa-solid fa-heart"></i> My Wishlist</li>
-        <li class="nav-group-head" data-navgroup="vendors" title="Sales, customers, purchases and vendor stock"><i class="fa-solid fa-tags"></i> Sales <i class="fa-solid fa-caret-down nav-group-caret"></i><span class="nav-group-dot" hidden></span></li>
+        <li class="nav-group-head" data-navgroup="vendors"><i class="fa-solid fa-tags"></i> Sales <i class="fa-solid fa-caret-down nav-group-caret"></i><span class="nav-group-dot" hidden></span></li>
         <li class="nav-item nav-group-item" data-page="sales" data-group="vendors"><i class="fa-solid fa-tags"></i> My Sales</li>
         <li class="nav-item nav-group-item" data-page="insights" data-group="vendors"><i class="fa-solid fa-chart-line"></i> Sales Insights</li>
         <li class="nav-item nav-group-item" data-page="customers" data-group="vendors"><i class="fa-solid fa-users"></i> My Customers</li>
         <li class="nav-item nav-group-item" data-page="purchases" data-group="vendors"><i class="fa-solid fa-cart-shopping"></i> My Purchases</li>
         <li class="nav-item nav-group-item" data-page="inventory" data-group="vendors"><i class="fa-solid fa-warehouse"></i> My Inventory</li>
-        <li class="nav-group-head" data-navgroup="structures" title="Harvesters and factories"><i class="fa-solid fa-building"></i> Structures <i class="fa-solid fa-caret-down nav-group-caret"></i><span class="nav-group-dot" hidden></span></li>
+        <li class="nav-group-head" data-navgroup="structures"><i class="fa-solid fa-building"></i> Structures <i class="fa-solid fa-caret-down nav-group-caret"></i><span class="nav-group-dot" hidden></span></li>
         <li class="nav-item nav-group-item" data-page="harvesters" data-group="structures"><i class="fa-solid fa-tractor"></i> Harvesters
           <span id="nav-harv-pill" class="nav-pill" title="Full hoppers waiting to be emptied" hidden></span></li>
         <li class="nav-item nav-group-item" data-page="factories" data-group="structures"><i class="fa-solid fa-industry"></i> Factories
           <span id="nav-fac-pill" class="nav-pill" title="Finished runs ready to collect" hidden></span></li>
-        <li class="nav-group-head" data-navgroup="tools" title="Characters, mail, notes, macros, aliases and the scanner"><i class="fa-solid fa-toolbox"></i> Tools <i class="fa-solid fa-caret-down nav-group-caret"></i><span class="nav-group-dot" hidden></span></li>
+        <li class="nav-group-head" data-navgroup="tools"><i class="fa-solid fa-toolbox"></i> Tools <i class="fa-solid fa-caret-down nav-group-caret"></i><span class="nav-group-dot" hidden></span></li>
         <li class="nav-item nav-group-item" data-page="characters" data-group="tools"><i class="fa-solid fa-user-group"></i> Characters</li>
         <li class="nav-item nav-group-item" data-page="monitor" data-group="tools"><i class="fa-solid fa-envelope"></i> Mail</li>
         <li class="nav-item nav-group-item" data-page="notes" data-group="tools"><i class="fa-solid fa-note-sticky"></i> Notes</li>
@@ -1201,7 +1202,7 @@
                   data-placeholder="Why these picks, buff setup, results in game…"></div>
               </div>
               <div id="lab-empty" class="al-empty">Pick a schematic to start experimenting — the bench shows whether your picks cap, and what they cost.</div>
-              <div id="lab-debug" class="lab-debug dev-only" hidden></div>
+              <div id="lab-debug" class="lab-debug" hidden></div>
             </div>
           </div>
         </div>
@@ -1230,7 +1231,7 @@
             </div>
           </div>
 
-          <div class="settings-section about-card" id="about-wall-card">
+          <div class="settings-section about-card" id="about-wall-card" hidden><!-- the wall is parked for now (Dustin, 2026-10-17): code + API stay, drop the hidden to bring it back -->
             <h2>The Wall <span class="settings-sub">graffiti for the galaxy — leave a mark for your fellow crafters, one tag a day, signed by you</span></h2>
             <div class="wall-compose">
               <input id="wall-input" type="text" class="form-control filter-input" maxlength="200"
@@ -3160,7 +3161,7 @@
   <script src="js/wishlist.js?v=20261012a"></script>
   <script src="js/myschematics.js?v=20261012a"></script>
   <script src="js/schemcalc.js?v=20261012a"></script>
-  <script src="js/inventory.js?v=20261016a"></script>
+  <script src="js/inventory.js?v=20261017a"></script>
   <script src="js/sales.js?v=20261012a"></script>
   <script src="js/insights.js?v=20261012a"></script>
   <script src="js/purchases.js?v=20261012a"></script>
@@ -3170,7 +3171,7 @@
   <script src="js/characters.js?v=20261012a"></script>
   <script src="js/settings.js?v=20261012a"></script>
   <script src="js/alerts.js?v=20261012a"></script>
-  <script src="js/lab.js?v=20261012a"></script>
+  <script src="js/lab.js?v=20261017a"></script>
   <script src="js/mail.js?v=20261012a"></script>
   <script src="js/notes.js?v=20261012a"></script>
   <script src="js/macro_commands.js?v=20261012a"></script>
@@ -3180,7 +3181,7 @@
   <script src="js/galaxy.js?v=20261016a"></script>
   <script src="js/schembuilder.js?v=20261016a"></script>
   <script src="js/scanner.js?v=20261012a"></script>
-  <script src="js/topspawns.js?v=20261012a"></script>
+  <script src="js/topspawns.js?v=20261017a"></script>
   <script src="js/restree_data.js?v=20261016a"></script>
   <script src="js/restree.js?v=20261016a"></script>
   <script src="js/planetmap.js?v=20261016a"></script>

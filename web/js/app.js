@@ -470,6 +470,7 @@ function wallTagHtml(p) {
 }
 async function loadWall() {
   const host = $('#wall-posts');
+  if (host && host.closest('#about-wall-card')?.hidden) return; // the wall is parked — don't fetch for a hidden card
   if (!host) return;
   let res;
   try { res = await apiFetch('GET', 'api/wall.php'); } catch (e) { res = { ok: false, error: String(e) }; }
@@ -1175,6 +1176,7 @@ async function navAttnSweep() {
     p.hidden = n <= 0;
     p.title = tip;
   };
+  if (typeof topSpawnsSweep === 'function') topSpawnsSweep(); // "new since you looked" pill on Top Spawns
   syncNavTips(); // collapsed-sidebar tooltips carry the count — "Factories (1)"
   set('#nav-harv-pill', harvFull,
     `${harvFull} full hopper${harvFull === 1 ? '' : 's'} — extraction is stopped until emptied`);

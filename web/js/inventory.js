@@ -230,12 +230,15 @@ async function invApplyTagEdit(remove) {
   if (!ed.items) { toast('Still counting items — one moment', false); return; }
   if (remove) {
     const n = ed.items.length;
+    // the tag dialog steps aside for the confirm (it used to paint over it — Veizyr) and
+    // comes back if you change your mind
+    $('#inv-tag-modal').hidden = true;
     const ok = await confirmDialog({
       title: `Remove tag “${ed.tag}”?`,
       message: `It comes off ${n === 1 ? 'the one item' : `all ${fmtNum(n)} items`} carrying it. The items themselves stay put.`,
       confirmLabel: 'Remove tag',
     });
-    if (!ok) return;
+    if (!ok) { $('#inv-tag-modal').hidden = false; return; }
   }
   $('#inv-tag-modal').hidden = true;
   const results = await Promise.all(ed.items.map((i) => {

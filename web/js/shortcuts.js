@@ -4,7 +4,7 @@
    Schematics. Stored in localStorage (instant) and config (durable), as one map
    of action id → combo ('' = unbound). Combos are "meta+shift+k"-style strings. */
 
-const SHORTCUT_DEFAULTS = { search: 's', navfilter: '/', 'page:home': 'h', 'page:resources': 'r', 'page:schematics': 'c' };
+const SHORTCUT_DEFAULTS = { search: 's', navfilter: '/', navtoggle: 'm', 'page:home': 'h', 'page:resources': 'r', 'page:schematics': 'c' };
 let shortcutMap = Object.assign({}, SHORTCUT_DEFAULTS);
 const scState = { capturing: null }; // action id while a chip waits for a key
 
@@ -16,6 +16,7 @@ function scActions() {
   const out = [
     { id: 'search', label: 'Global search', hint: 'open the top-bar search', run: () => { if (typeof gsOpenBox === 'function') gsOpenBox(); } },
     { id: 'navfilter', label: 'Menu filter', hint: 'focus the sidebar search', run: () => { const i = $('#nav-search'); if (i && !document.querySelector('.app-sidebar').classList.contains('collapsed')) { i.focus(); i.select(); } } },
+    { id: 'navtoggle', label: 'Collapse / expand menu', hint: 'toggle the sidebar between icons and labels', run: () => { $('#side-collapse')?.click(); } },
   ];
   document.querySelectorAll('.app-sidebar .nav-item[data-page]').forEach((item) => {
     const label = [...item.childNodes].filter((n) => n.nodeType === Node.TEXT_NODE).map((n) => n.textContent).join(' ').replace(/\s+/g, ' ').trim();

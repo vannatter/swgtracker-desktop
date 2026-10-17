@@ -19,7 +19,7 @@ const navHeadIcon = (h) => { const i = h.querySelector('i:first-child'); return 
 // a folder head's markup (built once, re-skinned on rename): icon, label, caret, dot, edit-mode tools
 function navHeadFill(h, label, icon) {
   h.innerHTML = `<i class="fa-solid ${escapeHtml(icon || 'fa-folder')}"></i> ${escapeHtml(label)} <span class="nav-head-tools"><a role="button" data-navedit title="Rename or change the icon"><i class="fa-solid fa-pen"></i></a>${h.dataset.navgroup.startsWith('custom-') ? '<a role="button" data-navdel title="Delete this folder (its pages move to the top level)"><i class="fa-solid fa-xmark"></i></a>' : ''}</span><i class="fa-solid fa-caret-down nav-group-caret"></i><span class="nav-group-dot" hidden></span>`;
-  h.title = label;
+  h.removeAttribute('title'); // no hover tip on folder heads — it added nothing (Dustin)
 }
 
 // read the menu as it stands in the DOM

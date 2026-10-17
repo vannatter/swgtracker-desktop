@@ -286,20 +286,21 @@ function labRenderBench() {
   labRenderDebug();
 }
 
-// dev-mode only: the full composite arithmetic, one section per checked line —
-// one row per weighted STAT showing which slots pool into its average (slots
-// whose pick lacks the stat drop out), then the weighted rollup + buffs
+// "How this is calculated" — the bench arithmetic spelled out for anyone curious (nerd
+// mode): one card per checked line, a row per weighted stat showing which picks pool into
+// its average (a pick without the stat sits out of that stat's pool), then the weighted
+// rollup + boosts against the cap. Folded by default; the fold is remembered.
 function labRenderDebug() {
   const box = $('#lab-debug');
   if (!box) return;
   const picked = labState.slots.filter((s) => s.pick);
-  const on = document.body.classList.contains('dev-mode') && labState.schematic && picked.length;
+  const on = labState.schematic && picked.length;
   box.hidden = !on;
   if (!on) { box.innerHTML = ''; return; }
+  const open = localStorage.getItem('lab_calc_open') === '1';
   const boost = labBoostTotal();
-  const secs = labState.formulas
-    .filter((f) => labState.checked.has(String(f.formulaId)) && f.weights)
-    .map((f) => {
+  const lines = labState.formulas.filter((f) => labState.checked.has(String(f.formulaId)) && f.weights);
+  const secs = lines.map((f) => {
       const rows = Object.entries(f.weights).map(([st, w]) => {
         let num = 0;
         let den = 0;
@@ -310,28 +311,30 @@ function labRenderDebug() {
           if (v > 0 && cap > 0) {
             num += s.units * (v / cap) * 1000;
             den += s.units;
-            return `${escapeHtml(s.pick.name)} ${v}/${cap} ×${s.units}u`;
+            return `<span class="lab-dbg-chip" title="${escapeHtml(s.pick.name)}: ${st.toUpperCase()} ${v} of a ${cap} cap, weighted by ${s.units} units"><b>${escapeHtml(s.pick.name)}</b> <span class="lab-dbg-num">${v}<span class="lab-dbg-cap">/${cap}</span></span> <span class="lab-dbg-units">×${s.units}u</span></span>`;
           }
-          return `<span class="lab-dbg-miss">${escapeHtml(s.pick.name)} — (out of this stat's pool)</span>`;
-        }).join('&ensp;');
+          return `<span class="lab-dbg-chip lab-dbg-out" title="${escapeHtml(s.pick.name)} has no ${st.toUpperCase()}, so it doesn't count toward this stat"><b>${escapeHtml(s.pick.name)}</b> <span class="lab-dbg-units">no ${st.toUpperCase()}</span></span>`;
+        }).join('');
         const avg = den > 0 ? num / den : 0;
-        return `<tr><td>${st.toUpperCase()} ×${w}%</td><td>${parts}</td>
-          <td>${den > 0 ? `${avg.toFixed(1)} over ${den}u` : '<span class="lab-dbg-miss">no slot has it</span>'}</td></tr>`;
+        return `<tr><td class="lab-dbg-stat">${st.toUpperCase()}</td><td class="lab-dbg-w">${w}%</td><td class="lab-dbg-pool">${parts}</td>
+          <td class="lab-dbg-avg">${den > 0 ? `<b>${avg.toFixed(1)}</b><span class="lab-dbg-cap"> over ${den}u</span>` : '<span class="lab-dbg-miss">no pick has it</span>'}</td></tr>`;
       }).join('');
       const raw = labLineValue(f.weights, picked);
       const final = labClamp01k(raw + boost);
+      const caps = final >= labState.threshold;
       return `<div class="lab-dbg-sec">
         <div class="lab-dbg-title">${escapeHtml(f.formulaDescription || '')}</div>
-        <table class="lab-dbg-table"><thead><tr><th>stat</th>
-          <th>pooled from (value/slot cap × units)</th><th>stat average</th></tr></thead>
+        <table class="lab-dbg-table"><thead><tr><th>Stat</th><th>Weight</th><th>Picks that count <span class="settings-sub">value / slot cap × units</span></th><th>Average</th></tr></thead>
         <tbody>${rows}</tbody></table>
-        <div class="lab-dbg-sum">Σ weight×average = <b>${raw.toFixed(2)}</b> + buffs ${boost}
-          = <b>${final.toFixed(2)}</b> vs caps-at ${labState.threshold}
-          → ${final >= labState.threshold ? '<span class="lab-caps">CAPS</span>' : `<span class="lab-nocap">misses by ${(labState.threshold - final).toFixed(1)}</span>`}</div>
+        <div class="lab-dbg-sum">Weighted average <b>${raw.toFixed(2)}</b> + boosts <b>${boost}</b> = <b>${final.toFixed(2)}</b>
+          <span class="lab-dbg-vs">vs cap at ${labState.threshold}</span>
+          ${caps ? '<span class="lab-caps lab-dbg-verdict"><i class="fa-solid fa-circle-check"></i> caps</span>' : `<span class="lab-nocap lab-dbg-verdict"><i class="fa-solid fa-circle-xmark"></i> misses by ${(labState.threshold - final).toFixed(1)}</span>`}</div>
       </div>`;
     }).join('');
-  box.innerHTML = `<div class="lab-dbg-head"><i class="fa-solid fa-bug"></i> Calc debug
-      <span class="settings-sub">each stat averages over the slots that HAVE it — a pick without the stat drops out of that stat's pool</span></div>${secs}`;
+  box.innerHTML = `<section class="hm-section lab-dbg-fold${open ? '' : ' collapsed'}">
+      <div class="hm-head" data-labdbgtoggle><i class="fa-solid fa-glasses hm-icon"></i><span class="hm-title">How this is calculated</span><span class="hm-count">${lines.length} line${lines.length === 1 ? '' : 's'}</span><span class="hm-headright">each stat averages over the picks that have it</span><i class="fa-solid fa-chevron-down hm-caret"></i></div>
+      <div class="hm-body">${secs || '<div class="settings-sub">Tick an experiment line to see its arithmetic.</div>'}</div>
+    </section>`;
 }
 
 function labBenchHeadHtml(cost, complete) {
@@ -1160,6 +1163,12 @@ async function labRefreshSchemList() {
 }
 
 function initLab() {
+  // "How this is calculated" folds under its header (remembered)
+  $('#lab-debug')?.addEventListener('click', (e) => {
+    const h = e.target.closest('[data-labdbgtoggle]'); if (!h) return;
+    const sec = h.closest('.lab-dbg-fold'); const open = sec.classList.toggle('collapsed') ? '0' : '1';
+    try { localStorage.setItem('lab_calc_open', open); } catch (_) {}
+  });
   api().get_categories().then((res) => {
     const cats = (res.ok && res.data && (res.data.schematic_categories || [])) || [];
     const parents = [...new Set(cats.map((c) => c.parent).filter(Boolean))].sort();

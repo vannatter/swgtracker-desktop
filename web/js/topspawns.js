@@ -31,6 +31,58 @@ const topState = {
   chartsOpen: localStorage.getItem('top_charts') !== '0',
 };
 
+// ---- "new since you looked": a pill on the Top Spawns menu row counts resources that
+// entered the top spawns since you last opened the page; opening it clears the pill and
+// the newcomers wear a NEW chip for that visit (Dustin). Seen ids live in config (durable)
+// + localStorage (instant); the set is pruned to what's currently ranking so it can't grow.
+const topSeen = { ids: null, fresh: new Set(), loaded: false };
+async function topSeenLoad() {
+  if (topSeen.loaded) return;
+  topSeen.loaded = true;
+  try { const a = JSON.parse(localStorage.getItem('topspawns_seen') || 'null'); if (Array.isArray(a)) topSeen.ids = new Set(a.map(String)); } catch (_) {}
+  try {
+    const cfg = await api().get_config();
+    const a = cfg && cfg.ok && cfg.data ? cfg.data.topspawns_seen : undefined;
+    if (Array.isArray(a)) topSeen.ids = new Set(a.map(String)); // the durable copy wins
+  } catch (_) {}
+}
+function topSeenSave() {
+  const arr = [...(topSeen.ids || [])];
+  try { localStorage.setItem('topspawns_seen', JSON.stringify(arr)); } catch (_) {}
+  try { api().set_config('topspawns_seen', arr); } catch (_) {}
+}
+function topSetPill(n) {
+  const p = $('#nav-top-pill');
+  if (!p) return;
+  p.textContent = n;
+  p.hidden = n <= 0;
+  p.title = `${n} resource${n === 1 ? '' : 's'} new to the top spawns since you last looked`;
+  if (typeof syncNavTips === 'function') syncNavTips();
+  if (typeof syncNavGroupDots === 'function') syncNavGroupDots();
+}
+// everything ranking right now counts as seen (the page is open, or it's the very first run)
+function topMarkSeen(ids) {
+  topSeen.ids = new Set(ids.map(String));
+  topSeenSave();
+  topSetPill(0);
+}
+async function topSpawnsSweep() {
+  await topSeenLoad();
+  let res;
+  try { res = await apiFetch('GET', 'api/topspawns.php'); } catch (_) { return; }
+  const rows = (res.ok && res.data && res.data.results) || [];
+  if (!res.ok || !rows.length) return;
+  const ids = [...new Set(rows.map((r) => String(r.id ?? '')).filter(Boolean))];
+  const onPage = document.getElementById('page-topspawns')?.classList.contains('active');
+  if (!topSeen.ids || onPage) { topMarkSeen(ids); return; } // first run / already looking: nothing to flag
+  const fresh = ids.filter((id) => !topSeen.ids.has(id));
+  topSeen.fresh = new Set(fresh);
+  // prune: ids that dropped out of the top spawns stop mattering
+  const live = new Set(ids);
+  topSeen.ids = new Set([...topSeen.ids].filter((id) => live.has(id)));
+  topSetPill(fresh.length);
+}
+
 async function loadTopSpawns(force = false) {
   if (topState.loaded && !force) { renderTopSpawns(); return; }
   if (topState.loading) return;
@@ -64,6 +116,12 @@ async function loadTopSpawns(force = false) {
   topState.shown = TOP_PAGE;
   topFillCategories();
   renderTopSpawns();
+  topSeenLoad().then(() => {
+    const ids = [...new Set(topState.rows.map((r) => String(r.id ?? '')).filter(Boolean))];
+    const unfiltered = !topState.search && !topState.category && !topState.rank && !topState.rankEq && !topState.section;
+    if (unfiltered) topMarkSeen([...new Set([...(topSeen.ids || []), ...ids])]); // a filtered load only adds what it showed
+    else { ids.forEach((id) => topSeen.ids && topSeen.ids.add(id)); topSeenSave(); }
+  });
 }
 
 function topFillCategories() {
@@ -77,7 +135,7 @@ const topRankClass = (r) => ({ 1: 'q-great', 2: 'q-good', 3: 'q-fair' }[safeInt(
 
 // one cell, by field — shared by the list rows and the tree's compact rows
 function topCellHtml(r, f) {
-    if (f === 'name') return `<td class="col-name res-name" data-resname="${escapeHtml(r.name || '')}">${escapeHtml(r.name || '')}</td>`;
+    if (f === 'name') return `<td class="col-name res-name" data-resname="${escapeHtml(r.name || '')}">${escapeHtml(r.name || '')}${topSeen.fresh.has(String(r.id ?? '')) ? '<span class="top-newchip" title="New to the top spawns since you last looked">new</span>' : ''}</td>`;
     if (f === 'type_name') return `<td class="col-text res-type">${escapeHtml(r.type_name || '')}</td>`;
     if (f === 'schematic_name') return `<td class="col-name"><span class="top-schem" data-topschem="${safeInt(r.schematic_id)}" data-topschemname="${escapeHtml(r.schematic_name || '')}">${escapeHtml(r.schematic_name || '')}</span></td>`;
     if (f === 'formula_description') return `<td class="col-text top-formula" title="${escapeHtml(r.formula_description || '')}">${escapeHtml(r.formula_description || '')}</td>`;
@@ -100,7 +158,7 @@ function topLiveCols(rows) {
 function topRowHtml(r, cols) {
   const id = r.id ?? '';
   const cells = (cols || topCols.visible()).map(([, f]) => topCellHtml(r, f)).join('');
-  return `<tr data-id="${id}">${cells}</tr>`;
+  return `<tr data-id="${id}"${topSeen.fresh.has(String(id)) ? ' class="top-new"' : ''}>${cells}</tr>`;
 }
 // the three breakdowns in the resource page's chart-card style (rd-pcard):
 // horizontal bars with gridlines + axis for category and section, a donut for
@@ -262,6 +320,8 @@ function renderTopSpawns() {
 }
 
 function initTopSpawns() {
+  // the NEW chips last for one visit: leaving the page forgets them
+  document.addEventListener('page:show', (e) => { if (e.detail?.key !== 'topspawns' && topSeen.fresh.size) topSeen.fresh = new Set(); });
   let searchTimer = null;
   $('#top-search').addEventListener('input', () => {
     clearTimeout(searchTimer);

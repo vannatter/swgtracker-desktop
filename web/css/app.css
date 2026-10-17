@@ -2231,19 +2231,33 @@ tr.row-detail > td { background: var(--bg-tertiary); padding: 0; }
 .mm-st-pend { color: var(--q-good); }
 .mm-st-done { color: var(--q-fair); }
 /* dev-mode calc debug — the bench arithmetic, spelled out */
-.lab-debug { margin-top: 14px; background: var(--bg-secondary); border-radius: 8px;
-  padding: 10px 14px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
-.lab-dbg-head { font-size: 12px; font-weight: 600; color: var(--text-hover); margin-bottom: 6px;
-  display: flex; align-items: center; gap: 7px; font-family: inherit; }
-.lab-dbg-head i { color: var(--q-accept); }
-.lab-dbg-sec { margin-top: 8px; }
-.lab-dbg-title { color: var(--q-accept); margin-bottom: 3px; }
+/* "How this is calculated" — the bench arithmetic for the curious, folded by default */
+.lab-debug { margin-top: 14px; font-size: 12px; }
+.lab-dbg-fold .hm-head { margin-bottom: 10px; }
+.lab-dbg-fold.collapsed .hm-body { display: none; }
+.lab-dbg-sec { background: var(--bg-secondary); border-radius: 8px; padding: 10px 14px 12px; margin-bottom: 10px; }
+.lab-dbg-title { color: var(--text-hover); font-weight: 600; margin-bottom: 6px; }
 .lab-dbg-table { width: 100%; border-collapse: collapse; }
-.lab-dbg-table th { text-align: left; color: var(--text-muted); font-weight: 400; padding: 2px 10px 2px 0; }
-.lab-dbg-table td { padding: 2px 10px 2px 0; color: var(--text-color); vertical-align: top; }
+.lab-dbg-table th { text-align: left; color: var(--text-muted); font-weight: 600; font-size: 11px; padding: 3px 10px 5px 0; border-bottom: 1px solid var(--border); }
+.lab-dbg-table th .settings-sub { font-weight: 400; margin-left: 6px; }
+.lab-dbg-table td { padding: 5px 10px 5px 0; color: var(--text-primary); vertical-align: top; border-bottom: 1px solid rgba(255, 255, 255, .04); }
+.lab-dbg-table tr:last-child td { border-bottom: 0; }
+.lab-dbg-stat { font-weight: 700; color: var(--text-hover); width: 44px; }
+.lab-dbg-w { color: var(--text-muted); width: 52px; font-variant-numeric: tabular-nums; }
+.lab-dbg-pool { display: flex; flex-wrap: wrap; gap: 5px; }
+.lab-dbg-avg { white-space: nowrap; text-align: right; font-variant-numeric: tabular-nums; }
+.lab-dbg-avg b { color: var(--text-hover); }
+.lab-dbg-chip { display: inline-flex; align-items: baseline; gap: 5px; padding: 2px 8px; border-radius: 999px; background: var(--bg-card); border: 1px solid var(--border); font-size: 11.5px; white-space: nowrap; }
+.lab-dbg-chip b { font-weight: 600; color: var(--text-hover); }
+.lab-dbg-num { font-variant-numeric: tabular-nums; color: var(--text-primary); }
+.lab-dbg-cap { color: var(--text-muted); }
+.lab-dbg-units { color: var(--text-muted); font-size: 10.5px; }
+.lab-dbg-out { opacity: .55; border-style: dashed; }
 .lab-dbg-miss { color: var(--accent); }
-.lab-dbg-sum { margin-top: 4px; color: var(--text-muted); }
-.lab-dbg-sum b { color: var(--text-hover); }
+.lab-dbg-sum { margin-top: 9px; color: var(--text-muted); display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
+.lab-dbg-sum b { color: var(--text-hover); font-variant-numeric: tabular-nums; }
+.lab-dbg-vs { margin-left: 4px; }
+.lab-dbg-verdict { margin-left: 6px; font-weight: 700; }
 
 .mail-label-missing { box-shadow: inset 0 0 0 1px var(--accent); } /* folder saved without its character */
 .set-addpath-row { display: flex; justify-content: flex-end; }
@@ -4368,3 +4382,8 @@ tr.gx-rowlink:hover .gx-detail-link { color: var(--accent-hover); }
 .navfolder-ico:hover { color: var(--text-hover); border-color: var(--text-muted); }
 .navfolder-ico.active { border-color: var(--accent); color: var(--accent); box-shadow: 0 0 0 2px rgba(226, 67, 80, .2); }
 .navfolder-del { margin-right: auto; }
+/* the shared confirm sheet always lands above whichever dialog asked for it */
+#confirm-dialog { z-index: 5100; }
+/* Top Spawns: rows new since the last visit */
+.top-newchip { display: inline-block; margin-left: 6px; font-size: 9px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #fff; background: var(--accent); border-radius: 4px; padding: 1px 5px; vertical-align: 1px; }
+tr.top-new td.col-name { color: var(--text-hover); }

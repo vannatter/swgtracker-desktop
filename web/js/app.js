@@ -340,7 +340,7 @@ function showPage(key, opts = {}) {
 // this floor get a BLOCKING update gate — the UI is closed until they update,
 // while the shell's mail monitor keeps uploading underneath, so nobody loses
 // data by procrastinating. Raise the floor with a normal bundle ship.
-const MIN_SUPPORTED_SHELL = '0.12.9'; // notes-sync floor; 0.12.8's single-instance fix rides along
+const MIN_SUPPORTED_SHELL = '0.14.0'; // persistent web storage + cache purge: every pref now survives restarts (Dustin, 2026-10-16)
 
 function verCmp(a, b) {
   const pa = String(a).split('.').map((n) => parseInt(n, 10) || 0);

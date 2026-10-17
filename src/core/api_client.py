@@ -26,6 +26,12 @@ class SWGTrackerAPI:
         # network were down, so the offline fallbacks/banner can be exercised.
         self.simulate_offline = False
         self.session = requests.Session()
+        # the UI fans out bursts of parallel calls (page loads + the minute sweeps);
+        # the default pool of 10 kept discarding connections ("pool is full" ×4000
+        # in a day's log) and re-handshaking — give it room
+        adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=32)
+        self.session.mount("https://", adapter)
+        self.session.mount("http://", adapter)
         self.session.headers.update({
             'Content-Type': 'application/json',
             'Accept': 'application/json',

@@ -147,11 +147,15 @@ class WebApi:
             return _err(e)
 
     def _offline_ok(self, error) -> bool:
-        """Fall back to the mirror only for transport-ish failures, not auth ones."""
+        """Fall back to the mirror only for TRANSPORT failures (no connection, timeout).
+
+        A server-side error (5xx, the 426 "no longer supported", a parse error)
+        used to count as offline too, which painted the offline banner while the
+        network was fine (Dustin)."""
         if not (self.dataset_sync and self.local_db):
             return False
         msg = str(error or "").lower()
-        return not any(t in msg for t in ("401", "403", "key", "unauthorized"))
+        return ("connection error" in msg or "timed out" in msg or "simulated offline" in msg)
 
     # --- App updates ---
 

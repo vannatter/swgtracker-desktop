@@ -49,7 +49,13 @@ function apiFetch(method, endpoint, opts = {}) {
     return Promise.resolve({ ok: false, error: 'This needs a newer app version — please update the desktop client.' });
   }
   // recording happens in the api() proxy — no double-log here
-  return bridge.api_request(method, endpoint, opts.data ?? null, opts.params ?? null);
+  return bridge.api_request(method, endpoint, opts.data ?? null, opts.params ?? null)
+    .then((res) => {
+      if (res && !res.ok && typeof gateOnUnsupported === 'function') gateOnUnsupported(res.error);
+      // any answer from the site means we're online — drop the banner without waiting for the next pulse
+      if (res && res.ok && typeof setOffline === 'function' && document.body.classList.contains('offline')) setOffline(false);
+      return res;
+    });
 }
 
 // ---- network debug log (Settings → Troubleshooting → Open network log) ----
@@ -747,6 +753,7 @@ const isAuthError = (err) => /api key/i.test(String(err || ''));
 
 // Surface auth failures as the full-screen key gate (defined in app.js).
 function checkAuthError(err) {
+  if (typeof gateOnUnsupported === 'function' && gateOnUnsupported(err)) return; // the server says this app is too old
   if (isAuthError(err)) showKeyGate(String(err));
 }
 

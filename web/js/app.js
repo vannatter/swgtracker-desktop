@@ -364,6 +364,27 @@ async function enforceMinShell() {
     realVer = r.ok ? r.data?.real_version : null;
   } catch (_) { return; } // bridge too old to even ask — the gate can't reach it
   if (!ver || verCmp(ver, MIN_SUPPORTED_SHELL) >= 0) return;
+  showUpdateGate(ver, realVer);
+}
+
+// The server is the other authority: when swgtracker.com answers an API call with
+// its 426 ("no longer supported"), raise the same screen at once — whatever bundle
+// this is, however old the shell. Old bundles only ever showed the error text in
+// their grids, which left people limping along (Dustin).
+let _updateGateUp = false;
+function gateOnUnsupported(err) {
+  if (_updateGateUp || !/no longer supported/i.test(String(err || ''))) return false;
+  (async () => {
+    let ver = '', realVer = '';
+    try { const r = await api().app_info(); ver = r.ok ? r.data?.version : ''; realVer = r.ok ? r.data?.real_version : ''; } catch (_) { /* still gate */ }
+    showUpdateGate(ver || '?', realVer);
+  })();
+  return true;
+}
+
+async function showUpdateGate(ver, realVer) {
+  if (_updateGateUp) return;
+  _updateGateUp = true;
   // dev-mode version mimicry must not lock the tester out of their own gate —
   // a REAL old shell reports no differing real_version, so this can't be spoofed
   const mimicking = realVer && realVer !== ver;
@@ -574,9 +595,29 @@ async function pollBundleState() {
   }
   if (st?.pending) {
     renderBundleChip(st.pending);
+    scheduleBundleAutoApply(st.pending);
     return; // stop polling — the chip is up
   }
-  if (st?.enabled) setTimeout(pollBundleState, 15 * 60 * 1000);
+  if (st?.enabled) setTimeout(pollBundleState, 2 * 60 * 1000); // the shell checks every 5 min; this keeps the chip within a couple of minutes of it
+}
+
+// A downloaded UI update applies itself after a few minutes unless you're mid-
+// typing or a dialog is open (then it waits and retries) — an unclicked chip used
+// to leave people on the old interface indefinitely (Dustin). Click the chip to
+// go sooner.
+let _bundleAutoTimer = null;
+function scheduleBundleAutoApply(pending) {
+  if (_bundleAutoTimer) return;
+  const GRACE = 5 * 60 * 1000;
+  toast(`UI update ${pending.version} is ready — it applies in 5 minutes, or click the chip now`);
+  const attempt = async () => {
+    const el = document.activeElement;
+    const typing = el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
+    const dialog = document.querySelector('.key-gate:not([hidden])');
+    if (typing || dialog) { _bundleAutoTimer = setTimeout(attempt, 60 * 1000); return; }
+    try { await api().bundle_apply(); } catch (_) { _bundleAutoTimer = setTimeout(attempt, 5 * 60 * 1000); }
+  };
+  _bundleAutoTimer = setTimeout(attempt, GRACE);
 }
 
 // ---- Server pulse ----
@@ -678,10 +719,17 @@ function setOffline(off) {
   $('#offline-bar').hidden = !off;
 }
 
+// one failed poll is not "offline": the banner needs two misses in a row, and a miss
+// retries in 30s instead of waiting the full 3 min (Dustin: the app said offline a lot)
+let _pulseMisses = 0;
 async function fetchPulse() {
   let res;
   try { res = await api().get_pulse(); } catch (e) { res = { ok: false }; }
-  setOffline(!(res.ok && res.data));
+  const good = !!(res.ok && res.data);
+  _pulseMisses = good ? 0 : _pulseMisses + 1;
+  if (good) setOffline(false);
+  else if (_pulseMisses >= 2) setOffline(true);
+  else { setTimeout(fetchPulse, 30 * 1000); return; } // first miss: quiet retry, keep the last good panel
   const statusEl = $('#pulse-status');
   const mini = $('#pulse-mini');
   if (res.ok && res.data) {

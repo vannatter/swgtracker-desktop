@@ -103,6 +103,12 @@
         </div>
         <button id="side-collapse" class="btn btn-icon side-collapse" title="Collapse menu"><i class="fa-solid fa-angles-left"></i></button>
       </div>
+      <div id="nav-edit-bar" class="nav-edit-bar" hidden>
+        <span class="nav-edit-label" title="Drag pages into folders or to the top; drag a folder to move it">Edit</span>
+        <button id="nav-edit-newfolder" class="btn btn-icon" type="button" title="New folder"><i class="fa-solid fa-folder-plus"></i></button>
+        <button id="nav-edit-reset" class="btn btn-icon" type="button" title="Reset the menu to its default"><i class="fa-solid fa-rotate-left"></i></button>
+        <button id="nav-edit-done" class="btn btn-icon nav-edit-done" type="button" title="Done"><i class="fa-solid fa-check"></i></button>
+      </div>
 
       <!-- collapsed-mode stand-in for the pulse panel: pulsing dot, hover for numbers -->
       <div id="pulse-mini" class="pulse-mini"><span class="pulse-mini-dot"></span></div>
@@ -1020,7 +1026,7 @@
         <div class="page-head">
           <h1>My Inventory</h1>
           <i class="fa-solid fa-circle-info info-tip"
-             title="Crafted-item stock. Click a Stocked or Threshold number to edit it. A threshold of 0 turns off that item's warnings (low stock and oversold) — handy for specials you only stock sometimes."></i>
+             title="Crafted-item stock. Click a Stocked or Threshold number to edit it. A threshold of -1 turns off that item's warnings (low stock and oversold) — handy for specials you only stock sometimes; 0 still warns when it runs out."></i>
           <select id="inv-filter" class="form-select filter-select head-filter">
             <option value="">All items</option>
             <option value="restock">Needs restock</option>
@@ -2108,6 +2114,13 @@
             <label class="form-check-label" for="set-notify">Show desktop notifications</label>
           </div>
           <div class="set-inline-pref">
+            <span>Menu layout <span class="settings-sub">the sidebar's folders and order — one layout, kept in your config</span></span>
+            <div class="set-btnrow">
+              <button id="set-menu-edit" class="btn btn-sm btn-outline-secondary" type="button"><i class="fa-solid fa-pen"></i> Edit the menu</button>
+              <button id="set-menu-reset" class="btn btn-sm btn-outline-secondary" type="button"><i class="fa-solid fa-rotate-left"></i> Reset to default</button>
+            </div>
+          </div>
+          <div class="set-inline-pref">
             <span>Date format</span>
             <select id="set-datefmt" class="form-select filter-select set-datefmt-select">
               <option value="us">US — MM/DD/YY</option>
@@ -2805,6 +2818,23 @@
     </div>
   </div>
 
+  <div id="navfolder-modal" class="key-gate" hidden>
+    <div class="key-gate-card sp-card inv-add-card navfolder-card">
+      <h2 id="navfolder-title">New folder</h2>
+      <div class="inv-add-field">
+        <label class="sp-field-label">Name</label>
+        <input id="navfolder-name" type="text" class="form-control filter-input" maxlength="24" placeholder="e.g. Crafting night" autocomplete="off">
+      </div>
+      <label class="sp-field-label">Icon</label>
+      <div id="navfolder-icons" class="navfolder-icons"></div>
+      <div class="inv-add-actions">
+        <button id="navfolder-delete" class="btn btn-sm btn-outline-secondary navfolder-del" hidden><i class="fa-solid fa-trash-can"></i> Delete folder</button>
+        <button id="navfolder-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
+        <button id="navfolder-save" class="btn btn-sm btn-accent"><i class="fa-solid fa-check"></i> Save</button>
+      </div>
+    </div>
+  </div>
+
   <div id="wp-add-modal" class="key-gate" hidden>
     <div class="key-gate-card sp-card inv-add-card wp-add-card">
       <h2>Share a waypoint</h2>
@@ -3130,7 +3160,7 @@
   <script src="js/wishlist.js?v=20261012a"></script>
   <script src="js/myschematics.js?v=20261012a"></script>
   <script src="js/schemcalc.js?v=20261012a"></script>
-  <script src="js/inventory.js?v=20261012a"></script>
+  <script src="js/inventory.js?v=20261016a"></script>
   <script src="js/sales.js?v=20261012a"></script>
   <script src="js/insights.js?v=20261012a"></script>
   <script src="js/purchases.js?v=20261012a"></script>
@@ -3156,9 +3186,10 @@
   <script src="js/planetmap.js?v=20261016a"></script>
   <script src="js/gsearch.js?v=20261016a"></script>
   <script src="js/shortcuts.js?v=20261016a"></script>
+  <script src="js/navlayout.js?v=20261016a"></script>
   <script src="js/beasts.js?v=20261016a"></script>
   <script src="js/beastcalc.js?v=20261016a"></script>
-  <script src="js/home.js?v=20261012a"></script>
+  <script src="js/home.js?v=20261016a"></script>
   <script src="js/app.js?v=20261016a"></script>
 </body>
 </html>

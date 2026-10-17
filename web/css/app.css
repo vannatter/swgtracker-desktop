@@ -4249,7 +4249,9 @@ tr.gx-rowlink:hover .gx-detail-link { color: var(--accent-hover); }
 .side-foot { display: flex; align-items: center; gap: 4px; margin: 4px 10px 8px; flex: 0 0 auto; }
 .side-foot .nav-search { flex: 1 1 auto; min-width: 0; margin: 0; }
 .side-foot .btn-icon.side-collapse { margin: 0; }
-.app-sidebar.collapsed .side-foot { margin: 0 auto 8px; justify-content: center; }
+/* collapsed: the foot is a centred column — pencil above the expand chevron, both dead centre */
+.app-sidebar.collapsed .side-foot { flex-direction: column; align-items: center; justify-content: center; gap: 2px; width: 100%; margin: 0 0 6px; padding: 0; }
+.app-sidebar.collapsed .side-foot .btn-icon { margin: 0; width: 34px; }
 /* Settings › Keyboard shortcuts */
 .sc-list { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; }
 .sc-group { font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin: 10px 0 3px; }
@@ -4333,3 +4335,36 @@ tr.gx-rowlink:hover .gx-detail-link { color: var(--accent-hover); }
 .sb-verifybar.sb-verified-slim i { color: #45e97e; font-size: 13px; }
 .sb-slim-title { color: var(--text-hover); font-weight: 600; }
 .sb-slim-credit { color: var(--text-muted); }
+/* sidebar edit mode: drag pages and folders */
+.nav-edit-btn { background: transparent; color: var(--text-muted); }
+.nav-edit-btn:hover { color: var(--text-hover); background: transparent; }
+.nav-edit-btn.active { color: var(--accent); }
+.nav-edit-bar { display: flex; align-items: center; gap: 4px; margin: 4px 10px 8px; flex: 0 0 auto; }
+.nav-edit-bar[hidden] { display: none; }
+.nav-edit-label { flex: 1 1 auto; min-width: 0; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); white-space: nowrap; cursor: help; padding-left: 6px; }
+.nav-edit-bar .btn-icon { background: transparent; color: var(--text-muted); flex: 0 0 auto; }
+.nav-edit-bar .btn-icon:hover { color: var(--text-hover); background: transparent; }
+.nav-edit-bar .nav-edit-done { color: var(--accent); }
+.app-sidebar.nav-editing .side-foot { display: none; } /* the edit row takes the foot's place */
+.app-sidebar.nav-editing .nav-item, .app-sidebar.nav-editing .nav-group-head { cursor: grab; outline: 1px dashed rgba(255, 255, 255, .08); outline-offset: -1px; }
+.app-sidebar.nav-editing .nav-item:hover { background: var(--bg-secondary); }
+.app-sidebar.nav-editing .nav-group-head { pointer-events: auto; }
+.app-sidebar .nav-dragging { opacity: .35; }
+.app-sidebar .nav-drop-before { box-shadow: inset 0 2px 0 var(--accent); }
+.app-sidebar .nav-drop-after { box-shadow: inset 0 -2px 0 var(--accent); }
+.app-sidebar .nav-drop-into { background: rgba(226, 67, 80, .18) !important; }
+.app-sidebar.collapsed .nav-edit-bar { display: none; }
+.set-btnrow { display: flex; gap: 8px; }
+/* folder heads: edit-mode tools (pencil, ×) only while editing */
+.nav-head-tools { display: none; margin-left: 6px; gap: 6px; align-items: center; }
+.nav-head-tools a { color: var(--text-muted); font-size: 10px; cursor: pointer; }
+.nav-head-tools a:hover { color: var(--text-hover); }
+.app-sidebar.nav-editing .nav-head-tools { display: inline-flex; }
+.app-sidebar.collapsed .nav-head-tools { display: none !important; }
+/* folder dialog */
+.navfolder-card { max-width: 460px; }
+.navfolder-icons { display: grid; grid-template-columns: repeat(11, 1fr); gap: 6px; margin-top: 4px; }
+.navfolder-ico { width: 32px; height: 32px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-input); color: var(--text-primary); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; }
+.navfolder-ico:hover { color: var(--text-hover); border-color: var(--text-muted); }
+.navfolder-ico.active { border-color: var(--accent); color: var(--accent); box-shadow: 0 0 0 2px rgba(226, 67, 80, .2); }
+.navfolder-del { margin-right: auto; }

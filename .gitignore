@@ -24,3 +24,6 @@ dist/
 .idea/
 .DS_Store
 
+
+# persistent webview storage (localStorage etc.) — see run_web.py webview.start
+webstorage/

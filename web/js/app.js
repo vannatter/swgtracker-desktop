@@ -155,19 +155,24 @@ function syncNavGroupDots() {
     if (dot && dot.hidden !== want) dot.hidden = want; // never rewrite: the observer below would see it and loop
   });
 }
-function initNavGroups() {
-  document.querySelectorAll('.nav-group-head[data-navgroup]').forEach((head) => {
-    const name = head.dataset.navgroup;
-    head.addEventListener('click', () => {
-      const c = !head.classList.contains('collapsed');
-      navGroupApply(head, c);
-      try { localStorage.setItem(`${name}-collapsed`, c ? '1' : ''); } catch (e) { /* ignore */ }
-      try { api().set_config(`${name}_collapsed`, c); } catch (e) { /* ignore */ }
-    });
-    let ls = false;
-    try { ls = localStorage.getItem(`${name}-collapsed`) === '1'; } catch (e) { /* ignore */ }
-    if (ls) navGroupApply(head, true);
+function navGroupWire(head) {
+  if (head.dataset.wired) return;
+  head.dataset.wired = '1';
+  const name = head.dataset.navgroup;
+  head.addEventListener('click', (e) => {
+    if (e.target.closest('.nav-head-tools')) return; // the edit-mode pencil / × on the head
+    if (document.querySelector('.app-sidebar').classList.contains('nav-editing')) return; // no folding mid-edit
+    const c = !head.classList.contains('collapsed');
+    navGroupApply(head, c);
+    try { localStorage.setItem(`${name}-collapsed`, c ? '1' : ''); } catch (e) { /* ignore */ }
+    try { api().set_config(`${name}_collapsed`, c); } catch (e) { /* ignore */ }
   });
+  let ls = false;
+  try { ls = localStorage.getItem(`${name}-collapsed`) === '1'; } catch (e) { /* ignore */ }
+  if (ls) navGroupApply(head, true);
+}
+function initNavGroups() {
+  document.querySelectorAll('.nav-group-head[data-navgroup]').forEach(navGroupWire);
   // honor the durable copies once they answer (they win over a cleared localStorage)
   (async () => {
     let cfg;
@@ -226,6 +231,7 @@ function initNavSearch() {
 }
 
 function initNav() {
+  initNavLayout();  // the saved order first — folds and search read the rebuilt list
   initNavGroups();
   initNavSearch();
   initGlobalSearch();

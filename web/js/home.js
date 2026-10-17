@@ -82,14 +82,39 @@ function homeLayout() {
   };
   return homeState.layout;
 }
+// localStorage is the instant path; config is the durable one — the shell's webview
+// has run in private mode, which throws localStorage away between launches (Twoie:
+// "Home dashboard resets to default when restarting the app")
+function homePersist(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch (_) {}
+  try { api().set_config(key, value); } catch (_) {}
+}
 function homeSaveLayout() {
   const l = homeLayout();
-  try {
-    localStorage.setItem('home_layout', JSON.stringify({
-      order: l.order, hidden: [...l.hidden], hotHidden: [...l.hotHidden], glanceHidden: [...l.glanceHidden],
-      widgets: l.widgets, spawnsN: l.spawnsN, annN: l.annN, spawnsView: l.spawnsView, hotView: l.hotView, glanceView: l.glanceView,
-    }));
-  } catch (_) {}
+  homePersist('home_layout', {
+    order: l.order, hidden: [...l.hidden], hotHidden: [...l.hotHidden], glanceHidden: [...l.glanceHidden],
+    widgets: l.widgets, spawnsN: l.spawnsN, annN: l.annN, spawnsView: l.spawnsView, hotView: l.hotView, glanceView: l.glanceView,
+  });
+}
+// boot: the durable copies win over a localStorage that came up empty (or stale)
+async function homeRestorePrefs() {
+  let cfg;
+  try { cfg = await api().get_config(); } catch (_) { return; }
+  const d = cfg && cfg.ok && cfg.data;
+  if (!d) return;
+  let changed = false;
+  for (const key of ['home_layout', 'home_collapsed', 'home_hotprof']) {
+    if (d[key] === undefined || d[key] === null) continue;
+    const want = JSON.stringify(d[key]);
+    let have = null;
+    try { have = localStorage.getItem(key); } catch (_) {}
+    if (have === want) continue;
+    try { localStorage.setItem(key, want); } catch (_) {}
+    changed = true;
+  }
+  if (!changed) return;
+  homeState.layout = null; homeState.collapsed = null; homeState.prof = null; // re-read from the restored copies
+  if (homeState.loadedAt) renderHome();
 }
 function homeCollapsed() {
   if (!homeState.collapsed) {
@@ -336,7 +361,7 @@ function homeHotHtml() {
   const profs = homeVisibleProfs();
   if (!profs.length) return { count: 0, html: `<div class="grid-empty">${hb.profs.length ? 'Every profession is hidden — Customize to bring some back.' : 'No hot resources right now.'}</div>` };
   let prof = homeState.prof;
-  if (!prof) { try { prof = localStorage.getItem('home_hotprof'); } catch (_) {} }
+  if (!prof) { try { prof = localStorage.getItem('home_hotprof'); if (prof && prof.startsWith('"')) prof = JSON.parse(prof); } catch (_) {} }
   if (!profs.some((p) => p.key === prof)) prof = profs[0].key;
   homeState.prof = prof;
   const allRows = homeHotAllRows();
@@ -781,6 +806,7 @@ function homeAddWidget(type, params) {
 }
 
 function initHome() {
+  homeRestorePrefs(); // async; repaints Home if the durable copies differ
   $('#home-customize').addEventListener('click', () => { homeRenderCfg(); $('#home-cfg-modal').hidden = false; });
   $('#home-cfg-done').addEventListener('click', () => { $('#home-cfg-modal').hidden = true; });
   bindBackdropClose($('#home-cfg-modal'), () => { $('#home-cfg-modal').hidden = true; });
@@ -797,6 +823,7 @@ function initHome() {
     if (!ok) return;
     homeState.layout = null;
     try { localStorage.removeItem('home_layout'); } catch (_) {}
+    try { api().set_config('home_layout', null); } catch (_) {}
     homeLayout(); homeRenderCfg(); loadHome(true);
   });
   $('#home-refresh').addEventListener('click', () => loadHome(true));
@@ -902,7 +929,7 @@ function initHome() {
     const chip = e.target.closest('[data-hmprof]');
     if (chip) {
       homeState.prof = chip.dataset.hmprof;
-      try { localStorage.setItem('home_hotprof', homeState.prof); } catch (_) {}
+      homePersist('home_hotprof', homeState.prof);
       renderHome(); return;
     }
     const go = e.target.closest('[data-hmgo]');
@@ -957,7 +984,7 @@ function initHome() {
       const col = homeCollapsed();
       const k = head.dataset.hmtoggle;
       if (col.has(k)) col.delete(k); else col.add(k);
-      try { localStorage.setItem('home_collapsed', JSON.stringify([...col])); } catch (_) {}
+      homePersist('home_collapsed', [...col]);
       renderHome();
     }
   });

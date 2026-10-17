@@ -18,6 +18,41 @@ FROZEN = bool(getattr(sys, "frozen", False))
 ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))
 DATA_DIR = Path.home() / ".swgtracker" if FROZEN else Path(__file__).parent
 DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _purge_webview_cache(storage: Path) -> None:
+    """Drop the webview's HTTP/file cache (never its LocalStorage) before it starts.
+
+    With private mode off the data store persists between launches — that's what
+    keeps localStorage prefs alive — but WebKit/WebView2 would then happily serve
+    a PREVIOUS install's index.html and scripts from disk cache after a shell
+    update (the bundle path changes per version, the built-in UI's path doesn't).
+    macOS keeps the cache under ~/Library/Caches/<bundle id>/WebKit; WebView2
+    under <storage_path>/EBWebView/<profile>/. Local storage lives elsewhere
+    (~/Library/WebKit/<bundle id>/WebsiteData, EBWebView/<profile>/Local Storage)
+    and is left untouched.
+    """
+    import shutil
+    targets = []
+    if sys.platform == "darwin":
+        ids = ["com.swgtracker.desktop", "org.python.python"]
+        try:  # the real id when frozen (python's own when run from source)
+            from Foundation import NSBundle  # type: ignore
+            bid = NSBundle.mainBundle().bundleIdentifier()
+            if bid:
+                ids.insert(0, str(bid))
+        except Exception:  # noqa: BLE001 — PyObjC missing/odd: the known ids cover it
+            pass
+        for bid in dict.fromkeys(ids):
+            base = Path.home() / "Library" / "Caches" / bid / "WebKit"
+            targets += [base / "NetworkCache", base / "CacheStorage"]
+    else:
+        for prof in (storage / "EBWebView").glob("*"):
+            targets += [prof / "Cache", prof / "Code Cache", prof / "GPUCache", prof / "Service Worker"]
+    for t in targets:
+        if t.is_dir():
+            shutil.rmtree(t, ignore_errors=True)
+            logger.info("webview cache purged: %s", t)
 sys.path.insert(0, str(ROOT))
 
 from src.core.config_manager import ConfigManager
@@ -29,7 +64,7 @@ from src.core.alert_poller import AlertPoller
 from src.core.bundle_manager import BundleManager
 from src.web_api import WebApi
 
-APP_VERSION = "0.13.3"  # keep in sync with pyproject.toml — bump with every change batch
+APP_VERSION = "0.14.0"  # keep in sync with pyproject.toml — bump with every change batch
 
 logging.basicConfig(
     level=logging.INFO,
@@ -255,7 +290,18 @@ def main():
     tray_icon = _setup_tray(window, config)
 
     # --debug enables the webview inspector (right-click → Inspect Element)
-    webview.start(debug="--debug" in sys.argv)  # blocks until the window closes
+    # private_mode (pywebview's default) hands the webview a throwaway storage
+    # every launch, so localStorage prefs (Home layout, grid columns, folds…)
+    # vanished on restart (Twoie). A persistent store beside config.json fixes
+    # that for every pref at once.
+    storage = DATA_DIR / "webstorage"
+    try:
+        storage.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        logger.error("webstorage dir failed", exc_info=True)
+    _purge_webview_cache(storage)
+    webview.start(debug="--debug" in sys.argv, private_mode=False,
+                  storage_path=str(storage))  # blocks until the window closes
     if tray_icon:
         tray_icon.stop()
     bundles.stop()

@@ -930,9 +930,11 @@ function applyCategoryFilter(code, label) {
 document.addEventListener('page:again', (e) => {
   if (e.detail?.key !== 'resources') return;
   const dirty = $('#res-search').value || $('#res-planet').value || $('#res-category').value || resState.filters.length || resState.statusFilter || resState.page > 1
-    || $('#res-pinned-only').checked || $('#res-stocked-only').checked;
+    || $('#res-pinned-only').checked || $('#res-stocked-only').checked || resState.sortField || resState.sortOrder !== 'DESC';
   if (!dirty) return;
   $('#res-pinned-only').checked = false; $('#res-stocked-only').checked = false;
+  resState.sortField = ''; resState.sortOrder = 'DESC'; // back to the default order (newest first), not just unfiltered
+  resSyncSort(); buildResHeader();
   clearResFilter('all');
   toast('Resources reset to the full list');
 });

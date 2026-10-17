@@ -439,13 +439,15 @@ td.col-actions .btn-icon.open { color: var(--accent); }
 /* pinned rows read as individual rows (not one blob) — a DARKER separator so it
    recedes into the tint rather than standing out */
 .data-grid tbody tr.pinned > td { border-bottom: 1px solid rgba(0, 0, 0, .28); }
-.data-grid tbody tr.pinned:hover, .data-grid tbody tr.activeResource:hover { filter: brightness(.88); }
+/* ONE hover for every row: the same dark overlay whether the row is plain, pinned or an active
+   spawn (the brightness filter made tinted rows hover differently — Dustin) */
+.data-grid tbody tr.pinned:hover, .data-grid tbody tr.activeResource:hover { filter: none; background-image: linear-gradient(rgba(0, 0, 0, .22), rgba(0, 0, 0, .22)); }
 /* Resources page: the status dot carries "active" now — drop the row tint (keep pinned) */
 /* the Resources grid (and Home's Recent Spawns copy of it) shows actives only, so
    the live-spawn tint would paint every row green — off there, pins still show */
 #res-grid tbody tr.activeResource, .hm-tablewrap .res-grid tbody tr.activeResource { background: transparent; }
 #res-grid tbody tr.activeResource.pinned, .hm-tablewrap .res-grid tbody tr.activeResource.pinned { background: var(--row-pinned); }
-#res-grid tbody tr.activeResource:hover { background: rgba(0, 0, 0, .22); filter: none; }
+#res-grid tbody tr.activeResource:hover, .hm-tablewrap .res-grid tbody tr.activeResource:hover { background: rgba(0, 0, 0, .22); background-image: none; filter: none; }
 
 .res-name { color: var(--text-hover); font-weight: 600; }
 .res-type { color: var(--text-muted); }
@@ -3533,7 +3535,7 @@ tr:hover .gx-pin { opacity: 1; }
 .gx-detail-link { color: var(--text-hover); }
 tr.gx-rowlink { cursor: pointer; }
 tr.gx-rowlink:hover { background: var(--row-hover, rgba(255,255,255,0.04)); }
-tr.gx-rowlink:hover .gx-detail-link { color: var(--accent-hover); }
+tr.gx-rowlink:hover .gx-detail-link { color: var(--text-hover); } /* hover brightens to white, never red (Dustin) */
 .key-gate-card.gx-detail-card { width: min(1060px, calc(100vw - 80px)); max-width: none; max-height: calc(100vh - 100px); overflow-y: auto; text-align: left; }
 /* hover cursor + tooltip on charts */
 .gx-chartwrap { position: relative; }
@@ -4436,3 +4438,6 @@ tr.top-new td.col-name { color: var(--text-hover); }
 .shop-group.collapsed .shop-group-head { margin-bottom: 0; }
 .page-head .shop-level { max-width: 260px; }
 .shop-class { color: var(--text-muted); font-size: 12px; }
+/* anything that opens a resource page shows the hand — Home's Recent Spawns and
+   Announcements had working links with an arrow cursor (Dustin) */
+[data-resname], [data-res], [data-navcat], [data-schem], [data-pet], [data-creature], [data-special] { cursor: pointer; }

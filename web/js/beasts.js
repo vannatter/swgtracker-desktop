@@ -110,7 +110,7 @@ function beastCardHtml(kind, r, sub, attr) {
   const src = m ? (/^https?:/i.test(m.model) ? m.model : SITE_BASE + (m.model.startsWith('/') ? '' : '/') + m.model) : '';
   const key = beastPinKey(kind, r);
   const pinned = beastPins[kind].has(key);
-  return `<div class="sch-card beast-tile ${pinned ? 'pinned' : ''}" ${attr}="${escapeHtml(r.slug)}" title="Click for full detail">
+  return `<div class="sch-card beast-tile ${pinned ? 'pinned' : ''}" ${attr}="${escapeHtml(r.slug)}">
     <div class="sch-card-model"${src ? ` data-mvlazy="${escapeHtml(r.slug)}" data-mvsrc="${escapeHtml(src)}"${m.color ? ` data-mvcolor="${escapeHtml(m.color)}"` : ''}` : ''}>
       <i class="fa-solid ${src ? 'fa-cube' : 'fa-paw'} sch-card-nomodel"${src ? '' : ' title="No 3D model yet"'}></i></div>
     <div class="sch-card-name">${escapeHtml(r.name)}</div>
@@ -186,7 +186,7 @@ function renderPets() {
     mvObserveCards('#pets-cards');
     return;
   }
-  body.innerHTML = rows.map((p) => `<tr class="gx-rowlink beast-row" data-pet="${escapeHtml(p.slug)}" title="Click for full detail">
+  body.innerHTML = rows.map((p) => `<tr class="gx-rowlink beast-row" data-pet="${escapeHtml(p.slug)}">
       ${beastPinCell('pets', p.slug)}
       <td class="col-name"><b class="gx-detail-link">${escapeHtml(p.name)}</b></td>
       <td class="col-text">${escapeHtml(p.family || '')}</td>
@@ -267,7 +267,7 @@ function renderCreatures() {
     mvObserveCards('#creatures-cards');
     return;
   }
-  body.innerHTML = rows.map((c) => `<tr class="gx-rowlink beast-row" data-creature="${escapeHtml(c.slug)}" title="Click for full detail">
+  body.innerHTML = rows.map((c) => `<tr class="gx-rowlink beast-row" data-creature="${escapeHtml(c.slug)}">
       ${beastPinCell('creatures', c.slug)}
       <td class="col-name"><b class="gx-detail-link">${escapeHtml(c.name)}</b></td>
       <td class="col-text">${escapeHtml(c.pet_type || '')}</td>
@@ -329,7 +329,7 @@ function renderSpecials() {
   const body = $('#specials-body');
   if (!rows.length) { body.innerHTML = ''; beastSetEmpty('specials', s.loaded ? (s.pinnedOnly && !beastPins.specials.size ? 'Nothing pinned yet — click a pin to keep a special at the top.' : 'No specials match.') : ''); return; }
   beastSetEmpty('specials', '');
-  body.innerHTML = rows.map((x) => `<tr class="gx-rowlink beast-row" data-special="${escapeHtml(x.name)}" data-rank="${safeInt(x.rank)}" title="Click for full detail">
+  body.innerHTML = rows.map((x) => `<tr class="gx-rowlink beast-row" data-special="${escapeHtml(x.name)}" data-rank="${safeInt(x.rank)}">
       ${beastPinCell('specials', beastSpecialKey(x))}
       <td class="col-name"><b class="gx-detail-link">${escapeHtml(x.name)}</b></td>
       <td class="col-num">${safeInt(x.rank)}</td>

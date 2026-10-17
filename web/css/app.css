@@ -81,13 +81,13 @@ html, body {
 /* downloaded-UI badge: this interface arrived as a bundle update, not from disk */
 .bundle-id { font-size: 10px; color: rgba(255, 255, 255, .55); margin-left: 6px; cursor: help; }
 .bundle-id i { font-size: 9px; margin-right: 3px; color: var(--q-fair); }
-.build-id.stale { color: var(--accent); } /* an update is available */
+/* An update is waiting: the version number itself goes green (and clickable to
+   take it) instead of a header pill — the pill fought the search flyout for room. */
+.build-id.has-update, .bundle-id.has-update { color: var(--q-fair); cursor: pointer; }
+.build-id.has-update:hover, .bundle-id.has-update:hover { color: #fff; }
+.bundle-id.has-update i { color: var(--q-fair); }
+.build-id.has-update i { font-size: 9px; margin-right: 3px; }
 .app-header-controls { display: flex; align-items: center; gap: 8px; }
-.update-chip {
-  font-size: 12px; font-weight: 600; padding: 3px 12px; border-radius: 12px;
-  background: var(--accent-green); border: 0; color: #fff; cursor: pointer;
-}
-.update-chip:hover { filter: brightness(1.2); }
 
 /* ---- Body / sidebar ---- */
 .app-body { display: flex; height: calc(100vh - 50px); }

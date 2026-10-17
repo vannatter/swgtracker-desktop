@@ -421,8 +421,8 @@ async function showUpdateGate(ver, realVer) {
 }
 
 // ---- App updates ----
-// Checks swgtracker.com/app/version.json once per launch; a chip appears in
-// the header when a newer version is published.
+// Checks swgtracker.com/app/version.json once per launch; the version number in
+// the header turns green when a newer version is published.
 async function showBuildId() {
   try {
     const res = await api().app_info();
@@ -435,14 +435,28 @@ async function checkForUpdate() {
   try { res = await api().check_update(); } catch (_) { return null; }
   const info = res.ok ? res.data : null;
   if (!info?.update_available) return null;
-  const chip = $('#update-chip');
-  chip.hidden = false;
-  chip.innerHTML = `<i class="fa-solid fa-circle-up"></i> Update v${escapeHtml(info.latest)}`;
-  chip.title = info.notes || `Version ${info.latest} is available — click to download`;
-  chip.onclick = () => api().open_external(info.url);
-  // dim the build id once we know it's stale
-  $('#build-id').classList.add('stale');
+  // the version number itself turns green and becomes the download link
+  _shellUpdate = info;
+  const b = $('#build-id');
+  b.classList.add('has-update');
+  b.innerHTML = `<i class="fa-solid fa-circle-up"></i>v${escapeHtml(info.latest)} available`;
+  b.title = (info.notes ? info.notes + '\n\n' : '') + `Version ${info.latest} is available — click to download`;
   return info;
+}
+let _shellUpdate = null;   // version.json says a newer app exists
+let _bundlePending = null; // a downloaded UI bundle is waiting to apply
+// Header version numbers: plain click re-checks; when an update is waiting the
+// click takes it (download the app / apply the UI bundle without a restart).
+function onBuildIdClick() {
+  if (_shellUpdate) return api().open_external(_shellUpdate.url);
+  return checkUpdatesNow();
+}
+async function onBundleIdClick() {
+  if (!_bundlePending) return checkUpdatesNow();
+  const b = $('#bundle-id');
+  b.style.pointerEvents = 'none';
+  try { await api().bundle_apply(); } catch (_) { b.style.pointerEvents = ''; }
+  // on success the shell reloads this page out from under us
 }
 
 // Manual update check — clicking the version/badge asks the shell to fetch
@@ -455,9 +469,9 @@ async function checkUpdatesNow() {
   try { shell = await checkForUpdate(); } catch (_) { /* best-effort */ }
   if (st?.pending) {
     renderBundleChip(st.pending);
-    toast(`UI update ${st.pending.version} is ready — click the chip to apply`);
+    toast(`UI update ${st.pending.version} is ready — click the green ui version to apply`);
   } else if (shell) {
-    toast(`App version ${shell.latest} is available — click the Update chip to download`);
+    toast(`App version ${shell.latest} is available — click the green version to download`);
   } else if (st?.gated) {
     toast(`Update ${st.gated.version} needs app version ${st.gated.min_shell} — update the app itself first`, false);
   } else {
@@ -466,15 +480,12 @@ async function checkUpdatesNow() {
 }
 
 function renderBundleChip(pending) {
-  const chip = $('#update-chip');
-  chip.hidden = false;
-  chip.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles"></i> UI update ${escapeHtml(pending.version)}`;
-  chip.title = pending.notes || 'A web UI update is ready — click to apply (no restart)';
-  chip.onclick = async () => {
-    chip.disabled = true;
-    try { await api().bundle_apply(); } catch (_) { chip.disabled = false; }
-    // on success the shell reloads this page out from under us
-  };
+  _bundlePending = pending;
+  const b = $('#bundle-id');
+  b.hidden = false;
+  b.classList.add('has-update');
+  b.innerHTML = `<i class="fa-solid fa-cloud-arrow-down"></i>ui ${escapeHtml(pending.version)} ready`;
+  b.title = (pending.notes ? pending.notes + '\n\n' : '') + 'A UI update is ready — click to apply now (no restart); it applies on its own in a few minutes';
 }
 
 // ---- About page ----
@@ -587,7 +598,7 @@ async function pollBundleState() {
   try { res = await api().bundle_state(); } catch (_) { return; }
   const st = res?.ok && res.data;
   // downloaded-UI badge next to the shell version
-  if (st?.source === 'bundle' && st.active_version) {
+  if (st?.source === 'bundle' && st.active_version && !_bundlePending) {
     const b = $('#bundle-id');
     b.hidden = false;
     b.innerHTML = `<i class="fa-solid fa-cloud-arrow-down"></i>ui ${escapeHtml(st.active_version)}`;
@@ -596,7 +607,7 @@ async function pollBundleState() {
   if (st?.pending) {
     renderBundleChip(st.pending);
     scheduleBundleAutoApply(st.pending);
-    return; // stop polling — the chip is up
+    return; // stop polling — the green version is up
   }
   if (st?.enabled) setTimeout(pollBundleState, 2 * 60 * 1000); // the shell checks every 5 min; this keeps the chip within a couple of minutes of it
 }
@@ -609,7 +620,7 @@ let _bundleAutoTimer = null;
 function scheduleBundleAutoApply(pending) {
   if (_bundleAutoTimer) return;
   const GRACE = 5 * 60 * 1000;
-  toast(`UI update ${pending.version} is ready — it applies in 5 minutes, or click the chip now`);
+  toast(`UI update ${pending.version} is ready — it applies in 5 minutes, or click the green ui version now`);
   const attempt = async () => {
     const el = document.activeElement;
     const typing = el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
@@ -1290,8 +1301,8 @@ async function boot() {
   // for freshly installed bundles and offer a hot apply
   try { api().bundle_mark_ok(); } catch (_) { /* builtin UI — no-op */ }
   pollBundleState();
-  $('#build-id').addEventListener('click', checkUpdatesNow);
-  $('#bundle-id').addEventListener('click', checkUpdatesNow);
+  $('#build-id').addEventListener('click', onBuildIdClick);
+  $('#bundle-id').addEventListener('click', onBundleIdClick);
 
   // Seed pinned sets before the first grid renders (local config, no auth).
   try {

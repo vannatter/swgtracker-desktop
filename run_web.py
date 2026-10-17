@@ -64,7 +64,7 @@ from src.core.alert_poller import AlertPoller
 from src.core.bundle_manager import BundleManager
 from src.web_api import WebApi
 
-APP_VERSION = "0.14.1"  # keep in sync with pyproject.toml — bump with every change batch
+APP_VERSION = "0.15.0"  # keep in sync with pyproject.toml — bump with every change batch
 
 logging.basicConfig(
     level=logging.INFO,
@@ -98,6 +98,34 @@ def _set_mac_dock_icon():
             info["NSHumanReadableCopyright"] = "swgtracker.com companion"
     except Exception:  # noqa: BLE001 — cosmetic only, never block launch
         logger.debug("couldn't set Dock identity", exc_info=True)
+
+
+RELAUNCH_ENV = "SWGT_RELAUNCH_PARENT"
+
+
+def _wait_for_relaunch_parent():
+    """A UI-bundle relaunch on Windows (see _reload_ui) starts the new process
+    while the old one is still tearing down. The old one still holds the
+    single-instance mutex and the WebView2 profile for a moment, so the child
+    used to 'wake' a dying window and exit — the app quit instead of coming
+    back (Dustin, v0.14.1). Wait until the parent is really gone first."""
+    import os
+    pid = os.environ.pop(RELAUNCH_ENV, "")
+    if not pid.isdigit() or sys.platform != "win32":
+        return
+    try:
+        import ctypes
+        import time
+        kernel32 = ctypes.windll.kernel32
+        SYNCHRONIZE = 0x00100000
+        h = kernel32.OpenProcess(SYNCHRONIZE, False, int(pid))
+        if h:
+            kernel32.WaitForSingleObject(h, 20000)  # ms; 0 = exited, 258 = timeout
+            kernel32.CloseHandle(h)
+        time.sleep(1.5)  # WebView2's browser processes release the profile a beat later
+        logger.info("relaunched after UI bundle apply — parent %s is gone", pid)
+    except Exception:  # noqa: BLE001 — worst case we race like before
+        logger.error("relaunch wait failed", exc_info=True)
 
 
 def _ensure_single_instance():
@@ -210,6 +238,7 @@ def _setup_tray(window, config):
 
 
 def main():
+    _wait_for_relaunch_parent()  # no-op unless we ARE the relaunch
     _instance_mutex = _ensure_single_instance()  # noqa: F841 — held for process lifetime
     _set_mac_dock_icon()
     config = ConfigManager(str(DATA_DIR / "config.json"))
@@ -270,6 +299,8 @@ def main():
     # hot-apply: bundle_apply() re-resolves and reloads the webview in place.
     # Windows relaunches instead — WebView2 silently refuses the in-place
     # navigation that WKWebView accepts, and a boot picks the bundle anyway.
+    state = {"tray": None}  # filled once the tray exists; _reload_ui stops it
+
     def _reload_ui():
         try:
             if sys.platform == "win32":
@@ -278,7 +309,13 @@ def main():
                 logger.info("applying UI bundle via relaunch")
                 args = [sys.executable] if getattr(sys, "frozen", False) \
                     else [sys.executable, str(Path(__file__).resolve())]
-                subprocess.Popen(args, close_fds=True)
+                env = dict(os.environ, **{RELAUNCH_ENV: str(os.getpid())})
+                subprocess.Popen(args, close_fds=True, env=env)
+                try:  # a ghost tray icon lingers otherwise until the mouse passes it
+                    if state.get("tray"):
+                        state["tray"].stop()
+                except Exception:  # noqa: BLE001
+                    pass
                 os._exit(0)
             idx = bundles.resolve_index()
             logger.info("applying UI bundle in place: %s", idx)
@@ -288,6 +325,7 @@ def main():
     bridge.reload_ui = _reload_ui
 
     tray_icon = _setup_tray(window, config)
+    state["tray"] = tray_icon
 
     # --debug enables the webview inspector (right-click → Inspect Element)
     # private_mode (pywebview's default) hands the webview a throwaway storage

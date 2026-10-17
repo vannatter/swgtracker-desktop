@@ -408,6 +408,19 @@ td.col-actions .btn-icon.open { color: var(--accent); }
 .filter-select { max-width: 160px; }
 .filter-input::placeholder { color: var(--text-muted); }
 .pin-toggle { font-size: 13px; color: var(--text-primary); display: flex; align-items: center; gap: 6px; cursor: pointer; }
+/* Resources: the "only show" toggles are a row of icon checkboxes (pinned,
+   stockpiled, wishlisted, shortlisted) — the words took the room the search bar
+   needs; the hover tip names each one. */
+.res-coll { display: flex; align-items: center; gap: 14px; }
+.res-coll .pin-toggle { gap: 5px; color: var(--text-muted); }
+.res-coll .pin-toggle i { font-size: 13px; width: 16px; text-align: center; }
+.res-coll .fa-thumbtack { position: relative; top: 1px; } /* the glyph's weight is in its head — optically high otherwise */
+.res-coll .pin-toggle:hover { color: var(--text-hover); }
+.res-coll .pin-toggle:has(input:checked) { color: var(--text-primary); }
+.res-coll .pin-toggle:has(input:checked) .fa-thumbtack { color: var(--accent); }
+.res-coll .pin-toggle:has(input:checked) .fa-heart { color: var(--accent); }
+.res-coll .pin-toggle:has(input:checked) .fa-cubes { color: var(--q-fair); }
+.res-coll .pin-toggle:has(input:checked) .fa-scale-balanced { color: var(--q-accept); }
 
 /* ---- Data grid ---- */
 .table-wrap {

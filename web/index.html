@@ -6,7 +6,7 @@
   <title>SWG Tracker Desktop</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.1/css/all.min.css">
-  <link rel="stylesheet" href="css/app.css?v=20261017c">
+  <link rel="stylesheet" href="css/app.css?v=20261017e">
 </head>
 <body>
   <div id="holiday-bar" class="holiday-bar" hidden></div>
@@ -224,12 +224,12 @@
           <select id="res-planet" class="form-select filter-select"></select>
           <select id="res-category" class="form-select filter-select"></select>
           <button id="res-search-btn" class="btn btn-accent" title="Search"><i class="fa-solid fa-magnifying-glass"></i></button>
-          <label class="pin-toggle ms-auto">
-            <input id="res-stocked-only" type="checkbox"> Stockpiled
-          </label>
-          <label class="pin-toggle">
-            <input id="res-pinned-only" type="checkbox"> Pinned
-          </label>
+          <div class="res-coll ms-auto" role="group" aria-label="Only show">
+            <label class="pin-toggle" title="Pinned only"><input id="res-pinned-only" type="checkbox"><i class="fa-solid fa-thumbtack"></i></label>
+            <label class="pin-toggle" title="Stockpiled only"><input id="res-stocked-only" type="checkbox"><i class="fa-solid fa-cubes"></i></label>
+            <label class="pin-toggle" title="Wishlisted only"><input id="res-wished-only" type="checkbox"><i class="fa-solid fa-heart"></i></label>
+            <label class="pin-toggle" title="Shortlisted only"><input id="res-shop-only" type="checkbox"><i class="fa-solid fa-scale-balanced"></i></label>
+          </div>
         </div>
         <div class="res-filterrow">
           <div id="res-filter-pills" class="res-pills"></div>
@@ -3174,7 +3174,7 @@
   <script src="js/shared.js?v=20261017a"></script>
   <script src="js/shop.js?v=20261017b"></script>
   <script src="js/help.js?v=20261012a"></script>
-  <script src="js/resources.js?v=20261017a"></script>
+  <script src="js/resources.js?v=20261017b"></script>
   <script src="js/resource.js?v=20261017a"></script>
   <script src="js/schematics.js?v=20261016a"></script>
   <script src="js/stockpile.js?v=20261012a"></script>

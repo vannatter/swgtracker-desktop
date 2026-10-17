@@ -735,6 +735,21 @@ function resRowHtml(res) {
 }
 
 let resLoadSeq = 0;
+// The "only show" toggles beside the search: each maps to a set of resource ids
+// the client already holds (pins, stockpile, wishlist, shortlist).
+const RES_ONLY = [
+  { sel: '#res-pinned-only', label: 'pinned', ids: () => resState.pinned },
+  { sel: '#res-stocked-only', label: 'stockpiled', ids: () => (typeof stkState !== 'undefined' && stkState.resourceIds) || new Set() },
+  { sel: '#res-wished-only', label: 'wishlisted', ids: () => (typeof wishState !== 'undefined' && wishState.resourceIds) || new Set() },
+  { sel: '#res-shop-only', label: 'shortlisted', ids: () => (typeof shopState !== 'undefined' && shopState.items) || new Map() },
+];
+function resOnlySets() {
+  return RES_ONLY.filter((o) => $(o.sel)?.checked).map((o) => ({ label: o.label, ids: [...o.ids().keys()].map(String) }));
+}
+function resIntersect(lists) {
+  return lists.reduce((acc, ids) => (acc === null ? ids : acc.filter((id) => ids.includes(id))), null) || [];
+}
+
 async function loadResources() {
   // a first visit that arrives with a filter (Resource Tree, Home, a resource's
   // type link) fires the page's plain load and the filtered one back to back —
@@ -769,23 +784,17 @@ async function loadResources() {
   };
 
   let res;
-  const stockedIds = $('#res-stocked-only').checked && typeof stkState !== 'undefined' ? [...(stkState.resourceIds || [])] : [];
-  if ($('#res-pinned-only').checked && resState.pinned.size) {
-    // Pinned view fetches the pinned ids DIRECTLY (status/pages ignored) — the
-    // old filter-the-current-page approach lost pins that were despawned or
-    // ranked pages deep (Jylin's Duroomevris). Via the gateway: the shell's
-    // search bridge whitelists params and would drop `ids`.
-    try { res = await apiFetch('GET', 'api/resources.php', { params: { ids: [...resState.pinned].join(',') } }); }
-    catch (e) { res = { ok: false, error: String(e) }; }
-    if (res.ok && res.data && !(res.data.results || []).length && resState.pinned.size) {
-      // older site deploy without the ids filter would return page 1 unfiltered;
-      // the client-side pinned filter below still keeps the view honest
-      res.data.results = (res.data.results || []);
-    }
-  } else if (stockedIds.length) {
-    // Stockpiled filter likewise fetches the stockpiled ids DIRECTLY so despawned
-    // or deep-ranked stockpile resources still show (not just the active page).
-    try { res = await apiFetch('GET', 'api/resources.php', { params: { ids: stockedIds.join(',') } }); }
+  // "Only show" toggles (pinned / stockpiled / wishlisted / shortlisted): the
+  // matching ids are fetched DIRECTLY, status and pages ignored — filtering the
+  // current page lost pins that were despawned or ranked pages deep (Jylin's
+  // Duroomevris). Several toggles at once = resources in ALL of them. Via the
+  // gateway: the shell's search bridge whitelists params and would drop `ids`.
+  const only = resOnlySets();
+  const onlyIds = only.length ? resIntersect(only.map((o) => o.ids)) : null;
+  if (onlyIds && !onlyIds.length) {
+    res = { ok: true, data: { results: [] } };
+  } else if (onlyIds) {
+    try { res = await apiFetch('GET', 'api/resources.php', { params: { ids: onlyIds.join(',') } }); }
     catch (e) { res = { ok: false, error: String(e) }; }
   } else {
     try { res = await api().search_resources(params); }
@@ -809,13 +818,13 @@ async function loadResources() {
   resState.hasNext = rows.length >= resState.perPage;
   const fetched = rows.length;
 
-  if ($('#res-pinned-only').checked) {
-    rows = rows.filter((r) => resState.pinned.has(String(r.id)));
-  }
-  if ($('#res-stocked-only').checked) {
-    rows = rows.filter((r) => stkState.resourceIds.has(String(r.id)));
-    // the id-based stockpile fetch ignores the status/search filters server-side,
-    // so honor them here (pinned intentionally shows everything, so skip then)
+  if (onlyIds) {
+    // an older site deploy without the ids filter returns page 1 unfiltered —
+    // keep the view honest client-side too
+    const keep = new Set(onlyIds);
+    rows = rows.filter((r) => keep.has(String(r.id)));
+    // the id fetch ignores the status/search filters server-side, so honor them
+    // here (Pinned intentionally shows everything, despawned included, so skip then)
     if (!$('#res-pinned-only').checked) {
       const st = effectiveStatus();
       if (st === 'active') rows = rows.filter((r) => String(r.status ?? '0') === '1');
@@ -836,8 +845,7 @@ async function loadResources() {
   }
 
   if (!rows.length) {
-    const filtered = $('#res-pinned-only').checked || $('#res-stocked-only').checked;
-    showResEmpty(filtered ? 'No matching resources on this page.' : 'No resources found.');
+    showResEmpty(onlyIds ? `Nothing ${only.map((o) => o.label).join(' and ')} matches.` : 'No resources found.');
     $('#res-status').textContent = '';
     updateResPager(page);
     return;
@@ -930,9 +938,9 @@ function applyCategoryFilter(code, label) {
 document.addEventListener('page:again', (e) => {
   if (e.detail?.key !== 'resources') return;
   const dirty = $('#res-search').value || $('#res-planet').value || $('#res-category').value || resState.filters.length || resState.statusFilter || resState.page > 1
-    || $('#res-pinned-only').checked || $('#res-stocked-only').checked || resState.sortField || resState.sortOrder !== 'DESC';
+    || resOnlySets().length || resState.sortField || resState.sortOrder !== 'DESC';
   if (!dirty) return;
-  $('#res-pinned-only').checked = false; $('#res-stocked-only').checked = false;
+  RES_ONLY.forEach((o) => { $(o.sel).checked = false; });
   resState.sortField = ''; resState.sortOrder = 'DESC'; // back to the default order (newest first), not just unfiltered
   resSyncSort(); buildResHeader();
   clearResFilter('all');
@@ -1299,8 +1307,7 @@ function initResources() {
   });
   $('#res-planet').addEventListener('change', () => { resState.page = 1; loadResources(); });
   $('#res-category').addEventListener('change', () => { resState.page = 1; loadResources(); });
-  $('#res-pinned-only').addEventListener('change', () => loadResources());
-  $('#res-stocked-only').addEventListener('change', () => loadResources());
+  RES_ONLY.forEach((o) => $(o.sel).addEventListener('change', () => loadResources()));
   $('[data-refresh="resources"]').addEventListener('click', () => loadResources());
   $('#res-prev').addEventListener('click', () => { if (resState.page > 1) { resState.page--; loadResources(); } });
   $('#res-next').addEventListener('click', () => { if (resState.hasNext) { resState.page++; loadResources(); } });

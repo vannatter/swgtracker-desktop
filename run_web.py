@@ -20,6 +20,89 @@ DATA_DIR = Path.home() / ".swgtracker" if FROZEN else Path(__file__).parent
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 
+def _pick_http_port() -> int:
+    """pywebview pins its local file server to one port (42001) once private
+    mode is off, so localStorage keeps a stable origin across launches. Fine —
+    until a second process wants it: the bind fails in a thread and the new
+    window silently loads the OTHER process's files (a dev client beside the
+    installed app showed the installed UI; a relaunch racing its parent likewise).
+    Source checkouts get their own port, and anyone finding theirs busy moves
+    up to a free one rather than borrow a stranger's interface."""
+    import socket
+    preferred = 42001 if FROZEN else 42011
+    for port in range(preferred, preferred + 20):
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+                probe.bind(("127.0.0.1", port))
+            if port != preferred:
+                logger.warning("port %s busy — serving the UI on %s (localStorage starts fresh this session)", preferred, port)
+            return port
+        except OSError:
+            continue
+    return preferred  # let pywebview fail loudly rather than hang here
+
+
+def _dev_control(window, path: Path) -> None:
+    """Source checkouts only: `--control FILE` turns the app into something a
+    script can drive without touching the mouse — append lines to FILE:
+        page <key>          showPage(key)
+        click <selector>    document.querySelector(selector).click()
+        js <code>           evaluate_js(code)
+        shot <png>          capture THIS window (macOS screencapture -l)
+        quit
+    Each line runs once; the file is truncated after reading. Used to take the
+    download-page screenshots (Dustin: "click through the app on your own")."""
+    import os
+    import subprocess
+    import threading
+    import time
+
+    def _window_id():
+        try:
+            import Quartz  # type: ignore
+            pid = os.getpid()
+            for w in Quartz.CGWindowListCopyWindowInfo(Quartz.kCGWindowListOptionOnScreenOnly, Quartz.kCGNullWindowID):
+                if w.get("kCGWindowOwnerPID") == pid and w.get("kCGWindowName") == "SWG Tracker Desktop":
+                    return w["kCGWindowNumber"]
+        except Exception:  # noqa: BLE001
+            pass
+        return None
+
+    def run(line: str) -> None:
+        cmd, _, arg = line.strip().partition(" ")
+        if cmd == "page":
+            window.evaluate_js(f"showPage({arg.strip()!r})")
+        elif cmd == "click":
+            window.evaluate_js(f"(function(){{const el=document.querySelector({arg.strip()!r}); if(el) el.click(); return !!el;}})()")
+        elif cmd == "js":
+            window.evaluate_js(arg)
+        elif cmd == "shot":
+            wid = _window_id()
+            if wid:
+                subprocess.run(["screencapture", "-x", "-o", "-l", str(wid), arg.strip()], check=False)
+            logger.info("dev shot %s (window %s)", arg.strip(), wid)
+        elif cmd == "quit":
+            os._exit(0)
+
+    def loop():
+        while True:
+            try:
+                if path.is_file() and path.stat().st_size:
+                    lines = path.read_text().splitlines()
+                    path.write_text("")
+                    for ln in lines:
+                        if ln.strip():
+                            try:
+                                run(ln)
+                            except Exception:  # noqa: BLE001
+                                logger.error("dev control %r failed", ln, exc_info=True)
+            except Exception:  # noqa: BLE001
+                logger.error("dev control loop", exc_info=True)
+            time.sleep(0.25)
+
+    threading.Thread(target=loop, daemon=True, name="dev-control").start()
+
+
 def _purge_webview_cache(storage: Path) -> None:
     """Drop the webview's HTTP/file cache (never its LocalStorage) before it starts.
 
@@ -64,7 +147,7 @@ from src.core.alert_poller import AlertPoller
 from src.core.bundle_manager import BundleManager
 from src.web_api import WebApi
 
-APP_VERSION = "0.15.0"  # keep in sync with pyproject.toml — bump with every change batch
+APP_VERSION = "0.15.1"  # keep in sync with pyproject.toml — bump with every change batch
 
 logging.basicConfig(
     level=logging.INFO,
@@ -295,7 +378,16 @@ def main():
         height=800,
         min_size=(960, 650),
         background_color="#14161d",
+        maximized="--maximized" in sys.argv,
     )
+    if not FROZEN:  # dev harness: --page KEY opens there; --control FILE takes commands
+        argv = sys.argv
+        start_page = argv[argv.index("--page") + 1] if "--page" in argv and argv.index("--page") + 1 < len(argv) else ""
+        control = argv[argv.index("--control") + 1] if "--control" in argv and argv.index("--control") + 1 < len(argv) else ""
+        if start_page:
+            window.events.loaded += lambda: window.evaluate_js(f"setTimeout(() => showPage({start_page!r}), 800)")
+        if control:
+            _dev_control(window, Path(control))
     # hot-apply: bundle_apply() re-resolves and reloads the webview in place.
     # Windows relaunches instead — WebView2 silently refuses the in-place
     # navigation that WKWebView accepts, and a boot picks the bundle anyway.
@@ -339,7 +431,8 @@ def main():
         logger.error("webstorage dir failed", exc_info=True)
     _purge_webview_cache(storage)
     webview.start(debug="--debug" in sys.argv, private_mode=False,
-                  storage_path=str(storage))  # blocks until the window closes
+                  storage_path=str(storage),
+                  http_port=_pick_http_port())  # blocks until the window closes
     if tray_icon:
         tray_icon.stop()
     bundles.stop()

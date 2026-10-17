@@ -1137,6 +1137,10 @@ td.lab-dim { opacity: .45; }
   gap: 10px; color: var(--text-hover); font-weight: 600; background: rgba(20,22,29,.6);
 }
 .grid-empty { color: var(--text-muted); font-weight: 400; }
+/* pin the veil to the visible part of a scrolled grid (--wrap-scroll set in app.js) */
+.table-wrap > .grid-loading, .table-wrap > .grid-empty {
+  top: var(--wrap-scroll, 0px); bottom: calc(-1 * var(--wrap-scroll, 0px));
+}
 /* Insights' empty/loading sit OUTSIDE any .table-wrap — as bare page content
    the absolute inset-0 veil above would blanket the entire app and eat every
    click (hit users with zero sales; reported by Phlan). Render them inline. */

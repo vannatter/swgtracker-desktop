@@ -1297,6 +1297,12 @@ async function boot() {
   initPulseChart();
   initTooltips(); // WKWebView shows no native title tooltips
   initHelp();     // delegated — every [data-help] icon, now and later
+  // grid veils are inset-0 of the scroll content — follow the wrap's scroll
+  // so a reload while scrolled down shows Loading… in view, not above the fold
+  document.addEventListener('scroll', (e) => {
+    const w = e.target;
+    if (w.classList?.contains('table-wrap')) w.style.setProperty('--wrap-scroll', w.scrollTop + 'px');
+  }, true);
   // thin client: confirm this UI booted (crash-rollback guard), then watch
   // for freshly installed bundles and offer a hot apply
   try { api().bundle_mark_ok(); } catch (_) { /* builtin UI — no-op */ }

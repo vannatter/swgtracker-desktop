@@ -65,6 +65,7 @@ function applyHolidayBar() {
 const PAGE_LOADERS = {
   home: () => loadHome(),
   resources: () => loadResources(),
+  shop: () => loadShop(),
   topspawns: () => loadTopSpawns(),
   schematics: () => loadSchematics(),
   cities: () => loadCities(),
@@ -311,6 +312,9 @@ function showPage(key, opts = {}) {
   // Record where we were so back can return there — but a back/forward hop
   // manages the stacks itself, and a fresh navigation drops the forward trail.
   const from = currentPageKey();
+  // asking for the page you're already on (menu click or its shortcut) means
+  // "take me back to its clean state" — pages that keep filters listen for this
+  if (!opts.internal && from === key) document.dispatchEvent(new CustomEvent('page:again', { detail: { key } }));
   if (!opts.internal && from && from !== key) { navBack.push(from); navForward.length = 0; }
   updateNavArrows();
   // Sub-pages (detail views) keep their parent sidebar item lit.
@@ -323,7 +327,7 @@ function showPage(key, opts = {}) {
   document.dispatchEvent(new CustomEvent('page:show', { detail: { key } }));
   // live-state pages reload on every visit, not just the first — mail uploads
   // and cron inventory depletion both move underneath a cached render
-  const ALWAYS_RELOAD = new Set(['monitor', 'inventory', 'characters', 'home']); // home throttles itself (5 min)
+  const ALWAYS_RELOAD = new Set(['monitor', 'inventory', 'characters', 'home', 'shop']); // shop: live stats each visit // home throttles itself (5 min)
   if (PAGE_LOADERS[key] && (!loadedPages.has(key) || ALWAYS_RELOAD.has(key))) {
     loadedPages.add(key);
     PAGE_LOADERS[key]();
@@ -1189,6 +1193,7 @@ async function boot() {
   initNav();
   initControls();
   initBroadcasts();
+  initShop();
   initResources();
   initSchematics();
   initStockpile();

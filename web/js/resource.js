@@ -99,7 +99,7 @@ function renderResourcePage(data) {
   rdState.id = safeInt(r.id);
   rdState.name = r.name || '';
   updateRdAddButton();
-  updateRdWishButton();
+  updateRdWishButton(); if (typeof shopSyncRdButton === 'function') shopSyncRdButton();
   // Community editing is rep-gated server-side; an older server omits can_edit
   // (then the buttons stay live and the server still enforces on save).
   // Locked buttons stay clickable (a real `disabled` swallows hover, killing
@@ -967,12 +967,12 @@ function initResourcePage() {
       btn.disabled = true;
       await removeFromStockpileByResource(rdState.id, rdState.name);
       updateRdAddButton();
-      updateRdWishButton();
+      updateRdWishButton(); if (typeof shopSyncRdButton === 'function') shopSyncRdButton();
     } else {
       // Dialog collects an optional amount + CPU; adds (and promotes if wished) on close.
       openStockpileAddDialog(rdState.id, rdState.name, () => {
         updateRdAddButton();
-        updateRdWishButton();
+        updateRdWishButton(); if (typeof shopSyncRdButton === 'function') shopSyncRdButton();
       });
     }
   });
@@ -989,6 +989,7 @@ function initResourcePage() {
       await addToWishlist(rdState.id, rdState.name);
     }
     updateRdAddButton();
-    updateRdWishButton();
+    updateRdWishButton(); if (typeof shopSyncRdButton === 'function') shopSyncRdButton();
   });
 }
+

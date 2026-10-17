@@ -208,6 +208,7 @@ function resCardHtml(res) {
       <span class="res-card-name res-name" data-resname="${escapeHtml(res.name || '')}" data-resid="${escapeHtml(String(id))}">${escapeHtml(res.name || '')}</span>
       ${isStocked ? '<i class="fa-solid fa-cubes res-card-mark res-card-stock" title="In your stockpile"></i>' : ''}
       ${isWished ? '<i class="fa-solid fa-heart res-card-mark res-card-wish" title="On your wishlist"></i>' : ''}
+      ${shopIconHtml(id, res.name, 'res-card-shop')}
       ${show('status') ? `<i class="fa-solid fa-circle res-status ${isActive ? 'on' : 'off'}" title="${isActive ? 'Active — in spawn' : 'Inactive — despawned'}"></i>` : ''}
     </div>
     ${type}
@@ -294,7 +295,7 @@ function resTreeItemHtml(r, depth) {
   const planets = resTreeShowPlanets() ? `<span class="res-tree-planetscell">${planetsHtml(r)}</span>` : '';
   return `<div class="res-tree-item">
     <span class="res-tree-itemlabel" style="padding-left:${depth * 15 + 12}px">
-      <i class="fa-solid fa-thumbtack res-tree-pin ${resState.pinned.has(String(r.id)) ? 'pinned-star' : ''}" data-pin="${escapeHtml(String(r.id ?? ''))}" title="Pin"></i>
+      <i class="fa-solid fa-thumbtack res-tree-pin ${resState.pinned.has(String(r.id)) ? 'pinned-star' : ''}" data-pin="${escapeHtml(String(r.id ?? ''))}" title="Pin"></i>${shopIconHtml(r.id, r.name, 'res-tree-shop')}
       <i class="fa-solid fa-circle res-status ${isActive ? 'on' : 'off'}"${isActive ? ` title="${escapeHtml(agoText(r.timestamp))}"` : ''}></i>
       <span class="res-name res-tree-itemname" data-resname="${escapeHtml(r.name || '')}" data-resid="${escapeHtml(String(r.id ?? ''))}">${escapeHtml(r.name || '')}</span>
     </span>
@@ -587,7 +588,7 @@ function absorbTypedTokens() {
 function resHeaderHtml() {
   return `<th class="pin-cell pin-reset ${resState.sortField ? '' : 'active'}" data-pinsort
        title="Pinned first (default order) — click to reset sort"><i class="fa-solid fa-thumbtack"></i></th>` +
-    '<th class="pin-cell"></th><th class="pin-cell"></th>' +
+    '<th class="pin-cell"></th><th class="pin-cell"></th><th class="pin-cell"></th>' +
     resCols().map(([label, field, cls]) => {
       const sortable = field !== 'planets' && field !== 'status'; // no server sort column for these
       const arrow = field === resState.sortField ? (resState.sortOrder === 'ASC' ? ' ▲' : ' ▼') : '';
@@ -728,6 +729,7 @@ function resRowHtml(res) {
     <td class="pin-cell ${isPinned ? 'pinned-star' : ''}" data-pin="${id}" title="Pin"><i class="${star}"></i></td>
     ${addCellHtml(id, res.name)}
     ${wishCellHtml(id, res.name)}
+    ${shopCellHtml(id, res.name)}
     ${cells}
   </tr>`;
 }
@@ -922,6 +924,18 @@ function applyCategoryFilter(code, label) {
   resState.page = 1;
   loadResources();
 }
+
+// Resources asked for again while already open: a clean slate — no search, no
+// planet/category, no stat filters, back to page 1 (Dustin: a re-click resets)
+document.addEventListener('page:again', (e) => {
+  if (e.detail?.key !== 'resources') return;
+  const dirty = $('#res-search').value || $('#res-planet').value || $('#res-category').value || resState.filters.length || resState.statusFilter || resState.page > 1
+    || $('#res-pinned-only').checked || $('#res-stocked-only').checked;
+  if (!dirty) return;
+  $('#res-pinned-only').checked = false; $('#res-stocked-only').checked = false;
+  clearResFilter('all');
+  toast('Resources reset to the full list');
+});
 
 function clearResFilter(kind, i) {
   if (kind === 'search') $('#res-search').value = '';

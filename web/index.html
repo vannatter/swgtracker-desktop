@@ -44,6 +44,8 @@
         <li class="nav-item active" data-page="home"><i class="fa-solid fa-house"></i> Home</li>
         <li class="nav-group-head" data-navgroup="crafting"><i class="fa-solid fa-hammer"></i> Crafting <i class="fa-solid fa-caret-down nav-group-caret"></i><span class="nav-group-dot" hidden></span></li>
         <li class="nav-item nav-group-item" data-page="resources" data-group="crafting"><i class="fa-solid fa-gem"></i> Resources</li>
+        <li class="nav-item nav-group-item" data-page="shop" data-group="crafting"><i class="fa-solid fa-scale-balanced"></i> Shortlist
+          <span id="nav-shop-pill" class="nav-pill nav-pill-quiet" title="Resources on your shortlist" hidden></span></li>
         <li class="nav-item nav-group-item" data-page="schematics" data-group="crafting"><i class="fa-solid fa-scroll"></i> Schematics</li>
         <li class="nav-item nav-group-item" data-page="topspawns" data-group="crafting"><i class="fa-solid fa-ranking-star"></i> Top Spawns
           <span id="nav-top-pill" class="nav-pill" title="Resources new to the top spawns since you last looked" hidden></span></li>
@@ -273,6 +275,7 @@
             <button id="rd-disable" class="btn btn-sm btn-outline-secondary rd-disable" hidden
                     title="Disable a bad/bogus resource — hides it for everyone (recoverable, nothing is deleted)"><i class="fa-solid fa-ban"></i> Disable</button>
             <button id="rd-wish" class="btn btn-sm btn-outline-secondary" hidden><i class="fa-regular fa-heart"></i> Wishlist</button>
+            <button id="rd-shop" class="btn btn-sm btn-outline-secondary rd-shop" hidden title="Shortlist it to compare with others of its class"><i class="fa-solid fa-scale-balanced"></i> Shortlist</button>
             <button id="rd-add" class="btn btn-sm btn-accent" hidden><i class="fa-solid fa-plus"></i> Add to Stockpile</button>
             <button id="rd-refresh" class="btn btn-icon" title="Refresh this resource"><i class="fa-solid fa-rotate-right"></i></button>
           </span>
@@ -349,6 +352,23 @@
           </div>
         </div>
         <div id="rd-comments" class="cmt-section" hidden></div>
+      </section>
+
+      <!-- Shortlist: compare / shop mode — resources grouped by class, side by side -->
+      <section id="page-shop" class="page">
+        <div class="page-head">
+          <h1>Shortlist</h1>
+          <i class="fa-solid fa-circle-info info-tip" title="Resources you've shortlisted from Resources, the cards, the tree or a resource page, grouped by class, so you can compare and pick. Two or more of a class line up side by side: the best value in each stat is flagged and the best overall by Score wears the crown. Stats are live every time you open this page."></i>
+          <span id="shop-count" class="gx-updated head-right"></span>
+          <select id="shop-level" class="form-select filter-select shop-level" title="Compare within each class, or across a parent class — up to everything together"><option value="class">By class</option></select>
+          <button id="shop-clear" class="btn btn-sm btn-outline-secondary" hidden><i class="fa-solid fa-trash-can"></i> Clear list</button>
+          <button id="shop-reload" class="btn btn-icon" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
+        </div>
+        <div class="table-wrap shop-scroll">
+          <div id="shop-groups" class="shop-groups"></div>
+          <div id="shop-loading" class="grid-loading" hidden><span class="spinner"></span> Loading…</div>
+          <div id="shop-empty" class="grid-empty shop-emptymsg" hidden></div>
+        </div>
       </section>
 
       <!-- Schematics page -->
@@ -3153,9 +3173,10 @@
   <!-- Classic scripts sharing one top-level scope; app.js boots last. -->
   <script src="js/class_caps.js?v=20261012a"></script>
   <script src="js/shared.js?v=20261012a"></script>
+  <script src="js/shop.js?v=20261017a"></script>
   <script src="js/help.js?v=20261012a"></script>
-  <script src="js/resources.js?v=20261016a"></script>
-  <script src="js/resource.js?v=20261016b"></script>
+  <script src="js/resources.js?v=20261017a"></script>
+  <script src="js/resource.js?v=20261017a"></script>
   <script src="js/schematics.js?v=20261016a"></script>
   <script src="js/stockpile.js?v=20261012a"></script>
   <script src="js/wishlist.js?v=20261012a"></script>

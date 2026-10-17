@@ -160,7 +160,19 @@ function renderShop() {
   const ids = [...shopState.items.keys()];
   if (!ids.length) {
     host.innerHTML = '';
-    $('#shop-empty').innerHTML = 'Nothing shortlisted yet. Hit the <i class="fa-solid fa-scale-balanced"></i> beside a resource on Resources, a card, the tree or a resource page — resources of the same class line up here side by side so you can see which is best.';
+    $('#shop-empty').innerHTML = `
+      <div class="shop-empty-card">
+        <div class="shop-empty-icon"><i class="fa-solid fa-scale-balanced"></i></div>
+        <h2>Nothing shortlisted yet</h2>
+        <p>Shortlist two or more resources of the same class and they line up here side by side — the best value in every stat flagged, the cheapest marked and the best overall crowned.</p>
+        <ul class="shop-empty-steps">
+          <li><span><i class="fa-solid fa-scale-balanced"></i></span>Hit the scale beside any resource on Resources, its cards or a resource page</li>
+          <li><span><i class="fa-solid fa-sitemap"></i></span>Or pick straight from a class in the Resource Tree</li>
+          <li><span><i class="fa-solid fa-layer-group"></i></span>Compare within a class, or widen to a parent class with the picker above</li>
+        </ul>
+        <button type="button" class="btn btn-accent" id="shop-empty-go"><i class="fa-solid fa-gem"></i> Browse Resources</button>
+      </div>`;
+    $('#shop-empty-go')?.addEventListener('click', () => showPage('resources'));
     $('#shop-empty').hidden = false;
     return;
   }

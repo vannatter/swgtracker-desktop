@@ -20,7 +20,8 @@ const invState = { page: 1, perPage: 100, hasNext: false, sortField: 'item_name'
                    groups: [], grpCollapsed: new Set(), tagFilter: null, tagEdit: null,
                    checked: new Set(),    // checkbox selection — bulk edit / multi-drag filing
                    lastSel: null,         // last-toggled checkbox (anchor for shift-click ranges)
-                   selected: new Set() }; // click-marked rows (Veizyr) — survive re-renders and window switches
+                   selected: new Set(),
+                   editMode: false };   // every Stocked/Threshold cell is a box — run down a column without clicking // click-marked rows (Veizyr) — survive re-renders and window switches
 
 // tags live as one comma-separated string server-side, like stockpile/factories
 const invTags = (i) => String(i.tags || '').split(',').map((t) => t.trim()).filter(Boolean);
@@ -86,6 +87,47 @@ async function invLoadVendorSuggestions() {
   } catch (_) { invState.vendors = []; }
 }
 
+// item-name match for the search box while a vendor is picked — same rules as
+// the server's: "quoted" = exact, otherwise contains, case-insensitive
+function invItemMatches(q) {
+  const exact = q.length >= 2 && q.startsWith('"') && q.endsWith('"');
+  const term = (exact ? q.slice(1, -1) : q).toLowerCase();
+  return (item) => {
+    const name = String(item.item_name || '').toLowerCase();
+    return exact ? name === term : name.includes(term);
+  };
+}
+
+// the vendor filter offers the vendors your INVENTORY sits on — not your sales
+// history, which carries one-off strays (a 1 cr sale years ago on someone
+// else's vendor). Re-read at most once a minute; rows in view top it up so an
+// item just moved to a new vendor shows straight away
+async function invLoadFilterVendors() {
+  invState.filterVendorsAt = Date.now();
+  const names = new Set();
+  try {
+    for (let page = 1; page <= 10; page++) {
+      const res = await api().get_inventory({ page, perpage: 500, sort: 'vendor', order: 'ASC' });
+      const rows = (res.ok && res.data && res.data.results) || [];
+      rows.forEach((r) => { if (r.vendor) names.add(String(r.vendor).trim()); });
+      if (rows.length < 500) break;
+    }
+    invState.filterVendors = [...names];
+  } catch (_) { invState.filterVendorsAt = 0; }
+}
+function invFillVendorFilter() {
+  const sel = $('#inv-vendor');
+  const cur = sel.value;
+  const seen = new Set();
+  const names = [...(invState.filterVendors || []), ...invState.items.map((i) => i.vendor), cur]
+    .map((v) => String(v || '').trim())
+    .filter((v) => v && !seen.has(v.toLowerCase()) && seen.add(v.toLowerCase()))
+    .sort((a, b) => (a === 'Bazaar' ? -1 : b === 'Bazaar' ? 1 : a.localeCompare(b)));   // Bazaar first when you use it
+  const html = '<option value="">All vendors</option>'
+    + names.map((v) => `<option value="${escapeHtml(v)}"${v === cur ? ' selected' : ''}>${escapeHtml(v)}</option>`).join('');
+  if (sel.innerHTML !== html) sel.innerHTML = html;
+}
+
 // filtered vendor suggestions under the vendor input (most-sold first).
 // NEVER repaint while the pointer is over the list: a keystroke landing as the
 // mouse travels to click used to swap the options under the cursor, so the
@@ -127,13 +169,14 @@ function invRowHtml(item, idx) {
   const tagged = invTags(item).length > 0;
   return `<tr class="${invState.selected.has(iid) ? 'inv-picked' : ''}" data-idx="${idx}" data-iid="${iid}"${invState.groups.length ? ' draggable="true"' : ''}>
     <td class="pin-cell inv-sel-cell"><input type="checkbox" class="inv-sel" data-selid="${iid}"${invState.checked.has(iid) ? ' checked' : ''}></td>
-    <td class="stat inv-edit ${stockCls}" data-edit="stocked" data-idx="${idx}" title="Click to edit">${stockCls
-      ? `<i class="fa-solid fa-triangle-exclamation inv-warnico" title="${stocked < 0 ? 'Oversold — stock is negative' : 'At or below restock threshold'}"></i>` : ''}${fmtNum(stocked)}</td>
+    <td class="stat inv-edit ${stockCls}" data-edit="stocked" data-idx="${idx}" title="${invState.editMode ? '' : 'Click to edit'}">${invState.editMode
+      ? invQuickInput('stocked', idx, stocked)
+      : `${stockCls ? `<i class="fa-solid fa-triangle-exclamation inv-warnico" title="${stocked < 0 ? 'Oversold — stock is negative' : 'At or below restock threshold'}"></i>` : ''}${fmtNum(stocked)}`}</td>
     <td class="col-name res-name"><span class="stk-tagslot">${tagged
       ? `<i class="fa-solid fa-tag stk-tagind" data-invtaghover="${idx}"></i>` : ''}</span>${escapeHtml(item.item_name || '')}</td>
     <td class="stat inv-edit${threshold >= 0 ? '' : ' inv-nowarn'}" data-edit="threshold" data-idx="${idx}" title="${threshold >= 0
         ? 'Click to edit — warns at or below this number; set it to -1 to turn off this item’s low-stock and oversold warnings'
-        : 'Warnings are off for this item (threshold -1) — click to set a threshold'}">${fmtNum(threshold)}</td>
+        : 'Warnings are off for this item (threshold -1) — click to set a threshold'}">${invState.editMode ? invQuickInput('threshold', idx, threshold) : fmtNum(threshold)}</td>
     <td class="col-text">${escapeHtml(item.vendor || '') || '<span class="stat_off">—</span>'}</td>
     <td class="col-num">${item.match_price != null && item.match_price !== '' ? fmtNum(item.match_price) : '<span class="stat_off">—</span>'}</td>
     <td class="stat ${safeInt(item.sales_count) ? 'inv-sales' : ''}" ${safeInt(item.sales_count) ? `data-sales="${idx}" title="Click to see the matched sales"` : ''}>${safeInt(item.sales_count) ? fmtNum(item.sales_count) : '<span class="stat_off">—</span>'}</td>
@@ -338,13 +381,21 @@ async function loadInventory() {
   // prefix, so the existing bridge needs no new param; quotes = exact match
   const scope = $('#inv-scope').value;
   const q = $('#inv-search').value.trim();
+  // vendor dropdown + search = two filters at once (Danvar: "Bazaar" AND
+  // "crafting tool"). The server takes one search, so the vendor goes to it as
+  // an exact scope and the text narrows item names here, over the vendor's
+  // whole list (500 = the endpoint's page cap) rather than one page of it
+  const vendor = $('#inv-vendor').value;
+  const both = !!(vendor && q);
   const params = {
-    search: q && scope ? `${scope}:${q}` : q,
-    page: invState.page,
-    perpage: invState.perPage,
+    search: vendor ? `vendor:"${vendor}"` : (q && scope ? `${scope}:${q}` : q),
+    page: both ? 1 : invState.page,
+    perpage: both ? 500 : invState.perPage,
     sort: invState.sortField,
     order: invState.sortOrder,
   };
+  $('#inv-scope').disabled = !!vendor;
+  if (Date.now() - (invState.filterVendorsAt || 0) > 60000) invLoadFilterVendors().then(invFillVendorFilter);
   if (filter === 'negative_stock' || filter === 'restock' || filter === 'one_off') params.inventory_type = filter;
   else if (filter === 'low') params.threshold = safeInt($('#inv-low').value);
 
@@ -365,11 +416,20 @@ async function loadInventory() {
     return;
   }
 
-  const rows = res.data.results || [];
+  let rows = res.data.results || [];
   const page = res.data.page ?? invState.page;
-  invState.perPage = res.data.per_page ?? invState.perPage;
-  invState.hasNext = rows.length >= invState.perPage;
+  if (both) {
+    const capped = rows.length >= 500;
+    rows = rows.filter(invItemMatches(q));
+    invState.hasNext = false;
+    invState.vendorCapped = capped;
+  } else {
+    invState.perPage = res.data.per_page ?? invState.perPage;
+    invState.hasNext = rows.length >= invState.perPage;
+    invState.vendorCapped = false;
+  }
   invState.items = rows;
+  invFillVendorFilter();
 
   buildInvHeader();
   invSyncAllToggle();
@@ -380,15 +440,72 @@ async function loadInventory() {
     // still render folder rows (if any) so an empty list can be organized
     renderInvRows();
     const empty = $('#inv-empty');
-    empty.textContent = filter || params.search ? 'No matching items.' : 'No items yet — add one above.';
+    empty.textContent = filter || params.search
+      ? (vendor ? `No matching items at ${vendor}.` : 'No matching items.') : 'No items yet — add one above.';
     empty.hidden = invState.groups.length > 0;
     $('#inv-status').textContent = '';
   } else {
     renderInvRows();
-    $('#inv-status').textContent = `Page ${page} — ${rows.length} items`;
+    $('#inv-status').textContent = both
+      ? `${rows.length} item${rows.length === 1 ? '' : 's'} at ${vendor}${invState.vendorCapped ? ' (searched this vendor’s first 500)' : ''}`
+      : `Page ${page} — ${rows.length} items`;
   }
-  $('#inv-prev').disabled = page <= 1;
+  $('#inv-prev').disabled = both || page <= 1;
   $('#inv-next').disabled = !invState.hasNext;
+}
+
+// ---- edit mode: the whole Stocked / Threshold columns as boxes -------------------
+// Each box saves when you leave it; Enter / ↓ / ↑ walk the same column like a
+// spreadsheet (arrows don't nudge the number). Nothing re-renders between saves —
+// the row's warning colour updates in place — so focus never jumps; switching
+// edit mode off reloads the list once.
+function invQuickInput(field, idx, value) {
+  return `<input type="number" class="stock-input inv-quick" data-qfield="${field}" data-idx="${idx}" value="${value}">`;
+}
+function invQuickMove(input, step) {
+  const all = [...document.querySelectorAll(`#inv-body .inv-quick[data-qfield="${input.dataset.qfield}"]`)];
+  const next = all[all.indexOf(input) + step];
+  if (next) { next.focus(); next.select(); } else input.blur();
+}
+async function invQuickSave(input) {
+  const item = invState.items[safeInt(input.dataset.idx)];
+  const field = input.dataset.qfield;
+  if (!item) return;
+  if (input.value.trim() === '') { input.value = safeInt(item[field]); return; }
+  const value = safeInt(input.value);
+  if (value === safeInt(item[field])) return;
+  const before = item[field];
+  item[field] = value;   // optimistic, so a fast Enter-Enter-Enter run doesn't re-save
+  let res;
+  try { res = await api().update_inventory_item({ inventory_id: item.id, [field]: value }); }
+  catch (e) { res = { ok: false, error: String(e) }; }
+  if (!res.ok) {
+    item[field] = before;
+    input.value = safeInt(before);
+    toast(`${item.item_name}: ${res.error || 'update failed'}`, false);
+    checkAuthError(res.error);
+    return;
+  }
+  input.classList.remove('inv-quick-saved'); void input.offsetWidth; input.classList.add('inv-quick-saved');
+  // the row's low / oversold colour follows the new numbers
+  const cell = input.closest('tr')?.querySelector('[data-edit="stocked"]');
+  if (cell) {
+    const s = safeInt(item.stocked), t = safeInt(item.threshold);
+    cell.classList.toggle('inv-neg', t >= 0 && s < 0);
+    cell.classList.toggle('inv-low', t >= 0 && s >= 0 && s <= t);
+  }
+}
+function invSetEditMode(on) {
+  invState.editMode = on;
+  $('#inv-editmode').classList.toggle('active', on);
+  $('#page-inventory').classList.toggle('inv-editing', on);
+  if (on) {
+    renderInvRows();
+    const first = document.querySelector('#inv-body .inv-quick');
+    if (first) { first.focus(); first.select(); }
+  } else {
+    loadInventory();   // re-sort / re-highlight with everything just typed
+  }
 }
 
 // Inline editor for stocked/threshold cells
@@ -545,6 +662,7 @@ function initInventory() {
   });
   $('#inv-low').addEventListener('change', () => { invState.page = 1; loadInventory(); });
   $('#inv-scope').addEventListener('change', () => { invState.page = 1; loadInventory(); });
+  $('#inv-vendor').addEventListener('change', () => { invState.page = 1; loadInventory(); });
   $('[data-refresh="inventory"]').addEventListener('click', () => loadInventory());
   $('#inv-prev').addEventListener('click', () => { if (invState.page > 1) { invState.page--; loadInventory(); } });
   $('#inv-next').addEventListener('click', () => { if (invState.hasNext) { invState.page++; loadInventory(); } });
@@ -569,6 +687,19 @@ function initInventory() {
   // Sales expander: one open at a time, click the count again to close
   $('#inv-sales-close').addEventListener('click', () => { $('#inv-sales-modal').hidden = true; });
   bindBackdropClose($('#inv-sales-modal'), () => { $('#inv-sales-modal').hidden = true; });
+  $('#inv-editmode').addEventListener('click', () => invSetEditMode(!invState.editMode));
+  $('#inv-body').addEventListener('keydown', (e) => {
+    const input = e.target.closest('.inv-quick');
+    if (!input) return;
+    if (e.key === 'Enter' || e.key === 'ArrowDown') { e.preventDefault(); invQuickMove(input, e.shiftKey && e.key === 'Enter' ? -1 : 1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); invQuickMove(input, -1); }
+    else if (e.key === 'Escape') {
+      const item = invState.items[safeInt(input.dataset.idx)];
+      if (item) input.value = safeInt(item[input.dataset.qfield]);
+      input.blur();
+    }
+  });
+  $('#inv-body').addEventListener('focusout', (e) => { if (e.target.classList.contains('inv-quick')) invQuickSave(e.target); });
   // Notes: hover the icon previews, click opens the dialog
   $('#inv-body').addEventListener('click', (e) => {
     const noteCell = e.target.closest('[data-notes]');

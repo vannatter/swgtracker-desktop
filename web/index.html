@@ -6,7 +6,7 @@
   <title>SWG Tracker Desktop</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.1/css/all.min.css">
-  <link rel="stylesheet" href="css/app.css?v=20261017e">
+  <link rel="stylesheet" href="css/app.css?v=20261019b">
 </head>
 <body>
   <div id="holiday-bar" class="holiday-bar" hidden></div>
@@ -1055,6 +1055,9 @@
             <option value="one_off">One-offs</option>
           </select>
           <input id="inv-low" type="number" class="form-control filter-input inv-num" value="5" min="0" title="Low-stock cutoff" hidden>
+          <select id="inv-vendor" class="form-select filter-select inv-vendor-filter" title="Only this vendor's items — the search then narrows by item name within it">
+            <option value="">All vendors</option>
+          </select>
           <select id="inv-scope" class="form-select filter-select inv-scope" title="Which field the search matches">
             <option value="">Item + Vendor</option>
             <option value="item">Item only</option>
@@ -1062,6 +1065,7 @@
           </select>
           <input id="inv-search" type="text" class="form-control filter-input head-search" placeholder="Search..."
                  title="Wrap the search in double quotes for an exact match — &quot;Caf&quot; finds only items named exactly Caf">
+          <button id="inv-editmode" class="btn btn-icon inv-editmode" title="Edit mode — every Stocked and Threshold becomes a box: type, then Enter or ↓ saves and drops to the next row (↑ goes back, Tab moves across)"><i class="fa-solid fa-pen-to-square"></i></button>
           <button id="inv-newgroup" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-folder-plus"></i> New Group</button>
           <button id="inv-add-open" class="btn btn-sm btn-accent"><i class="fa-solid fa-plus"></i> Add Item</button>
           <button class="btn btn-icon" data-refresh="inventory" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
@@ -3249,7 +3253,7 @@
   <script src="js/wishlist.js?v=20261012a"></script>
   <script src="js/myschematics.js?v=20261012a"></script>
   <script src="js/schemcalc.js?v=20261012a"></script>
-  <script src="js/inventory.js?v=20261017a"></script>
+  <script src="js/inventory.js?v=20261019a"></script>
   <script src="js/sales.js?v=20261019a"></script>
   <script src="js/insights.js?v=20261019a"></script>
   <script src="js/purchases.js?v=20261019a"></script>

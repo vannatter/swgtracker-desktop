@@ -1785,6 +1785,16 @@ td .harv-name { font-size: inherit; font-weight: inherit; color: inherit; }
   font-size: 13px; font-weight: 600; text-align: center; padding: 1px 4px;
 }
 .stock-input:focus { outline: none; }
+/* Inventory edit mode: the boxes sit quietly until focused, flash green on save */
+.inv-editmode.active { color: #fff; background: var(--accent); border-color: var(--accent); }
+.inv-quick { border-color: var(--border); -moz-appearance: textfield; }
+.inv-quick::-webkit-outer-spin-button, .inv-quick::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.inv-quick:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(226, 67, 80, .25); }
+.inv-editing .inv-edit { text-decoration: none; cursor: default; }
+.inv-low .inv-quick { color: var(--q-good); }
+.inv-neg .inv-quick { color: var(--accent); }
+@keyframes invQuickSaved { from { background: rgba(69, 233, 126, .35); } to { background: var(--bg-input); } }
+.inv-quick-saved { animation: invQuickSaved .9s ease-out; }
 
 /* ---- Stockpile folders/buckets ---- */
 .stk-sel-cell { width: 30px; text-align: center; padding: 0; }
@@ -3802,17 +3812,19 @@ tr.gx-rowlink:hover .gx-detail-link { color: var(--text-hover); } /* hover brigh
 .hm-hot-planets .planet { font-size: 9px; }
 /* at a glance tiles */
 .hm-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; }
-.hm-tile { border: 1px solid var(--border); border-radius: 8px; padding: 14px 12px 12px; background: var(--bg-secondary); text-align: center; min-height: 118px;
-           display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+/* compact enough to sit near the Hot Resources cards' height — the tallest tile
+   (a mini chart) sets the whole carousel row, so the charts stay short too */
+.hm-tile { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; background: var(--bg-secondary); text-align: center; min-height: 0;
+           display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
 .hm-tile-label { font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); }
 .hm-tile-value { font-size: 17px; font-weight: 700; color: var(--text-hover); width: 100%; }
 .hm-tile-value .res-name, .hm-schem { cursor: pointer; }
 .hm-tile-value .res-name:hover, .hm-schem:hover { color: var(--accent-hover); }
 .hm-tile-sub { font-size: 12px; color: var(--text-muted); }
-.hm-badge { font-size: 11px; padding: 2px 9px; border-radius: 5px; background: rgba(255,255,255,.08); color: var(--text-muted); margin-top: 4px; }
+.hm-badge { font-size: 11px; padding: 2px 9px; border-radius: 5px; background: rgba(255,255,255,.08); color: var(--text-muted); margin-top: 2px; }
 .hm-mini { width: 100%; }
 .hm-mini .gx-legend { display: none; }
-.hm-mini .gx-chartwrap svg { height: 70px; }
+.hm-mini .gx-chartwrap svg { height: 42px; }
 .hm-gcw-now, .hm-pulse-now { display: flex; gap: 12px; font-size: 12px; justify-content: center; }
 .hm-imp { color: #e24350; font-weight: 700; } .hm-reb { color: #5b8def; font-weight: 700; }
 .hm-pulse-now span { color: var(--text-muted); }

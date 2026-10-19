@@ -2082,7 +2082,7 @@
               On the x64 client (most Restoration players) the game writes under the <code>x64</code> folder:
               <code>…\x64\profiles\…\mail_Character</code></span></h2>
           <div id="set-mailpaths"></div>
-          <div class="set-addpath-row"><button id="set-addpath" class="btn btn-sm btn-outline-secondary">+ Add Character</button></div>
+          <div class="set-addpath-row"><button id="set-addpath" class="btn btn-sm btn-outline-secondary">+ Add mail folder</button> <button type="button" class="btn btn-sm btn-link" data-mailsetup>Guided setup</button></div>
           <datalist id="set-char-list"></datalist>
         </div>
 
@@ -2657,6 +2657,74 @@
     </div>
   </div>
 
+  <!-- Set up sales tracking: the whole character → /mailsave → folder → monitor chain in one sectioned dialog (mailsetup.js) -->
+  <div id="ms-modal" class="key-gate" hidden>
+    <div class="key-gate-card sp-card ms-card">
+      <button id="ms-close" type="button" class="btn btn-icon ms-x" title="Close"><i class="fa-solid fa-xmark"></i></button>
+      <h2>Set up sales tracking</h2>
+      <div class="settings-sub ms-lede">Your vendor sales arrive as in-game mail. Once the app is watching a character's mail, sales and purchases fill in on their own.</div>
+
+      <section class="ms-step" data-msstep="1">
+        <div class="ms-step-head"><span class="ms-num"><span>1</span><i class="fa-solid fa-check"></i></span><span class="ms-title">Character</span>
+          <span class="ms-summary" id="ms-sum-1"></span><button type="button" class="btn btn-sm btn-link ms-change" data-msback="1">Change</button></div>
+        <div class="ms-step-body">
+          <div class="settings-sub">Whose sales are these? Mail is tracked per character.</div>
+          <label class="ms-choice"><input type="radio" name="ms-mode" id="ms-mode-existing"> <span>An existing character</span>
+            <select id="ms-existing" class="form-select filter-select"></select></label>
+          <label class="ms-choice"><input type="radio" name="ms-mode" id="ms-mode-new"> <span>A new character</span>
+            <input id="ms-new-name" type="text" class="form-control filter-input" placeholder="Name as it appears in game, e.g. Sena" autocomplete="off"></label>
+          <div id="ms-err-1" class="ms-err"></div>
+          <div class="ms-actions"><button id="ms-next-1" type="button" class="btn btn-sm btn-accent">Next <i class="fa-solid fa-arrow-right"></i></button></div>
+        </div>
+      </section>
+
+      <section class="ms-step" data-msstep="2">
+        <div class="ms-step-head"><span class="ms-num"><span>2</span><i class="fa-solid fa-check"></i></span><span class="ms-title">Export the mail in game</span>
+          <span class="ms-summary" id="ms-sum-2"></span><button type="button" class="btn btn-sm btn-link ms-change" data-msback="2">Change</button></div>
+        <div class="ms-step-body">
+          <div class="settings-sub">SWG keeps mail on the server — nothing is on your PC until you export it.</div>
+          <ol class="ms-list">
+            <li>Log in as <b id="ms-mailsave-name"></b> and type <code>/mailsave</code> in chat.</li>
+            <li>It says how many mails it's saving. A full mailbox takes a few minutes — run <code>/mailsave</code> again to see how many are left.</li>
+            <li>When it says it <b>saved successfully</b> it names the folder it wrote to. Note it — that's the next step.</li>
+          </ol>
+          <div class="ms-actions">
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-help="mail-directories"><i class="fa-solid fa-circle-question"></i> More detail</button>
+            <button id="ms-next-2" type="button" class="btn btn-sm btn-accent">It saved — next <i class="fa-solid fa-arrow-right"></i></button>
+          </div>
+        </div>
+      </section>
+
+      <section class="ms-step" data-msstep="3">
+        <div class="ms-step-head"><span class="ms-num"><span>3</span><i class="fa-solid fa-check"></i></span><span class="ms-title">Mail folder</span><span class="ms-summary ms-path-shown" id="ms-sum-3"></span></div>
+        <div class="ms-step-body">
+          <div class="settings-sub">Pick the folder <code>/mailsave</code> named — usually <code>…\x64\profiles\&lt;account&gt;\&lt;server&gt;\mail_&lt;Name&gt;</code> inside your SWG folder.</div>
+          <div class="ms-pathrow">
+            <input id="ms-path" type="text" class="form-control filter-input" autocomplete="off" placeholder="Choose or paste the mail folder">
+            <button id="ms-browse" type="button" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-folder-open"></i> Browse</button>
+          </div>
+          <label class="harv-wp-opt ms-auto"><input type="checkbox" id="ms-auto"> <span>Start watching automatically whenever the app opens</span></label>
+          <div id="ms-err-3" class="ms-err"></div>
+          <div class="ms-actions"><button id="ms-save" type="button" class="btn btn-sm btn-accent"><i class="fa-solid fa-play"></i> Save &amp; start watching</button></div>
+        </div>
+      </section>
+
+      <section class="ms-step" data-msstep="4">
+        <div class="ms-step-head"><span class="ms-num"><span>4</span><i class="fa-solid fa-check"></i></span><span class="ms-title">Watching</span></div>
+        <div class="ms-step-body">
+          <div class="ms-done"><i class="fa-solid fa-circle-check"></i> Watching <b id="ms-done-name"></b>'s mail in <span id="ms-done-path" class="ms-path-shown"></span></div>
+          <div class="settings-sub">New mail uploads as it lands. Sales and purchases show up on My Sales and Insights a few minutes after that. Run <code>/mailsave</code> in game whenever you want fresh mail picked up.</div>
+          <div class="ms-actions">
+            <button id="ms-done-another" type="button" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-user-plus"></i> Add another character</button>
+            <button id="ms-done-sales" type="button" class="btn btn-sm btn-accent"><i class="fa-solid fa-tags"></i> Open My Sales</button>
+          </div>
+        </div>
+      </section>
+
+      <div class="inv-add-actions"><button id="ms-cancel" type="button" class="btn btn-sm btn-outline-secondary">Cancel</button></div>
+    </div>
+  </div>
+
   <!-- Characters page dialogs: profile form (add/edit) + single-field (designer link) -->
   <div id="char-form-modal" class="key-gate" hidden>
     <div class="key-gate-card sp-card inv-add-card">
@@ -3182,9 +3250,9 @@
   <script src="js/myschematics.js?v=20261012a"></script>
   <script src="js/schemcalc.js?v=20261012a"></script>
   <script src="js/inventory.js?v=20261017a"></script>
-  <script src="js/sales.js?v=20261012a"></script>
-  <script src="js/insights.js?v=20261012a"></script>
-  <script src="js/purchases.js?v=20261012a"></script>
+  <script src="js/sales.js?v=20261019a"></script>
+  <script src="js/insights.js?v=20261019a"></script>
+  <script src="js/purchases.js?v=20261019a"></script>
   <script src="js/harvesters.js?v=20261012a"></script>
   <script src="js/factories.js?v=20261012a"></script>
   <script src="js/customers.js?v=20261012a"></script>
@@ -3210,7 +3278,8 @@
   <script src="js/navlayout.js?v=20261016a"></script>
   <script src="js/beasts.js?v=20261016a"></script>
   <script src="js/beastcalc.js?v=20261016a"></script>
-  <script src="js/home.js?v=20261016a"></script>
-  <script src="js/app.js?v=20261017b"></script>
+  <script src="js/home.js?v=20261019a"></script>
+  <script src="js/mailsetup.js?v=20261019a"></script>
+  <script src="js/app.js?v=20261019a"></script>
 </body>
 </html>

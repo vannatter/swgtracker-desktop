@@ -7,6 +7,7 @@
    localStorage, like grid column prefs. */
 
 const HOME_SECTIONS = [
+  { key: 'quick', name: 'Quick Actions', icon: 'fa-bolt', hint: 'sales tracking status and setup, plus shortcuts' },
   { key: 'hot', name: 'Hot Resources', icon: 'fa-fire', hint: 'the site’s top resources, by profession' },
   { key: 'glance', name: 'At a Glance', icon: 'fa-chart-simple', hint: 'the website dashboard tiles plus your own widgets' },
   { key: 'announce', name: 'Resource Announcements', icon: 'fa-bullhorn', hint: 'notable spawns server-wide — the Spawn Alerts feed' },
@@ -52,6 +53,7 @@ const homeState = {
   profData: null,                  // api/professions.php (class widgets)
   loadedAt: 0, loading: false,
   picker: { type: 'guild', results: [] },
+  quick: null,                     // { chars, paths, running, folders } — the setup checklist's inputs
 };
 
 // ---- layout prefs -----------------------------------------------------------
@@ -62,9 +64,12 @@ function homeLayout() {
   saved = saved && typeof saved === 'object' ? saved : {};
   const keys = HOME_SECTIONS.map((s) => s.key);
   let order = (Array.isArray(saved.order) ? saved.order : []).filter((k) => keys.includes(k));
+  // Quick Actions lands on top for layouts saved before it existed — it's the
+  // setup path new crafters were missing; anyone who doesn't want it hides it once
+  if (order.length && !order.includes('quick')) order.unshift('quick');
   keys.forEach((k) => { if (!order.includes(k)) order.push(k); });   // sections added later append
   // the pre-reorder default had Announcements last — treat that saved order as "never customised"
-  if (order.join() === 'hot,glance,spawns,announce') order = [...keys];
+  if (order.join() === 'quick,hot,glance,spawns,announce') order = [...keys];
   const arr = (v) => (Array.isArray(v) ? v.map(String) : []);
   homeState.layout = {
     order,
@@ -269,6 +274,7 @@ async function loadHome(force = false) {
   const l = homeLayout();
   const want = (k) => !l.hidden.has(k);
   const jobs = [loadPrefs()];            // the greeting needs the account name
+  if (want('quick')) jobs.push(homeQuickLoad());
   if (homeState.booting) jobs.push(new Promise((r) => setTimeout(r, 500)));
   if (want('hot') || want('glance')) {
     jobs.push(apiFetch('GET', 'api/home.php')
@@ -301,7 +307,7 @@ function renderHome() {
   const g = $('#home-greet'); if (g) g.textContent = homeGreeting();
   const parts = l.order.filter((k) => !l.hidden.has(k)).map((k) => {
     const def = HOME_SECTIONS.find((s) => s.key === k);
-    const body = { hot: homeHotHtml, glance: homeGlanceHtml, spawns: homeSpawnsHtml, announce: homeAnnounceHtml }[k]();
+    const body = { quick: homeQuickHtml, hot: homeHotHtml, glance: homeGlanceHtml, spawns: homeSpawnsHtml, announce: homeAnnounceHtml }[k]();
     const isCol = col.has(k);
     return `<section class="hm-section${isCol ? ' collapsed' : ''}" data-hmsec="${k}">
       <div class="hm-head" data-hmtoggle="${k}">
@@ -698,9 +704,78 @@ function homeAnnounceHtml() {
 }
 
 // ---- customize dialog ---------------------------------------------------------
+// ---- quick actions ------------------------------------------------------------------
+// Sales tracking needs four things done in order — a character, /mailsave in
+// game, that character's mail folder, the monitor running. The guided dialog
+// (mailsetup.js) is the flow; this section just says where you stand and
+// opens it, then turns into a row of shortcuts once mail is being watched.
+async function homeQuickLoad() {
+  const q = { chars: null, paths: [], running: false, folders: 0 };
+  await Promise.all([
+    apiFetch('GET', 'api/characters.php')
+      .then((r) => { if (r.ok && r.data && Array.isArray(r.data.characters)) q.chars = r.data.characters.map((c) => String(c.name)); })
+      .catch(() => {}),
+    Promise.resolve().then(() => api().get_config())
+      .then((r) => {
+        q.paths = ((r && r.ok && r.data && r.data.mail_paths) || [])
+          .map((m) => (typeof m === 'object' && m ? m : { path: String(m || ''), label: '' }))
+          .filter((m) => m.path);
+      })
+      .catch(() => {}),
+    Promise.resolve().then(() => api().monitor_state())
+      .then((r) => { if (r && r.ok && r.data) { q.running = !!r.data.running; q.folders = (r.data.folders || []).length; } })
+      .catch(() => {}),
+  ]);
+  homeState.quick = q;
+}
+// the header button / Settings changed something underneath — repaint if Home shows the section
+async function homeQuickSync() {
+  if (!homeState.quick || homeLayout().hidden.has('quick')) return;
+  await homeQuickLoad();
+  if ($('#page-home').classList.contains('active')) renderHome();
+}
+
+function homeQuickHtml() {
+  const q = homeState.quick;
+  const right = '<button type="button" class="btn btn-icon hm-hide" data-hmhide="quick" title="Hide Quick Actions (bring it back from Customize)"><i class="fa-solid fa-eye-slash"></i></button>';
+  if (!q) return { html: homeLoadingHtml, right };
+  const n = q.folders || q.paths.length;
+  if (!q.paths.length || !q.running) {
+    // not set up, or set up but the monitor's off — one button into the guided dialog
+    const why = q.paths.length
+      ? `Your mail folder${q.paths.length === 1 ? ' is' : 's are'} set up, but the mail monitor isn't running — nothing new is uploading.`
+      : 'Sales tracking isn’t set up yet. It takes a couple of minutes: pick your character, export its mail in game, and point the app at the folder.';
+    const btn = q.paths.length
+      ? '<button class="btn btn-sm btn-accent" data-hmqa="start"><i class="fa-solid fa-play"></i> Start mail monitor</button>'
+      : '<button class="btn btn-sm btn-accent" data-mailsetup><i class="fa-solid fa-wand-magic-sparkles"></i> Set up sales tracking</button>';
+    return { right, html: `<div class="hm-qa-row"><span class="hm-qa-status hm-qa-todo"><i class="fa-solid fa-circle-exclamation"></i> ${why}</span>${btn}</div>` };
+  }
+  return {
+    right,
+    html: `<div class="hm-qa-row">
+      <span class="hm-qa-status"><i class="fa-solid fa-circle-check"></i> Sales tracking is on — watching ${n} mail folder${n === 1 ? '' : 's'}</span>
+      <button class="btn btn-sm btn-outline-secondary" data-hmgo="sales"><i class="fa-solid fa-tags"></i> My Sales</button>
+      <button class="btn btn-sm btn-outline-secondary" data-hmgo="insights"><i class="fa-solid fa-chart-line"></i> Insights</button>
+      <button class="btn btn-sm btn-outline-secondary" data-hmgo="monitor"><i class="fa-solid fa-envelope"></i> Mail</button>
+      <button class="btn btn-sm btn-outline-secondary" data-mailsetup${q.paths.length >= MAX_MAIL_PATHS ? ' disabled title="Four folders is the most the monitor watches"' : ''}><i class="fa-solid fa-user-plus"></i> Track another character</button>
+    </div>`,
+  };
+}
+
+async function homeQuickAction(kind) {
+  if (kind === 'start') {
+    const res = await api().start_monitoring();
+    if (!res.ok) { toast(res.error || 'Could not start the mail monitor', false); return; }
+    setMonitoring(true, res.data);
+    toast(res.data || 'Mail monitor started');
+  }
+  await homeQuickSync();
+}
+
 function homeRenderCfg() {
   const l = homeLayout();
   const sub = {
+    quick: () => '<div class="settings-sub">Collapse it from its header, or untick it here to hide it for good.</div>',
     hot: () => {
       const profs = (homeState.dash && homeState.dash.hotbar && homeState.dash.hotbar.profs) || [];
       if (!profs.length) return '<div class="settings-sub">Professions appear here once Hot Resources has loaded.</div>';
@@ -837,7 +912,7 @@ function initHome() {
       if (show.checked) l.hidden.delete(show.dataset.hmshow); else l.hidden.add(show.dataset.hmshow);
       homeSaveLayout(); homeRenderCfg();
       const k = show.dataset.hmshow;
-      const needs = show.checked && ((k === 'spawns' && !homeState.spawns) || (k === 'announce' && homeState.ann == null)
+      const needs = show.checked && ((k === 'spawns' && !homeState.spawns) || (k === 'announce' && homeState.ann == null) || (k === 'quick' && !homeState.quick)
         || ((k === 'hot' || k === 'glance') && !homeState.dash));
       if (needs) loadHome('quiet'); else renderHome();
       return;
@@ -934,6 +1009,15 @@ function initHome() {
     }
     const go = e.target.closest('[data-hmgo]');
     if (go) { showPage(go.dataset.hmgo); return; }
+    const qa = e.target.closest('[data-hmqa]');
+    if (qa) { if (!qa.disabled) homeQuickAction(qa.dataset.hmqa); return; }
+    const hide = e.target.closest('[data-hmhide]');
+    if (hide) {
+      homeLayout().hidden.add(hide.dataset.hmhide);
+      homeSaveLayout(); renderHome();
+      toast('Quick Actions hidden — bring it back from Customize');
+      return;
+    }
     const view = e.target.closest('[data-hmview]');
     if (view) { homeLayout().spawnsView = view.dataset.hmview; homeSaveLayout(); renderHome(); return; }
     const sview = e.target.closest('[data-hmsview]');

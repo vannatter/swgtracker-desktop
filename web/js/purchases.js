@@ -93,8 +93,9 @@ async function loadPurchases() {
   const totalPages = data.total_pages ?? 1;
 
   if (!rows.length) {
-    showPurEmpty($('#pur-search').value.trim()
-      ? 'No purchases match this filter.' : 'No purchases found.');
+    const filtered = !!$('#pur-search').value.trim();
+    showPurEmpty(filtered ? 'No purchases match this filter.' : 'No purchases found.');
+    if (!filtered) mailSetupOffer($('#pur-empty'));
     $('#pur-status').textContent = '';
   } else {
     $('#pur-body').innerHTML = rows.map(purRowHtml).join('');

@@ -948,11 +948,7 @@ function initControls() {
         const paths = ((cfg.ok && cfg.data && cfg.data.mail_paths) || [])
           .map((m) => (typeof m === 'object' && m ? m : { path: String(m || ''), label: '' }))
           .filter((m) => m.path);
-        if (!paths.length) {
-          toast('Add a mail folder in Settings first', false);
-          showPage('settings');
-          return;
-        }
+        if (!paths.length) { openMailSetup(); return; }   // first time: the guided setup, not a trip to Settings
         const untied = paths.find((m) => !String(m.label || '').trim());
         if (untied) {
           toast('Assign a character to each mail folder in Settings before starting', false);
@@ -998,6 +994,7 @@ function setMonitoring(on, msg) {
   if (on) monPollTimer = setInterval(refreshMonitorState, 10000);
   // the Mail page mirrors this state — snap it in step when it's on screen
   if ($('#page-monitor').classList.contains('active')) loadMail();
+  if (typeof homeQuickSync === 'function') homeQuickSync();
 }
 
 // details (folders · uploaded · failed) live in the hover tip, not the bar
@@ -1297,6 +1294,7 @@ async function boot() {
   initPulseChart();
   initTooltips(); // WKWebView shows no native title tooltips
   initHelp();     // delegated — every [data-help] icon, now and later
+  initMailSetup();
   // grid veils are inset-0 of the scroll content — follow the wrap's scroll
   // so a reload while scrolled down shows Loading… in view, not above the fold
   document.addEventListener('scroll', (e) => {

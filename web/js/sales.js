@@ -108,8 +108,9 @@ async function loadSales() {
   const totalPages = data.total_pages ?? 1;
 
   if (!sales.length) {
-    showSalesEmpty($('#sales-search').value.trim()
-      ? 'No sales match this filter.' : 'No sales found.');
+    const filtered = !!$('#sales-search').value.trim();
+    showSalesEmpty(filtered ? 'No sales match this filter.' : 'No sales found.');
+    if (!filtered) mailSetupOffer($('#sales-empty'));
     $('#sales-status').textContent = '';
   } else {
     $('#sales-body').innerHTML = sales.map(saleRowHtml).join('');

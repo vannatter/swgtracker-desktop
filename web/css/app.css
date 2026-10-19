@@ -3835,6 +3835,50 @@ tr.gx-rowlink:hover .gx-detail-link { color: var(--text-hover); } /* hover brigh
 /* Home: widgets, picker, richer customize rows, spawn view switch */
 .hm-link { cursor: pointer; } .hm-link:hover { color: var(--accent-hover); }
 .hm-live { color: var(--accent-green, #45e97e); font-weight: 600; }
+/* Quick Actions: the sales-tracking setup checklist, then a shortcut row */
+.hm-hide { width: 26px; height: 26px; font-size: 12px; color: var(--text-muted); }
+.hm-hide:hover { color: var(--text-hover); }
+.hm-qa-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.hm-qa-status { margin-right: auto; color: var(--text-primary); }
+.hm-qa-status i { color: var(--accent-green, #45e97e); margin-right: 4px; }
+.hm-qa-todo i { color: var(--accent); }
+/* Set up sales tracking dialog — sections unlock in order; done ones fold to a summary */
+.ms-card { max-width: 620px; width: 100%; position: relative; }
+.ms-x { position: absolute; top: 14px; right: 14px; color: var(--text-muted); }
+.ms-lede { margin: -4px 0 14px; }
+.ms-step { border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; background: var(--bg-secondary); }
+.ms-step.active { border-color: rgba(226, 67, 80, .55); }
+.ms-step.locked { opacity: .45; }
+.ms-step-head { display: flex; align-items: center; gap: 10px; padding: 10px 12px; }
+.ms-num { flex: 0 0 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; border: 1px solid var(--border); color: var(--text-muted); }
+.ms-num i, .ms-step.done .ms-num span { display: none; }
+.ms-step.done .ms-num i { display: inline; }
+.ms-step.active .ms-num { background: var(--accent); border-color: var(--accent); color: #fff; }
+.ms-step.done .ms-num { color: var(--accent-green, #45e97e); border-color: var(--accent-green, #45e97e); }
+.ms-title { font-weight: 600; color: var(--text-hover); }
+.ms-summary { margin-left: auto; color: var(--text-muted); font-size: 13px; }
+.ms-change { display: none; padding: 0 4px; font-size: 12px; color: var(--text-muted); text-decoration: none; }
+.ms-change:hover { color: var(--accent-hover); }
+.ms-step.done .ms-change:not([hidden]) { display: inline-block; }
+.ms-step-body { display: none; padding: 0 12px 12px 46px; }
+.ms-step.active .ms-step-body { display: block; }
+.ms-choice { display: grid; grid-template-columns: auto 150px 1fr; align-items: center; gap: 8px; margin: 10px 0 0; color: var(--text-primary); }
+.ms-choice select, .ms-choice input[type="text"] { width: 100%; max-width: none; }
+.ms-list { margin: 8px 0 0; padding-left: 18px; color: var(--text-primary); display: flex; flex-direction: column; gap: 4px; }
+.ms-pathrow { display: flex; gap: 6px; margin-top: 10px; }
+.ms-pathrow input { flex: 1; max-width: none; }
+.ms-auto { margin-top: 10px; }
+.ms-err { color: var(--accent); font-size: 12px; margin-top: 8px; }
+.ms-err:empty { display: none; }
+.ms-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+.ms-done { color: var(--text-primary); margin-bottom: 6px; }
+.ms-done i { color: var(--accent-green, #45e97e); margin-right: 4px; }
+.ms-path-shown { font-family: var(--font-mono, monospace); font-size: 12px; word-break: break-all; }
+#ms-modal .inv-add-actions { margin-top: 8px; }
+/* empty Sales / Purchases / Insights: the setup offer under the message */
+.ms-offer-host { flex-direction: column; }
+.ms-offer { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 10px; font-weight: 400; color: var(--text-muted); }
 .hm-slots { width: 100%; text-align: left; display: flex; flex-direction: column; gap: 3px; margin-top: 4px; font-size: 12px; }
 .hm-slot-type { color: var(--text-muted); } .hm-slot .res-name { cursor: pointer; font-weight: 600; } .hm-slot .res-name:hover { color: var(--accent-hover); }
 .hm-slot-q { color: var(--q-good); font-weight: 600; }

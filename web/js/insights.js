@@ -44,6 +44,7 @@ async function loadInsights() {
       ? 'No sales in this window yet — try a wider range.'
       : 'No sales uploaded yet. Point the Mail monitor at your in-game mail and your vendor sales will start flowing in.';
     $('#ins-empty').hidden = false;
+    if (!insState.days) mailSetupOffer($('#ins-empty'));
     return;
   }
 

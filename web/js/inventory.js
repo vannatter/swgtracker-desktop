@@ -576,6 +576,7 @@ async function addInvItem() {
   const btn = $('#inv-add');
   btn.disabled = true;
   const editId = $('#inv-add-modal').dataset.editId || '';
+  const group = safeInt($('#inv-new-group').value);
   let res;
   try {
     // gateway (not the shell bridge): it carries the vendor field. POST for a
@@ -587,6 +588,8 @@ async function addInvItem() {
         vendor: $('#inv-new-vendor').value.trim(),
         stocked: safeInt($('#inv-new-stocked').value),
         threshold: safeInt($('#inv-new-threshold').value),
+        // only when it moved — filing is metadata the row may not carry
+        ...(group !== safeInt($('#inv-add-modal').dataset.groupWas) ? { group_id: group || null } : {}),
       } });
     } else {
       res = await apiFetch('POST', 'api/inventory.php', { data: {
@@ -595,6 +598,12 @@ async function addInvItem() {
         stocked: safeInt($('#inv-new-stocked').value),
         threshold: safeInt($('#inv-new-threshold').value),
       } });
+      // POST has no group field — file the new row with a follow-up PUT (Danvar)
+      const newId = res.ok && res.data ? safeInt(res.data.inventory_id) : 0;
+      if (newId && group) {
+        const g = await apiFetch('PUT', 'api/inventory.php', { data: { inventory_id: newId, group_id: group } });
+        if (!g.ok) toast(`Added, but couldn't file it in the group: ${g.error || 'server error'}`, false);
+      }
     }
   } catch (e) { res = { ok: false, error: String(e) }; }
   btn.disabled = false;
@@ -616,6 +625,13 @@ async function addInvItem() {
 function openInvDialog(item = null, clone = false, preset = null) {
   invLoadVendorSuggestions();
   const modal = $('#inv-add-modal');
+  // Group picker (Danvar): edit and clone start in the row's folder
+  const gid = item ? safeInt(item.group_id) : 0;
+  const groups = invState.groups.slice().sort((a, b) => safeInt(a.sort_order) - safeInt(b.sort_order));
+  $('#inv-new-group').innerHTML = '<option value="0">Unfiled</option>'
+    + groups.map((g) => `<option value="${safeInt(g.id)}">${escapeHtml(g.name || 'Group')}</option>`).join('');
+  $('#inv-new-group').value = String(groups.some((g) => safeInt(g.id) === gid) ? gid : 0);
+  modal.dataset.groupWas = String(item && !clone ? gid : 0);
   const nameInput = $('#inv-new-name');
   nameInput.readOnly = false;
   if (item && !clone) {

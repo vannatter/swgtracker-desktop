@@ -707,10 +707,30 @@ function fmtDate(ts) {
 // .table-wrap (which is also the scroller), so it only covers the first
 // viewport of content — scroll to the top so it covers what's on screen,
 // which is where fresh results land anyway.
+// A reload keeps your place: editing, filing or deleting a row half-way down
+// a long grid used to throw you back to the top (Danvar). Only a change of
+// VIEW starts the next load at the top — a filter or search in the page head,
+// a pager button, a sort header, a tag filter. Capture phase, so the mark is
+// down before the page's own handler kicks off the load.
+function markGridReset(from) {
+  from.closest('.page')?.querySelectorAll('.table-wrap').forEach((w) => { w.dataset.resetScroll = '1'; });
+}
+['change', 'input'].forEach((type) => document.addEventListener(type, (e) => {
+  if (e.target.closest?.('.page-head')) markGridReset(e.target);
+}, true));
+document.addEventListener('click', (e) => {
+  const t = e.target.closest?.('.pager button, .table-wrap thead th, .fac-tagbar button, .fac-tagbar [data-invtag]');
+  if (t) markGridReset(t);
+}, true);
+
 function showGridLoading(sel) {
   const el = $(sel);
   el.hidden = false;
-  el.closest('.table-wrap')?.scrollTo(0, 0);
+  const wrap = el.closest('.table-wrap');
+  if (wrap && wrap.dataset.resetScroll) {
+    delete wrap.dataset.resetScroll;
+    wrap.scrollTo(0, 0);
+  }
 }
 
 // Relative time ("2h ago") with the exact timestamp in the hover tip.

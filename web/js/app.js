@@ -1261,6 +1261,7 @@ async function boot() {
   initCharactersPage();
   initHarvesters();
   initInventory();
+  initInvLog();
   initSettings();
   initAlerts();
   initHome();

@@ -1605,6 +1605,28 @@ body.dev-mode .dev-pill { display: inline-flex; }
 .inv-sales-table td { padding: 5px 10px; color: var(--text-primary); }
 .inv-sales-table tbody tr:nth-child(even) td { background: rgba(255, 255, 255, .025); }
 .inv-sales-table .col-num { text-align: right; }
+/* inventory activity (invlog.js) */
+.invlog-card { max-width: 900px; width: 92vw; text-align: left; }
+.invlog-box { min-height: 160px; }
+.invlog-bar { display: flex; gap: 8px; margin-bottom: 10px; }
+.invlog-bar .filter-select { flex: 0 0 290px; width: 290px; max-width: none; }
+.invlog-bar .filter-input { flex: 1; }
+.invlog-foot { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.invlog-foot #invlog-keep { margin-right: auto; }
+.invlog-tabs { margin: -4px 0 10px; border-bottom: 1px solid var(--bg-secondary); }
+.inv-sales-card:has(.invlog-tabs:not([hidden])) { max-width: 760px; }
+.invlog-table td { vertical-align: top; }
+.invlog-when { white-space: nowrap; }
+.invlog-item { max-width: 260px; }
+.invlog-vendor { display: block; font-size: 11px; color: var(--text-muted); }
+.invlog-src { display: inline-block; font-size: 11px; padding: 1px 8px; border-radius: 10px; background: var(--bg-input); white-space: nowrap; }
+.invlog-unmatched .invlog-src { background: rgba(240, 173, 78, .18); color: #f0ad4e; }
+.invlog-sale .invlog-src { background: rgba(92, 184, 92, .15); color: #7fd07f; }
+.invlog-down { color: #e08a8a; }
+.invlog-up { color: #7fd07f; }
+.invlog-detail { color: var(--text-muted); }
+.invlog-link { padding: 0; font-size: 12px; vertical-align: baseline; color: var(--text-hover) !important; }
+.invlog-link:hover { color: var(--accent-hover) !important; }
 
 /* My Schematics: accepted-but-not-optimal (yellow) */
 .mys-st-acc { color: var(--q-accept); font-weight: 700; cursor: pointer; white-space: nowrap; }
@@ -3870,6 +3892,9 @@ tr.gx-rowlink:hover .gx-detail-link { color: var(--text-hover); } /* hover brigh
 .ms-step.done .ms-num { color: var(--accent-green, #45e97e); border-color: var(--accent-green, #45e97e); }
 .ms-title { font-weight: 600; color: var(--text-hover); }
 .ms-summary { margin-left: auto; color: var(--text-muted); font-size: 13px; }
+/* link-style buttons: app colors, not Bootstrap's underlined blue */
+.btn.btn-link { color: var(--text-muted); text-decoration: none; border: 0; }
+.btn.btn-link:hover, .btn.btn-link:focus-visible { color: var(--accent-hover); text-decoration: none; }
 .ms-change { display: none; padding: 0 4px; font-size: 12px; color: var(--text-muted); text-decoration: none; }
 .ms-change:hover { color: var(--accent-hover); }
 .ms-step.done .ms-change:not([hidden]) { display: inline-block; }

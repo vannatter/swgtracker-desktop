@@ -119,6 +119,7 @@ async function loadSettings() {
   $('#set-tray').checked = cfg.minimize_to_tray !== false;
   $('#set-notify').checked = cfg.show_notifications !== false;
   $('#set-autostart').checked = !!cfg.auto_start_monitoring;
+  $('#set-invlog').checked = !!cfg.inventory_activity;
   // three-way disposition; legacy shells only stored the delete boolean
   setState.moveDir = String(cfg.mail_move_dir || '');
   const disp = ['keep', 'delete', 'move'].includes(cfg.mail_disposition)
@@ -224,6 +225,7 @@ async function saveSettings() {
       ['minimize_to_tray', $('#set-tray').checked],
       ['show_notifications', $('#set-notify').checked],
       ['auto_start_monitoring', $('#set-autostart').checked],
+      ['inventory_activity', $('#set-invlog').checked],
       ['date_format', $('#set-datefmt').value],
       ['timezone', $('#set-tz') ? $('#set-tz').value : ''],
       ['waypoint_format', wpFormat()],
@@ -267,6 +269,7 @@ async function saveSettings() {
     setDateFormat($('#set-datefmt').value);
     if ($('#set-tz')) setTimeZone($('#set-tz').value);
     setWaypointFormat(wpFormat());
+    if (typeof invLogApply === 'function') invLogApply($('#set-invlog').checked);
     if (fmtChanged && typeof loadedPages !== 'undefined') loadedPages.clear();
 
     // folder re-tied to a different character → migrate its uploaded history
@@ -329,6 +332,13 @@ function initSettings() {
   document.querySelectorAll('input[name="set-maildisp"]').forEach((r) =>
     r.addEventListener('change', syncZipToggle));
   $('#set-mailzip').addEventListener('change', syncZipToggle);
+  // a view switch, not a setting to batch — applies and saves the moment it flips
+  $('#set-invlog').addEventListener('change', async (e) => {
+    const on = e.target.checked;
+    if (typeof invLogApply === 'function') invLogApply(on);
+    try { await api().set_config('inventory_activity', on); } catch (_) { /* Save still writes it */ }
+    toast(on ? 'Inventory activity on — the clock button is on My Inventory' : 'Inventory activity off');
+  });
   // the example archive name shows the real current month
   const now = new Date();
   $('#set-mailzip-eg').textContent =

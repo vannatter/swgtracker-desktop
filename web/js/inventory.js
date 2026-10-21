@@ -156,6 +156,10 @@ function invRenderVendorSug() {
   box.hidden = false;
 }
 
+// with inventory activity on (invlog.js), every row opens — History is worth
+// a look on an item no sale has counted against yet
+const invSalesClickable = (item) => safeInt(item.sales_count) > 0 || (typeof invLogState !== 'undefined' && invLogState.on);
+
 function invRowHtml(item, idx) {
   const stocked = safeInt(item.stocked);
   const threshold = safeInt(item.threshold);
@@ -179,7 +183,7 @@ function invRowHtml(item, idx) {
         : 'Warnings are off for this item (threshold -1) — click to set a threshold'}">${invState.editMode ? invQuickInput('threshold', idx, threshold) : fmtNum(threshold)}</td>
     <td class="col-text">${escapeHtml(item.vendor || '') || '<span class="stat_off">—</span>'}</td>
     <td class="col-num">${item.match_price != null && item.match_price !== '' ? fmtNum(item.match_price) : '<span class="stat_off">—</span>'}</td>
-    <td class="stat ${safeInt(item.sales_count) ? 'inv-sales' : ''}" ${safeInt(item.sales_count) ? `data-sales="${idx}" title="Click to see the matched sales"` : ''}>${safeInt(item.sales_count) ? fmtNum(item.sales_count) : '<span class="stat_off">—</span>'}</td>
+    <td class="stat ${invSalesClickable(item) ? 'inv-sales' : ''}" ${invSalesClickable(item) ? `data-sales="${idx}" title="${safeInt(item.sales_count) ? 'Click to see the matched sales' : 'Click to see this item’s history'}"` : ''}>${safeInt(item.sales_count) ? fmtNum(item.sales_count) : '<span class="stat_off">—</span>'}</td>
     <td class="col-text res-type">${fmtAgoTip(item.last_updated)}</td>
     <td class="pin-cell" data-invalert="${idx}" title="${Number(item.notify_email)
         ? 'Emailing you when this drops to its threshold or oversells — click to stop'
@@ -775,23 +779,28 @@ function initInventory() {
     const item = invState.items[Number(cell.dataset.sales)];
     if (!item) return;
     $('#inv-sales-title').textContent = `Sales — ${item.item_name}`;
-    $('#inv-sales-body').innerHTML = 'Loading…';
     $('#inv-sales-modal').hidden = false;
-    let rows = [];
-    try {
-      const res = await api().inventory_sales(item.id);
-      rows = (res.ok && res.data && res.data.results) || [];
-    } catch (_) { /* renders the empty message */ }
-    $('#inv-sales-body').innerHTML = rows.length
-      ? `<table class="inv-sales-table"><thead><tr>
-           <th>When</th><th>Buyer</th><th>Vendor</th><th class="col-num">Amount</th>
-         </tr></thead><tbody>${rows.map((s) => `<tr>
-           <td>${fmtAgoTip(s.sale_timestamp)}</td>
-           <td>${escapeHtml(s.buyer || '')}</td>
-           <td>${escapeHtml(s.vendor || '')}</td>
-           <td class="col-num sale-amount">${fmtNum(s.sale_amount)} cr</td>
-         </tr>`).join('')}</tbody></table>`
-      : '<span class="stat_off">No matched sales recorded for this item.</span>';
+    const renderSales = async () => {
+      $('#inv-sales-body').innerHTML = 'Loading…';
+      let rows = [];
+      try {
+        const res = await api().inventory_sales(item.id);
+        rows = (res.ok && res.data && res.data.results) || [];
+      } catch (_) { /* renders the empty message */ }
+      $('#inv-sales-body').innerHTML = rows.length
+        ? `<table class="inv-sales-table"><thead><tr>
+             <th>When</th><th>Buyer</th><th>Vendor</th><th class="col-num">Amount</th>
+           </tr></thead><tbody>${rows.map((s) => `<tr>
+             <td>${fmtAgoTip(s.sale_timestamp)}</td>
+             <td>${escapeHtml(s.buyer || '')}</td>
+             <td>${escapeHtml(s.vendor || '')}</td>
+             <td class="col-num sale-amount">${fmtNum(s.sale_amount)} cr</td>
+           </tr>`).join('')}</tbody></table>`
+        : '<span class="stat_off">No matched sales recorded for this item.</span>';
+    };
+    // History tab (invlog.js) when Settings has inventory activity on
+    if (typeof invLogSalesTabs === 'function') invLogSalesTabs(item, renderSales);
+    renderSales();
   });
 
   // folders: create, collapse, rename, delete, drag rows in

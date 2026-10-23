@@ -136,8 +136,6 @@ th.q-col-notes, td.q-col-notes { white-space: nowrap; width: 1%; }
 .q-lb-next { right: 18px; top: 50%; transform: translateY(-50%); }
 
 /* comment composer extras (shared component; paste/drop + attached thumbnail) */
-.cmt-section.cmt-dropping { outline: 2px dashed var(--accent); outline-offset: -4px; }
-.cmt-thumb { height: 22px; width: auto; border-radius: 3px; vertical-align: middle; margin-right: 4px; border: 1px solid var(--border); }
 
 /* Planet Maps: the Quests layer */
 .qd-qpin { background: none; border: none; position: relative; text-align: center; }

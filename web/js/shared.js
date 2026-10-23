@@ -216,8 +216,10 @@ function escapeHtml(s) {
 // shrink-to-JPEG + data-URL path the proof screenshots use, and open in the
 // floating compare windows.
 // opts (all optional): { head, sub, placeholder, maxW (downscale photos to this
-// longest side, default the proof-shot 1600), onRows(rows) after every load }.
-// A photo can also be pasted into the note or dropped onto the section.
+// longest side, default the proof-shot 1600), onRows(rows) after every load,
+// onImage(url) to open a thumbnail somewhere other than the floating window }.
+// Up to CMT_MAX_IMAGES screenshots per note, picked, pasted or dropped on the section.
+const CMT_MAX_IMAGES = 4; // api/comments.php (includes/comments.inc.php COMMENT_MAX_IMAGES)
 function cmtMount(hostSel, kind, id, opts = {}) {
   const host = document.querySelector(hostSel);
   if (!host) return;
@@ -227,15 +229,17 @@ function cmtMount(hostSel, kind, id, opts = {}) {
   if (!host.dataset.wired) {
     host.dataset.wired = '1';
     const o = host._opts;
+    host._imgs = [];
     host.innerHTML = `
-      <div class="cmt-head">${escapeHtml(o.head || 'Community notes')} <span class="settings-sub">${escapeHtml(o.sub || 'field reports, tips, photos — visible to every app user')}</span></div>
+      <div class="cmt-head">${escapeHtml(o.head || 'Community notes')} <span class="settings-sub">${escapeHtml(o.sub || 'field reports, tips, screenshots — visible to every app user')}</span></div>
       <div class="cmt-compose">
-        <textarea class="form-control filter-input cmt-input" rows="2" maxlength="1000" placeholder="${escapeHtml(o.placeholder || 'Leave a note for fellow crafters…')}"></textarea>
+        <textarea class="cmt-input" rows="2" maxlength="1000" placeholder="${escapeHtml(o.placeholder || 'Leave a note for fellow crafters…')}" aria-label="Your note"></textarea>
+        <div class="cmt-attached" hidden></div>
         <div class="cmt-actions">
-          <input type="file" class="cmt-file" accept="image/png,image/jpeg,image/webp" hidden>
-          <button class="btn btn-sm btn-outline-secondary cmt-attach" title="Attach a photo (screenshot, survey, result)"><i class="fa-solid fa-image"></i> Photo</button>
-          <span class="cmt-attached" hidden></span>
-          <button class="btn btn-sm btn-accent cmt-post"><i class="fa-solid fa-paper-plane"></i> Post</button>
+          <input type="file" class="cmt-file" accept="image/png,image/jpeg,image/webp" multiple hidden>
+          <button type="button" class="cmt-tool cmt-attach" title="Attach screenshots (up to ${CMT_MAX_IMAGES})" aria-label="Attach screenshots"><i class="fa-solid fa-image"></i></button>
+          <span class="cmt-hint">Paste or drop screenshots</span>
+          <button type="button" class="btn btn-sm btn-accent cmt-post"><i class="fa-solid fa-paper-plane"></i> Post</button>
         </div>
       </div>
       <div class="cmt-list"><span class="stat_off">Loading notes…</span></div>`;
@@ -245,62 +249,80 @@ function cmtMount(hostSel, kind, id, opts = {}) {
       ta.style.height = 'auto';
       ta.style.height = `${Math.min(300, ta.scrollHeight + 2)}px`;
     });
+    const box = host.querySelector('.cmt-compose');
+    const chips = host.querySelector('.cmt-attached');
+    const drawChips = () => {
+      chips.hidden = !host._imgs.length;
+      chips.innerHTML = host._imgs.map((u, i) => `<span class="cmt-chip"><img src="${u}" alt=""><button type="button" class="cmt-unattach" data-i="${i}" title="Remove this screenshot" aria-label="Remove this screenshot"><i class="fa-solid fa-xmark"></i></button></span>`).join('')
+        + (host._imgs.length ? `<span class="cmt-chipnote">${host._imgs.length}/${CMT_MAX_IMAGES}</span>` : '');
+    };
+    host._drawChips = drawChips;
     const fileInp = host.querySelector('.cmt-file');
     host.querySelector('.cmt-attach').addEventListener('click', () => fileInp.click());
-    const attach = async (f) => {
-      if (!f || !/^image\/(png|jpeg|webp|gif|bmp)$/i.test(f.type || '')) { if (f) toast('That isn\u2019t an image', false); return; }
-      try {
-        host._img = host._opts.maxW ? await cmtShrinkImage(f, host._opts.maxW)
-          : typeof sbShrinkImage === 'function' ? await sbShrinkImage(f) : null;
-      } catch (_) { host._img = null; toast('Could not read that image', false); }
-      const chip = host.querySelector('.cmt-attached');
-      chip.hidden = !host._img;
-      if (host._img) chip.innerHTML = `<img class="cmt-thumb" src="${host._img}" alt=""> photo attached <a role="button" class="cmt-unattach" title="Remove"><i class="fa-solid fa-xmark"></i></a>`;
+    const attach = async (files) => {
+      for (const f of files) {
+        if (!f) continue;
+        if (host._imgs.length >= CMT_MAX_IMAGES) { toast(`Up to ${CMT_MAX_IMAGES} screenshots per note`, false); break; }
+        if (!/^image\/(png|jpeg|webp|gif|bmp)$/i.test(f.type || '')) { toast('That isn’t an image', false); continue; }
+        try {
+          const d = host._opts.maxW ? await cmtShrinkImage(f, host._opts.maxW)
+            : typeof sbShrinkImage === 'function' ? await sbShrinkImage(f) : null;
+          if (d) host._imgs.push(d);
+        } catch (_) { toast('Could not read that image', false); }
+      }
+      drawChips();
     };
-    fileInp.addEventListener('change', async () => {
-      const f = fileInp.files && fileInp.files[0];
+    fileInp.addEventListener('change', () => {
+      const files = [...(fileInp.files || [])];
       fileInp.value = '';
-      if (f) await attach(f);
+      attach(files);
     });
-    // paste a screenshot straight into the note, or drop one on the section
+    // paste screenshots straight into the note, or drop them on the section
     ta.addEventListener('paste', (e) => {
-      const it = [...((e.clipboardData && e.clipboardData.items) || [])].find((x) => x.kind === 'file' && /^image\//.test(x.type));
-      if (!it) return;
+      const files = [...((e.clipboardData && e.clipboardData.items) || [])]
+        .filter((x) => x.kind === 'file' && /^image\//.test(x.type)).map((x) => x.getAsFile());
+      if (!files.length) return;
       e.preventDefault();
-      attach(it.getAsFile());
+      attach(files);
     });
+    ta.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); host.querySelector('.cmt-post').click(); }
+    });
+    box.addEventListener('click', (e) => { if (e.target === box) ta.focus(); });
     host.addEventListener('dragover', (e) => {
       if (![...(e.dataTransfer?.types || [])].includes('Files')) return;
-      e.preventDefault(); host.classList.add('cmt-dropping');
+      e.preventDefault(); box.classList.add('is-dropping');
     });
-    host.addEventListener('dragleave', (e) => { if (!host.contains(e.relatedTarget)) host.classList.remove('cmt-dropping'); });
+    host.addEventListener('dragleave', (e) => { if (!host.contains(e.relatedTarget)) box.classList.remove('is-dropping'); });
     host.addEventListener('drop', (e) => {
-      const f = [...(e.dataTransfer?.files || [])].find((x) => /^image\//.test(x.type));
-      host.classList.remove('cmt-dropping');
-      if (!f) return;
+      const files = [...(e.dataTransfer?.files || [])].filter((x) => /^image\//.test(x.type));
+      box.classList.remove('is-dropping');
+      if (!files.length) return;
       e.preventDefault();
-      attach(f);
+      attach(files);
     });
     host.addEventListener('click', async (e) => {
-      if (e.target.closest('.cmt-unattach')) {
-        host._img = null;
-        host.querySelector('.cmt-attached').hidden = true;
-        return;
-      }
+      const un = e.target.closest('.cmt-unattach');
+      if (un) { host._imgs.splice(safeInt(un.dataset.i), 1); drawChips(); return; }
       if (e.target.closest('.cmt-post')) {
         const ta = host.querySelector('.cmt-input');
         const body = ta.value.trim();
         if (body.length < 2) { toast('Write something first', false); return; }
         const btn = host.querySelector('.cmt-post');
+        if (btn.disabled) return;
         btn.disabled = true;
+        const imgs = host._imgs;
+        // `image` too, so a site that predates multi-screenshot notes still keeps the first
         const res = await apiFetch('POST', 'api/comments.php', {
-          data: { kind: host.dataset.kind, id: safeInt(host.dataset.id), body, image: host._img || undefined },
+          data: { kind: host.dataset.kind, id: safeInt(host.dataset.id), body,
+            images: imgs.length ? imgs : undefined, image: imgs[0] || undefined },
         }).catch((err) => ({ ok: false, error: String(err) }));
         btn.disabled = false;
         if (!res.ok) { toast(res.error || 'Posting failed — site update pending?', false); return; }
         ta.value = '';
-        host._img = null;
-        host.querySelector('.cmt-attached').hidden = true;
+        ta.style.height = '';
+        host._imgs = [];
+        drawChips();
         toast('Posted — thanks for the field report');
         cmtLoad(host);
         return;
@@ -314,11 +336,21 @@ function cmtMount(hostSel, kind, id, opts = {}) {
         return;
       }
       const img = e.target.closest('[data-cmtimg]');
-      if (img && typeof sbShowShot === 'function') sbShowShot(img.dataset.cmtimg);
+      if (img) {
+        if (typeof host._opts.onImage === 'function') host._opts.onImage(img.dataset.cmtimg);
+        else if (typeof sbShowShot === 'function') sbShowShot(img.dataset.cmtimg);
+      }
     });
+  } else if (host._drawChips) {
+    // another entity in the same host: drop what was attached for the last one
+    host._imgs = [];
+    host._drawChips();
   }
   cmtLoad(host);
 }
+
+// a note's screenshots (`images` from a multi-screenshot site, else the single `image`)
+const cmtImagesOf = (c) => (Array.isArray(c.images) && c.images.length ? c.images : (c.image ? [c.image] : []));
 
 async function cmtLoad(host) {
   const wantId = host.dataset.id;
@@ -334,14 +366,16 @@ async function cmtLoad(host) {
   }
   const rows = (res.data && res.data.comments) || [];
   if (host._opts && typeof host._opts.onRows === 'function') host._opts.onRows(rows);
-  list.innerHTML = rows.length ? rows.map((c) => `
+  list.innerHTML = rows.length ? rows.map((c) => {
+    const imgs = cmtImagesOf(c);
+    return `
     <div class="cmt-item">
       <div class="cmt-meta"><b>${escapeHtml(c.by)}</b> <span class="cmt-when">${fmtAgoTip(c.at)}</span>
         ${c.mine ? `<a role="button" class="cmt-del" data-cmtdel="${c.id}" title="Delete your note"><i class="fa-solid fa-trash-can"></i></a>` : ''}</div>
       <div class="cmt-body">${escapeHtml(c.body)}</div>
-      ${c.image ? `<img class="cmt-img" src="https://swgtracker.com${escapeHtml(c.image)}" loading="lazy"
-         data-cmtimg="${escapeHtml(c.image)}" title="Click to open in a movable window">` : ''}
-    </div>`).join('')
+      ${imgs.length ? `<div class="cmt-shots">${imgs.map((u) => `<button type="button" class="cmt-shot" data-cmtimg="${escapeHtml(u)}" title="Open full size"><img src="https://swgtracker.com${escapeHtml(u)}" loading="lazy" alt="Screenshot attached to this note"></button>`).join('')}</div>` : ''}
+    </div>`;
+  }).join('')
     : '<div class="empty-state is-compact">No notes yet — <b>Post</b> the first field report.</div>';
 }
 

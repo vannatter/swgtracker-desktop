@@ -407,8 +407,8 @@ function renderQuestPage(q) {
   if (safeInt(q.numeric_id)) {
     cmtMount('#qd-comments', 'quest', safeInt(q.numeric_id), {
       head: 'Quest notes', sub: 'tips, routes, screenshots — visible to every app user',
-      placeholder: 'Share a tip, a route or a screenshot for this quest… (paste or drop an image)',
-      maxW: 1920, onRows: qdRenderGallery,
+      placeholder: 'Share a tip, a route or a screenshot for this quest…',
+      maxW: 1920, onRows: qdRenderGallery, onImage: (u) => qOpenShot(qdState.gallery, u),
     });
   } else {
     $('#qd-comments').innerHTML = '<div class="empty-state is-compact">Notes aren’t available for this quest.</div>';
@@ -433,17 +433,23 @@ function qTabsShow(root, k, storeKey, transient) {
 // screenshot gallery (images ride on the entity's notes). comments.php?images=1 lists every
 // photo oldest-first; an older site deploy without it falls back to the photos among the
 // notes just loaded. g = { root, kind, id, storeKey } — g.list holds what the strip shows.
+// a note's thumbnail opens the page's lightbox at that screenshot
+function qOpenShot(g, url) {
+  const list = g && g.list && g.list.length ? g.list : [{ image: url, body: '', by: '' }];
+  questLightbox(list, Math.max(0, list.findIndex((c) => c.image === url)));
+}
 async function qGalleryRender(g, rows) {
   const id = g.id;
   const seq = (g.seq = (g.seq || 0) + 1); // a slower, older load must not overwrite a newer one
   const notesN = document.querySelector(`${g.root} [data-qcount="notes"]`); if (notesN) notesN.textContent = (rows || []).length || '';
-  let list = (rows || []).filter((c) => c.image);
+  // one entry per screenshot (a note can carry several); the gallery endpoint below is the authority
+  let list = (rows || []).flatMap((c) => cmtImagesOf(c).map((u, k) => ({ id: safeInt(c.id), n: k, image: u, body: c.body, by: c.by, at: c.at })));
   if (id) {
     let res = null;
     try { res = await apiFetch('GET', 'api/comments.php', { params: { kind: g.kind, id, images: 1 } }); } catch (_) { /* fallback */ }
     if (seq !== g.seq || g.dead) return; // superseded / navigated away
     const imgs = res && res.ok && res.data && Array.isArray(res.data.images) ? res.data.images : null;
-    if (imgs) list = imgs.map((x) => ({ id: safeInt(x.id), image: x.url, body: x.body, by: x.by, at: x.at }));
+    if (imgs) list = imgs.map((x) => ({ id: safeInt(x.id), n: safeInt(x.n), image: x.url, body: x.body, by: x.by, at: x.at }));
   }
   g.list = list;
   if (g.kind === 'npc') npcRenderPicker();
@@ -457,8 +463,8 @@ async function qGalleryRender(g, rows) {
     if (n && qTabsSaved(g.storeKey, '') === 'shots') qTabsShow(g.root, 'shots', g.storeKey, true);
     else if (!n && tab.classList.contains('active')) qTabsShow(g.root, 'notes', g.storeKey, true);
   }
-  // NPC pages star their main photo (g.mainId)
-  gal.innerHTML = list.map((c, i) => { const main = g.mainId && c.id === g.mainId; return `<button type="button" class="qd-thumb${main ? ' qd-thumb-main' : ''}" data-qshot="${i}" title="${escapeHtml(c.by || '')}${c.body ? ` — ${escapeHtml(String(c.body).slice(0, 80))}` : ''}">
+  // NPC pages star their main photo (g.mainUrl)
+  gal.innerHTML = list.map((c, i) => { const main = g.mainUrl && c.image === g.mainUrl; return `<button type="button" class="qd-thumb${main ? ' qd-thumb-main' : ''}" data-qshot="${i}" title="${escapeHtml(c.by || '')}${c.body ? ` — ${escapeHtml(String(c.body).slice(0, 80))}` : ''}">
       <img src="${escapeHtml(questImgUrl(c.image))}" loading="lazy" alt="">${main ? '<span class="qd-thumb-badge"><i class="fa-solid fa-star"></i> Main</span>' : ''}</button>`; }).join('');
 }
 
@@ -863,13 +869,13 @@ function renderNpcPage(n) {
   npcSetEditing(npcState.editing);
 
   if (mapped.length) npcBuildMap(mapped);
-  npcState.gallery = { root: '#npc-body', kind: 'npc', id: safeInt(n.numeric_id), storeKey: 'npc_tab', list: [], mainId: photo ? safeInt(photo.id) : 0 };
+  npcState.gallery = { root: '#npc-body', kind: 'npc', id: safeInt(n.numeric_id), storeKey: 'npc_tab', list: [], mainUrl: photo ? photo.url : '' };
   npcRenderPicker();
   if (safeInt(n.numeric_id)) {
     cmtMount('#npc-comments', 'npc', safeInt(n.numeric_id), {
       head: 'NPC notes', sub: 'where to find them, what they say, screenshots — visible to every app user',
-      placeholder: `Share a tip or a screenshot of ${n.name}… (paste or drop an image)`,
-      maxW: 1920, onRows: (rows) => qGalleryRender(npcState.gallery, rows),
+      placeholder: `Share a tip or a screenshot of ${n.name}…`,
+      maxW: 1920, onRows: (rows) => qGalleryRender(npcState.gallery, rows), onImage: (u) => qOpenShot(npcState.gallery, u),
     });
   } else {
     $('#npc-comments').innerHTML = '<div class="empty-state is-compact">Notes aren’t available for this NPC yet.</div>';
@@ -988,7 +994,7 @@ function npcRenderPicker() {
   const g = npcState.gallery; const box = document.querySelector('#npc-body .npc-pick'); if (!g || !box) return;
   const list = (g.list || []).filter((c) => c.id);
   box.querySelector('.npc-pick-h').textContent = list.length ? 'Pick the main photo' : 'Post a screenshot in Notes, then pick it here';
-  box.querySelector('.npc-pick-grid').innerHTML = list.map((c) => `<button type="button" class="npc-pick-shot${c.id === g.mainId ? ' is-main' : ''}" data-npcpick="${safeInt(c.id)}" title="Make this the main photo"><img src="${escapeHtml(questImgUrl(c.image))}" loading="lazy" alt=""></button>`).join('');
+  box.querySelector('.npc-pick-grid').innerHTML = list.map((c) => `<button type="button" class="npc-pick-shot${c.image === g.mainUrl ? ' is-main' : ''}" data-npcpick="${safeInt(c.id)}" data-n="${safeInt(c.n)}" title="Make this the main photo"><img src="${escapeHtml(questImgUrl(c.image))}" loading="lazy" alt=""></button>`).join('');
 }
 let npcDescBusy = false;
 async function npcSaveDesc() {
@@ -1009,7 +1015,7 @@ async function npcPickPhoto(btn) {
   const n = npcState.npc; if (!n || btn.classList.contains('is-main') || btn.disabled) return;
   btn.disabled = true;
   let r;
-  try { r = await apiFetch('POST', 'api/quests.php?npc_photo=1', { data: { npc: n.id, comment_id: safeInt(btn.dataset.npcpick) } }); } catch (e) { r = { ok: false, error: String(e) }; }
+  try { r = await apiFetch('POST', 'api/quests.php?npc_photo=1', { data: { npc: n.id, comment_id: safeInt(btn.dataset.npcpick), n: safeInt(btn.dataset.n) } }); } catch (e) { r = { ok: false, error: String(e) }; }
   btn.disabled = false;
   if (!r.ok || (r.data && r.data.error)) { toast((r.data && r.data.error) || r.error || 'Could not set the photo', false); return; }
   toast('Main photo set');
@@ -1067,7 +1073,7 @@ function initQuests() {
     if (t.closest('[data-npcphoto]')) {
       const g = npcState.gallery; const list = g && g.list && g.list.length ? g.list : null;
       const p = npcState.npc && npcState.npc.photo;
-      if (list) questLightbox(list, Math.max(0, list.findIndex((c) => c.id === g.mainId)));
+      if (list) questLightbox(list, Math.max(0, list.findIndex((c) => c.image === g.mainUrl)));
       else if (p) questLightbox([{ id: safeInt(p.id), image: p.url, body: p.body, by: p.by, at: p.at }], 0);
       return;
     }

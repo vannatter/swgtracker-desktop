@@ -328,7 +328,7 @@ function renderStockpile(statusMsg) {
 
   const empty = $('#stk-empty');
   if (!items.length && !stkHasBuckets()) {
-    empty.textContent = stkState.items.length ? 'No matches in your stockpile.' : 'Your stockpile is empty.';
+    empty.textContent = stkState.items.length ? 'Nothing matches these filters.' : 'No resources in your stockpile yet.';
     empty.hidden = false;
   } else {
     empty.hidden = true;

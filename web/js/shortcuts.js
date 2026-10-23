@@ -19,6 +19,7 @@ function scActions() {
     { id: 'navtoggle', label: 'Collapse / expand menu', hint: 'toggle the sidebar between icons and labels', run: () => { $('#side-collapse')?.click(); } },
   ];
   document.querySelectorAll('.app-sidebar .nav-item[data-page]').forEach((item) => {
+    if (item.classList.contains('dev-only') && !document.body.classList.contains('dev-mode')) return; // hidden page (dev-mode gated)
     const label = [...item.childNodes].filter((n) => n.nodeType === Node.TEXT_NODE).map((n) => n.textContent).join(' ').replace(/\s+/g, ' ').trim();
     const page = item.dataset.page;
     out.push({ id: `page:${page}`, label, hint: 'open the page', group: item.dataset.group || '', run: () => showPage(page) });

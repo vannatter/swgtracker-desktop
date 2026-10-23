@@ -161,11 +161,11 @@ function facCardHtml(f, embed = false) {
     </div>
     <div class="fac-foot">
       ${f.started_at
-        ? `<button class="btn btn-sm ${done ? 'btn-accent' : 'btn-outline-secondary'}" data-facdone="${f.id}" title="End this run — collected, cleared"><i class="fa-solid fa-xmark"></i> Done</button>
-           ${done ? '' : f.paused_at
+        ? `${done ? '' : f.paused_at
              ? `<button class="btn btn-sm btn-outline-secondary" data-facresume="${f.id}"><i class="fa-solid fa-play"></i> Resume</button>`
              : `<button class="btn btn-sm btn-outline-secondary" data-facpause="${f.id}" title="Freeze the countdown without ending the run"><i class="fa-solid fa-pause"></i> Pause</button>`}
-           <button class="btn btn-sm btn-outline-secondary" data-facreset="${f.id}" title="Start this exact run over from the top — same product, time and quantity"><i class="fa-solid fa-rotate-left"></i> Restart</button>`
+           <button class="btn btn-sm btn-outline-secondary" data-facreset="${f.id}" title="Start this exact run over from the top — same product, time and quantity"><i class="fa-solid fa-rotate-left"></i> Restart</button>
+           <button class="btn btn-sm ${done ? 'btn-accent' : 'btn-outline-secondary'}" data-facdone="${f.id}" title="End this run — collected, cleared"><i class="fa-solid fa-xmark"></i> Done</button>`
         : `<button class="btn btn-sm btn-accent" data-facstart="${f.id}">Start</button>`}
       <label class="pin-toggle fac-notify" title="Desktop notification when this run finishes">
         <input type="checkbox" data-facfield="notify_desktop" ${f.notify_desktop ? 'checked' : ''}> Notify</label>
@@ -246,7 +246,7 @@ function facHistMenuHtml() {
       </select>
       <button class="fac-hist-del" data-fachistdel="${h.id}" title="Forget this run"><i class="fa-solid fa-trash-can"></i></button>
     </div>`).join('');
-  return chips + (rows || '<div class="fac-hist-empty">No matching runs.</div>');
+  return chips + (rows || '<div class="empty-state is-compact">Nothing matches that search.</div>');
 }
 
 function facRefreshHistMenu() {

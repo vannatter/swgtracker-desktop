@@ -90,7 +90,7 @@ function renderAlertRules() {
     </div>`).join('');
   const empty = $('#al-rules-empty');
   empty.hidden = !!rules.length;
-  empty.textContent = 'No alert rules yet — click New Rule to watch for spawns by class, stats, or schematic rank.';
+  empty.innerHTML = 'No alert rules yet — <b>New Rule</b> to watch for spawns by class, stats, or schematic rank.';
 }
 
 // ---- Tabs (My Rules / Matches / Community) ----

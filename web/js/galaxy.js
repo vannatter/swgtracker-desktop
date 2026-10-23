@@ -338,7 +338,7 @@ function renderCities() {
   rows = gxSortRows(rows, citiesState.sortField, citiesState.sortOrder, CITIES_NUM);
   rows = gxPinFirst(rows, gxPins.cities, gxCityKey);
   const body = $('#cities-body');
-  if (!rows.length) { body.innerHTML = ''; $('#cities-empty').textContent = 'No cities match.'; $('#cities-empty').hidden = false; return; }
+  if (!rows.length) { body.innerHTML = ''; $('#cities-empty').textContent = 'Nothing matches these filters.'; $('#cities-empty').hidden = false; return; }
   $('#cities-empty').hidden = true;
   body.innerHTML = rows.map((c) => {
     const taxTip = `Income ${c.income_tax || 0} · Property ${c.property_tax || 0} · Sales ${c.sales_tax || 0}`;
@@ -424,7 +424,7 @@ function renderGuilds() {
   rows = gxSortRows(rows, guildsState.sortField, guildsState.sortOrder, GUILDS_NUM);
   rows = gxPinFirst(rows, gxPins.guilds, gxGuildKey);
   const body = $('#guilds-body');
-  if (!rows.length) { body.innerHTML = ''; $('#guilds-empty').textContent = 'No guilds match.'; $('#guilds-empty').hidden = false; return; }
+  if (!rows.length) { body.innerHTML = ''; $('#guilds-empty').textContent = 'Nothing matches these filters.'; $('#guilds-empty').hidden = false; return; }
   $('#guilds-empty').hidden = true;
   body.innerHTML = rows.map((g) => {
     const key = gxGuildKey(g);
@@ -737,7 +737,7 @@ function renderProfessions() {
   const q = ($('#prof-search')?.value || '').trim().toLowerCase();
   const all = profState.items.filter((p) => p.count > 0 || !q);
   const matches = q ? all.filter((p) => p.name.toLowerCase().includes(q)) : all;
-  if (!matches.length) { $('#prof-list').innerHTML = ''; $('#prof-empty').textContent = 'No classes match.'; $('#prof-empty').hidden = false; return; }
+  if (!matches.length) { $('#prof-list').innerHTML = ''; $('#prof-empty').textContent = 'Nothing matches that search.'; $('#prof-empty').hidden = false; return; }
   $('#prof-empty').hidden = true;
   const max = Math.max(1, ...all.map((p) => p.count)); // bars scale against the whole server, not per group
   const byKey = Object.fromEntries(profState.items.map((p) => [p.key, p]));
@@ -873,7 +873,7 @@ function renderTitles() {
   if (q) rows = rows.filter((t) => String(t.friendly || '').toLowerCase().includes(q) || String(t.titlekey || '').toLowerCase().includes(q));
   rows = gxSortRows(rows, titlesState.sortField, titlesState.sortOrder, new Set());
   const body = $('#titles-body');
-  if (!rows.length) { body.innerHTML = ''; $('#titles-empty').textContent = 'No titles match.'; $('#titles-empty').hidden = false; return; }
+  if (!rows.length) { body.innerHTML = ''; $('#titles-empty').textContent = 'Nothing matches these filters.'; $('#titles-empty').hidden = false; return; }
   $('#titles-empty').hidden = true;
   body.innerHTML = rows.map((t) => `<tr>
       <td class="col-text"><b>${escapeHtml(t.friendly || t.titlekey)}</b></td>

@@ -109,7 +109,7 @@ async function loadSales() {
 
   if (!sales.length) {
     const filtered = !!$('#sales-search').value.trim();
-    showSalesEmpty(filtered ? 'No sales match this filter.' : 'No sales found.');
+    showSalesEmpty(filtered ? 'Nothing matches these filters.' : 'No sales yet.');
     if (!filtered) mailSetupOffer($('#sales-empty'));
     $('#sales-status').textContent = '';
   } else {
@@ -230,7 +230,7 @@ function renderCustomers() {
          <td class="col-num sale-amount">${fmtNum(r.total)} cr</td>
          <td>${fmtAgoTip(r.last_purchase)}</td>
        </tr>`).join('')}</tbody></table>`
-    : '<span class="stat_off">No customers match this window/threshold.</span>';
+    : '<div class="empty-state is-compact">Nothing matches this window and threshold.</div>';
 }
 
 async function loadCustomers() {

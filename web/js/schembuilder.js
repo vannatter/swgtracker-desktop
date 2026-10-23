@@ -179,7 +179,7 @@ function sbRenderList() {
   const empty = $('#sb-list-empty');
   if (sbState.drafts.length) { empty.hidden = true; }
   else if (!empty.textContent.includes('deploy')) {
-    empty.textContent = 'No drafts yet — click New Schematic and start filling in a missing one. Drafts save as you type; come back any time.';
+    empty.innerHTML = 'No drafts yet — <b>New Schematic</b> to start filling in a missing one. Drafts save as you type; come back any time.';
     empty.hidden = false;
   }
 }
@@ -729,9 +729,6 @@ async function sbRenderVerifyBar(schematicId, isCommunity) {
               title="Take back your confirmation — only possible while it's still unverified"><i class="fa-solid fa-rotate-left"></i> Undo</button>`
       : `<button id="scd-confirm" class="btn btn-sm btn-outline-secondary"
              title="Check the proof screenshots against the details below, then confirm."><i class="fa-solid fa-check"></i> Confirm accurate</button>`)
-      // admin override: verify outright, no votes needed (Dustin's desktop)
-      + (st.admin ? `<button id="scd-approve" class="btn btn-sm btn-accent"
-             title="Admin override — verify this schematic right now, without waiting for community confirmations"><i class="fa-solid fa-user-shield"></i> Approve now</button>` : '')
       + (!st.mine && !st.flagged ? `<button id="scd-flag" class="btn btn-sm btn-outline-secondary"
              title="Something's wrong with this schematic? Flag it and say what needs fixing — the submitter sees your note."><i class="fa-solid fa-flag"></i> Flag as incorrect</button>`
         : '')
@@ -739,7 +736,11 @@ async function sbRenderVerifyBar(schematicId, isCommunity) {
       // in place, so a mistaken submission the author never fixes doesn't just rot
       + (st.can_fix ? `<button id="scd-fixtakeover" class="btn btn-sm btn-accent" data-sid="${schematicId}"
              title="Open it in the builder prefilled, fix the flagged issues, and take it over — it re-verifies from scratch under your name (the original author stays credited)."><i class="fa-solid fa-wrench"></i> Fix &amp; take over</button>`
-        : (st.fix_rep_needed && !st.mine && (st.flags || []).length ? `<span class="sb-vb-locknote stat_off" title="Fixing a flagged schematic unlocks at reputation ${st.fix_rep_needed} — you're at ${Math.floor(st.my_rep || 0)}. Rep grows as you use the tracker.">Fix unlocks at rep ${st.fix_rep_needed}</span>` : ''));
+        : (st.fix_rep_needed && !st.mine && (st.flags || []).length ? `<span class="sb-vb-locknote stat_off" title="Fixing a flagged schematic unlocks at reputation ${st.fix_rep_needed} — you're at ${Math.floor(st.my_rep || 0)}. Rep grows as you use the tracker.">Fix unlocks at rep ${st.fix_rep_needed}</span>` : ''))
+      // admin override: verify outright, no votes needed (Dustin's desktop)
+      // (the red action stays right-most)
+      + (st.admin ? `<button id="scd-approve" class="btn btn-sm btn-accent"
+             title="Admin override — verify this schematic right now, without waiting for community confirmations"><i class="fa-solid fa-user-shield"></i> Approve now</button>` : '');
     bar.innerHTML = `${shots ? `<div class="sb-vb-shots">${shots}</div>` : ''}
       <div class="sb-vb-info">
         <div class="sb-vb-title"><i class="fa-solid ${st.fixes ? 'fa-wrench' : 'fa-users'}"></i> ${st.fixes ? 'Community correction' : 'Community schematic'}

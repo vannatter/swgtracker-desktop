@@ -135,7 +135,7 @@ function renderInsCustPerf() {
       <td class="stat">${fmtNum(r.count)}</td>
       <td class="stat">${fmtShort(r.avg)}</td>
       <td class="stat">${insAgo(r.last)}</td>
-    </tr>`).join('') || '<tr><td colspan="9" class="stat_off lab-pool-empty">No customers in this window.</td></tr>';
+    </tr>`).join('') || '<tr><td colspan="9"><div class="empty-state is-compact">No customers in this window.</div></td></tr>';
 }
 
 function insAgo(ts) {
@@ -214,8 +214,8 @@ function renderInsCustMsgs(b, editing = false) {
       </div>`).join('')}
     <div class="ins-msgedit-actions">
       <button type="button" class="btn btn-sm btn-outline-secondary" data-msgadd><i class="fa-solid fa-plus"></i> Add message</button>
-      <button type="button" class="btn btn-sm btn-accent" data-msgsave>Save</button>
       <button type="button" class="btn btn-sm btn-outline-secondary" data-msgcancel>Cancel</button>
+      <button type="button" class="btn btn-sm btn-accent" data-msgsave>Save</button>
     </div>
   </div>`;
 }
@@ -281,7 +281,7 @@ function renderInsCustCharts(sales, ids = {}) {
   // scorecard passes its own ids and gets the identical charts
   const tl = $(ids.tl || '#ins-cust-timeline'), heat = $(ids.heat || '#ins-cust-heat'), ven = $(ids.ven || '#ins-cust-vendors');
   if (!sales || !sales.length) {
-    const none = '<div class="ins-empty-mini">No purchase data.</div>';
+    const none = '<div class="empty-state is-compact">No purchases yet.</div>';
     tl.innerHTML = none; heat.innerHTML = none; ven.innerHTML = none;
     return;
   }
@@ -468,7 +468,7 @@ function renderInsCustPurchases() {
       <td class="col-name">${escapeHtml(s.item || '')}</td>
       <td class="stat">${fmtShort(s.amount)}</td>
       <td class="col-name">${escapeHtml(s.vendor || '')}</td></tr>`).join('')
-    || `<tr><td colspan="4" class="stat_off lab-pool-empty">${q ? 'No purchases match.' : 'No purchases in this window.'}</td></tr>`;
+    || `<tr><td colspan="4"><div class="empty-state is-compact">${q ? 'Nothing matches that search.' : 'No purchases in this window.'}</div></td></tr>`;
 }
 
 // ---- Items / Vendors performance tables (KPIs requested by Lativa) --------
@@ -535,7 +535,7 @@ function renderInsItemPerf() {
       <td class="stat">${(safeInt(r.total) / totalRev * 100).toFixed(1)}%</td>
       <td class="stat">${fmtShort(r.avg)}</td>
       <td class="stat">${insGrowthHtml(safeInt(r.total), safeInt(r.recent_rev))}</td>
-    </tr>`).join('') || '<tr><td colspan="9" class="stat_off lab-pool-empty">No sales in this window.</td></tr>';
+    </tr>`).join('') || '<tr><td colspan="9"><div class="empty-state is-compact">No sales in this window.</div></td></tr>';
 }
 
 function renderInsVendorPerf() {
@@ -562,7 +562,7 @@ function renderInsVendorPerf() {
       <td class="stat">${fmtNum(r.customers)}</td>
       <td class="stat">${fmtShort(r.avg)}</td>
       <td class="col-name">${r.best_item ? `${escapeHtml(r.best_item)} <span class="ins-sub">(${fmtShort(r.best_item_rev)})</span>` : '<span class="stat_off">—</span>'}</td>
-    </tr>`).join('') || '<tr><td colspan="9" class="stat_off lab-pool-empty">No sales in this window.</td></tr>';
+    </tr>`).join('') || '<tr><td colspan="9"><div class="empty-state is-compact">No sales in this window.</div></td></tr>';
 }
 
 // ---- Pricing tab ----------------------------------------------------------
@@ -603,13 +603,13 @@ function insPickPriceItem(name) {
 async function loadInsPrices() {
   const item = insState.priceItem;
   const facts = $('#ins-price-facts');
-  if (!item) { facts.innerHTML = '<div class="ins-empty-mini">No items sold in this window.</div>'; drawInsPrice([]); return; }
+  if (!item) { facts.innerHTML = '<div class="empty-state is-compact">No items sold in this window.</div>'; drawInsPrice([]); return; }
   let res;
   try {
     res = await apiFetch('GET', 'api/sales.php', { params: { action: 'item_prices', item, days: insState.days } });
   } catch (e) { res = { ok: false, error: String(e) }; }
   if (!res.ok || !res.data || !Array.isArray(res.data.points)) {
-    facts.innerHTML = '<div class="ins-empty-mini">Price history needs the latest swgtracker.com update.</div>';
+    facts.innerHTML = '<div class="empty-state is-compact">Price history needs the latest swgtracker.com update.</div>';
     drawInsPrice([]);
     return;
   }
@@ -617,7 +617,7 @@ async function loadInsPrices() {
   drawInsPrice(res.data.points, res.data.weekly);
   // price-change + revenue-impact readout: first vs last half of the window
   const sold = res.data.points.filter((p) => p.count > 0);
-  if (sold.length < 2) { facts.innerHTML = '<div class="ins-empty-mini">Not enough sales to read a trend.</div>'; return; }
+  if (sold.length < 2) { facts.innerHTML = '<div class="empty-state is-compact">Not enough sales to read a trend.</div>'; return; }
   const half = Math.floor(res.data.points.length / 2);
   const agg = (pts) => {
     const c = pts.reduce((s, p) => s + p.count, 0), t = pts.reduce((s, p) => s + p.total, 0);
@@ -869,7 +869,7 @@ function renderInsLoyalty(loyalty) {
   const oB = safeInt(l.onetime_buyers), rB = safeInt(l.repeat_buyers);
   const oR = safeInt(l.onetime_rev), rR = safeInt(l.repeat_rev);
   const totB = oB + rB, totR = oR + rR;
-  if (!totB) { box.innerHTML = '<div class="ins-empty-mini">No data yet.</div>'; return; }
+  if (!totB) { box.innerHTML = '<div class="empty-state is-compact">No sales yet.</div>'; return; }
 
   const splitBar = (repeatVal, oneVal, repeatTxt, oneTxt) => {
     const tot = repeatVal + oneVal;
@@ -960,7 +960,7 @@ function renderInsHeatmap(byHour, byDow, kpis) {
 function renderInsLeaders(sel, rows, kind) {
   const box = $(sel);
   const list = (rows || []).slice(0, 15);
-  if (!list.length) { box.innerHTML = '<div class="ins-empty-mini">No data yet.</div>'; return; }
+  if (!list.length) { box.innerHTML = '<div class="empty-state is-compact">No sales yet.</div>'; return; }
   const max = Math.max(1, ...list.map((r) => safeInt(r.total)));
   const sub = (r) => kind === 'item'
     ? `${fmtNum(r.count)} sold · avg ${fmtShort(r.avg)}`

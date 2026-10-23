@@ -109,10 +109,10 @@ async function invLogLoad() {
     return;
   }
   const filtered = !!(source || q);
-  body.innerHTML = invLogTable(invLogState.rows, 'all', true) || `<span class="stat_off">${
+  body.innerHTML = invLogTable(invLogState.rows, 'all', true) || `<div class="empty-state is-compact">${
     $('#invlog-source').value === 'unmatched' && !q
       ? 'Every sale since the log started counted against one of your items.'
-      : filtered ? 'Nothing matches that filter.' : 'No activity yet — it starts with the next sale or edit.'}</span>`;
+      : filtered ? 'Nothing matches these filters.' : 'No activity yet — it starts with the next sale or edit.'}</div>`;
   $('#invlog-page').textContent = invLogState.page > 1 || invLogState.hasNext ? `Page ${invLogState.page}` : '';
   $('#invlog-prev').disabled = invLogState.page <= 1;
   $('#invlog-next').disabled = !invLogState.hasNext;
@@ -134,7 +134,7 @@ async function invLogItemHistory(item) {
     const d = await invLogFetch({ id: safeInt(item.id), perpage: 100 });
     invLogState.itemRows = d.results;
     body.innerHTML = invLogTable(d.results, 'item', false)
-      || '<span class="stat_off">No activity logged for this item yet — the log started recording with the latest website update.</span>';
+      || '<div class="empty-state is-compact">No activity logged for this item yet — the log started recording with the latest website update.</div>';
   } catch (e) {
     body.innerHTML = `<span class="stat_off">${escapeHtml(e.message)}</span>`;
   }

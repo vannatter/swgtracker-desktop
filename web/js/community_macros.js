@@ -108,8 +108,8 @@ function renderCmac() {
   if (!cmacState.macros.length) {
     host.innerHTML = '';
     empty.innerHTML = (cmacState.q || cmacState.class)
-      ? 'No macros match that filter.'
-      : 'No community macros yet — be the first to <b>Share a Macro</b>.';
+      ? 'Nothing matches these filters.'
+      : 'No community macros yet — <b>Share a Macro</b> to be the first.';
     empty.hidden = false;
     return;
   }

@@ -80,6 +80,7 @@ const PAGE_LOADERS = {
   pets: () => loadPets(),
   creatures: () => loadCreatures(),
   specials: () => loadSpecials(),
+  quests: () => loadQuests(),
   hydro: () => {}, incubator: () => {}, mutation: () => {}, // calculators build themselves at boot (initBeastCalcs)
   myschematics: () => loadMySchematics(),
   stockpile: () => syncStockpile(),
@@ -223,7 +224,7 @@ function initNavSearch() {
   box.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') { box.value = ''; navSearchApply(); box.blur(); return; }
     if (e.key === 'Enter') {
-      const first = [...document.querySelectorAll('.app-sidebar .nav-item')].find((i) => i.style.display !== 'none' && i.classList.contains('nav-hit'));
+      const first = [...document.querySelectorAll('.app-sidebar .nav-item')].find((i) => i.style.display !== 'none' && i.classList.contains('nav-hit') && i.offsetParent !== null); // offsetParent: skips dev-only items hidden by CSS
       if (first) { showPage(first.dataset.page); box.value = ''; navSearchApply(); box.blur(); }
     }
   });
@@ -309,6 +310,8 @@ function goForward() {
 
 function showPage(key, opts = {}) {
   if (!document.getElementById(`page-${key}`)) return; // never blank the app on a bad key
+  // Quests are dev-mode gated (quests.js questsGated — remove the `dev-only` class to launch)
+  if ((key === 'quests' || key === 'quest' || key === 'npc') && typeof questsGated === 'function' && questsGated()) key = 'home';
   // Record where we were so back can return there — but a back/forward hop
   // manages the stacks itself, and a fresh navigation drops the forward trail.
   const from = currentPageKey();
@@ -319,7 +322,7 @@ function showPage(key, opts = {}) {
   updateNavArrows();
   // Sub-pages (detail views) keep their parent sidebar item lit.
   const navKey = { schematic: 'schematics', resource: 'resources', myschematic: 'myschematics', schembuilder: 'schematics',
-    pet: 'pets', creature: 'creatures', special: 'specials' }[key] || key;
+    pet: 'pets', creature: 'creatures', special: 'specials', quest: 'quests', npc: 'quests' }[key] || key;
   document.querySelectorAll('.nav-item').forEach((n) => n.classList.toggle('active', n.dataset.page === navKey));
   syncNavGroupDots();
   document.querySelectorAll('.page').forEach((p) => p.classList.toggle('active', p.id === `page-${key}`));
@@ -511,13 +514,13 @@ async function loadWall() {
   let res;
   try { res = await apiFetch('GET', 'api/wall.php'); } catch (e) { res = { ok: false, error: String(e) }; }
   if (!res.ok) {
-    host.innerHTML = '<span class="stat_off">The wall isn\'t up yet — site update pending.</span>';
+    host.innerHTML = '<div class="empty-state is-compact">The wall isn\'t up yet — site update pending.</div>';
     return;
   }
   const posts = (res.data && res.data.posts) || [];
   host.innerHTML = posts.length
     ? posts.map(wallTagHtml).join('')
-    : '<span class="stat_off">Bare duracrete… be the first to tag it.</span>';
+    : '<div class="empty-state is-compact">No tags yet — bare duracrete. <b>Tag it</b> to be the first.</div>';
 }
 
 async function loadAbout() {
@@ -842,7 +845,7 @@ function renderBellPanel(inbox) {
       <span class="bell-item-meta">${i.ts ? fmtAgo(i.ts) : ''}</span>
       <button class="bell-item-del" data-delbc="${i.id}" title="Delete"><i class="fa-solid fa-trash"></i></button>
     </div>`).join('')
-    : (alertRow ? '' : '<div class="bell-empty">No notifications.</div>'));
+    : (alertRow ? '' : '<div class="empty-state is-compact">No notifications yet.</div>'));
 }
 
 function initBroadcasts() {
@@ -1282,6 +1285,7 @@ async function boot() {
   initRdLocations();
   initWaypointAddDialog();
   initBeasts();
+  initQuests();
   initBeastCalcs();
   applySeasonalLogo();
   applyHolidayBar();

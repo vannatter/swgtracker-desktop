@@ -147,9 +147,9 @@ async function loadMail() {
   }).join('');
   const empty = $('#mm-empty');
   empty.hidden = !!rows.length;
-  empty.textContent = mmState.category === 'archived'
-    ? 'Nothing archived — tick mails in any view and hit Archive to tidy them away here.'
-    : 'Nothing uploaded yet — configure a mail folder in Settings, then hit Start Mail Monitor up top.';
+  empty.innerHTML = mmState.category === 'archived'
+    ? 'No archived mail yet — tick mails in any view and <b>Archive</b> to tidy them away here.'
+    : 'No mail uploaded yet — add a mail folder in Settings, then <b>Start Mail Monitor</b> up top.';
   mmSyncSelAll();
 
   const pages = Math.max(1, Math.ceil(total / mmState.perPage));

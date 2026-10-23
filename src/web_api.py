@@ -1737,6 +1737,104 @@ class WebApi:
         except Exception as e:
             return _err(e)
 
+    # ---- Share cards (web/js/share-wizard.js) ------------------------------------
+    @staticmethod
+    def _png_from_data_url(data_url):
+        import base64
+        head, _, b64 = str(data_url or "").partition(",")
+        if not head.startswith("data:image/png;base64") or not b64:
+            raise ValueError("expected a PNG data URL")
+        return base64.b64decode(b64)
+
+    def copy_image_png(self, data_url):
+        """Put a PNG (data: URL from the share-card canvas) on the OS clipboard —
+        the webviews don't reliably support navigator.clipboard.write for images."""
+        try:
+            import sys
+            raw = self._png_from_data_url(data_url)
+            if sys.platform == "darwin":
+                from AppKit import NSPasteboard, NSPasteboardTypePNG
+                from Foundation import NSData
+                pb = NSPasteboard.generalPasteboard()
+                pb.clearContents()
+                ok = pb.setData_forType_(NSData.dataWithBytes_length_(raw, len(raw)), NSPasteboardTypePNG)
+                return _ok({"copied": bool(ok)}) if ok else _err("clipboard refused the image")
+            if sys.platform == "win32":
+                self._win_clipboard_png(raw)
+                return _ok({"copied": True})
+            return _err("image copy isn't supported on this platform")
+        except Exception as e:  # noqa: BLE001
+            logger.error("copy_image_png failed", exc_info=True)
+            return _err(e)
+
+    @staticmethod
+    def _win_clipboard_png(raw):
+        """Windows: CF_DIB (every app) + the registered "PNG" format (Discord,
+        browsers — keeps the alpha). ctypes only; Pillow converts to the DIB."""
+        import ctypes
+        import io
+        from ctypes import wintypes
+        from PIL import Image
+        bmp = io.BytesIO()
+        Image.open(io.BytesIO(raw)).convert("RGB").save(bmp, "BMP")
+        dib = bmp.getvalue()[14:]  # drop BITMAPFILEHEADER
+        user32 = ctypes.windll.user32
+        kernel32 = ctypes.windll.kernel32
+        kernel32.GlobalAlloc.restype = wintypes.HGLOBAL
+        kernel32.GlobalAlloc.argtypes = [wintypes.UINT, ctypes.c_size_t]
+        kernel32.GlobalLock.restype = ctypes.c_void_p
+        kernel32.GlobalLock.argtypes = [wintypes.HGLOBAL]
+        kernel32.GlobalUnlock.argtypes = [wintypes.HGLOBAL]
+        user32.SetClipboardData.restype = wintypes.HANDLE
+        user32.SetClipboardData.argtypes = [wintypes.UINT, wintypes.HANDLE]
+        user32.RegisterClipboardFormatW.restype = wintypes.UINT
+        user32.RegisterClipboardFormatW.argtypes = [wintypes.LPCWSTR]
+
+        def put(fmt, data):
+            h = kernel32.GlobalAlloc(0x0002, len(data))  # GMEM_MOVEABLE
+            if not h:
+                raise OSError("GlobalAlloc failed")
+            p = kernel32.GlobalLock(h)
+            ctypes.memmove(p, data, len(data))
+            kernel32.GlobalUnlock(h)
+            if not user32.SetClipboardData(fmt, h):
+                raise OSError("SetClipboardData failed")
+
+        if not user32.OpenClipboard(None):
+            raise OSError("clipboard is busy — try again")
+        try:
+            user32.EmptyClipboard()
+            put(8, dib)  # CF_DIB
+            put(user32.RegisterClipboardFormatW("PNG"), raw)
+        finally:
+            user32.CloseClipboard()
+
+    def save_image_png(self, data_url, filename="swgtracker-card.png"):
+        """Native Save dialog for a share card PNG (webviews ignore <a download>).
+        Returns {path} when saved, {path: None} when cancelled."""
+        try:
+            import os
+            import re
+            import webview
+            raw = self._png_from_data_url(data_url)
+            name = re.sub(r"[^A-Za-z0-9._-]+", "-", str(filename or "")).strip("-.") or "swgtracker-card"
+            if not name.lower().endswith(".png"):
+                name += ".png"
+            res = webview.windows[0].create_file_dialog(
+                webview.FileDialog.SAVE, directory=os.path.expanduser("~/Downloads"), save_filename=name)
+            path = res[0] if isinstance(res, (list, tuple)) and res else res
+            if not path:
+                return _ok({"path": None})
+            path = str(path)
+            if not path.lower().endswith(".png"):
+                path += ".png"
+            with open(path, "wb") as fh:
+                fh.write(raw)
+            return _ok({"path": path})
+        except Exception as e:  # noqa: BLE001
+            logger.error("save_image_png failed", exc_info=True)
+            return _err(e)
+
     def pick_aliases_file(self):
         """Native file picker for the aliases.txt location (game root), then save it.
         Returns the refreshed aliases_files() so the UI can pick it up immediately."""

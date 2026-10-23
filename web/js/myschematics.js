@@ -143,7 +143,7 @@ function renderMysList() {
   empty.hidden = true;
   if (!visible.length && !mysState.groups.length) {
     empty.textContent = mysState.items.length
-      ? 'No schematics match your search.'
+      ? 'Nothing matches that search.'
       : 'No schematics in your crafting list yet — add them with the wrench icon on the Schematics page.';
     empty.hidden = false;
   }

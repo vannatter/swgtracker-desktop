@@ -125,11 +125,11 @@ function renderAliases() {
   let rows = aliState.aliases.filter((a) => a.raw === null || a.raw === undefined);
   const all = rows.slice();
   if (!rows.length && aliState.editing !== 'new') {
-    list.innerHTML = '<div class="mac-side-empty">No aliases yet — click <b>New Alias</b>.</div>';
+    list.innerHTML = '<div class="empty-state is-compact">No aliases yet — <b>New Alias</b> to add one.</div>';
     const ed = $('#ali-detail .mac-ed');
     const none = $('#ali-ed-none');
     if (ed) ed.hidden = true;
-    if (none) { none.hidden = false; none.innerHTML = 'This file has no aliases yet — click <b>New Alias</b>.'; }
+    if (none) { none.hidden = false; none.innerHTML = 'No aliases in this file yet — <b>New Alias</b> to add one.'; }
     return;
   }
   const q = ($('#ali-search')?.value || '').trim().toLowerCase();
@@ -141,7 +141,7 @@ function renderAliases() {
     `<div class="mac-side-item ${a.name === aliState.selected ? 'mac-side-sel' : ''}" data-aliname="${escapeHtml(a.name)}">
       <span class="mac-side-name">/${escapeHtml(a.name)}</span>
       <span class="mac-side-slot ali-side-cmd">${escapeHtml(a.command)}</span>
-    </div>`).join('') : `<div class="mac-side-empty">No aliases match “${escapeHtml(q)}”.</div>`;
+    </div>`).join('') : `<div class="empty-state is-compact">Nothing matches “${escapeHtml(q)}”.</div>`;
   renderAliDetail();
 }
 

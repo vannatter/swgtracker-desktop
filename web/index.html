@@ -6,7 +6,9 @@
   <title>SWG Tracker Desktop</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.1/css/all.min.css">
-  <link rel="stylesheet" href="css/app.css?v=20261020a">
+  <link rel="stylesheet" href="css/app.css?v=20261022es">
+  <link rel="stylesheet" href="css/share.css?v=20261022x">
+  <link rel="stylesheet" href="css/quests.css?v=20261022es">
 </head>
 <body>
   <div id="holiday-bar" class="holiday-bar" hidden></div>
@@ -55,6 +57,8 @@
         <li class="nav-item nav-group-item" data-page="pulse" data-group="galaxy"><i class="fa-solid fa-heart-pulse"></i> Pulse</li>
         <li class="nav-item nav-group-item" data-page="cities" data-group="galaxy"><i class="fa-solid fa-city"></i> Cities</li>
         <li class="nav-item nav-group-item" data-page="planetmap" data-group="galaxy"><i class="fa-solid fa-map-location-dot"></i> Planet Maps</li>
+        <!-- Quests: dev-mode gated — `dev-only` here IS the gate (see questsGated in js/quests.js); remove it to launch -->
+        <li class="nav-item nav-group-item dev-only" data-page="quests" data-group="galaxy"><i class="fa-solid fa-book-journal-whills"></i> Quests</li>
         <li class="nav-item nav-group-item" data-page="guilds" data-group="galaxy"><i class="fa-solid fa-shield-halved"></i> Guilds</li>
         <li class="nav-item nav-group-item" data-page="wealth" data-group="galaxy"><i class="fa-solid fa-coins"></i> Wealth</li>
         <li class="nav-item nav-group-item" data-page="gcw" data-group="galaxy"><i class="fa-solid fa-jedi"></i> GCW</li>
@@ -275,6 +279,7 @@
                     title="Disable a bad/bogus resource — hides it for everyone (recoverable, nothing is deleted)"><i class="fa-solid fa-ban"></i> Disable</button>
             <button id="rd-wish" class="btn btn-sm btn-outline-secondary" hidden><i class="fa-regular fa-heart"></i> Wishlist</button>
             <button id="rd-shop" class="btn btn-sm btn-outline-secondary rd-shop" hidden title="Shortlist it to compare with others of its class"><i class="fa-solid fa-scale-balanced"></i> Shortlist</button>
+            <button id="rd-share" class="btn btn-sm btn-outline-secondary" hidden title="Make a WTS / WTB card for Discord"><i class="fa-solid fa-share-nodes"></i> Share</button>
             <button id="rd-add" class="btn btn-sm btn-accent" hidden><i class="fa-solid fa-plus"></i> Add to Stockpile</button>
             <button id="rd-refresh" class="btn btn-icon" title="Refresh this resource"><i class="fa-solid fa-rotate-right"></i></button>
           </span>
@@ -341,8 +346,8 @@
             <select id="rd-loc-planet" class="form-select filter-select" title="Planet"></select>
             <span id="rd-loc-count" class="settings-sub"></span>
             <span class="rd-loc-spacer"></span>
-            <button id="rd-loc-add" class="btn btn-sm btn-accent" title="Share where you found it — or click the map"><i class="fa-solid fa-plus"></i> Add waypoint</button>
             <button id="rd-loc-fullmap" class="btn btn-sm btn-outline-secondary" title="Open Planet Maps filtered to this resource"><i class="fa-solid fa-map-location-dot"></i> Open full map</button>
+            <button id="rd-loc-add" class="btn btn-sm btn-accent" title="Share where you found it — or click the map"><i class="fa-solid fa-plus"></i> Add waypoint</button>
           </div>
           <div id="rd-loc-hint" class="grid-empty" hidden></div>
           <div class="rd-loc-body">
@@ -485,8 +490,9 @@
              title="Comma-separated — added to each selected resource's existing tags, never replacing them">
           <span id="stk-selbar-n" class="inv-selbar-count"></span>
           <input id="stk-bulk-tags" type="text" class="form-control filter-input inv-bulk-vendor" placeholder="Add or remove tags" autocomplete="off">
-          <button id="stk-bulk-apply" class="btn btn-sm btn-accent">Apply</button>
           <button id="stk-bulk-remove" class="btn btn-sm btn-outline-secondary" title="Strip the entered tag(s) from every selected resource">Remove</button>
+          <button id="stk-bulk-share" class="btn btn-sm btn-outline-secondary" title="Make a WTS card for Discord from the selected resources"><i class="fa-solid fa-share-nodes"></i> Share</button>
+          <button id="stk-bulk-apply" class="btn btn-sm btn-accent">Apply</button>
           <span class="inv-selbar-sep"></span>
           <button id="stk-bulk-delete" class="btn btn-sm btn-outline-danger" title="Delete the selected resources from your stockpile"><i class="fa-solid fa-trash-can"></i> Delete</button>
           <button id="stk-sel-clear" class="btn btn-icon" title="Clear selection"><i class="fa-solid fa-xmark"></i></button>
@@ -523,8 +529,8 @@
              title="Comma-separated — added to each selected schematic's existing tags, never replacing them">
           <span id="mys-selbar-n" class="inv-selbar-count"></span>
           <input id="mys-bulk-tags" type="text" class="form-control filter-input inv-bulk-vendor" placeholder="Add or remove tags" autocomplete="off">
-          <button id="mys-bulk-apply" class="btn btn-sm btn-accent">Apply</button>
           <button id="mys-bulk-remove" class="btn btn-sm btn-outline-secondary" title="Strip the entered tag(s) from every selected schematic">Remove</button>
+          <button id="mys-bulk-apply" class="btn btn-sm btn-accent">Apply</button>
           <span class="inv-selbar-sep"></span>
           <button id="mys-bulk-delete" class="btn btn-sm btn-outline-danger" title="Remove the selected schematics from My Schematics"><i class="fa-solid fa-trash-can"></i> Delete</button>
           <button id="mys-sel-clear" class="btn btn-icon" title="Clear selection"><i class="fa-solid fa-xmark"></i></button>
@@ -594,8 +600,9 @@
              title="Comma-separated — added to each selected resource's existing tags, never replacing them">
           <span id="wish-selbar-n" class="inv-selbar-count"></span>
           <input id="wish-bulk-tags" type="text" class="form-control filter-input inv-bulk-vendor" placeholder="Add or remove tags" autocomplete="off">
-          <button id="wish-bulk-apply" class="btn btn-sm btn-accent">Apply</button>
           <button id="wish-bulk-remove" class="btn btn-sm btn-outline-secondary" title="Strip the entered tag(s) from every selected resource">Remove</button>
+          <button id="wish-bulk-share" class="btn btn-sm btn-outline-secondary" title="Make a WTB card for Discord from the selected resources"><i class="fa-solid fa-share-nodes"></i> Share</button>
+          <button id="wish-bulk-apply" class="btn btn-sm btn-accent">Apply</button>
           <span class="inv-selbar-sep"></span>
           <button id="wish-bulk-delete" class="btn btn-sm btn-outline-danger" title="Remove the selected resources from your wishlist"><i class="fa-solid fa-trash-can"></i> Delete</button>
           <button id="wish-sel-clear" class="btn btn-icon" title="Clear selection"><i class="fa-solid fa-xmark"></i></button>
@@ -689,7 +696,7 @@
             </tr></thead>
             <tbody id="al-announcements"></tbody>
           </table>
-          <div id="al-announce-empty" class="grid-empty" hidden>Nothing announced yet.</div>
+          <div id="al-announce-empty" class="grid-empty" hidden>No announcements yet.</div>
         </div>
         </div>
       </section>
@@ -716,8 +723,8 @@
              title="Comma-separated — added to each selected customer's existing tags, never replacing them">
           <span id="cust-selbar-n" class="inv-selbar-count"></span>
           <input id="cust-bulk-tags" type="text" class="form-control filter-input inv-bulk-vendor" placeholder="Add or remove tags" autocomplete="off">
-          <button id="cust-bulk-apply" class="btn btn-sm btn-accent">Apply</button>
           <button id="cust-bulk-remove" class="btn btn-sm btn-outline-secondary" title="Strip the entered tag(s) from every selected customer">Remove</button>
+          <button id="cust-bulk-apply" class="btn btn-sm btn-accent">Apply</button>
           <button id="cust-sel-clear" class="btn btn-icon" title="Clear selection"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <div class="table-wrap">
@@ -955,7 +962,7 @@
           <button class="btn btn-icon" data-refresh="factories" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
         </div>
         <div id="fac-loading" class="grid-loading" hidden><span class="spinner"></span> Loading…</div>
-        <div id="fac-empty" class="al-empty" hidden>No factories yet — click <b>Add Factory</b> and start timing your runs.
+        <div id="fac-empty" class="empty-state" hidden>No factories yet — <b>Add Factory</b> to start timing your runs.
           Factories aren't tied to a character, so friends' factories you're borrowing fit right in.</div>
         <div id="fac-tagbar" class="fac-tagbar" hidden></div>
         <div id="fac-selbar" class="inv-selbar" hidden
@@ -991,9 +998,9 @@
              title="Comma-separated — added to each selected harvester's existing tags, never replacing them">
           <span id="harv-selbar-n" class="inv-selbar-count"></span>
           <input id="harv-bulk-tags" type="text" class="form-control filter-input inv-bulk-vendor" placeholder="Add tags" autocomplete="off">
-          <button id="harv-bulk-apply" class="btn btn-sm btn-accent">Apply</button>
           <button id="harv-bulk-wp" class="btn btn-sm btn-outline-secondary" title="Copy /waypoint commands for the selected harvesters (those with planet + x/y entered)"><i class="fa-solid fa-location-dot"></i> Waypoints</button>
           <button id="harv-bulk-wpnote" class="btn btn-sm btn-outline-secondary" title="Save the selected harvesters' /waypoint commands as a note"><i class="fa-solid fa-note-sticky"></i> To note</button>
+          <button id="harv-bulk-apply" class="btn btn-sm btn-accent">Apply</button>
           <button id="harv-sel-clear" class="btn btn-icon" title="Clear selection"><i class="fa-solid fa-xmark"></i></button>
         </div>
 
@@ -1001,7 +1008,7 @@
           <div id="harv-list" class="harv-list"></div>
           <div id="harv-loading" class="grid-loading" hidden><span class="spinner"></span> Loading…</div>
           <div id="harv-empty" class="grid-empty" hidden>
-            No harvesters yet — hit <b>Add Harvester</b> after you place one in game.
+            No harvesters yet — <b>Add Harvester</b> after you place one in game.
             Enter what you loaded it with and the countdowns run themselves.
           </div>
         </div>
@@ -1179,9 +1186,9 @@
         <!-- Home: every saved experiment as a card, notes front and center -->
         <div id="lab-home">
           <div id="lab-exps" class="lab-exps"></div>
-          <div id="lab-home-nomatch" class="al-empty" hidden></div>
-          <div id="lab-home-empty" class="al-empty" hidden>
-            No experiments yet — hit <b>New Experiment</b>, pick a schematic, fill the slots, and save.
+          <div id="lab-home-nomatch" class="empty-state" hidden></div>
+          <div id="lab-home-empty" class="empty-state" hidden>
+            No experiments yet — <b>New Experiment</b> to pick a schematic, fill the slots, and save.
             Each experiment keeps its picks, verdict, cost, and your notes.
           </div>
         </div>
@@ -1225,7 +1232,7 @@
                 <div id="lab-notes-editor" class="lab-notes-editor" contenteditable="true"
                   data-placeholder="Why these picks, buff setup, results in game…"></div>
               </div>
-              <div id="lab-empty" class="al-empty">Pick a schematic to start experimenting — the bench shows whether your picks cap, and what they cost.</div>
+              <div id="lab-empty" class="empty-state is-compact">Pick a schematic to start experimenting — the bench shows whether your picks cap, and what they cost.</div>
               <div id="lab-debug" class="lab-debug" hidden></div>
             </div>
           </div>
@@ -1320,10 +1327,10 @@
               <div class="scan-aide-progressrow">
                 <b id="scan-aide-progress"></b>
                 <span class="scan-aide-actions">
-                  <button id="scan-aide-copy" class="btn btn-sm btn-accent"><i class="fa-solid fa-copy"></i> Copy completed file</button>
                   <button id="scan-aide-new" class="btn btn-sm btn-outline-secondary" title="Paste a different file">New file</button>
                   <button id="scan-aide-clear" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-trash-can"></i> Clear</button>
                   <button id="scan-aide-close" class="btn btn-sm btn-outline-secondary">Close</button>
+                  <button id="scan-aide-copy" class="btn btn-sm btn-accent"><i class="fa-solid fa-copy"></i> Copy completed file</button>
                 </span>
               </div>
               <div id="scan-aide-rows" class="scan-aide-rows"></div>
@@ -1335,8 +1342,8 @@
             <div class="scan-wl-dlg-head">
               <h2>New spawn worklist <span id="scan-wl-count2" class="scan-wl-count"></span></h2>
               <div class="scan-wl-actions">
-                <button id="scan-wl-copy" class="btn btn-sm btn-accent"><i class="fa-solid fa-copy"></i> Copy SWGAide lines</button>
                 <button id="scan-wl-clear" class="btn btn-sm btn-outline-secondary">Clear list</button>
+                <button id="scan-wl-copy" class="btn btn-sm btn-accent"><i class="fa-solid fa-copy"></i> Copy SWGAide lines</button>
                 <button id="scan-wl-close" class="btn btn-icon" title="Close"><i class="fa-solid fa-xmark"></i></button>
               </div>
             </div>
@@ -1417,7 +1424,7 @@
             <button id="sb-new" class="btn btn-sm btn-accent head-right"><i class="fa-solid fa-plus"></i> New Schematic</button>
           </div>
           <div id="sb-drafts" class="sb-drafts"></div>
-          <div id="sb-list-empty" class="al-empty" hidden></div>
+          <div id="sb-list-empty" class="empty-state" hidden></div>
         </div>
 
         <div id="sb-edit-view" hidden>
@@ -1542,7 +1549,7 @@
         <div id="mac-gamewarn" class="al-empty" hidden><i class="fa-solid fa-triangle-exclamation"></i>
           Edits land in the game at the character's NEXT login — and the game rewrites this file at logout,
           so save your changes while that character is logged out or they'll be overwritten.</div>
-        <div id="mac-empty" class="al-empty" hidden></div>
+        <div id="mac-empty" class="empty-state" hidden></div>
         <div id="mac-layout" class="mac-layout">
           <div class="mac-side">
             <div class="mac-side-head">
@@ -1584,14 +1591,14 @@
                   </div>
                 </div>
               </div>
-              <div id="mac-ed-none" class="mac-none">Pick a macro on the left, or click <b>New Macro</b>.</div>
+              <div id="mac-ed-none" class="empty-state">Pick a macro on the left, or <b>New Macro</b> to write one.</div>
             </div>
           </div>
         </div>
         </div><!-- /#mac-tab-mine -->
 
         <div id="mac-tab-community" hidden>
-          <div id="cmac-empty" class="al-empty" hidden></div>
+          <div id="cmac-empty" class="empty-state" hidden></div>
           <div id="cmac-list" class="cmac-list"></div>
         </div><!-- /#mac-tab-community -->
       </section>
@@ -1611,7 +1618,7 @@
         <div id="ali-gamewarn" class="al-empty" hidden><i class="fa-solid fa-triangle-exclamation"></i>
           Edits land in the game at the character's NEXT login — and the game rewrites this file at logout,
           so save your changes while that character is logged out or they'll be overwritten.</div>
-        <div id="ali-empty" class="al-empty" hidden></div>
+        <div id="ali-empty" class="empty-state" hidden></div>
         <div id="ali-layout" class="mac-layout">
           <div class="mac-side">
             <div id="ali-list" class="mac-list"></div>
@@ -1645,7 +1652,7 @@
                   </div>
                 </div>
               </div>
-              <div id="ali-ed-none" class="mac-none">Pick an alias on the left, or click <b>New Alias</b>.</div>
+              <div id="ali-ed-none" class="empty-state">Pick an alias on the left, or <b>New Alias</b> to add one.</div>
             </div>
           </div>
         </div>
@@ -1667,7 +1674,7 @@
           <button id="notes-pull" class="btn btn-sm btn-outline-secondary"
                   title="Read this game notes file into a linked note — creates the note, or refreshes it from the file"><i class="fa-solid fa-download"></i> Read into note</button>
         </div>
-        <div id="notes-empty" class="al-empty" hidden>No notes yet — click <b>New Note</b> and keep waypoints,
+        <div id="notes-empty" class="empty-state" hidden>No notes yet — <b>New Note</b> to keep waypoints,
           customer lists, or anything else at hand. Notes stay on this machine; copy one to paste in game.</div>
         <div id="notes-layout" class="notes-layout" hidden>
           <div class="notes-side">
@@ -1684,15 +1691,15 @@
                         title="Link this note to a game notes file — Push writes it there, and in-game edits sync back first"></select>
                 <button id="note-push" class="btn btn-sm btn-outline-secondary" hidden
                         title="Write this note to its game file (always backsyncs first — in-game changes are offered into the note, never overwritten)"><i class="fa-solid fa-upload"></i> Push</button>
-                <button id="note-save" class="btn btn-sm btn-accent" disabled><i class="fa-solid fa-floppy-disk"></i> Save</button>
                 <button id="note-copy" class="btn btn-icon" title="Copy the note text to the clipboard"><i class="fa-solid fa-copy"></i></button>
                 <button id="note-del" class="btn btn-icon" title="Delete this note"><i class="fa-solid fa-trash-can"></i></button>
+                <button id="note-save" class="btn btn-sm btn-accent" disabled><i class="fa-solid fa-floppy-disk"></i> Save</button>
               </div>
               <div id="notes-sync-banner" class="notes-sync-banner" hidden>
                 <i class="fa-solid fa-rotate"></i>
                 <span id="notes-sync-msg">This note's game file changed in game.</span>
-                <button id="notes-sync-append" class="btn btn-sm btn-accent" title="Add the lines the game wrote (that this note doesn't have) to the note">Append changes to note</button>
                 <button id="notes-sync-replace" class="btn btn-sm btn-outline-secondary" title="Throw away the note's text and take the game's copy">Replace note with game copy</button>
+                <button id="notes-sync-append" class="btn btn-sm btn-accent" title="Add the lines the game wrote (that this note doesn't have) to the note">Append changes to note</button>
               </div>
               <textarea id="note-f-content" class="notes-content" spellcheck="false"
                         placeholder="Waypoints, customer notes, shopping lists — anything you want at hand."></textarea>
@@ -1873,8 +1880,8 @@
           <span id="pm-filternote" class="pm-filternote" hidden></span>
           <select id="pm-planet" class="form-select filter-select head-filter" title="Planet"></select>
           <select id="pm-resource" class="form-select filter-select pm-resource" title="Only this resource's waypoints"><option value="">All resources</option></select>
-          <button id="pm-add" class="btn btn-sm btn-accent" title="Share a resource concentration waypoint"><i class="fa-solid fa-plus"></i> Add waypoint</button>
           <button id="pm-sidebtn" class="btn btn-icon pm-sidebtn" title="Hide the side panel"><i class="fa-solid fa-table-columns"></i></button>
+          <button id="pm-add" class="btn btn-sm btn-accent" title="Share a resource concentration waypoint"><i class="fa-solid fa-plus"></i> Add waypoint</button>
           <button id="pm-reload" class="btn btn-icon" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
         </div>
         <div id="pm-hint" class="grid-empty" hidden></div>
@@ -2032,6 +2039,75 @@
           <div id="special-body" class="beast-detail"></div>
           <div id="special-loading" class="grid-loading" hidden><span class="spinner"></span> Loading…</div>
           <div id="special-empty" class="grid-empty" hidden></div>
+        </div>
+      </section>
+
+      <!-- Quests: the DSRC quest datapad (api/quests.php) — list + quest page (js/quests.js, css/quests.css) -->
+      <section id="page-quests" class="page">
+        <div class="page-head">
+          <h1>Quests</h1>
+          <i class="fa-solid fa-circle-info info-tip" title="Every ground quest on Restoration — steps with waypoints you can copy straight into the game, rewards and loot, who hands it out and what it leads to. Click a quest for its full walkthrough, a map of its steps, and community tips and screenshots."></i>
+          <input id="quests-search" type="text" class="form-control filter-input head-search" placeholder="Search quests, NPCs, items..." autocomplete="off">
+          <button id="quests-reload" class="btn btn-icon" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
+        </div>
+        <div class="res-filterrow beast-filterrow">
+          <select id="quests-category" class="form-select filter-select beast-sel" title="Category"><option value="">All categories</option></select>
+          <select id="quests-planet" class="form-select filter-select beast-sel" title="Planet a step sends you to"></select>
+          <span class="q-lvl" title="Recommended level range">
+            <span class="q-lvl-l">Level</span>
+            <input id="quests-minlvl" type="number" min="0" max="90" class="form-control filter-input q-lvl-in" placeholder="min" autocomplete="off">
+            <span class="q-lvl-l">–</span>
+            <input id="quests-maxlvl" type="number" min="0" max="90" class="form-control filter-input q-lvl-in" placeholder="max" autocomplete="off">
+          </span>
+          <select id="quests-type" class="form-select filter-select beast-sel" title="Solo or group">
+            <option value="">Solo &amp; group</option><option value="solo">Solo</option><option value="group">Group</option>
+          </select>
+          <select id="quests-repeat" class="form-select filter-select beast-sel" title="Repeatable">
+            <option value="">Any</option><option value="1">Repeatable</option><option value="0">One-time</option>
+          </select>
+          <label class="pin-toggle ms-auto" title="Also list quests nobody hands out (unused or test content)"><input id="quests-unused" type="checkbox"> Unused</label>
+        </div>
+        <div class="table-wrap">
+          <table class="data-grid" id="quests-grid"><thead><tr id="quests-head"></tr></thead><tbody id="quests-body"></tbody></table>
+          <div id="quests-loading" class="grid-loading" hidden><span class="spinner"></span> Loading…</div>
+          <div id="quests-empty" class="grid-empty" hidden></div>
+        </div>
+        <div class="pager">
+          <span id="quests-status" class="pager-status"></span>
+          <div class="pager-nav">
+            <button id="quests-prev" class="btn btn-sm btn-outline-secondary" disabled>&lsaquo; Prev</button>
+            <button id="quests-next" class="btn btn-sm btn-outline-secondary" disabled>Next &rsaquo;</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="page-quest" class="page">
+        <div class="rd-head"><nav class="crumbs" id="quest-crumbs"></nav>
+          <span class="rd-actions">
+            <button id="quest-copyall" class="btn btn-sm btn-outline-secondary" hidden title="Copy every step's /way, one per line"><i class="fa-regular fa-clone"></i> Copy all waypoints</button>
+            <button id="quest-refresh" class="btn btn-icon" title="Refresh this quest"><i class="fa-solid fa-rotate-right"></i></button>
+          </span>
+        </div>
+        <div class="table-wrap beast-detail-wrap">
+          <div id="quest-body" class="beast-detail qd"></div>
+          <div id="quest-loading" class="grid-loading" hidden><span class="spinner"></span> Loading…</div>
+          <div id="quest-empty" class="grid-empty" hidden></div>
+        </div>
+      </section>
+
+      <!-- NPC page: a quest giver / target (api/quests.php?npc=) — map, quests, waypoints, notes (js/quests.js) -->
+      <section id="page-npc" class="page">
+        <div class="rd-head"><nav class="crumbs" id="npc-crumbs"></nav>
+          <span class="rd-actions">
+            <button type="button" id="npc-edit" class="btn btn-sm btn-outline-secondary npc-editbtn" aria-pressed="false" title="Edit the description and pick the main photo"><i class="fa-solid fa-pen"></i> Edit</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-npcwpadd title="Share where this NPC stands"><i class="fa-solid fa-location-dot"></i> Add waypoint</button>
+            <button id="npc-refresh" class="btn btn-icon" title="Refresh this NPC"><i class="fa-solid fa-rotate-right"></i></button>
+          </span>
+        </div>
+        <div class="table-wrap beast-detail-wrap">
+          <div id="npc-body" class="beast-detail qd"></div>
+          <div id="npc-loading" class="grid-loading" hidden><span class="spinner"></span> Loading…</div>
+          <div id="npc-empty" class="grid-empty" hidden></div>
         </div>
       </section>
 
@@ -2265,9 +2341,9 @@
         </div>
 
         <div class="settings-actions">
-          <button id="set-save" class="btn btn-accent settings-save"><i class="fa-solid fa-floppy-disk"></i> Save Settings</button>
           <button id="set-reset" class="btn btn-outline-secondary" title="Discard unsaved changes and reload the saved settings">
             <i class="fa-solid fa-rotate-left"></i> Reset</button>
+          <button id="set-save" class="btn btn-accent settings-save"><i class="fa-solid fa-floppy-disk"></i> Save Settings</button>
           <span id="set-status" class="settings-status"></span>
         </div>
       </section>
@@ -2935,6 +3011,41 @@
     </div>
   </div>
 
+  <!-- NPC page: share where an NPC stands (js/quests.js npcOpenWpDialog) -->
+  <div id="npcwp-modal" class="key-gate" hidden>
+    <div class="key-gate-card sp-card inv-add-card wp-add-card">
+      <h2>Add a waypoint</h2>
+      <div class="settings-hint">Where <b id="npcwp-name"></b> stands — everyone sees it on the NPC's page.</div>
+      <div class="inv-add-field">
+        <label class="sp-field-label">Quick entry <span class="settings-sub">paste a /way line — "/way tatooine 3490 0 -4871"</span></label>
+        <input id="npcwp-quick" type="text" class="form-control filter-input" placeholder="/way tatooine 3490 0 -4871 note" autocomplete="off">
+      </div>
+      <div class="inv-add-row">
+        <div class="inv-add-field">
+          <label class="sp-field-label">Planet</label>
+          <select id="npcwp-planet" class="form-select filter-select"></select>
+        </div>
+        <div class="inv-add-field wp-add-xy">
+          <label class="sp-field-label">X</label>
+          <input id="npcwp-x" type="number" class="form-control filter-input" min="-8192" max="8192" step="1" placeholder="X" autocomplete="off">
+        </div>
+        <div class="inv-add-field wp-add-xy">
+          <label class="sp-field-label">Z</label>
+          <input id="npcwp-z" type="number" class="form-control filter-input" min="-8192" max="8192" step="1" placeholder="Z" autocomplete="off">
+        </div>
+      </div>
+      <div class="inv-add-field">
+        <label class="sp-field-label">Note <span class="settings-sub">optional</span></label>
+        <input id="npcwp-note" type="text" class="form-control filter-input" maxlength="255" placeholder="e.g. upstairs in the cantina" autocomplete="off">
+      </div>
+      <div class="inv-add-actions">
+        <span id="npcwp-status" class="key-gate-status"></span>
+        <button id="npcwp-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
+        <button id="npcwp-save" class="btn btn-sm btn-accent"><i class="fa-solid fa-location-dot"></i> Share waypoint</button>
+      </div>
+    </div>
+  </div>
+
   <div id="wp-add-modal" class="key-gate" hidden>
     <div class="key-gate-card sp-card inv-add-card wp-add-card">
       <h2>Share a waypoint</h2>
@@ -3113,7 +3224,7 @@
           </tr></thead>
           <tbody id="mm-trash-body"></tbody>
         </table>
-        <div id="mm-trash-empty" class="grid-empty" hidden>Trash is empty.</div>
+        <div id="mm-trash-empty" class="grid-empty" hidden>No mail in the trash.</div>
       </div>
       <div class="stk-note-actions">
         <button id="mm-trash-restoreall" class="btn btn-sm btn-outline-secondary" hidden><i class="fa-solid fa-trash-arrow-up"></i> Restore all</button>
@@ -3282,48 +3393,51 @@
 
   <!-- Classic scripts sharing one top-level scope; app.js boots last. -->
   <script src="js/class_caps.js?v=20261012a"></script>
-  <script src="js/shared.js?v=20261021a"></script>
+  <script src="js/shared.js?v=20261022es"></script>
   <script src="js/shop.js?v=20261017b"></script>
   <script src="js/help.js?v=20261012a"></script>
-  <script src="js/resources.js?v=20261017b"></script>
-  <script src="js/resource.js?v=20261017a"></script>
-  <script src="js/schematics.js?v=20261016a"></script>
-  <script src="js/stockpile.js?v=20261012a"></script>
-  <script src="js/wishlist.js?v=20261012a"></script>
-  <script src="js/myschematics.js?v=20261012a"></script>
-  <script src="js/schemcalc.js?v=20261012a"></script>
-  <script src="js/inventory.js?v=20261021a"></script>
-  <script src="js/invlog.js?v=20261019c"></script>
-  <script src="js/sales.js?v=20261019a"></script>
-  <script src="js/insights.js?v=20261019a"></script>
-  <script src="js/purchases.js?v=20261019a"></script>
-  <script src="js/harvesters.js?v=20261012a"></script>
-  <script src="js/factories.js?v=20261012a"></script>
-  <script src="js/customers.js?v=20261012a"></script>
-  <script src="js/characters.js?v=20261012a"></script>
+  <script src="js/resources.js?v=20261022es"></script>
+  <script src="js/share-card.js?v=20261022y"></script>
+  <script src="js/share-wizard.js?v=20261022es"></script>
+  <script src="js/resource.js?v=20261022x"></script>
+  <script src="js/schematics.js?v=20261022es"></script>
+  <script src="js/stockpile.js?v=20261022es"></script>
+  <script src="js/wishlist.js?v=20261022es"></script>
+  <script src="js/myschematics.js?v=20261022es"></script>
+  <script src="js/schemcalc.js?v=20261022es"></script>
+  <script src="js/inventory.js?v=20261022es"></script>
+  <script src="js/invlog.js?v=20261022es"></script>
+  <script src="js/sales.js?v=20261022es"></script>
+  <script src="js/insights.js?v=20261022es"></script>
+  <script src="js/purchases.js?v=20261022es"></script>
+  <script src="js/harvesters.js?v=20261022es"></script>
+  <script src="js/factories.js?v=20261022es"></script>
+  <script src="js/customers.js?v=20261022es"></script>
+  <script src="js/characters.js?v=20261022es"></script>
   <script src="js/settings.js?v=20261020a"></script>
-  <script src="js/alerts.js?v=20261012a"></script>
-  <script src="js/lab.js?v=20261017a"></script>
-  <script src="js/mail.js?v=20261012a"></script>
-  <script src="js/notes.js?v=20261012a"></script>
+  <script src="js/alerts.js?v=20261022es"></script>
+  <script src="js/lab.js?v=20261022es"></script>
+  <script src="js/mail.js?v=20261022es"></script>
+  <script src="js/notes.js?v=20261022es"></script>
   <script src="js/macro_commands.js?v=20261012a"></script>
-  <script src="js/macros.js?v=20261012a"></script>
-  <script src="js/aliases.js?v=20261012a"></script>
-  <script src="js/community_macros.js?v=20261012a"></script>
-  <script src="js/galaxy.js?v=20261016a"></script>
-  <script src="js/schembuilder.js?v=20261016a"></script>
-  <script src="js/scanner.js?v=20261012a"></script>
-  <script src="js/topspawns.js?v=20261017a"></script>
+  <script src="js/macros.js?v=20261022es"></script>
+  <script src="js/aliases.js?v=20261022es"></script>
+  <script src="js/community_macros.js?v=20261022es"></script>
+  <script src="js/galaxy.js?v=20261022es"></script>
+  <script src="js/schembuilder.js?v=20261022es"></script>
+  <script src="js/scanner.js?v=20261022ro"></script>
+  <script src="js/topspawns.js?v=20261022es"></script>
   <script src="js/restree_data.js?v=20261016a"></script>
-  <script src="js/restree.js?v=20261016a"></script>
-  <script src="js/planetmap.js?v=20261016a"></script>
-  <script src="js/gsearch.js?v=20261016a"></script>
-  <script src="js/shortcuts.js?v=20261016a"></script>
+  <script src="js/restree.js?v=20261022es"></script>
+  <script src="js/planetmap.js?v=20261022es"></script>
+  <script src="js/gsearch.js?v=20261022es"></script>
+  <script src="js/shortcuts.js?v=20261022qa"></script>
   <script src="js/navlayout.js?v=20261016a"></script>
-  <script src="js/beasts.js?v=20261016a"></script>
+  <script src="js/beasts.js?v=20261022es"></script>
+  <script src="js/quests.js?v=20261022es"></script>
   <script src="js/beastcalc.js?v=20261016a"></script>
-  <script src="js/home.js?v=20261019a"></script>
+  <script src="js/home.js?v=20261022es"></script>
   <script src="js/mailsetup.js?v=20261019a"></script>
-  <script src="js/app.js?v=20261019c"></script>
+  <script src="js/app.js?v=20261022es"></script>
 </body>
 </html>

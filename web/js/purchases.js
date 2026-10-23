@@ -94,7 +94,7 @@ async function loadPurchases() {
 
   if (!rows.length) {
     const filtered = !!$('#pur-search').value.trim();
-    showPurEmpty(filtered ? 'No purchases match this filter.' : 'No purchases found.');
+    showPurEmpty(filtered ? 'Nothing matches these filters.' : 'No purchases yet.');
     if (!filtered) mailSetupOffer($('#pur-empty'));
     $('#pur-status').textContent = '';
   } else {

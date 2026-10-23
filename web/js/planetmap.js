@@ -133,7 +133,7 @@ function pmCitiesOn(code, cities) {
 function pmWpCmd(w) { return w.waypoint || `/wp ${(PM_PLANETS[w.planet] || {}).name || w.planet || ''} ${w.x} ${w.y}`; }
 // the waypoint list (sidebar on the map page, right column on the Locations tab)
 function pmListHtml(data, { hideName = false } = {}) {
-  if (!data || !data.length) return '<div class="pm-empty">No waypoints here yet.</div>';
+  if (!data || !data.length) return '<div class="empty-state is-compact">No waypoints here yet.</div>';
   return data.map((w) => {
     const cmd = pmWpCmd(w);
     const copy = waypointCopyText({ waypoint: cmd, resource_name: w.resource_name, concentration: w.concentration });
@@ -141,14 +141,13 @@ function pmListHtml(data, { hideName = false } = {}) {
       <span class="pm-pct" style="color:${pmConcColor(safeInt(w.concentration))}">${safeInt(w.concentration)}%</span>
       ${hideName ? '' : `<span class="pm-name" data-wpres="${escapeHtml(w.resource_name || '')}" title="Open ${escapeHtml(w.resource_name || '')}">${escapeHtml(w.resource_name || '')}</span>`}
       ${w.note ? `<span class="pm-note">${escapeHtml(w.note)}</span>` : ''}
-      <code class="pm-cmd">${escapeHtml(cmd)}</code>
-      <a role="button" class="pm-copy" data-pmcopy="${escapeHtml(copy)}" title="Copy waypoint"><i class="fa-regular fa-clone"></i></a>
+      <a role="button" class="pm-copy" data-pmcopy="${escapeHtml(copy)}" title="Copy ${escapeHtml(copy)}"><i class="fa-regular fa-clone"></i></a>
       ${safeInt(w.mine) ? `<a role="button" class="pm-drop" data-wpdrop="${safeInt(w.id)}" title="Remove — you shared this one"><i class="fa-solid fa-xmark"></i></a>` : ''}
     </div>`;
   }).join('');
 }
 function pmCityListHtml(cities) {
-  if (!cities.length) return '<div class="pm-empty">No cities on this planet.</div>';
+  if (!cities.length) return '<div class="empty-state is-compact">No cities on this planet.</div>';
   const sorted = cities.slice().sort((a, b) => String(a.name).localeCompare(String(b.name)));
   return sorted.map((c) => {
     const wp = c.waypoint || `/wp ${c.x} ${c.z}`;
@@ -162,23 +161,10 @@ function pmCityListHtml(cities) {
   }).join('');
 }
 
-// ---- one map instance ----
-// opts: { el, planet, resourceId?, listEl?, countEl?, showCities, onUpdate(info), onPick(x, y, planet) }
-function pmCreateMap(L, opts) {
-  const bounds = [[0, 0], [PM_SIZE, PM_SIZE]];
-  let planet = pmIsPlanet(opts.planet) ? opts.planet : 'tat';
-  let resourceId = opts.resourceId || null;
-  let filterRid = null;
-  let showHeat = true;
-  let lastData = [];
-  let allCities = null;
-  let loadSeq = 0;
-  let popupClosedAt = 0;
-
-  // trackpad manners: two-finger scroll PANS (never zooms); pinch (a wheel event with ctrlKey
-  // on macOS/Windows) or the +/- buttons zoom. Leaflet's default of zooming on every wheel
-  // tick made moving around a lottery (Dustin).
-  const map = L.map(opts.el, { crs: L.CRS.Simple, minZoom: -2, maxZoom: 2, zoomSnap: 0, zoomDelta: 0.5, attributionControl: false, scrollWheelZoom: false });
+// trackpad manners: two-finger scroll PANS (never zooms); pinch (a wheel event with ctrlKey
+// on macOS/Windows) or the +/- buttons zoom. Leaflet's default of zooming on every wheel
+// tick made moving around a lottery (Dustin).
+function pmTrackpadManners(map) {
   const cont = map.getContainer();
   let pinchAcc = 0;
   cont.addEventListener('wheel', (e) => {
@@ -211,6 +197,23 @@ function pmCreateMap(L, opts) {
     map.setZoomAround(pinchPt, z, { animate: false });
   }, { passive: false });
   cont.addEventListener('gestureend', (e) => { e.preventDefault(); pinchZoom = null; }, { passive: false });
+}
+
+// ---- one map instance ----
+// opts: { el, planet, resourceId?, listEl?, countEl?, showCities, onUpdate(info), onPick(x, y, planet) }
+function pmCreateMap(L, opts) {
+  const bounds = [[0, 0], [PM_SIZE, PM_SIZE]];
+  let planet = pmIsPlanet(opts.planet) ? opts.planet : 'tat';
+  let resourceId = opts.resourceId || null;
+  let filterRid = null;
+  let showHeat = true;
+  let lastData = [];
+  let allCities = null;
+  let loadSeq = 0;
+  let popupClosedAt = 0;
+
+  const map = L.map(opts.el, { crs: L.CRS.Simple, minZoom: -2, maxZoom: 2, zoomSnap: 0, zoomDelta: 0.5, attributionControl: false, scrollWheelZoom: false });
+  pmTrackpadManners(map);
   let imageLayer = L.imageOverlay(pmImg(planet), bounds).addTo(map);
   map.createPane('pmGlow');
   map.getPane('pmGlow').style.zIndex = 450;
@@ -240,6 +243,8 @@ function pmCreateMap(L, opts) {
   if (opts.showCities) {
     mkToggle('Cities', 'Toggle player cities', true, (on) => { if (on) cityLayer.addTo(map); else map.removeLayer(cityLayer); });
   }
+  // quest step waypoints (quests.js; dev-mode gated there)
+  const questLayer = opts.showQuests && typeof questLayerAttach === 'function' ? questLayerAttach(L, map, () => planet) : null;
   const Legend = L.Control.extend({
     options: { position: 'bottomright' },
     onAdd() {
@@ -373,6 +378,7 @@ function pmCreateMap(L, opts) {
     map.fitBounds(bounds);
     refresh();
     renderCities();
+    if (questLayer) questLayer.planetChanged();
     emit();
   }
 
@@ -511,6 +517,7 @@ async function loadPlanetMap() {
     planet: pmState.planet,
     listEl: 'pm-wp-list',
     showCities: true,
+    showQuests: true,
     onUpdate(info) {
       pmRebuildFilter(info.resources || []);
       $('#pm-wp-count').textContent = info.count ? `${info.count}` : '0';

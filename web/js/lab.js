@@ -280,7 +280,7 @@ function labRenderBench() {
 
   bench.innerHTML = `${labBenchHeadHtml(cost, complete)}
     <div class="${labState.wasComplete ? 'lab-reveal' : ''}">
-    ${lines || '<div class="al-empty">Select at least one experiment line.</div>'}
+    ${lines || '<div class="empty-state is-compact">Select at least one experiment line.</div>'}
     </div>`;
   labBindBenchActions();
   labRenderDebug();
@@ -439,7 +439,7 @@ function labSlotTbodyHtml(slot) {
   const rows = labSlotVisibleRows(slot);
   if (!rows.length) {
     return (slot.query || '').trim()
-      ? '<tr><td colspan="15" class="stat_off lab-pool-empty">No matches in this class.</td></tr>'
+      ? '<tr><td colspan="15"><div class="empty-state is-compact">Nothing in this class matches that search.</div></td></tr>'
       : `<tr><td colspan="15" class="stat_off lab-pool-empty">
           Couldn\u2019t load this class pool \u2014 <a role="button" data-poolretry="${labState.slots.indexOf(slot)}">retry</a></td></tr>`;
   }
@@ -749,7 +749,7 @@ async function labLoadSchematic(id, name) {
   try { res = await api().get_schematic(String(id)); }
   catch (e) { res = { ok: false }; }
   const det = res.ok && res.data ? (res.data.schematic || res.data) : null;
-  if (!det) { $('#lab-bench').innerHTML = '<div class="al-empty">Couldn’t load that schematic.</div>'; return; }
+  if (!det) { $('#lab-bench').innerHTML = '<div class="empty-state is-compact">Couldn’t load that schematic.</div>'; return; }
   labState.detail = det;
 
   labState.formulas = (det.formula || []).filter((f) => f.active !== false)
@@ -802,8 +802,48 @@ async function labLoadSchematic(id, name) {
 
 // ---- diary ----
 
+// Experiments + settings live in the account (api/prefs.php ui keys — the website's
+// Laboratory reads and writes the same two), with the local config as the offline
+// copy. The account copy wins on load; an app that had experiments before the
+// account knew any pushes them up once, so nothing is lost in the move.
+const LAB_KEYS = ['lab_experiments', 'lab_settings'];
+async function labCloudGet() {
+  try {
+    const r = await apiFetch('GET', 'api/prefs.php');
+    return r.ok && r.data && r.data.ui ? r.data.ui : null;
+  } catch (_) { return null; } // offline / older site — the local copy stands
+}
+async function labCloudPut(key, value) {
+  try { const r = await apiFetch('PUT', 'api/prefs.php', { data: { ui: { [key]: value } } }); return !!r.ok; }
+  catch (_) { return false; }
+}
+async function labSave(key, value) {
+  await api().set_config(key, value);
+  return labCloudPut(key, value);
+}
+// local config merged with the account copy (account wins; local-only keys are pushed up)
+async function labLoadConfig() {
+  const res = await api().get_config();
+  const local = (res.ok && res.data) || {};
+  const cloud = await labCloudGet();
+  const out = { lab_experiments: local.lab_experiments, lab_settings: local.lab_settings };
+  if (cloud) {
+    for (const k of LAB_KEYS) {
+      if (cloud[k] != null) {
+        out[k] = cloud[k];
+        try { await api().set_config(k, cloud[k]); } catch (_) { /* cache only */ }
+      } else if (local[k] != null && !(Array.isArray(local[k]) && !local[k].length)) {
+        labCloudPut(k, local[k]);
+      }
+    }
+  }
+  return out;
+}
+
 async function labPersistExperiments() {
-  try { await api().set_config('lab_experiments', labState.experiments); }
+  // the account copy is best-effort: until the site has ui prefs (or while offline)
+  // the local config alone keeps them, silently
+  try { await labSave('lab_experiments', labState.experiments); }
   catch (_) { toast('Couldn’t save experiments', false); }
 }
 
@@ -909,7 +949,7 @@ function labRenderHome() {
   $('#lab-home-empty').hidden = total > 0;
   $('#lab-home-nomatch').hidden = !(total > 0 && list.length === 0);
   if (total > 0 && list.length === 0) {
-    $('#lab-home-nomatch').innerHTML = `No experiments match <b>${escapeHtml(q)}</b>. `
+    $('#lab-home-nomatch').innerHTML = `Nothing matches <b>${escapeHtml(q)}</b>. `
       + '<a role="button" data-homeclear>Clear the filter</a>.';
   }
 
@@ -932,7 +972,7 @@ function labRenderHome() {
         <div class="lab-exp-picks">${(e.picks || []).slice(0, 6).map((p) =>
           `<span class="mys-loadout lab-pick-pill" data-pillres="${escapeHtml(p.name)}" title="${escapeHtml(p.slot)} — click to filter by this resource">${escapeHtml(p.name)}</span>`).join(' ')}</div>
         <div class="lab-notes-view lab-card-notes">${labNotesHtml(e.notes)
-          || '<span class="stat_off">No notes yet — open on bench to add some.</span>'}</div>
+          || '<div class="empty-state is-compact">No notes yet — open it on the bench to add some.</div>'}</div>
       </div>
       <div class="lab-exp-foot">
         <span>
@@ -1000,8 +1040,8 @@ async function labReloadExperiments() {
   const ico = btn && btn.querySelector('i');
   if (ico) ico.classList.add('fa-spin');
   try {
-    const res = await api().get_config();
-    if (res.ok && res.data) labState.experiments = res.data.lab_experiments || [];
+    const cfg = await labLoadConfig();
+    labState.experiments = cfg.lab_experiments || [];
     labRenderHome();
   } catch (_) { toast('Couldn’t reload experiments', false); }
   if (ico) ico.classList.remove('fa-spin');
@@ -1090,7 +1130,7 @@ function labRenderBoosts() {
 
 async function labPersistSettings() {
   try {
-    await api().set_config('lab_settings', {
+    await labSave('lab_settings', {
       threshold: labState.threshold,
       boosts: labState.boosts.map((b) => ({ key: b.key, on: b.on, value: b.value })),
       banned: [...labState.banned],
@@ -1103,10 +1143,10 @@ async function labPersistSettings() {
 
 async function loadLab() {
   try {
-    const res = await api().get_config();
-    if (res.ok && res.data) {
-      labState.experiments = res.data.lab_experiments || [];
-      const ls = res.data.lab_settings || {};
+    const cfg = await labLoadConfig();
+    {
+      labState.experiments = cfg.lab_experiments || [];
+      const ls = cfg.lab_settings || {};
       if (ls.threshold) { labState.threshold = safeInt(ls.threshold); $('#lab-threshold').value = labState.threshold; }
       for (const saved of ls.boosts || []) {
         const b = labState.boosts.find((x) => x.key === saved.key);

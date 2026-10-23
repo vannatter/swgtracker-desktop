@@ -330,8 +330,8 @@ function scanItemHtml(item, parsed, matches) {
                    value="${parsed.stats[k] ?? ''}" spellcheck="false"></label>`).join('')}
         </div>
         <div class="scan-actions">
-          <button class="btn btn-sm btn-accent" data-editapply="${item.id}"><i class="fa-solid fa-check"></i> Apply</button>
           <button class="btn btn-sm btn-outline-secondary" data-editcancel="${item.id}">Cancel</button>
+          <button class="btn btn-sm btn-accent" data-editapply="${item.id}"><i class="fa-solid fa-check"></i> Apply</button>
         </div>
       </div>
     </div>`;
@@ -356,8 +356,6 @@ function scanItemHtml(item, parsed, matches) {
         ? `<select class="form-select filter-select scan-pick" data-pickfor="${item.id}">${options}</select>`
         : '<div class="scan-warn">No match found in the resource mirror.</div>'}
       <div class="scan-actions">
-        <button class="btn btn-sm btn-accent" data-approve="${item.id}" ${matches.length ? '' : 'disabled'}>
-          <i class="fa-solid fa-check"></i> Add to stockpile</button>
         <button class="btn btn-sm btn-outline-secondary" data-newspawn="${item.id}"
           title="Not in the system yet (a fresh spawn)? Queue it for an SWGAide submit — the worklist below">
           <i class="fa-solid fa-seedling"></i> New spawn</button>
@@ -365,6 +363,8 @@ function scanItemHtml(item, parsed, matches) {
           title="OCR misread something? Correct the name, stats or quantity by hand">
           <i class="fa-solid fa-pen"></i> Edit</button>
         <button class="btn btn-sm btn-outline-secondary" data-discard="${item.id}">Discard</button>
+        <button class="btn btn-sm btn-accent" data-approve="${item.id}" ${matches.length ? '' : 'disabled'}>
+          <i class="fa-solid fa-check"></i> Add to stockpile</button>
       </div>
     </div>
   </div>`;
@@ -839,8 +839,8 @@ function initScanner() {
         appr.closest('.scan-item').querySelector('.scan-actions').innerHTML = `
           <span class="scan-qty-ask">Already in stockpile${have ? ` with <b>${fmtNum(have)}</b>` : ''}
             — add the scanned <b>${fmtNum(parsed.qty)}</b>${have ? ` for ${fmtNum(have + parsed.qty)} total` : ''}?</span>
-          <button class="btn btn-sm btn-accent" data-addqty="${id}">Add ${fmtNum(parsed.qty)}</button>
-          <button class="btn btn-sm btn-outline-secondary" data-skipqty="${id}">Don't add</button>`;
+          <button class="btn btn-sm btn-outline-secondary" data-skipqty="${id}">Don't add</button>
+          <button class="btn btn-sm btn-accent" data-addqty="${id}">Add ${fmtNum(parsed.qty)}</button>`;
         return;
       }
       // Wishlisted resources get PROMOTED by addToStockpile inside the dialog

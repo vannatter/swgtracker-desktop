@@ -90,7 +90,7 @@ async function schemCalcRender(host, item) {
     try { await syncStockpile(); } catch (_) { /* market still works */ }
   }
   const top = await scFetch(item.schematic_id, item.formulas || '');
-  if (!top) { host.innerHTML = '<div class="sc-empty">Could not load the recipe for the calculator.</div>'; return; }
+  if (!top) { host.innerHTML = '<div class="empty-state is-compact">Could not load the recipe for the calculator.</div>'; return; }
 
   const sid = String(item.schematic_id);
   // recipe amounts are PER UNIT (one item/layer); a factory run makes a crate of this many
@@ -288,7 +288,7 @@ async function schemCalcRender(host, item) {
     host.innerHTML =
       `<table class="sc-table"><thead><tr><th></th><th>Resource</th><th>Your CPU</th><th>Your cost</th><th>Market CPU</th><th>Market cost</th></tr></thead>`
       + `<tbody><tr class="sc-grouphead"><td colspan="6">Resources</td></tr>`
-      + (model.resources.length ? model.resources.map(resRow).join('') : '<tr><td colspan="6" class="sc-muted">No resources.</td></tr>')
+      + (model.resources.length ? model.resources.map(resRow).join('') : '<tr><td colspan="6"><div class="empty-state is-compact">No resources in this recipe.</div></td></tr>')
       + (model.components.length ? `<tr class="sc-grouphead"><td colspan="6">Components</td></tr>` + model.components.map(compRow).join('') : '')
       + '</tbody></table>'
       + `<div class="sc-summary">

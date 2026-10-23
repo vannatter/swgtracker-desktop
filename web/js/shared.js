@@ -108,7 +108,7 @@ function netRenderRows() {
   const openIds = new Set([...body.querySelectorAll('[data-netdetail]:not([hidden])')].map((d) => d.dataset.netdetail));
   body.innerHTML = netLog.entries.length
     ? netLog.entries.map(netRowHtml).join('')
-    : '<div class="netlog-empty">No requests yet — use the app and they appear here newest-first.</div>';
+    : '<div class="empty-state is-compact">No requests yet — use the app and they appear here newest-first.</div>';
   openIds.forEach((id) => { const d = body.querySelector(`[data-netdetail="${id}"]`); if (d) d.hidden = false; });
 }
 function netOpenWindow() {
@@ -215,17 +215,22 @@ function escapeHtml(s) {
 // tips, and photos, attributed and self-deletable. Photos ride the same
 // shrink-to-JPEG + data-URL path the proof screenshots use, and open in the
 // floating compare windows.
-function cmtMount(hostSel, kind, id) {
+// opts (all optional): { head, sub, placeholder, maxW (downscale photos to this
+// longest side, default the proof-shot 1600), onRows(rows) after every load }.
+// A photo can also be pasted into the note or dropped onto the section.
+function cmtMount(hostSel, kind, id, opts = {}) {
   const host = document.querySelector(hostSel);
   if (!host) return;
   host.dataset.kind = kind;
   host.dataset.id = String(id);
+  host._opts = opts || {};
   if (!host.dataset.wired) {
     host.dataset.wired = '1';
+    const o = host._opts;
     host.innerHTML = `
-      <div class="cmt-head">Community notes <span class="settings-sub">field reports, tips, photos — visible to every app user</span></div>
+      <div class="cmt-head">${escapeHtml(o.head || 'Community notes')} <span class="settings-sub">${escapeHtml(o.sub || 'field reports, tips, photos — visible to every app user')}</span></div>
       <div class="cmt-compose">
-        <textarea class="form-control filter-input cmt-input" rows="2" maxlength="1000" placeholder="Leave a note for fellow crafters…"></textarea>
+        <textarea class="form-control filter-input cmt-input" rows="2" maxlength="1000" placeholder="${escapeHtml(o.placeholder || 'Leave a note for fellow crafters…')}"></textarea>
         <div class="cmt-actions">
           <input type="file" class="cmt-file" accept="image/png,image/jpeg,image/webp" hidden>
           <button class="btn btn-sm btn-outline-secondary cmt-attach" title="Attach a photo (screenshot, survey, result)"><i class="fa-solid fa-image"></i> Photo</button>
@@ -242,14 +247,39 @@ function cmtMount(hostSel, kind, id) {
     });
     const fileInp = host.querySelector('.cmt-file');
     host.querySelector('.cmt-attach').addEventListener('click', () => fileInp.click());
+    const attach = async (f) => {
+      if (!f || !/^image\/(png|jpeg|webp|gif|bmp)$/i.test(f.type || '')) { if (f) toast('That isn\u2019t an image', false); return; }
+      try {
+        host._img = host._opts.maxW ? await cmtShrinkImage(f, host._opts.maxW)
+          : typeof sbShrinkImage === 'function' ? await sbShrinkImage(f) : null;
+      } catch (_) { host._img = null; toast('Could not read that image', false); }
+      const chip = host.querySelector('.cmt-attached');
+      chip.hidden = !host._img;
+      if (host._img) chip.innerHTML = `<img class="cmt-thumb" src="${host._img}" alt=""> photo attached <a role="button" class="cmt-unattach" title="Remove"><i class="fa-solid fa-xmark"></i></a>`;
+    };
     fileInp.addEventListener('change', async () => {
       const f = fileInp.files && fileInp.files[0];
       fileInp.value = '';
+      if (f) await attach(f);
+    });
+    // paste a screenshot straight into the note, or drop one on the section
+    ta.addEventListener('paste', (e) => {
+      const it = [...((e.clipboardData && e.clipboardData.items) || [])].find((x) => x.kind === 'file' && /^image\//.test(x.type));
+      if (!it) return;
+      e.preventDefault();
+      attach(it.getAsFile());
+    });
+    host.addEventListener('dragover', (e) => {
+      if (![...(e.dataTransfer?.types || [])].includes('Files')) return;
+      e.preventDefault(); host.classList.add('cmt-dropping');
+    });
+    host.addEventListener('dragleave', (e) => { if (!host.contains(e.relatedTarget)) host.classList.remove('cmt-dropping'); });
+    host.addEventListener('drop', (e) => {
+      const f = [...(e.dataTransfer?.files || [])].find((x) => /^image\//.test(x.type));
+      host.classList.remove('cmt-dropping');
       if (!f) return;
-      host._img = typeof sbShrinkImage === 'function' ? await sbShrinkImage(f) : null;
-      const chip = host.querySelector('.cmt-attached');
-      chip.hidden = !host._img;
-      if (host._img) chip.innerHTML = '<i class="fa-solid fa-paperclip"></i> photo attached <a role="button" class="cmt-unattach" title="Remove"><i class="fa-solid fa-xmark"></i></a>';
+      e.preventDefault();
+      attach(f);
     });
     host.addEventListener('click', async (e) => {
       if (e.target.closest('.cmt-unattach')) {
@@ -298,10 +328,12 @@ async function cmtLoad(host) {
   const list = host.querySelector('.cmt-list');
   if (!list) return;
   if (!res.ok) {
-    list.innerHTML = '<span class="stat_off">Notes aren\'t available yet — site update pending.</span>';
+    list.innerHTML = '<div class="empty-state is-compact">Notes aren\'t available yet — site update pending.</div>';
+    if (host._opts && typeof host._opts.onRows === 'function') host._opts.onRows([]);
     return;
   }
   const rows = (res.data && res.data.comments) || [];
+  if (host._opts && typeof host._opts.onRows === 'function') host._opts.onRows(rows);
   list.innerHTML = rows.length ? rows.map((c) => `
     <div class="cmt-item">
       <div class="cmt-meta"><b>${escapeHtml(c.by)}</b> <span class="cmt-when">${fmtAgoTip(c.at)}</span>
@@ -310,7 +342,28 @@ async function cmtLoad(host) {
       ${c.image ? `<img class="cmt-img" src="https://swgtracker.com${escapeHtml(c.image)}" loading="lazy"
          data-cmtimg="${escapeHtml(c.image)}" title="Click to open in a movable window">` : ''}
     </div>`).join('')
-    : '<span class="stat_off">No notes yet — drop the first field report.</span>';
+    : '<div class="empty-state is-compact">No notes yet — <b>Post</b> the first field report.</div>';
+}
+
+// downscale a photo so its longest side is ≤ maxW, as a JPEG data URL (game
+// screenshots are huge; comments.php caps uploads at 8MB)
+function cmtShrinkImage(file, maxW = 1920) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxW / Math.max(img.width, img.height));
+      const cv = document.createElement('canvas');
+      cv.width = Math.max(1, Math.round(img.width * scale));
+      cv.height = Math.max(1, Math.round(img.height * scale));
+      cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+      URL.revokeObjectURL(img.src);
+      let q = 0.85; let out = cv.toDataURL('image/jpeg', q);
+      while (out.length > 7.5 * 1024 * 1024 * 4 / 3 && q > 0.4) { q -= 0.15; out = cv.toDataURL('image/jpeg', q); }
+      resolve(out);
+    };
+    img.onerror = () => reject(new Error('unreadable image'));
+    img.src = URL.createObjectURL(file);
+  });
 }
 
 // ---- account-level preferences (api/prefs.php, synced server-side so the

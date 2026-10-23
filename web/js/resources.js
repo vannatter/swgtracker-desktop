@@ -235,7 +235,7 @@ function resApplyView() {
   const rows = resState.lastRows || [];
   if (view === 'tree') { renderResTree(cards, rows); return; }
   cards.classList.remove('res-treewrap');
-  if (!rows.length) { cards.innerHTML = '<div class="grid-empty">No resources.</div>'; return; }
+  if (!rows.length) { cards.innerHTML = '<div class="empty-state">Nothing matches these filters.</div>'; return; }
   cards.innerHTML = `<div class="res-card-grid">${rows.map(resCardHtml).join('')}</div>`;
 }
 
@@ -306,7 +306,7 @@ function resTreeItemHtml(r, depth) {
 async function renderResTree(container, rows, opts = {}) {
   if (!resState.treeCollapsed) resState.treeCollapsed = new Set();
   const tree = await resEnsureCatTree();
-  if (!tree) { container.innerHTML = '<div class="grid-empty">Category tree unavailable offline.</div>'; return; }
+  if (!tree) { container.innerHTML = '<div class="empty-state">Category tree unavailable offline.</div>'; return; }
   if (resState.view !== 'tree' && !opts.force) return; // navigated away while fetching (Home forces its own tree)
   container.classList.add('res-treewrap');
   const { nodes, roots } = tree;
@@ -358,7 +358,7 @@ async function renderResTree(container, rows, opts = {}) {
   }
   container.innerHTML = body
     ? resTreeHeaderHtml() + body
-    : '<div class="grid-empty">No resources match.</div>';
+    : '<div class="empty-state">Nothing matches these filters.</div>';
 }
 
 // sort control (drives the server sort for every view — the only way to sort
@@ -845,7 +845,7 @@ async function loadResources() {
   }
 
   if (!rows.length) {
-    showResEmpty(onlyIds ? `Nothing ${only.map((o) => o.label).join(' and ')} matches.` : 'No resources found.');
+    showResEmpty(onlyIds ? `Nothing ${only.map((o) => o.label).join(' and ')} matches.` : 'Nothing matches these filters.');
     $('#res-status').textContent = '';
     updateResPager(page);
     return;
@@ -1014,7 +1014,7 @@ function renderBookmarkMenu() {
     ? resState.savedSearches.map((s, i) =>
       `<div class="rfm-saved-row"><button type="button" class="rfm-saved" data-saved="${i}" title="Apply">${escapeHtml(s.name)}</button>`
       + `<button type="button" class="rfm-saved-del" data-savedel="${i}" title="Delete"><i class="fa-solid fa-xmark"></i></button></div>`).join('')
-    : '<div class="rfm-empty">No saved searches yet — build filters, then bookmark them.</div>';
+    : '<div class="empty-state is-compact">No saved searches yet — build filters, then bookmark them.</div>';
   menu.innerHTML = `<div class="rfm-sec-label">Saved searches</div><div class="rfm-saved-list">${saved}</div>`;
 }
 

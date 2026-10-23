@@ -170,6 +170,7 @@ function renderResourcePage(data) {
 
   // Planet badges + the "+" to fix them (the website's Planets column +)
   rdState.res = r;
+  $('#rd-share').hidden = false;
   $('#rd-planets').innerHTML = `<span class="rd-planets-label">${rdIsActive(r) ? 'Spawning on:' : 'Last seen on:'}</span> <span class="rd-planets-list">${rdPlanetsListHtml(r)}</span>`;
 
   // your stockpile tags for this resource — click one to open My Stockpile
@@ -717,6 +718,59 @@ function renderRdTable() {
   }
 }
 
+// Share — WTS/WTB ads for Discord (web/js/share-wizard.js + share-card.js,
+// byte-identical with the website's copies). Opened from the resource page's
+// Share (one resource; a saved draft can collect more) and from the My
+// Stockpile / My Wishlist selection bars (every selected row, WTS / WTB).
+// The app is always signed in, so stockpile / wishlist / characters /
+// waypoints prefill through apiFetch.
+// Images: navigator.clipboard.write first; if the webview refuses, the shell's
+// copy_image_png bridge (newer shells only) puts the PNG on the OS clipboard.
+// Download goes through save_image_png (a native Save dialog) — webviews
+// ignore <a download> — and older shells say to update.
+function shareHost() {
+  const bridge = () => (window.pywebview && window.pywebview.api) || {};
+  return {
+    signedIn: true,
+    api: (method, endpoint, opts) => apiFetch(method, endpoint, opts || {}),
+    searchEndpoint: 'api/search.php',
+    toast,
+    logoUrl: 'icon.png',
+    siteUrl: 'https://swgtracker.com',
+    copyImage: async (dataUrl) => {
+      if (typeof bridge().copy_image_png !== 'function') return false;
+      const res = await api().copy_image_png(dataUrl);
+      return !!(res && res.ok);
+    },
+    saveImage: async (dataUrl, filename) => {
+      if (typeof bridge().save_image_png !== 'function') {
+        return 'Saving needs the newest app version — use Copy image (or Copy text) for now.';
+      }
+      const res = await api().save_image_png(dataUrl, filename);
+      if (!res || !res.ok) return res && res.error ? `Couldn't save: ${res.error}` : "Couldn't save the PNG.";
+      return res.data && res.data.path ? `Saved ${res.data.path}` : ''; // '' = cancelled
+    },
+  };
+}
+function rdOpenShare() {
+  if (!rdState.res || typeof SWGTShareWizard === 'undefined') return;
+  SWGTShareWizard.open({ resource: rdState.res, host: shareHost() });
+}
+// the selection bars' Share: stockpile rows -> WTS (stock / my_cpu), wishlist rows -> WTB (wtb_*)
+function shareSelected(kind) {
+  if (typeof SWGTShareWizard === 'undefined') return;
+  const wish = kind === 'wish';
+  const rows = wish
+    ? wishState.items.filter((i) => wishState.checked.has(String(i.wishlist_id)))
+    : stkState.items.filter((i) => stkState.selection.has(String(i.stockpile_id)));
+  if (!rows.length) { toast('Select some resources first', false); return; }
+  SWGTShareWizard.open({
+    side: wish ? 'wtb' : 'wts',
+    items: rows.map((r) => ({ resource: r, amount: wish ? r.wtb_amount : r.stock, cpu: wish ? r.wtb_cpu : r.my_cpu })),
+    host: shareHost(),
+  });
+}
+
 async function openResourcePage(name) {
   showPage('resource');
   $('#rd-crumbs').innerHTML = '<a role="button" data-nav="resources">Resources</a>';
@@ -725,6 +779,7 @@ async function openResourcePage(name) {
   $('#rd-wish').hidden = true;
   $('#rd-edit').hidden = true;
   $('#rd-disable').hidden = true;
+  $('#rd-share').hidden = true;
   $('#rd-scoreline').textContent = '';
   // the whole hero hides while loading — a stale gauge + a placeholder card
   // half-rendered looked broken; it reappears complete with the data
@@ -827,6 +882,9 @@ async function disableResource(btn) {
 }
 
 function initResourcePage() {
+  $('#rd-share').addEventListener('click', rdOpenShare);
+  $('#stk-bulk-share').addEventListener('click', () => shareSelected('stk'));
+  $('#wish-bulk-share').addEventListener('click', () => shareSelected('wish'));
   $('#rd-refresh').addEventListener('click', () => {
     if (rdState.name) openResourcePage(rdState.name);
   });

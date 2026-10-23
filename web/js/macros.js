@@ -155,11 +155,11 @@ function renderMacros() {
   let rows = macState.macros.filter((m) => m.raw === null || m.raw === undefined);
   const all = rows.slice();
   if (!rows.length && macState.editing !== 'new') {
-    list.innerHTML = '<div class="mac-side-empty">No macros yet — click <b>New Macro</b>.</div>';
+    list.innerHTML = '<div class="empty-state is-compact">No macros yet — <b>New Macro</b> to write one.</div>';
     const ed = $('#mac-detail .mac-ed');
     const none = $('#mac-ed-none');
     if (ed) ed.hidden = true;
-    if (none) { none.hidden = false; none.innerHTML = 'This file has no macros yet — click <b>New Macro</b>.'; }
+    if (none) { none.hidden = false; none.innerHTML = 'No macros in this file yet — <b>New Macro</b> to write one.'; }
     return;
   }
   const q = ($('#mac-search')?.value || '').trim().toLowerCase();
@@ -169,7 +169,7 @@ function renderMacros() {
     macState.selected = rows.length ? rows[0].slot : (all.length ? all[0].slot : null);
   }
   if (!rows.length) {
-    list.innerHTML = `<div class="mac-side-empty">No macros match “${escapeHtml(q)}”.</div>`;
+    list.innerHTML = `<div class="empty-state is-compact">Nothing matches “${escapeHtml(q)}”.</div>`;
     renderMacDetail();
     return;
   }
@@ -367,7 +367,7 @@ function macHistDate(ts) {
 
 function macRenderHistory(versions) {
   const host = $('#mac-hist-list');
-  if (!versions.length) { host.innerHTML = '<div class="settings-sub">No snapshots yet.</div>'; return; }
+  if (!versions.length) { host.innerHTML = '<div class="empty-state is-compact">No snapshots yet.</div>'; return; }
   const rows = versions.map((v, i) => {
     const latest = i === 0;
     const src = v.source === 'app' ? 'Your edit' : v.source === 'game' ? 'In-game' : escapeHtml(String(v.source || ''));

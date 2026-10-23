@@ -320,7 +320,7 @@ function renderHome() {
     </section>`;
   });
   $('#home-sections').innerHTML = parts.join('')
-    || '<div class="grid-empty">Every section is hidden — use Customize to bring some back.</div>';
+    || '<div class="empty-state">Every section is hidden — <b>Customize</b> to bring some back.</div>';
   const upd = $('#home-updated');
   if (upd) upd.textContent = homeState.loading ? 'Loading…' : homeState.loadedAt ? `Updated ${new Date(homeState.loadedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : '';
   homeKickWidgets();
@@ -360,18 +360,18 @@ function homeHotAllRows() {
 // Hot Resources: profession chips + cards, mirroring the website's hot bar
 function homeHotHtml() {
   const right = homeCardViewSwitch('hot', homeLayout().hotView);
-  if (homeState.dashErr) return { right, html: `<div class="grid-empty">${escapeHtml(homeNeedsSite(homeState.dashErr))}</div>` };
+  if (homeState.dashErr) return { right, html: `<div class="empty-state is-compact">${escapeHtml(homeNeedsSite(homeState.dashErr))}</div>` };
   const d = homeState.dash;
   if (!d) return { right, html: homeLoadingHtml };
   const hb = d.hotbar || { profs: [], byProf: {}, total: 0 };
   const profs = homeVisibleProfs();
-  if (!profs.length) return { count: 0, html: `<div class="grid-empty">${hb.profs.length ? 'Every profession is hidden — Customize to bring some back.' : 'No hot resources right now.'}</div>` };
+  if (!profs.length) return { count: 0, html: `<div class="empty-state is-compact">${hb.profs.length ? 'Every profession is hidden — <b>Customize</b> to bring some back.' : 'No hot resources right now.'}</div>` };
   let prof = homeState.prof;
   if (!prof) { try { prof = localStorage.getItem('home_hotprof'); if (prof && prof.startsWith('"')) prof = JSON.parse(prof); } catch (_) {} }
   if (!profs.some((p) => p.key === prof)) prof = profs[0].key;
   homeState.prof = prof;
   const allRows = homeHotAllRows();
-  if (profs.length === 1 && profs[0].key === '__all') return { count: 0, html: '<div class="grid-empty">Every profession is hidden — Customize to bring some back.</div>' };
+  if (profs.length === 1 && profs[0].key === '__all') return { count: 0, html: '<div class="empty-state is-compact">Every profession is hidden — <b>Customize</b> to bring some back.</div>' };
   const chips = profs.map((p) => `<button type="button" class="hm-chip${p.key === prof ? ' active' : ''}" data-hmprof="${escapeHtml(p.key)}"
       style="--chip:${escapeHtml(p.color || '#777')}"><span class="hm-chip-dot"></span>${escapeHtml(p.label)} <span class="hm-chip-n">${p.key === '__all' ? allRows.length : safeInt(p.count)}</span></button>`).join('');
   const rows = prof === '__all' ? allRows.slice(0, 12) : (hb.byProf[prof] || []);
@@ -382,7 +382,7 @@ function homeHotHtml() {
       <div class="hm-hot-planets">${planetsHtml(r)}</div>
     </div>`).join('');
   return { count: allRows.length, right, html: `<div class="hm-chips">${chips}</div>${cards
-    ? homeCardsWrap(homeLayout().hotView, 'hm-hot-grid', cards) : '<div class="grid-empty">Nothing hot for this profession.</div>'}` };
+    ? homeCardsWrap(homeLayout().hotView, 'hm-hot-grid', cards) : '<div class="empty-state is-compact">Nothing hot for this profession right now.</div>'}` };
 }
 
 // grid / carousel switch for a card section's header, and the wrapper that
@@ -418,10 +418,10 @@ function homeGlanceHtml() {
   const right = homeCardViewSwitch('glance', l.glanceView);
   const builtins = HOME_GLANCE.filter((t) => !l.glanceHidden.has(t.key));
   const widgets = l.widgets.filter((w) => !l.glanceHidden.has(w.id));
-  if (!builtins.length && !widgets.length) return { right, html: '<div class="grid-empty">Every tile is hidden — Customize to bring some back or add a widget.</div>' };
+  if (!builtins.length && !widgets.length) return { right, html: '<div class="empty-state is-compact">Every tile is hidden — <b>Customize</b> to bring some back or add a widget.</div>' };
   let tiles = '';
   if (builtins.length) {
-    if (homeState.dashErr) tiles = `<div class="grid-empty">${escapeHtml(homeNeedsSite(homeState.dashErr))}</div>`;
+    if (homeState.dashErr) tiles = `<div class="empty-state is-compact">${escapeHtml(homeNeedsSite(homeState.dashErr))}</div>`;
     else if (!d) tiles = homeLoadingHtml;
     else {
       const hr = d.hottest_resource, hs = d.hottest_schematic, tr = d.top_rated, cm = d.city_mover, gm = d.guild_mover;
@@ -678,10 +678,10 @@ function homeSpawnsHtml() {
   const right = `<span class="res-view-switch hm-view" title="View">${[['list', 'fa-list', 'List'], ['cards', 'fa-table-cells-large', 'Cards'], ['tree', 'fa-sitemap', 'Category tree']]
       .map(([v, ic, t]) => `<button type="button" class="res-view-btn${view === v ? ' active' : ''}" data-hmview="${v}" title="${t}"><i class="fa-solid ${ic}"></i></button>`).join('')}</span>
     <span class="res-view-switch hm-view"><button type="button" class="res-view-btn hm-jump" data-hmgo="resources" title="Open Resources"><i class="fa-solid fa-arrow-up-right-from-square"></i></button></span>`;
-  if (homeState.spawnsErr) return { right, html: `<div class="grid-empty">Error: ${escapeHtml(homeState.spawnsErr)}</div>` };
+  if (homeState.spawnsErr) return { right, html: `<div class="empty-state is-compact">Error: ${escapeHtml(homeState.spawnsErr)}</div>` };
   const rows = homeState.spawns;
   if (!rows) return { right, html: homeLoadingHtml };
-  if (!rows.length) return { count: 0, right, html: '<div class="grid-empty">No active spawns reported.</div>' };
+  if (!rows.length) return { count: 0, right, html: '<div class="empty-state is-compact">No active spawns reported yet.</div>' };
   if (view === 'cards') return { count: rows.length, right, html: `<div class="res-card-grid hm-spawn-grid">${rows.map(resCardHtml).join('')}</div>` };
   if (view === 'tree') return { count: rows.length, right, html: '<div id="home-spawn-tree" class="hm-spawn-tree"></div>' }; // filled after paint (async)
   return { count: rows.length, right, html: `<div class="table-wrap hm-tablewrap"><table class="data-grid res-grid"><thead><tr>${resHeaderHtml()}</tr></thead>
@@ -690,13 +690,13 @@ function homeSpawnsHtml() {
 
 // Announcements: the Spawn Alerts community feed
 function homeAnnounceHtml() {
-  if (homeState.annErr) return { html: `<div class="grid-empty">Error: ${escapeHtml(homeState.annErr)}</div>` };
+  if (homeState.annErr) return { html: `<div class="empty-state is-compact">Error: ${escapeHtml(homeState.annErr)}</div>` };
   // (section title: Resource Announcements — the Spawn Alerts feed)
   const list = homeState.ann;
   if (list === null && !homeState.loadedAt) return { html: homeLoadingHtml };
   const right = '<span class="res-view-switch hm-view"><button type="button" class="res-view-btn hm-jump" data-hmgo="alerts" title="Open Spawn Alerts"><i class="fa-solid fa-arrow-up-right-from-square"></i></button></span>';
-  if (!Array.isArray(list)) return { right, html: '<div class="grid-empty">Announcements need the server update — the feed appears once swgtracker.com deploys it.</div>' };
-  if (!list.length) return { count: 0, right, html: '<div class="grid-empty">Nothing notable has spawned lately.</div>' };
+  if (!Array.isArray(list)) return { right, html: '<div class="empty-state is-compact">Announcements need the server update — the feed appears once swgtracker.com deploys it.</div>' };
+  if (!list.length) return { count: 0, right, html: '<div class="empty-state is-compact">Nothing notable has spawned lately.</div>' };
   const shown = list.slice(0, homeLayout().annN);
   return { count: shown.length, right, html: `<div class="table-wrap hm-tablewrap"><table class="data-grid">
       <thead><tr><th class="col-text">When</th><th class="col-name">Resource</th><th class="col-text">Type</th><th class="col-text">What</th></tr></thead>
@@ -828,7 +828,7 @@ function homePickerSync() {
   homeState.picker.results = hasOptions ? def.options : [];
   $('#home-widget-results').innerHTML = hasOptions
     ? def.options.map((it, i) => `<div class="hm-pick" data-hmpick="${i}"><i class="fa-solid ${def.icon}"></i><span>${escapeHtml(it.label)}</span><i class="fa-solid fa-plus hm-pick-add"></i></div>`).join('')
-    : needsSearch ? '<div class="settings-sub hm-pick-empty">Type at least two letters to search.</div>' : '';
+    : needsSearch ? '<div class="empty-state is-compact">Type at least two letters to search.</div>' : '';
 }
 let homePickerTimer = null;
 async function homePickerSearch() {
@@ -866,7 +866,7 @@ async function homePickerSearch() {
   const ic = HOME_WIDGETS[type].icon;
   box.innerHTML = items.length
     ? items.map((it, i) => `<div class="hm-pick" data-hmpick="${i}"><i class="fa-solid ${ic}"></i><span>${escapeHtml(it.label)}</span><i class="fa-solid fa-plus hm-pick-add"></i></div>`).join('')
-    : '<div class="settings-sub hm-pick-empty">No matches.</div>';
+    : '<div class="empty-state is-compact">Nothing matches that search.</div>';
 }
 function homeAddWidget(type, params) {
   const l = homeLayout();

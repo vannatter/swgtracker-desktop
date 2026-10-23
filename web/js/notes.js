@@ -80,7 +80,7 @@ function renderNotes() {
       <div class="notes-item-title">${escapeHtml(n.title || 'Untitled')}</div>
       <div class="notes-item-sub">${n.character ? `<span class="notes-item-char">${escapeHtml(n.character)}</span>` : ''}
         ${fmtAgoTip(Math.round((n.updated || 0) / 1000))}</div>
-    </div>`).join('') || '<div class="notes-empty">No notes match the search.</div>';
+    </div>`).join('') || '<div class="empty-state is-compact">Nothing matches that search.</div>';
   renderNoteEditor();
 }
 

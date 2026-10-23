@@ -61,7 +61,7 @@ function restreeFilter() {
     let p = r.dataset.parent;
     while (p && byCode[p]) { byCode[p].hidden = false; restreeSetToggle(byCode[p], true); p = byCode[p].dataset.parent; }
   });
-  $('#restree-empty').textContent = 'No resource classes match.';
+  $('#restree-empty').textContent = 'Nothing matches that search.';
   $('#restree-empty').hidden = hits > 0;
 }
 

@@ -446,7 +446,7 @@ function harvCardHtml(h) {
 function harvLogHtml(hid) {
   const evs = harvState.events[String(hid)];
   if (!evs) return '<span class="stat_off">Loading…</span>';
-  if (!evs.length) return '<span class="stat_off">No events yet.</span>';
+  if (!evs.length) return '<div class="empty-state is-compact">No events yet.</div>';
   const icon = { placed: 'fa-plus', power: 'fa-bolt', maintenance: 'fa-coins', hopper: 'fa-box-open', note: 'fa-pen' };
   return evs.map((e) => `<div class="harv-ev">
     <i class="fa-solid ${icon[e.kind] || 'fa-circle-info'}"></i>
@@ -704,8 +704,8 @@ function renderHarvSuggestions() {
       <i class="fa-solid fa-wand-magic-sparkles"></i>
       <span>Detected: <b>${escapeHtml(s.type)}</b> placed ${fmtAgoTip(s.at)}${s.character ? ` on <b>${escapeHtml(s.character)}</b>` : ''} — add it?</span>
       <span class="harv-suggest-actions">
-        <button class="btn btn-sm btn-accent" data-sugadd="${escapeHtml(s.mail_id)}"><i class="fa-solid fa-plus"></i> Add</button>
         <button class="btn btn-sm btn-outline-secondary" data-sugdismiss="${escapeHtml(s.mail_id)}">Dismiss</button>
+        <button class="btn btn-sm btn-accent" data-sugadd="${escapeHtml(s.mail_id)}"><i class="fa-solid fa-plus"></i> Add</button>
       </span>
     </div>`).join('');
 }

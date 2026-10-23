@@ -173,7 +173,7 @@ function topNiceStep(max) {
 }
 function topBarChart(items, key, activeVal) {
   const rows = items.slice(0, 8);
-  if (!rows.length) return '<div class="rd-psub rd-pmuted">nothing here</div>';
+  if (!rows.length) return '<div class="empty-state is-compact">Nothing here yet.</div>';
   const max = Math.max(1, ...rows.map((x) => x.count));
   const step = topNiceStep(max), top = Math.ceil(max / step) * step || 1;
   const ticks = [];
@@ -187,7 +187,7 @@ function topBarChart(items, key, activeVal) {
   return `<div class="top-hbars"><div class="top-plot"><div class="top-gridlayer">${grid}</div>${bars}</div><div class="top-axis"><span class="top-label"></span><span class="top-axisarea">${axis}</span></div></div>`;
 }
 function topDonut(ranks) {
-  if (!ranks.length) return '<div class="rd-psub rd-pmuted">nothing here</div>';
+  if (!ranks.length) return '<div class="empty-state is-compact">Nothing here yet.</div>';
   const total = ranks.reduce((s, r) => s + r.count, 0) || 1;
   const size = 176, cx = 88, cy = 88, r = 76, inner = 46;
   let a0 = -Math.PI / 2;
@@ -289,7 +289,7 @@ function topTreeHtml(rows) {
       html += items.slice().sort((a, b) => safeInt(a.rank) - safeInt(b.rank)).map((r) => leaf(r, 2)).join('');
     });
   });
-  return html || '<div class="grid-empty">No top spawns match.</div>';
+  return html || '<div class="empty-state">Nothing matches these filters.</div>';
 }
 
 function renderTopSpawns() {
@@ -315,7 +315,7 @@ function renderTopSpawns() {
   const more = $('#top-more');
   if (view !== 'tree') more.hidden = rows.length <= topState.shown;
   if (!more.hidden) more.textContent = `Show ${fmtNum(Math.min(TOP_PAGE, rows.length - topState.shown))} more of ${fmtNum(rows.length - topState.shown)}`;
-  $('#top-empty').textContent = 'No top spawns match these filters.';
+  $('#top-empty').textContent = 'Nothing matches these filters.';
   $('#top-empty').hidden = rows.length > 0;
 }
 

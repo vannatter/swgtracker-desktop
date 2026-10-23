@@ -133,7 +133,6 @@ body.offline #broadcast-bar { bottom: 26px; } /* stack above the offline bar */
 .bell-item-meta { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
 .bell-item-del { background: transparent; border: 0; color: var(--text-muted); cursor: pointer; }
 .bell-item-del:hover { color: var(--accent); }
-.bell-empty { padding: 16px; font-size: 12.5px; color: var(--text-muted); }
 
 #offline-bar {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 250;
@@ -747,6 +746,8 @@ td.lab-dim { opacity: .45; }
 .key-gate-card.ins-cust-card.as-page {
   position: static; margin: 0; box-shadow: none;
   width: 100%; max-width: 100%; max-height: none;
+  /* the page is already the surface — no card-in-a-card */
+  background: none; border: 0; border-radius: 0; padding: 0;
 }
 .key-gate-card.ins-cust-card.as-page #ins-cust-close { display: none; }
 /* purchases keep a bounded scroll box in page mode too — the table must not
@@ -921,7 +922,7 @@ td.lab-dim { opacity: .45; }
 .al-formulas { margin-top: 8px; }
 .al-editor-foot { justify-content: space-between; margin-top: 14px; }
 .al-rules { display: flex; flex-direction: column; gap: 8px; }
-/* inline empty/notice card — NOT .grid-empty, which is an absolute overlay for .table-wrap */
+/* inline NOTICE card (game-file warnings, verify notes) — not for empty states: those use .empty-state */
 .al-empty {
   font-size: 13px; color: var(--text-muted); background: var(--bg-secondary);
   border-radius: 8px; padding: 14px 16px;
@@ -1136,7 +1137,21 @@ td.lab-dim { opacity: .45; }
   position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
   gap: 10px; color: var(--text-hover); font-weight: 600; background: rgba(20,22,29,.6);
 }
-.grid-empty { color: var(--text-muted); font-weight: 400; }
+/* the veil keeps its overlay box; its TEXT reads exactly like .empty-state */
+.grid-empty { color: var(--text-muted); font-weight: 400; font-size: 13.5px; line-height: 1.55; text-align: center;
+  padding-inline: max(16px, calc((100% - 680px) / 2)); }
+.grid-empty b, .grid-empty strong { color: var(--text-primary); font-weight: 600; }
+
+/* THE empty state, app-wide: bare centered muted text — never a boxed grey card
+   (Dustin). Copy: "No <things> yet — <b>Button</b> to <do it>." / "Nothing matches
+   these filters." Over a .table-wrap grid use .grid-empty (the veil) instead.
+   .is-compact: inside a card, tab pane, panel, home section or small list. */
+.empty-state { display: block; width: 100%; box-sizing: border-box; text-align: center; color: var(--text-muted);
+  font-size: 13.5px; line-height: 1.55; padding: 48px 16px; max-width: 680px; margin: 0 auto;
+  background: none; border: 0; font-weight: 400; font-style: normal; }
+.empty-state b, .empty-state strong { color: var(--text-primary); font-weight: 600; }
+.empty-state.is-compact { padding: 18px 12px; font-size: 13px; }
+.empty-state a { color: var(--text-primary); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 /* pin the veil to the visible part of a scrolled grid (--wrap-scroll set in app.js) */
 .table-wrap > .grid-loading, .table-wrap > .grid-empty {
   top: var(--wrap-scroll, 0px); bottom: calc(-1 * var(--wrap-scroll, 0px));
@@ -1148,6 +1163,7 @@ td.lab-dim { opacity: .45; }
 #page-factories > .grid-loading {
   position: static; background: none; padding: 48px 0;
 }
+#page-insights > .grid-empty { padding-inline: max(16px, calc((100% - 680px) / 2)); }
 
 /* ---- Factories: timed runs, cards in the prototype's image ---- */
 .fac-list { display: flex; flex-direction: column; gap: 10px; max-width: 1400px; }
@@ -1329,7 +1345,6 @@ tr.grp-row .grp-count { margin-left: 10px; }
 .fac-hist-del { flex: none; border: 0; background: transparent; color: var(--text-muted);
   cursor: pointer; font-size: 12px; padding: 2px 4px; }
 .fac-hist-del:hover { color: var(--accent); }
-.fac-hist-empty { color: var(--text-muted); font-size: 12px; padding: 6px; }
 /* auto-fit: on narrow cards whole fields wrap to a second row instead of
    squeezing until "Seconds" clips to "Secor" */
 .fac-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; }
@@ -2130,7 +2145,6 @@ tr.row-detail > td { background: var(--bg-tertiary); padding: 0; }
 .rfm-saved:hover { border-color: var(--accent-dark); color: var(--text-hover); }
 .rfm-saved-del { flex: none; background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 2px 4px; }
 .rfm-saved-del:hover { color: var(--accent); }
-.rfm-empty { font-size: 12px; color: var(--text-muted); font-style: italic; }
 .rfm-save { display: flex; gap: 6px; margin-top: 10px; }
 .rfm-save .form-control {
   flex: 1; background: var(--bg-input); border: 1px solid var(--border);
@@ -2551,7 +2565,6 @@ tr.row-detail > td { background: var(--bg-tertiary); padding: 0; }
   color: var(--text-hover); white-space: nowrap; }
 .ins-lead-sub { grid-column: 2 / span 2; grid-row: 2; z-index: 1; font-size: 11px; color: var(--text-muted);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ins-empty-mini { color: var(--text-muted); font-size: 12px; padding: 10px 4px; }
 
 /* per-period / cumulative toggle */
 .ins-seg { margin-left: auto; display: inline-flex; background: var(--bg-input); border-radius: 6px; padding: 2px; align-self: center; }
@@ -2623,7 +2636,6 @@ tr.row-detail > td { background: var(--bg-tertiary); padding: 0; }
 /* keep the dark ground on focus too — Bootstrap's .form-control:focus went
    white here before the class was dropped; belt and braces */
 .notes-content:focus { outline: none; border-color: var(--border); background: var(--bg-input); color: var(--text-primary); }
-.notes-empty { color: var(--text-muted); font-size: 12px; padding: 10px 4px; }
 .notes-none { color: var(--text-muted); flex: 1; display: flex; align-items: center; justify-content: center; }
 .notes-none[hidden] { display: none; }
 .notes-layout[hidden] { display: none; }
@@ -2977,7 +2989,6 @@ body.dev-mode .scd-hiddenrow { display: block; opacity: .55; }
 .mac-side-slot { color: var(--text-muted); font-size: 11px; }
 .mac-side-warn { color: #e9b445; font-size: 11px; }
 .mac-side-loop { color: #45e97e; font-size: 11px; }
-.mac-side-empty { color: var(--text-muted); font-size: 12px; padding: 10px 4px; }
 .mac-side-head { display: flex; align-items: center; justify-content: space-between; gap: 8px;
   padding: 0 4px 6px; flex: 0 0 auto; }
 .mac-side-head-label { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
@@ -3008,8 +3019,6 @@ body.dev-mode .scd-hiddenrow { display: block; opacity: .55; }
   background: var(--bg-input, #14161c); border: 1px solid var(--border); border-radius: 6px; padding: 12px 14px; }
 /* NOT flex: a text node + inline <b> as flex items would collapse the space
    between them ("clickNew Macro") — keep it normal inline flow, centered. */
-.mac-none { color: var(--text-muted); font-size: 13px; text-align: center;
-  padding: 48px 24px; line-height: 1.6; }
 
 /* inline editor (right column) — fills the detail panel top to bottom */
 .mac-ed { display: flex; flex-direction: column; gap: 12px; min-height: 0; flex: 1 1 auto; }
@@ -3287,7 +3296,6 @@ body.dev-mode .scd-hiddenrow { display: block; opacity: .55; }
   background: var(--bg-input, #14161c); border: 1px solid var(--border); border-radius: 5px; padding: 6px 8px; }
 .netlog-errline { color: #e05260; border-color: #e05260; }
 .netlog-detail .btn { margin-top: 8px; }
-.netlog-empty { padding: 16px; color: var(--text-muted); }
 .netlog-paused { color: #e9b445; }
 
 /* JTL space-resource marker on type names (Resources list + detail crumb) */
@@ -3735,7 +3743,7 @@ tr.gx-rowlink:hover .gx-detail-link { color: var(--text-hover); } /* hover brigh
 #mysd-tabs .scd-tab.active { border-bottom: 2px solid var(--accent); border-radius: 8px 8px 0 0; }
 .mysd-calc { margin-top: 4px; }
 .mysd-calc-note { font-size: 12px; color: var(--text-muted); margin: 0 0 12px; line-height: 1.5; }
-.sc-loading, .sc-empty { color: var(--text-muted); padding: 24px; text-align: center; }
+.sc-loading { color: var(--text-muted); padding: 24px; text-align: center; }
 .sc-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .sc-table thead th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); padding: 6px 8px; border-bottom: 1px solid var(--border); }
 .sc-table thead th:nth-child(3), .sc-table thead th:nth-child(4), .sc-table thead th:nth-child(5), .sc-table thead th:nth-child(6) { text-align: right; }
@@ -3956,7 +3964,6 @@ tr.gx-rowlink:hover .gx-detail-link { color: var(--text-hover); } /* hover brigh
 .hm-pick-add { opacity: 0; color: var(--accent); }
 .hm-pick:hover { background: rgba(255,255,255,.06); color: var(--text-hover); }
 .hm-pick:hover .hm-pick-add { opacity: 1; }
-.hm-pick-empty { padding: 8px 6px; }
 .set-tz-select { max-width: 320px; }
 .hm-cfg-optname { flex: 1 1 auto !important; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -4172,6 +4179,7 @@ tr.gx-rowlink:hover .gx-detail-link { color: var(--text-hover); } /* hover brigh
 .pm-cmd { color: #9fb3c8; background: var(--bg-tertiary); padding: 2px 6px; border-radius: 3px; margin-left: auto; white-space: nowrap; font-size: 11px; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .pm-copy { color: var(--accent); cursor: pointer; }
 .pm-copy:hover { color: var(--accent-hover); }
+.pm-row .pm-copy { margin-left: auto; } /* the list hides the /wp text — the copy button's tooltip carries it */
 .pm-drop { color: var(--text-muted); cursor: pointer; }
 .pm-drop:hover, .pm-drop.confirm-del { color: var(--accent); }
 .pm-city-ico { color: #aab2c0; margin-right: 2px; }
@@ -4520,8 +4528,7 @@ tr.top-new td.col-name { color: var(--text-hover); }
    icon mix was split into flex columns. One block child, laid out on its own. */
 .shop-emptymsg { background: transparent; }
 .shop-empty-card { display: flex; flex-direction: column; align-items: center; text-align: center;
-  max-width: 520px; padding: 36px 32px 32px; border: 1px dashed var(--border); border-radius: 12px;
-  background: rgba(255,255,255,.015); color: var(--text-muted); line-height: 1.55; }
+  max-width: 520px; padding: 36px 32px 32px; color: var(--text-muted); line-height: 1.55; }
 .shop-empty-icon { width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center;
   background: rgba(255,159,67,.1); color: var(--q-accept); font-size: 26px; margin-bottom: 16px; }
 .shop-empty-card h2 { margin: 0 0 8px; font-size: 18px; font-weight: 700; color: var(--text-hover); }

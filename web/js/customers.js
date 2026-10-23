@@ -127,7 +127,7 @@ function renderMyCustomers(statusMsg) {
   empty.hidden = !!items.length;
   if (!items.length) {
     empty.textContent = mycState.items.length
-      ? 'No matching customers.'
+      ? 'Nothing matches these filters.'
       : 'No customers yet — they appear as your vendor sales get parsed from mail.';
   }
   $('#cust-status').textContent = statusMsg

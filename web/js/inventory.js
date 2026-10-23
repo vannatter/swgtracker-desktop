@@ -444,8 +444,8 @@ async function loadInventory() {
     // still render folder rows (if any) so an empty list can be organized
     renderInvRows();
     const empty = $('#inv-empty');
-    empty.textContent = filter || params.search
-      ? (vendor ? `No matching items at ${vendor}.` : 'No matching items.') : 'No items yet — add one above.';
+    empty.innerHTML = filter || params.search
+      ? (vendor ? `Nothing at ${escapeHtml(vendor)} matches these filters.` : 'Nothing matches these filters.') : 'No items yet — <b>Add Item</b> to start tracking your stock.';
     empty.hidden = invState.groups.length > 0;
     $('#inv-status').textContent = '';
   } else {
@@ -713,6 +713,12 @@ function initInventory() {
     if (!input) return;
     if (e.key === 'Enter' || e.key === 'ArrowDown') { e.preventDefault(); invQuickMove(input, e.shiftKey && e.key === 'Enter' ? -1 : 1); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); invQuickMove(input, -1); }
+    else if (e.key === 'Tab') {
+      // Tab only visits the edit boxes — Stocked, Threshold, next row's Stocked… — never the row buttons
+      const all = [...document.querySelectorAll('#inv-body .inv-quick')];
+      const next = all[all.indexOf(input) + (e.shiftKey ? -1 : 1)];
+      if (next) { e.preventDefault(); next.focus(); next.select(); }
+    }
     else if (e.key === 'Escape') {
       const item = invState.items[safeInt(input.dataset.idx)];
       if (item) input.value = safeInt(item[input.dataset.qfield]);
@@ -812,7 +818,7 @@ function initInventory() {
              <td>${escapeHtml(s.vendor || '')}</td>
              <td class="col-num sale-amount">${fmtNum(s.sale_amount)} cr</td>
            </tr>`).join('')}</tbody></table>`
-        : '<span class="stat_off">No matched sales recorded for this item.</span>';
+        : '<div class="empty-state is-compact">No matched sales for this item yet.</div>';
     };
     // History tab (invlog.js) when Settings has inventory activity on
     if (typeof invLogSalesTabs === 'function') invLogSalesTabs(item, renderSales);

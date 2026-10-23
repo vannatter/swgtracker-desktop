@@ -1,14 +1,16 @@
 /* Global search — the website's "press S" search, in the app's top bar: one box
    that finds resources, schematics, guilds, cities, pets, creatures and specials
-   (api/search.php, like the site) plus the app's own pages, grouped by kind.
+   (api/search.php, like the site), quests (api/quests.php) plus the app's own pages, grouped by kind.
    Arrows + Enter pick, Esc closes, S from anywhere focuses it. */
 
 const gsState = { timer: null, seq: 0, items: [], index: -1, open: false };
 const GS_ICONS = {
   Page: 'fa-solid fa-window-maximize', Resource: 'fa-solid fa-gem', Schematic: 'fa-solid fa-scroll',
   Guild: 'fa-solid fa-shield-halved', City: 'fa-solid fa-city', Pet: 'fa-solid fa-dog',
-  Creature: 'fa-solid fa-dragon', Special: 'fa-solid fa-bolt',
+  Creature: 'fa-solid fa-dragon', Special: 'fa-solid fa-bolt', Quest: 'fa-solid fa-book-journal-whills',
 };
+// Quests are dev-mode gated for now (quests.js questsGated) — no hits while hidden
+const gsQuestsHidden = () => typeof questsGated !== 'function' || questsGated();
 
 // the app's own pages, from the sidebar (folder name rides along for matching)
 function gsPageMatches(q) {
@@ -17,6 +19,7 @@ function gsPageMatches(q) {
     const label = [...item.childNodes].filter((n) => n.nodeType === Node.TEXT_NODE).map((n) => n.textContent).join(' ').replace(/\s+/g, ' ').trim();
     const head = item.dataset.group ? document.querySelector(`.nav-group-head[data-navgroup="${item.dataset.group}"]`) : null;
     const folder = head ? [...head.childNodes].filter((n) => n.nodeType === Node.TEXT_NODE).map((n) => n.textContent).join(' ').trim() : '';
+    if (item.classList.contains('dev-only') && !document.body.classList.contains('dev-mode')) return; // hidden page
     if (label.toLowerCase().includes(q)) out.push({ type: 'Page', name: label, detail: folder, page: item.dataset.page });
   });
   return out.slice(0, 5);
@@ -45,7 +48,7 @@ function gsCloseBox() {
 function gsRender() {
   const box = $('#gs-results');
   if (!gsState.items.length) {
-    box.innerHTML = '<div class="gs-empty">No results</div>';
+    box.innerHTML = '<div class="empty-state is-compact">Nothing matches that search.</div>';
   } else {
     let last = ''; let html = '';
     gsState.items.forEach((r, i) => {
@@ -84,6 +87,7 @@ function gsOpen(r) {
     case 'Pet': if (r.data && r.data.slug) openPetPage(r.data.slug); break;
     case 'Creature': if (r.data && r.data.slug) openCreaturePage(r.data.slug); break;
     case 'Special': if (r.data && r.data.name) openSpecialPage(r.data.name, r.data.rank); break;
+    case 'Quest': { const id = (r.data && (r.data.id || r.data.slug)) || r.slug || (typeof r.id === 'string' ? r.id : ''); if (id) openQuestPage(id); break; }
     default: break;
   }
   gsCloseBox();
@@ -97,11 +101,18 @@ async function gsSearch() {
   gsState.items = pages; gsState.index = -1;
   gsRender();
   $('#gs-results').insertAdjacentHTML('beforeend', '<div class="gs-loading"><span class="spinner"></span></div>');
-  let res;
-  try { res = await apiFetch('GET', 'api/search.php', { params: { q } }); } catch (e) { res = { ok: false }; }
+  let res; let qres = null;
+  const questsOn = !gsQuestsHidden();
+  [res, qres] = await Promise.all([
+    apiFetch('GET', 'api/search.php', { params: { q } }).catch(() => ({ ok: false })),
+    questsOn ? apiFetch('GET', 'api/quests.php', { params: { list: 1, q, per: 5, sort: 'title' } }).catch(() => null) : Promise.resolve(null),
+  ]);
   if (my !== gsState.seq) return; // a newer keystroke won
-  const rows = (res.ok && res.data && res.data.results) || [];
-  gsState.items = pages.concat(rows);
+  const rows = ((res.ok && res.data && res.data.results) || []).filter((r) => questsOn || r.type !== 'Quest');
+  const qrows = rows.some((r) => r.type === 'Quest') ? []
+    : ((qres && qres.ok && qres.data && qres.data.quests) || []).slice(0, 5).map((x) => ({
+      type: 'Quest', name: x.title || x.id, detail: [x.category, safeInt(x.level) ? `Lv ${safeInt(x.level)}` : ''].filter(Boolean).join(' · '), data: { id: x.id } }));
+  gsState.items = pages.concat(rows, qrows);
   gsState.index = -1;
   gsRender();
   if (!res.ok) $('#gs-results').insertAdjacentHTML('afterbegin', `<div class="gs-empty gs-err">${escapeHtml(res.error || 'Search is offline')}</div>`);

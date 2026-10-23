@@ -143,9 +143,9 @@ async function loadCharactersPage() {
 
   const empty = $('#char-empty');
   empty.hidden = !!chars.length;
-  empty.textContent = res.ok
-    ? 'No characters yet — Add Character to start. Mail folders and harvesters link to them.'
-    : `Couldn’t load characters: ${res.error || 'server error'}`;
+  empty.innerHTML = res.ok
+    ? 'No characters yet — <b>Add Character</b> to start. Mail folders and harvesters link to them.'
+    : `Couldn’t load characters: ${escapeHtml(res.error || 'server error')}`;
 
   // keep the Settings mail-label autocomplete in sync
   const dl = $('#set-char-list');

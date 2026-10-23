@@ -124,7 +124,7 @@ function renderWishlist(statusMsg) {
 
   const empty = $('#wish-empty');
   if (!items.length) {
-    empty.textContent = wishState.items.length ? 'No matches on your wishlist.' : 'Your wishlist is empty — click a ♥ on any resource.';
+    empty.textContent = wishState.items.length ? 'Nothing matches these filters.' : 'No resources on your wishlist yet — the ♥ on any resource adds it.';
     empty.hidden = false;
   } else {
     empty.hidden = true;

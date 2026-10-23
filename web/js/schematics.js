@@ -86,7 +86,7 @@ function renderSchRows() {
       : [];
     $('#sch-cards').innerHTML = withModels.length
       ? withModels.map(([s, i]) => schCardHtml(s, i)).join('')
-      : `<div class="al-empty sch-cards-empty">${schState.modelIds
+      : `<div class="empty-state sch-cards-empty">${schState.modelIds
           ? 'No 3D models among these schematics — switch to list view to see them all.'
           : 'Loading models…'}</div>`;
     schObserveCardModels(); // mount viewers only while visible (WebGL context cap)
@@ -293,7 +293,7 @@ function schRenderReviewPanel() {
           : i.voted ? '<span class="sb-chip sb-chip-pub">confirmed</span>'
           : '<span class="sb-chip sb-chip-todo">needs your review</span>'}
       </div>`).join('')
-      : '<div class="sch-review-row stat_off">Nothing awaiting review right now — community submissions land here for verification.</div>'}`;
+      : '<div class="empty-state is-compact">Nothing awaiting review right now — community submissions land here for verification.</div>'}`;
 }
 
 // Category dropdown from api/categories.php (12 profession parents); once per session
@@ -357,7 +357,7 @@ async function loadSchematics() {
   schState.rows = rows;
 
   if (!rows.length) {
-    showSchEmpty($('#sch-pinned-only').checked ? 'No pinned schematics on this page.' : 'No schematics found.');
+    showSchEmpty($('#sch-pinned-only').checked ? 'No pinned schematics on this page.' : 'Nothing matches these filters.');
     $('#sch-status').textContent = '';
   } else {
     renderSchRows();
@@ -886,7 +886,7 @@ async function scdShowEditHistory() {
       ${edits.length
         ? edits.map((ed) => `<div class="scd-editrow"><span class="scd-editwhat">${scdEditSentence(ed)}</span>
             <span class="scd-editwhen">${fmtAgoTip(ed.at)}</span></div>`).join('')
-        : '<div class="scd-editrow stat_off">No community edits yet — every dotted number on this page (and the description) can be fixed by any app user, and changes land here.</div>'}
+        : '<div class="empty-state is-compact">No community edits yet — every dotted number on this page (and the description) can be fixed by any app user, and changes land here.</div>'}
     </div>`;
   ov.addEventListener('click', (e) => {
     if (e.target === ov || e.target.closest('[data-histclose]')) ov.remove();
@@ -899,8 +899,8 @@ function scdEditDescription(el) {
   const old = el.textContent;
   el.innerHTML = `<textarea class="scd-desc-input" maxlength="2000">${escapeHtml(old)}</textarea>
     <div class="scd-desc-actions">
-      <button class="btn btn-sm btn-accent" data-descsave>Save</button>
       <button class="btn btn-sm btn-outline-secondary" data-desccancel>Cancel</button>
+      <button class="btn btn-sm btn-accent" data-descsave>Save</button>
     </div>`;
   const ta = el.querySelector('textarea');
   ta.focus();

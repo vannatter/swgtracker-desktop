@@ -124,7 +124,7 @@ function beastSetEmpty(prefix, msg) {
   if (!el) return;
   if (msg) { el.textContent = msg; el.hidden = false; } else el.hidden = true;
   const cards = $(`#${prefix}-cards`);
-  if (cards && !cards.hidden) cards.innerHTML = msg ? `<div class="al-empty sch-cards-empty">${escapeHtml(msg)}</div>` : cards.innerHTML;
+  if (cards && !cards.hidden) cards.innerHTML = msg ? `<div class="empty-state sch-cards-empty">${escapeHtml(msg)}</div>` : cards.innerHTML;
 }
 
 // ===================== Pets =====================
@@ -178,7 +178,7 @@ function renderPets() {
   rows = beastPage('pets', s, rows, 'pets', JSON.stringify([q, s.family, s.bonus, s.source, s.supplement, s.color, s.mount, s.fly, s.pinnedOnly, s.sortField, s.sortOrder]), 'pets');
   const body = $('#pets-body');
   const cards = beastApplyView('pets', 'pets');
-  if (!rows.length) { body.innerHTML = ''; $('#pets-cards').innerHTML = ''; beastSetEmpty('pets', s.loaded ? (s.pinnedOnly && !beastPins.pets.size ? 'Nothing pinned yet — click a pin to keep a pet at the top.' : 'No pets match.') : ''); return; }
+  if (!rows.length) { body.innerHTML = ''; $('#pets-cards').innerHTML = ''; beastSetEmpty('pets', s.loaded ? (s.pinnedOnly && !beastPins.pets.size ? 'Nothing pinned yet — click a pin to keep a pet at the top.' : 'Nothing matches these filters.') : ''); return; }
   beastSetEmpty('pets', '');
   if (cards) {
     body.innerHTML = '';
@@ -259,7 +259,7 @@ function renderCreatures() {
   rows = beastPage('creatures', s, rows, 'creatures', JSON.stringify([q, s.planet, s.difficulty, s.petType, s.damage, s.dna, s.pinnedOnly, s.sortField, s.sortOrder]), 'creatures');
   const body = $('#creatures-body');
   const cards = beastApplyView('creatures', 'creatures');
-  if (!rows.length) { body.innerHTML = ''; $('#creatures-cards').innerHTML = ''; beastSetEmpty('creatures', s.loaded ? (s.pinnedOnly && !beastPins.creatures.size ? 'Nothing pinned yet — click a pin to keep a creature at the top.' : 'No creatures match.') : ''); return; }
+  if (!rows.length) { body.innerHTML = ''; $('#creatures-cards').innerHTML = ''; beastSetEmpty('creatures', s.loaded ? (s.pinnedOnly && !beastPins.creatures.size ? 'Nothing pinned yet — click a pin to keep a creature at the top.' : 'Nothing matches these filters.') : ''); return; }
   beastSetEmpty('creatures', '');
   if (cards) {
     body.innerHTML = '';
@@ -327,7 +327,7 @@ function renderSpecials() {
   rows = gxSortRows(rows, s.sortField, s.sortOrder, SPECIALS_NUM); // stable: ties keep the API's name, rank order
   rows = beastPage('specials', s, rows, 'specials', JSON.stringify([q, s.type, s.rank, s.pinnedOnly, s.sortField, s.sortOrder]), 'specials');
   const body = $('#specials-body');
-  if (!rows.length) { body.innerHTML = ''; beastSetEmpty('specials', s.loaded ? (s.pinnedOnly && !beastPins.specials.size ? 'Nothing pinned yet — click a pin to keep a special at the top.' : 'No specials match.') : ''); return; }
+  if (!rows.length) { body.innerHTML = ''; beastSetEmpty('specials', s.loaded ? (s.pinnedOnly && !beastPins.specials.size ? 'Nothing pinned yet — click a pin to keep a special at the top.' : 'Nothing matches these filters.') : ''); return; }
   beastSetEmpty('specials', '');
   body.innerHTML = rows.map((x) => `<tr class="gx-rowlink beast-row" data-special="${escapeHtml(x.name)}" data-rank="${safeInt(x.rank)}">
       ${beastPinCell('specials', beastSpecialKey(x))}
@@ -464,7 +464,7 @@ function renderPetPage(d) {
   const bonusCard = `<div class="scd-card beast-card">${beastH6(`Bonuses${p.bonus_group ? ` - ${p.bonus_group}` : ''}`)}
     ${bonuses.length
       ? `<table class="beast-kv">${bonuses.map(([k, v]) => `<tr><td class="beast-kv-l">${escapeHtml(k)}</td><td class="beast-kv-v">${escapeHtml(String(v))}</td></tr>`).join('')}</table>`
-      : '<p class="settings-sub">No stat bonuses listed.</p>'}
+      : '<div class="empty-state is-compact">No stat bonuses listed.</div>'}
     ${sizeParts.length ? `<div class="settings-sub beast-meta">Size: ${escapeHtml(sizeParts.join(' '))}</div>` : ''}</div>`;
 
   const specials = d.specials || [];

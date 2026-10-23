@@ -161,7 +161,7 @@ function alAnnounceRowsHtml(list) {
       <td class="col-text">${fmtAgoTip(safeInt(a.created))}</td>
       <td class="col-name res-name" data-res="${escapeHtml(a.resource_name)}">${escapeHtml(a.resource_name)}</td>
       <td class="col-text res-type">${a.type_name ? escapeHtml(a.type_name) : '<span class="stat_off">—</span>'}</td>
-      <td class="col-text">${escapeHtml(a.detail || '')}${a.kind === 'hot' ? ' <span class="scd-age">· hot</span>' : ' <span class="scd-age">· top rank</span>'}</td>
+      <td class="col-text">${annWhatHtml(a.detail, a.kind)}</td>
     </tr>`).join('');
 }
 
@@ -190,7 +190,7 @@ function renderAlertFeed() {
     <tr class="${String(h.seen) === '1' ? '' : 'al-unseen'}">
       <td class="col-text">${fmtAgoTip(h.created)}${String(h.is_backfill) === '1' ? ' <span class="scd-age">(backfill)</span>' : ''}</td>
       <td class="col-name res-name" data-res="${escapeHtml(h.resource_name)}">${escapeHtml(h.resource_name)}</td>
-      <td class="col-text">${escapeHtml(h.detail || '')}</td>
+      <td class="col-text">${annWhatHtml(h.detail)}</td>
       <td class="col-text res-type">${escapeHtml(h.rule_name || '')}</td>
     </tr>`).join('');
   $('#al-feed').innerHTML = rows;

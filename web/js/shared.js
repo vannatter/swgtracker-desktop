@@ -827,6 +827,22 @@ function fmtAgoTip(dt) {
   return `<span title="${escapeHtml(fmtDate(dt))}">${fmtAgo(dt)}</span>`;
 }
 
+// Spawn-alert "What" cell. The server's detail is a sentence ("#1 for Composite Armor
+// Segment and 4 more — new top spawn", "Rating 912 — high-rating spawn (900+ for Iron)")
+// that crammed the column; show a tag + the gist on one line, the sentence on hover.
+function annWhatHtml(detail, kind) {
+  const d = String(detail || '');
+  const tip = escapeHtml(d);
+  let m = d.match(/^#(\d+) for (.+?)(?: and (\d+) more)?(?: — new top spawn)?$/);
+  if (m) {
+    return `<span class="ann-what" title="${tip}"><span class="ann-tag">#${m[1]}</span><span class="ann-name">${escapeHtml(m[2])}</span>${m[3] ? ` <span class="ann-more">+${m[3]}</span>` : ''}</span>`;
+  }
+  m = d.match(/^Rating (\d+)/);
+  if (m) return `<span class="ann-what" title="${tip}"><span class="ann-tag is-hot">Hot</span><span class="ann-name">Rating ${m[1]}</span></span>`;
+  const tag = kind === 'hot' ? '<span class="ann-tag is-hot">Hot</span>' : (kind ? '<span class="ann-tag">Top</span>' : '');
+  return `<span class="ann-what" title="${tip}">${tag}<span class="ann-name">${escapeHtml(d)}</span></span>`;
+}
+
 // Clipboard write with the execCommand fallback WKWebView sometimes needs;
 // toasts the given message on success either way.
 async function copyTextToClipboard(text, msg) {

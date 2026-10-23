@@ -4580,3 +4580,13 @@ tr.top-new td.col-name { color: var(--text-hover); }
 /* anything that opens a resource page shows the hand — Home's Recent Spawns and
    Announcements had working links with an arrow cursor (Dustin) */
 [data-resname], [data-res], [data-navcat], [data-schem], [data-pet], [data-creature], [data-special] { cursor: pointer; }
+
+/* spawn-alert "What" cell (annWhatHtml): tag + the gist on one line, full sentence on hover */
+.ann-what { display: inline-flex; align-items: center; gap: 6px; max-width: 280px; white-space: nowrap; vertical-align: middle; }
+.ann-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ann-tag {
+	flex: 0 0 auto; font: 600 10px/1 var(--app-font, inherit); padding: 3px 6px; border-radius: 999px;
+	border: 1px solid var(--border); color: var(--text-muted);
+}
+.ann-tag.is-hot { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.ann-more { flex: 0 0 auto; color: var(--text-muted); font-size: 11px; }

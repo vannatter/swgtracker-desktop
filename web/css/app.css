@@ -4582,7 +4582,7 @@ tr.top-new td.col-name { color: var(--text-hover); }
 [data-resname], [data-res], [data-navcat], [data-schem], [data-pet], [data-creature], [data-special] { cursor: pointer; }
 
 /* spawn-alert "What" cell (annWhatHtml): tag + the gist on one line, full sentence on hover */
-.ann-what { display: inline-flex; align-items: center; gap: 6px; max-width: 280px; white-space: nowrap; vertical-align: middle; }
+.ann-what { display: inline-flex; align-items: center; gap: 6px; max-width: 460px; white-space: nowrap; vertical-align: middle; }
 .ann-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .ann-tag {
 	flex: 0 0 auto; font: 600 10px/1 var(--app-font, inherit); padding: 3px 6px; border-radius: 999px;
@@ -4590,3 +4590,24 @@ tr.top-new td.col-name { color: var(--text-hover); }
 }
 .ann-tag.is-hot { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
 .ann-more { flex: 0 0 auto; color: var(--text-muted); font-size: 11px; }
+
+/* spawn-alert tables (Announcements, My Alerts, Home's Announcements) turn into mini
+   cards when their box is narrow — a phone or a slim Home column: name + when, then the
+   type / rule, then the What tag and its full text, nothing clipped */
+.ann-wrap { container-type: inline-size; }
+@container (max-width: 620px) {
+	.ann-cards, .ann-cards > tbody { display: block; width: 100%; }
+	.ann-cards > thead { display: none; }
+	.ann-cards > tbody > tr {
+		display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "res when" "sub sub" "what what";
+		gap: 3px 10px; padding: 10px 12px; border-bottom: 1px solid var(--border);
+	}
+	.ann-cards > tbody > tr > td { display: block; padding: 0 !important; border: 0 !important; height: auto; min-width: 0; white-space: normal; text-align: left; }
+	.ann-cards .ac-res { grid-area: res; font-weight: 600; overflow-wrap: anywhere; }
+	.ann-cards .ac-when { grid-area: when; font-size: 12px; color: var(--text-muted); text-align: right; white-space: nowrap; }
+	.ann-cards .ac-sub { grid-area: sub; font-size: 12px; color: var(--text-muted); overflow-wrap: anywhere; }
+	.ann-cards .ac-sub:empty { display: none; }
+	.ann-cards .ac-what { grid-area: what; margin-top: 3px; }
+	.ann-cards .ann-what { display: flex; flex-wrap: wrap; align-items: center; max-width: none; white-space: normal; row-gap: 3px; }
+	.ann-cards .ann-name { overflow: visible; overflow-wrap: anywhere; }
+}

@@ -698,7 +698,7 @@ function homeAnnounceHtml() {
   if (!Array.isArray(list)) return { right, html: '<div class="empty-state is-compact">Announcements need the server update — the feed appears once swgtracker.com deploys it.</div>' };
   if (!list.length) return { count: 0, right, html: '<div class="empty-state is-compact">Nothing notable has spawned lately.</div>' };
   const shown = list.slice(0, homeLayout().annN);
-  return { count: shown.length, right, html: `<div class="table-wrap hm-tablewrap"><table class="data-grid">
+  return { count: shown.length, right, html: `<div class="table-wrap hm-tablewrap ann-wrap"><table class="data-grid ann-cards">
       <thead><tr><th class="col-text">When</th><th class="col-name">Resource</th><th class="col-text">Type</th><th class="col-text">What</th></tr></thead>
       <tbody>${alAnnounceRowsHtml(shown)}</tbody></table></div>` };
 }

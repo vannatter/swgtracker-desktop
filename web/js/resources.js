@@ -38,6 +38,7 @@ const RES_COLUMNS = [
   ['DR', 'dr', 'stat'], ['HR', 'hr', 'stat'], ['MA', 'ma', 'stat'],
   ['SR', 'sr', 'stat'], ['UT', 'ut', 'stat'], ['FL', 'fl', 'stat'],
   ['PE', 'pe', 'stat'],
+  ['Spawned', 'timestamp', 'col-text'],   // spawn date, "3d ago" (Xyrek: spot new spawns from the list)
   ['Planets', 'planets', 'col-text'],
 ];
 
@@ -61,7 +62,7 @@ const resState = {
 // 'name' is locked visible; everything else is user-toggleable. A plain-English
 // label for the stat codes so the column picker reads clearly.
 const RES_COL_LABELS = {
-  name: 'Name', type_name: 'Type', status: 'In spawn', score: 'Score',
+  name: 'Name', type_name: 'Type', status: 'In spawn', timestamp: 'Spawned', score: 'Score',
   oq: 'Overall Quality (OQ)', cr: 'Cold Resist (CR)', cd: 'Conductivity (CD)',
   dr: 'Decay Resist (DR)', hr: 'Heat Resist (HR)', ma: 'Malleability (MA)',
   sr: 'Shock Resist (SR)', ut: 'Unit Toughness (UT)', fl: 'Flavor (FL)',
@@ -92,15 +93,9 @@ function resSaveColPref() {
 }
 
 // Effective column tuples [label, field, cls] in the user's order, hidden ones
-// dropped. New columns added to RES_COLUMNS later still appear (appended).
+// dropped. New columns added to RES_COLUMNS later still appear, beside their default neighbour.
 function resCols() {
-  if (!resState.colOrder) resLoadColPref();
-  const byField = new Map(RES_COLUMNS.map((c) => [c[1], c]));
-  const ordered = [];
-  const seen = new Set();
-  for (const f of resState.colOrder) { if (byField.has(f) && !seen.has(f)) { ordered.push(byField.get(f)); seen.add(f); } }
-  for (const c of RES_COLUMNS) { if (!seen.has(c[1])) ordered.push(c); }
-  return ordered.filter((c) => RES_COL_LOCKED.has(c[1]) || !resState.colHidden.has(c[1]));
+  return resColsAll().filter((c) => RES_COL_LOCKED.has(c[1]) || !resState.colHidden.has(c[1]));
 }
 
 // the full column list in the user's current order (hidden ones included) —
@@ -110,7 +105,15 @@ function resColsAll() {
   const byField = new Map(RES_COLUMNS.map((c) => [c[1], c]));
   const out = []; const seen = new Set();
   for (const f of resState.colOrder) { if (byField.has(f) && !seen.has(f)) { out.push(byField.get(f)); seen.add(f); } }
-  for (const c of RES_COLUMNS) { if (!seen.has(c[1])) out.push(c); }
+  // a column the saved layout predates (e.g. Spawned) goes in front of the next
+  // column that follows it by default, not at the far end
+  RES_COLUMNS.forEach((c, i) => {
+    if (seen.has(c[1])) return;
+    const next = RES_COLUMNS.slice(i + 1).find((d) => seen.has(d[1]));
+    const at = next ? out.indexOf(next) : -1;
+    if (at >= 0) out.splice(at, 0, c); else out.push(c);
+    seen.add(c[1]);
+  });
   return out;
 }
 
@@ -714,6 +717,7 @@ function resRowHtml(res) {
         : `<td class="col-text res-type">${name}</td>`;
     }
     if (field === 'planets') return `<td class="col-text col-planets">${planetsEditHtml(res)}</td>`;
+    if (field === 'timestamp') return `<td class="col-text res-spawned">${safeInt(res.timestamp) > 0 ? fmtAgoTip(safeInt(res.timestamp)) : '—'}</td>`;
     if (field === 'score') {
       const v = res.score; // 0–100, null when unscored
       return v == null ? '<td class="stat stat_off">—</td>'

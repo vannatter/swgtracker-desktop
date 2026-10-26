@@ -57,6 +57,12 @@ function gxLineChart(series, opts = {}) {
   if (all.length < 2) return '<div class="settings-sub">not enough history yet</div>';
   let min = Math.min(...all), max = Math.max(...all);
   if (min === max) { min = Math.max(0, min - 1); max += 1; }
+  // zero: counts (players online, accounts) sit on a 0 baseline with round ticks, so a
+  // 413 → 318 month reads as the ~25% dip it is instead of a cliff (zeddco)
+  if (opts.zero) {
+    const raw = Math.max(max, 1) / 4, p = 10 ** Math.floor(Math.log10(raw)), f = raw / p;
+    min = 0; max = 4 * p * [1, 1.25, 1.5, 2, 2.5, 3, 4, 5, 6, 7.5, 8, 10].find((x) => f <= x);
+  }
   const span = (max - min) || 1;
   const iw = w - padL - padR, ih = h - padT - padB;
   const n = Math.max(...series.map((s) => (s.values || []).length));
@@ -1088,20 +1094,20 @@ function renderPulsePage() {
   const stepMin = live.step ? Math.max(1, Math.round(live.step / 60)) : 10;
   const fmtLive = (ts) => { const x = new Date(ts * 1000); return `${x.toLocaleDateString([], { month: 'short', day: 'numeric' })} ${x.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`; };
   const liveBlock = block('live', '<span class="pulse-live-dot"></span>Active characters', `live · last 7 days · every ${stepMin} minutes`,
-    lp.length > 1 ? gxLineChart([{ values: lp.map((x) => x[1]), color: 'var(--accent)', name: 'Logged in', fill: true }], { h: 240, w, labels: lp.map((x) => fmtLive(x[0])) }) : '<div class="settings-sub">no samples yet</div>',
+    lp.length > 1 ? gxLineChart([{ values: lp.map((x) => x[1]), color: 'var(--accent)', name: 'Logged in', fill: true }], { zero: true, h: 240, w, labels: lp.map((x) => fmtLive(x[0])) }) : '<div class="settings-sub">no samples yet</div>',
     `<span class="pulse-live-now">${gxNum(live.now)} <span class="settings-sub">online now</span></span>`);
   $('#pulse-charts').innerHTML = [liveBlock,
     block('history', 'Logged in characters', pulse.length ? (d.bucket >= 86400 ? 'daily average and daily peak' : d.bucket >= 3600 ? 'hourly average and peak' : '10-minute samples') : '',
       pulse.length > 1 ? gxLineChart([
           { values: pulse.map((p) => p.peak), color: 'rgba(226, 67, 80, .45)', name: 'Peak' },
           { values: pulse.map((p) => p.online), color: 'var(--accent)', name: 'Average', fill: true },
-        ], { h: 220, w, labels: pulse.map((p) => fmtDay(p.ts)) })
+        ], { zero: true, h: 220, w, labels: pulse.map((p) => fmtDay(p.ts)) })
         : '<div class="settings-sub">no samples in this range</div>'),
     block('accounts', 'Active accounts', 'accounts seen each day',
-      daily.length > 1 ? gxLineChart([{ values: daily.map((x) => x.total), color: '#5b9bd5', name: 'Active accounts', fill: true }], { h: 200, w, labels: daily.map((x) => x.date || fmtDay(x.ts)) })
+      daily.length > 1 ? gxLineChart([{ values: daily.map((x) => x.total), color: '#5b9bd5', name: 'Active accounts', fill: true }], { zero: true, h: 200, w, labels: daily.map((x) => x.date || fmtDay(x.ts)) })
         : '<div class="settings-sub">no daily data in this range</div>'),
     block('monthly', 'Monthly average', 'average logged in per month',
-      monthly.length > 1 ? gxLineChart([{ values: monthly.map((m) => m.avg), color: '#45e97e', name: 'Monthly average', fill: true }], { h: 180, w, labels: monthly.map((m) => m.month) })
+      monthly.length > 1 ? gxLineChart([{ values: monthly.map((m) => m.avg), color: '#45e97e', name: 'Monthly average', fill: true }], { zero: true, h: 180, w, labels: monthly.map((m) => m.month) })
         : '<div class="settings-sub">not enough months in this range</div>'),
   ].join('');
   $('#pulse-empty').hidden = !!(pulse.length || daily.length || monthly.length);

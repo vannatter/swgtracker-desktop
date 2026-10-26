@@ -4611,3 +4611,9 @@ tr.top-new td.col-name { color: var(--text-hover); }
 	.ann-cards .ann-what { display: flex; flex-wrap: wrap; align-items: center; max-width: none; white-space: normal; row-gap: 3px; }
 	.ann-cards .ann-name { overflow: visible; overflow-wrap: anywhere; }
 }
+
+/* My Inventory: items-per-page picker beside Prev / Next */
+.pager-nav .inv-pagesize { width: auto; height: 30px; padding-top: 0; padding-bottom: 0; font-size: 12px; }
+
+/* My Sales: the cards' scope toggle at the end of the filter note */
+.sales-fnote .sales-scope { padding: 0 4px; font-size: 12px; margin-left: 4px; }

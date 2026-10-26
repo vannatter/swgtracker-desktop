@@ -28,16 +28,26 @@ function buildSalesCards() {
     </div>`).join('');
 }
 
+// The cards follow the list's filters (Type + search) unless the user pinned them
+// to all sales — a per-device preference toggled from this note (Danvar)
+const SALES_SCOPE_KEY = 'sales-cards-scope';
+let salesCardsSeq = 0;
+const salesCardsAll = () => { try { return localStorage.getItem(SALES_SCOPE_KEY) === 'all'; } catch (_) { return false; } };
 function updateSalesFilterNote() {
   const q = $('#sales-search').value.trim();
+  const type = $('#sales-type').value;
   $('#sales-search-clear').hidden = !q;
   const note = $('#sales-fnote');
-  if (!q) { note.hidden = true; note.innerHTML = ''; return; }
+  if (!q && !type) { note.hidden = true; note.innerHTML = ''; return; }
   note.hidden = false;
-  note.innerHTML = `<span class="res-pills-label">Totals filtered to</span>`
-    + `<span class="res-pill">${escapeHtml(q)}`
-    + `<button type="button" id="sales-fclear" class="res-pill-x" title="Clear filter"><i class="fa-solid fa-xmark"></i></button>`
-    + `</span>`;
+  const toggle = (all) => `<button type="button" class="btn btn-sm btn-link sales-scope" data-salesscope="${all ? 'filtered' : 'all'}">${all ? 'Match filters' : 'Show all sales'}</button>`;
+  if (salesCardsAll()) { note.innerHTML = '<span class="res-pills-label">Totals: all sales</span>' + toggle(true); return; }
+  note.innerHTML = '<span class="res-pills-label">Totals filtered to</span>'
+    + (type ? `<span class="res-pill">${type === '2' ? 'Bazaar' : 'Vendor'}</span>` : '')
+    + (q ? `<span class="res-pill">${escapeHtml(q)}`
+      + '<button type="button" id="sales-fclear" class="res-pill-x" title="Clear filter"><i class="fa-solid fa-xmark"></i></button>'
+      + '</span>' : '')
+    + toggle(false);
 }
 
 function updateSalesCards(summaries) {
@@ -101,6 +111,13 @@ async function loadSales() {
 
   const data = res.data;
   updateSalesCards(data.summaries);
+  // cards pinned to all sales: one light unfiltered call just for the summaries
+  const cardsSeq = ++salesCardsSeq;   // a slow answer never paints over a newer load
+  if (salesCardsAll() && ($('#sales-search').value.trim() || $('#sales-type').value)) {
+    api().get_sales({ search: '', type: '', page: 1, limit: 1 })
+      .then((r) => { if (cardsSeq === salesCardsSeq && r && r.ok && r.data && salesCardsAll()) updateSalesCards(r.data.summaries); })
+      .catch(() => {});
+  }
 
   const sales = data.results || [];
   const page = data.page ?? salesState.page;
@@ -271,6 +288,12 @@ function initSales() {
     loadSales();
   });
   $('#sales-fnote').addEventListener('click', (e) => {
+    const sc = e.target.closest('[data-salesscope]');
+    if (sc) {
+      try { localStorage.setItem(SALES_SCOPE_KEY, sc.dataset.salesscope); } catch (_) {}
+      loadSales();
+      return;
+    }
     if (!e.target.closest('#sales-fclear')) return;
     $('#sales-search').value = '';
     salesState.page = 1;

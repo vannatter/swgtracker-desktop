@@ -204,6 +204,31 @@ function invRowHtml(item, idx) {
 
 const invRowsHtml = (item, idx) => invRowHtml(item, idx);
 
+// Page size is the user's (100 / 250 / 500 / All, remembered per device), but the
+// paging runs over the WHOLE grouped + sorted list, so a group's items stay
+// together and filters see every item. Returns this page's [{ sec, items }]:
+// a group split across pages keeps its header on each; collapsed / empty groups
+// sit on the page where they fall in order.
+function invPageSlice(secs, isCollapsed, size, page) {
+  const total = secs.reduce((n, s) => n + (isCollapsed(s) ? 0 : s.items.length), 0);
+  const pages = size ? Math.max(1, Math.ceil(total / size)) : 1;
+  const pg = Math.min(Math.max(1, page), pages);
+  if (!size) return { out: secs.map((sec) => ({ sec, items: sec.items })), pages, page: pg, total, from: 1, to: total };
+  const start = (pg - 1) * size, end = start + size, out = [];
+  let pos = 0;
+  secs.forEach((sec) => {
+    const n = isCollapsed(sec) ? 0 : sec.items.length;
+    const items = n ? sec.items.slice(Math.max(0, start - pos), Math.max(0, Math.min(n, end - pos))) : [];
+    if (items.length || (!n && ((pos >= start && pos < end) || (pos >= total && pg === pages)))) out.push({ sec, items });
+    pos += n;
+  });
+  return { out, pages, page: pg, total, from: total ? start + 1 : 0, to: Math.min(end, total) };
+}
+const INV_SIZE_KEY = 'inv-pagesize';
+function invPageSize() {
+  try { const v = parseInt(localStorage.getItem(INV_SIZE_KEY), 10); return [100, 250, 500].includes(v) ? v : 0; } catch (_) { return 0; }
+}
+
 // Re-render from state — no refetch. Folder rows split the page's rows into
 // sections (rename/collapse/delete inline); ungrouped-only = a flat list.
 function renderInvRows() {
@@ -212,15 +237,18 @@ function renderInvRows() {
   const sections = grpSections(invState.groups, pairs, ([i]) => i.group_id);
   const spacer = `<tr class="stk-group-gap"><td colspan="${invColCount()}"></td></tr>`;
   const parts = [];
-  sections.forEach((sec) => {
+  const pi = invPageSlice(sections, (s) => invState.grpCollapsed.has(s.key), invPageSize(), invState.page);
+  invState.page = pi.page; invState.pageInfo = pi;
+  pi.out.forEach(({ sec, items }) => {
     const collapsed = invState.grpCollapsed.has(sec.key);
     if (sec.key !== 'un' || sections.length > 1) {
       if (parts.length) parts.push(spacer);
       parts.push(grpTableHeaderHtml(sec.key, sec.name, sec.items.length, collapsed, sec.key !== 'un', invColCount(), 'col-actions', sec.key !== 'un', true));
     }
-    if (!collapsed) parts.push(...sec.items.map(([item, idx]) => invRowsHtml(item, idx)));
+    if (!collapsed) parts.push(...items.map(([item, idx]) => invRowsHtml(item, idx)));
   });
   $('#inv-body').innerHTML = parts.join('');
+  invRenderPager();
 
   // tag cloud from this page's items; an active filter can always be unclicked
   const allTags = [...new Set(invState.items.flatMap(invTags))];
@@ -234,6 +262,19 @@ function renderInvRows() {
           title="Rename or remove this tag everywhere"></i></span>`).join('')
     : '';
   invSyncSelAll(); // selection bar + header checkbox track every repaint
+}
+
+function invRenderPager() {
+  const pi = invState.pageInfo || { pages: 1, page: 1, total: invState.items.length, from: 1, to: invState.items.length };
+  const n = invState.items.length;
+  const vendor = $('#inv-vendor').value, q = $('#inv-search').value.trim();
+  const at = vendor && q ? ` at ${vendor}` : '';
+  $('#inv-status').textContent = !n ? ''
+    : pi.pages > 1 ? `${pi.from}–${pi.to} of ${pi.total}${at}${n > pi.total ? ` (+${n - pi.total} in collapsed groups)` : ''}` : `${n} item${n === 1 ? '' : 's'}${at}`;
+  $('#inv-prev').hidden = $('#inv-next').hidden = pi.pages <= 1;
+  $('#inv-prev').disabled = pi.page <= 1;
+  $('#inv-next').disabled = pi.page >= pi.pages;
+  $('#inv-pagesize').value = String(invPageSize());
 }
 
 // ---- tag dialog: rename a tag (fix a typo) or strip it from every item ----
@@ -387,14 +428,14 @@ async function loadInventory() {
   const q = $('#inv-search').value.trim();
   // vendor dropdown + search = two filters at once (Danvar: "Bazaar" AND
   // "crafting tool"). The server takes one search, so the vendor goes to it as
-  // an exact scope and the text narrows item names here, over the vendor's
-  // whole list (500 = the endpoint's page cap) rather than one page of it
+  // an exact scope and the text narrows item names here.
   const vendor = $('#inv-vendor').value;
   const both = !!(vendor && q);
+  // the WHOLE list, no pages: groups, sorts and filters only ever saw the page
+  // on screen, so item 102 never showed in its group from page 1 (Danvar).
+  // Inventories run to a few hundred; invFetchAll walks the 500-row page cap.
   const params = {
     search: vendor ? `vendor:"${vendor}"` : (q && scope ? `${scope}:${q}` : q),
-    page: both ? 1 : invState.page,
-    perpage: both ? 500 : invState.perPage,
     sort: invState.sortField,
     order: invState.sortOrder,
   };
@@ -405,7 +446,7 @@ async function loadInventory() {
 
   let res, groups;
   try {
-    [res, groups] = await Promise.all([api().get_inventory(params), grpList('inventory')]);
+    [res, groups] = await Promise.all([invFetchAll(params), grpList('inventory')]);
   } catch (e) { res = { ok: false, error: String(e) }; groups = invState.groups; }
   invState.groups = groups || [];
 
@@ -421,17 +462,8 @@ async function loadInventory() {
   }
 
   let rows = res.data.results || [];
-  const page = res.data.page ?? invState.page;
-  if (both) {
-    const capped = rows.length >= 500;
-    rows = rows.filter(invItemMatches(q));
-    invState.hasNext = false;
-    invState.vendorCapped = capped;
-  } else {
-    invState.perPage = res.data.per_page ?? invState.perPage;
-    invState.hasNext = rows.length >= invState.perPage;
-    invState.vendorCapped = false;
-  }
+  if (both) rows = rows.filter(invItemMatches(q));
+  invState.hasNext = false; invState.vendorCapped = false;   // the page itself is kept (edits repaint in place)
   invState.items = rows;
   invFillVendorFilter();
 
@@ -450,12 +482,23 @@ async function loadInventory() {
     $('#inv-status').textContent = '';
   } else {
     renderInvRows();
-    $('#inv-status').textContent = both
-      ? `${rows.length} item${rows.length === 1 ? '' : 's'} at ${vendor}${invState.vendorCapped ? ' (searched this vendor’s first 500)' : ''}`
-      : `Page ${page} — ${rows.length} items`;
+    invRenderPager();
   }
-  $('#inv-prev').disabled = both || page <= 1;
-  $('#inv-next').disabled = !invState.hasNext;
+}
+
+// every page of one inventory query, merged (the endpoint caps a page at 500)
+async function invFetchAll(params) {
+  let all = [], first = null;
+  for (let page = 1; page <= 40; page++) {
+    const res = await api().get_inventory({ ...params, page, perpage: 500 });
+    if (!res.ok || !res.data) return first || res;
+    if (!first) first = res;
+    const rows = res.data.results || [];
+    all = all.concat(rows);
+    if (rows.length < 500) break;
+  }
+  first.data = { ...first.data, results: all, page: 1 };
+  return first;
 }
 
 // ---- edit mode: the whole Stocked / Threshold columns as boxes -------------------
@@ -683,9 +726,15 @@ function initInventory() {
   $('#inv-low').addEventListener('change', () => { invState.page = 1; loadInventory(); });
   $('#inv-scope').addEventListener('change', () => { invState.page = 1; loadInventory(); });
   $('#inv-vendor').addEventListener('change', () => { invState.page = 1; loadInventory(); });
+  // paging is local (the whole list is loaded) — no refetch, just repaint
+  const invGo = (d) => { invState.page += d; renderInvRows(); $('#inv-body').closest('.table-wrap')?.scrollTo?.(0, 0); window.scrollTo(0, 0); };
+  $('#inv-prev').addEventListener('click', () => invGo(-1));
+  $('#inv-next').addEventListener('click', () => invGo(1));
+  $('#inv-pagesize').addEventListener('change', (e) => {
+    try { localStorage.setItem(INV_SIZE_KEY, e.target.value); } catch (_) {}
+    invState.page = 1; renderInvRows();
+  });
   $('[data-refresh="inventory"]').addEventListener('click', () => loadInventory());
-  $('#inv-prev').addEventListener('click', () => { if (invState.page > 1) { invState.page--; loadInventory(); } });
-  $('#inv-next').addEventListener('click', () => { if (invState.hasNext) { invState.page++; loadInventory(); } });
   $('#inv-add-open').addEventListener('click', () => openInvDialog());
   // styled vendor suggestions (own dropdown, not native datalist)
   $('#inv-new-vendor').addEventListener('focus', () => { invSuppressSug = false; invRenderVendorSug(); });

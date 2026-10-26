@@ -749,10 +749,10 @@ async function fetchPulse() {
   if (res.ok && res.data) {
     const online = res.data.online || {};
     mini.classList.remove('offline');
-    mini.title = `Online — ${(online.current || 0).toLocaleString()} players · peak today ${(online.peak_today || 0).toLocaleString()}`;
+    mini.title = `Online — ${(online.current || 0).toLocaleString()} characters logged in right now · peak today ${(online.peak_today || 0).toLocaleString()}`;
     statusEl.textContent = 'Online';
     statusEl.className = 'pulse-status online';
-    $('#pulse-online').innerHTML = `Players: ${(online.current || 0).toLocaleString()}`
+    $('#pulse-online').innerHTML = `Online now: ${(online.current || 0).toLocaleString()}`
       + ` <span class="pulse-peak-inline">· peak ${(online.peak_today || 0).toLocaleString()}</span>`;
     // dev-only: how many desktop apps are phoning home right now
     $('#pulse-desktop').textContent = res.data.desktop_online != null

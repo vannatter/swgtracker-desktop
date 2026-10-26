@@ -1017,7 +1017,7 @@ function initGalaxy() {
 
 
 // ===================== Server Pulse (the website's pulse.php) =====================
-// Logged-in characters over a range, daily active accounts, the monthly average,
+// Concurrent accounts online over a range, daily active accounts, the monthly average,
 // and the today / 7-day / 30-day KPIs — api/pulse_history.php, same thresholds
 // as the site. Ranges 1M/3M/6M/1Y/All, or a custom from/to.
 const pulseState = { range: '6m', from: '', to: '', data: null, loaded: false, loading: false, collapsed: null };
@@ -1075,9 +1075,9 @@ function renderPulsePage() {
   const card = (num, label, peak, cur, prev, vs, trend, color) =>
     `<div class="wealth-statcard"><div class="wealth-stat-num">${gxNum(num)}</div><div class="wealth-stat-label">${label} <span class="pulse-peak">· peak ${gxNum(peak)}</span></div>${deltaHtml(cur, prev, vs)}${spark(trend, color)}</div>`;
   $('#pulse-cards').innerHTML =
-    card(k.today_avg, 'online at once today, on average', k.today_max, k.today_avg, k.yesterday_avg, 'vs yesterday', sp.today, 'var(--accent)')
-    + card(k.seven_avg, 'online at once over 7 days, on average', k.seven_max, k.seven_avg, k.prev_seven_avg, 'vs the week before', sp.seven, '#45e97e')
-    + card(k.thirty_avg, 'online at once over 30 days, on average', k.thirty_max, k.thirty_avg, k.prev_thirty_avg, 'vs the month before', sp.thirty, 'var(--accent)');
+    card(k.today_avg, 'accounts online at once today, on average', k.today_max, k.today_avg, k.yesterday_avg, 'vs yesterday', sp.today, 'var(--accent)')
+    + card(k.seven_avg, 'accounts online at once over 7 days, on average', k.seven_max, k.seven_avg, k.prev_seven_avg, 'vs the week before', sp.seven, '#45e97e')
+    + card(k.thirty_avg, 'accounts online at once over 30 days, on average', k.thirty_max, k.thirty_avg, k.prev_thirty_avg, 'vs the month before', sp.thirty, 'var(--accent)');
   const w = Math.round(($('#pulse-charts').getBoundingClientRect().width || 900) - 36);
   const pulse = d.pulse || [], daily = d.daily || [], monthly = d.monthly || [];
   const col = pulseCollapsed();
@@ -1093,11 +1093,11 @@ function renderPulsePage() {
   const lp = live.points || [];
   const stepMin = live.step ? Math.max(1, Math.round(live.step / 60)) : 10;
   const fmtLive = (ts) => { const x = new Date(ts * 1000); return `${x.toLocaleDateString([], { month: 'short', day: 'numeric' })} ${x.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`; };
-  const liveBlock = block('live', '<span class="pulse-live-dot"></span>Concurrent characters', `online at the same moment · live · last 7 days · every ${stepMin} minutes`,
+  const liveBlock = block('live', '<span class="pulse-live-dot"></span>Concurrent accounts', `accounts online at the same moment · live · last 7 days · every ${stepMin} minutes`,
     lp.length > 1 ? gxLineChart([{ values: lp.map((x) => x[1]), color: 'var(--accent)', name: 'Online at once', fill: true }], { zero: true, h: 240, w, labels: lp.map((x) => fmtLive(x[0])) }) : '<div class="settings-sub">no samples yet</div>',
     `<span class="pulse-live-now">${gxNum(live.now)} <span class="settings-sub">online now</span></span>`);
   $('#pulse-charts').innerHTML = [liveBlock,
-    block('history', 'Concurrent characters over time', pulse.length ? 'online at the same moment · ' + (d.bucket >= 86400 ? 'daily average and daily peak' : d.bucket >= 3600 ? 'hourly average and peak' : '10-minute samples') : '',
+    block('history', 'Concurrent accounts over time', pulse.length ? 'accounts online at the same moment · ' + (d.bucket >= 86400 ? 'daily average and daily peak' : d.bucket >= 3600 ? 'hourly average and peak' : '10-minute samples') : '',
       pulse.length > 1 ? gxLineChart([
           { values: pulse.map((p) => p.peak), color: 'rgba(226, 67, 80, .45)', name: 'Peak' },
           { values: pulse.map((p) => p.online), color: 'var(--accent)', name: 'Average', fill: true },
@@ -1106,7 +1106,7 @@ function renderPulsePage() {
     block('accounts', 'Active accounts', 'different accounts that played each day',
       daily.length > 1 ? gxLineChart([{ values: daily.map((x) => x.total), color: '#5b9bd5', name: 'Active accounts', fill: true }], { zero: true, h: 200, w, labels: daily.map((x) => x.date || fmtDay(x.ts)) })
         : '<div class="settings-sub">no daily data in this range</div>'),
-    block('monthly', 'Monthly average', 'average concurrent characters per month',
+    block('monthly', 'Monthly average', 'average concurrent accounts per month',
       monthly.length > 1 ? gxLineChart([{ values: monthly.map((m) => m.avg), color: '#45e97e', name: 'Monthly average', fill: true }], { zero: true, h: 180, w, labels: monthly.map((m) => m.month) })
         : '<div class="settings-sub">not enough months in this range</div>'),
   ].join('');

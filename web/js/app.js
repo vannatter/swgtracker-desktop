@@ -749,7 +749,7 @@ async function fetchPulse() {
   if (res.ok && res.data) {
     const online = res.data.online || {};
     mini.classList.remove('offline');
-    mini.title = `Online — ${(online.current || 0).toLocaleString()} characters logged in right now · peak today ${(online.peak_today || 0).toLocaleString()}`;
+    mini.title = `Online — ${(online.current || 0).toLocaleString()} accounts logged in right now · peak today ${(online.peak_today || 0).toLocaleString()}`;
     statusEl.textContent = 'Online';
     statusEl.className = 'pulse-status online';
     $('#pulse-online').innerHTML = `Online now: ${(online.current || 0).toLocaleString()}`

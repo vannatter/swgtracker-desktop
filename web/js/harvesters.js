@@ -1261,10 +1261,11 @@ function harvSyncFormMode() {
   $('#harv-f-powerwrap').hidden = gen;
   $('#harv-f-powerratewrap').hidden = gen; // generators produce power — no drain
   if (gen) { $('#harv-f-power').value = ''; $('#harv-f-powerrate').value = ''; }
-  // BER stays within 0..type cap; concentration within 0..100 — live clamps
+  // BER never below 0 (no cap — see berOver); concentration within 0..100 — live clamps
   const berEl = $('#harv-f-ber');
   berEl.placeholder = d ? `max ${d.ber}` : 'e.g. 44';
-  if (d && safeInt(berEl.value) > d.ber) berEl.value = d.ber;
+  // no ceiling: buffs (Harvest Faire) lift BER past the type's max (Danvar) — say so instead
+  const berOver = d && berEl.value.trim() !== '' && safeInt(berEl.value) > d.ber ? safeInt(berEl.value) : 0;
   if (berEl.value.trim() !== '' && safeInt(berEl.value) < 0) berEl.value = 0;
   const concEl = $('#harv-f-conc');
   if (concEl.value.trim() !== '') {
@@ -1277,6 +1278,7 @@ function harvSyncFormMode() {
   const bits = [];
   if (harvState.resFamilyWarn) bits.push(`<span class="harv-derived-warn">⚠ ${escapeHtml(harvState.resFamilyWarn)} can't be pulled by a harvester (creature/space resource)</span>`);
   if (rate) bits.push(`pulls <b class="harv-derived-good">≈ ${fmtNum(Math.floor(rate))} units/hr</b> · <b>${fmtNum(Math.floor(rate * 24))}/day</b>`);
+  if (berOver) bits.push(`BER ${berOver} is above this type's max (${d.ber}) — buffed, e.g. Harvest Faire`);
   if (d) {
     const selChar = harvState.chars.find((c) => String(c.id) === $('#harv-f-char').value);
     const mm = selChar && Number(selChar.master_merchant);

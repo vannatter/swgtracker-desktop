@@ -1289,6 +1289,7 @@ async function boot() {
   initBeastCalcs();
   applySeasonalLogo();
   applyHolidayBar();
+  if (window.decorMount) decorMount(document.querySelector('#page-home .hm-pagehead')); // October bats etc. (decor.js)
   initSchemBuilder();
   initMyCustomers();
   initDevMode();

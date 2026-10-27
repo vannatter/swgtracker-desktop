@@ -4617,3 +4617,37 @@ tr.top-new td.col-name { color: var(--text-hover); }
 
 /* My Sales: the cards' scope toggle at the end of the filter note */
 .sales-fnote .sales-scope { padding: 0 4px; font-size: 12px; margin-left: 4px; }
+
+/* ---- holiday decor in Home's header band (js/decor.js) ----------------------
+   behind the greeting + buttons, under the band's fade (::after), never clickable */
+.hm-pagehead > .hd-layer { position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+/* October: a pale moon low on the right, bats crossing it right → left */
+/* the moon sits in a strip of sky the clouds cross; moon centred in it */
+.hd-sky { position: absolute; right: calc(24% - 140px); top: 0; width: 320px; height: 56px; overflow: hidden;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent);
+          mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent); }
+.hd-moon { position: absolute; left: 141px; top: 6px; width: 38px; height: 38px; border-radius: 50%;
+  background: radial-gradient(circle at 38% 36%, #fffdf2 0%, #f6ecc8 60%, #e6d6a2 100%);
+  box-shadow: 0 0 18px 6px rgba(255, 240, 190, .28); opacity: .8; }
+/* clouds: long, thin, moonlit wisps — pale and see-through so the moon glows through
+   them — drifting right → left across the strip and looping (Dustin: wider, lighter) */
+.hd-wisp { position: absolute; top: var(--wt); left: 100%; width: var(--ww); height: 16px; border-radius: 50%;
+  background: radial-gradient(ellipse at 50% 50%, rgba(196, 192, 218, .5) 0%, rgba(160, 156, 190, .28) 42%, transparent 70%);
+  filter: blur(2px); animation: hd-wisp var(--wd) linear var(--wdl) infinite; }
+@keyframes hd-wisp { from { left: 100%; } to { left: calc(-1 * var(--ww)); } }
+.hd-bat { position: absolute; top: var(--top); left: 105%; width: var(--sz); opacity: var(--o);
+  animation: hd-fly var(--dur) linear var(--delay) infinite; }
+.hd-bat-bob { display: block; animation: hd-bob calc(var(--dur) / 9) ease-in-out infinite alternate; }
+.hd-bat svg { display: block; width: 100%; height: auto; fill: #07060c; overflow: visible;
+  filter: drop-shadow(0 0 1.5px rgba(190, 140, 255, .75)) drop-shadow(0 0 5px rgba(150, 90, 230, .35)); }
+/* each wing hinges at the shoulder (30,13): raised and spread, then swept down and
+   folded in toward the body — the mirrored wing runs the same keyframes */
+.hd-wing { transform-box: view-box; transform-origin: 30px 13px; animation: hd-flap calc(var(--flap) * 2) ease-in-out infinite; }
+@keyframes hd-fly { from { left: 105%; } to { left: -12%; } }
+@keyframes hd-bob { from { transform: translateY(0); } to { transform: translateY(var(--bob)); } }
+@keyframes hd-flap { 0%, 100% { transform: rotate(-24deg) scaleX(1); } 50% { transform: rotate(38deg) scaleX(.5); } }
+@media (prefers-reduced-motion: reduce) {
+  .hd-bat { animation: none; left: var(--x); }
+  .hd-bat-bob, .hd-wing, .hd-wisp { animation: none; }
+  .hd-wisp { left: calc(50% - var(--ww) / 2); }
+}

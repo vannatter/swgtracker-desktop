@@ -186,6 +186,11 @@ function sbRenderList() {
 
 // ---- editor ----
 
+// a line's weights as a plain object (keeps any stat keys already set on an array)
+function sbWeightsObj(w) {
+  return w && typeof w === 'object' ? (Array.isArray(w) ? Object.assign({}, w) : w) : {};
+}
+
 async function sbOpenDraft(id) {
   let cur = null;
   if (id) {
@@ -195,6 +200,9 @@ async function sbOpenDraft(id) {
     const d = res.data.draft;
     cur = { id: safeInt(d.id), status: d.status, parent_draft_id: safeInt(d.parent_draft_id) || null,
       schematic_id: safeInt(d.schematic_id) || null, body: { ...sbEmptyBody(), ...(d.body || {}) } };
+    // older saves stored an empty weights map as [] — stat keys set on an array are
+    // dropped by JSON.stringify, so the line saved as 0% while the badge read 100%
+    (cur.body.formulas || []).forEach((f) => { f.weights = sbWeightsObj(f.weights); });
   } else {
     cur = { id: 0, status: 'draft', parent_draft_id: null, schematic_id: null, body: sbEmptyBody() };
   }
@@ -1122,7 +1130,7 @@ function initSchemBuilder() {
     const f = sbState.cur.body.formulas[safeInt(row.dataset.sbform)];
     if (e.target.dataset.ff === 'name') f.name = e.target.value;
     if (e.target.dataset.fw) {
-      f.weights = f.weights || {};
+      f.weights = sbWeightsObj(f.weights);
       const v = safeInt(e.target.value);
       if (v > 0) f.weights[e.target.dataset.fw] = v; else delete f.weights[e.target.dataset.fw];
       const total = SB_STATS.reduce((a, s) => a + safeInt(f.weights[s]), 0);

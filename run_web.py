@@ -147,7 +147,7 @@ from src.core.alert_poller import AlertPoller
 from src.core.bundle_manager import BundleManager
 from src.web_api import WebApi
 
-APP_VERSION = "0.15.2"  # keep in sync with pyproject.toml — bump with every change batch
+APP_VERSION = "0.15.3"  # keep in sync with pyproject.toml — bump with every change batch
 
 logging.basicConfig(
     level=logging.INFO,
@@ -184,6 +184,28 @@ def _set_mac_dock_icon():
 
 
 RELAUNCH_ENV = "SWGT_RELAUNCH_PARENT"
+# how the window was when a UI-bundle relaunch began: "tray", "minimized",
+# "maximized" or "" — the new copy opens the same way, so an update applied while
+# the app sat in the tray no longer pops a window up (Oogie, Devi)
+RELAUNCH_STATE_ENV = "SWGT_RELAUNCH_STATE"
+
+
+def _window_state_win32() -> str:
+    """Windows: the main window's current state, for the relaunch to restore."""
+    try:
+        import ctypes
+        user32 = ctypes.windll.user32
+        hwnd = user32.FindWindowW(None, "SWG Tracker Desktop")  # finds hidden windows too
+        if not hwnd:
+            return ""
+        if not user32.IsWindowVisible(hwnd):
+            return "tray"
+        if user32.IsIconic(hwnd):
+            return "minimized"
+        return "maximized" if user32.IsZoomed(hwnd) else ""
+    except Exception:  # noqa: BLE001 — unknown state just opens normally, as before
+        logger.error("window state check failed", exc_info=True)
+        return ""
 
 
 def _wait_for_relaunch_parent():
@@ -370,6 +392,11 @@ def main():
 
     logger.info("SWG Tracker Desktop v%s starting — ui: %s (%s)",
                 APP_VERSION, bundles.active_version or "builtin", bundles.active_source)
+    # a UI-bundle relaunch comes back the way the window was (tray stays in the tray)
+    import os
+    relaunch_state = os.environ.pop(RELAUNCH_STATE_ENV, "")
+    if relaunch_state:
+        logger.info("relaunch restores window state: %s", relaunch_state)
     window = webview.create_window(
         "SWG Tracker Desktop",
         url=str(index),
@@ -378,7 +405,9 @@ def main():
         height=800,
         min_size=(960, 650),
         background_color="#14161d",
-        maximized="--maximized" in sys.argv,
+        maximized="--maximized" in sys.argv or relaunch_state == "maximized",
+        minimized=relaunch_state == "minimized",
+        hidden=relaunch_state == "tray",
     )
     if not FROZEN:  # dev harness: --page KEY opens there; --control FILE takes commands
         argv = sys.argv
@@ -401,7 +430,8 @@ def main():
                 logger.info("applying UI bundle via relaunch")
                 args = [sys.executable] if getattr(sys, "frozen", False) \
                     else [sys.executable, str(Path(__file__).resolve())]
-                env = dict(os.environ, **{RELAUNCH_ENV: str(os.getpid())})
+                env = dict(os.environ, **{RELAUNCH_ENV: str(os.getpid()),
+                                          RELAUNCH_STATE_ENV: _window_state_win32()})
                 subprocess.Popen(args, close_fds=True, env=env)
                 try:  # a ghost tray icon lingers otherwise until the mouse passes it
                     if state.get("tray"):

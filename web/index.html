@@ -6,7 +6,7 @@
   <title>SWG Tracker Desktop</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.1/css/all.min.css">
-  <link rel="stylesheet" href="css/app.css?v=20261027h5">
+  <link rel="stylesheet" href="css/app.css?v=20261030a">
   <link rel="stylesheet" href="css/share.css?v=20261022x">
   <link rel="stylesheet" href="css/quests.css?v=20261022cm">
 </head>
@@ -426,6 +426,7 @@
         <div class="rd-head">
           <nav class="crumbs" id="scd-crumbs"></nav>
           <span class="rd-actions">
+            <button id="scd-cols-btn" class="btn btn-sm btn-outline-secondary" title="Choose & reorder columns"><i class="fa-solid fa-table-columns"></i></button>
             <button id="scd-history" class="btn btn-sm btn-outline-secondary" data-schemlog title="Community edit history for this schematic"><i class="fa-solid fa-clock-rotate-left"></i></button>
             <button id="scd-mustafar" class="btn btn-sm btn-outline-secondary" title="Toggle Mustafar resources"><i class="fa-solid fa-fire"></i> Hide Mustafar</button>
             <button id="scd-mys" class="btn btn-sm btn-accent" hidden></button>
@@ -2477,6 +2478,20 @@
     </div>
   </div>
 
+  <div id="scd-cols-modal" class="key-gate" hidden>
+    <div class="key-gate-card rescols-card">
+      <div class="mac-hist-head">
+        <h2>Schematic columns</h2>
+        <button id="scd-cols-x" class="btn btn-icon" title="Close"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <p class="settings-sub">Drag to reorder · uncheck to hide. Applies to every schematic's resource lists.</p>
+      <div id="scd-cols-list" class="rescols-list"></div>
+      <div class="stk-note-actions">
+        <button id="scd-cols-reset" class="btn btn-sm btn-outline-secondary">Reset to default</button>
+      </div>
+    </div>
+  </div>
+
   <div id="confirm-dialog" class="key-gate" hidden>
     <div class="key-gate-card confirm-card">
       <h2 id="confirm-title">Are you sure?</h2>
@@ -3403,7 +3418,7 @@
   <script src="js/share-card.js?v=20261022y"></script>
   <script src="js/share-wizard.js?v=20261022es"></script>
   <script src="js/resource.js?v=20261022x"></script>
-  <script src="js/schematics.js?v=20261022es"></script>
+  <script src="js/schematics.js?v=20261030b"></script>
   <script src="js/stockpile.js?v=20261022es"></script>
   <script src="js/wishlist.js?v=20261022es"></script>
   <script src="js/myschematics.js?v=20261022es"></script>

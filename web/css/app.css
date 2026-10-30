@@ -1411,6 +1411,11 @@ tr.grp-row .grp-count { margin-left: 10px; }
 .ins-gauge.q-poor .ins-gauge-fill { stroke: var(--q-poor); }
 .rd-cpuvote { cursor: pointer; font-size: 11px; opacity: .55; }
 .rd-cpuvote:hover { opacity: 1; }
+/* schematic page: eCPU column with the vote arrows either side of the value */
+.scd-cpu { white-space: nowrap; }
+.scd-cpu [data-cpuval] { display: inline-block; min-width: 2ch; margin: 0 4px; }
+.scd-cpuvote { cursor: pointer; font-size: 10px; opacity: .35; }
+.scd-cpuvote:hover { opacity: 1; }
 .rd-cards { display: flex; flex-wrap: wrap; gap: 8px; }
 .rd-card {
   flex: 0 0 92px; /* uniform — no stretching when the row wraps */

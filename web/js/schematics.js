@@ -388,7 +388,57 @@ const SCD_STATS = ['oq', 'cr', 'cd', 'dr', 'hr', 'ma', 'sr', 'ut', 'fl', 'pe'];
 const scdState = {
   schematic: null, tab: 'best', id: null,
   activeFormulas: new Set(), formulaIds: [], hideMustafar: false,
+  colOrder: null, colHidden: new Set(), // user column layout (localStorage), like Resources
 };
+
+// --- resource-list columns: show/hide + reorder, like the Resources page ---
+// Resource Name (and the +/♡ cells before it) stay put; these are the movable ones.
+const SCD_COLUMNS = ['quality', ...SCD_STATS, 'cpu', 'timestamp'];
+const SCD_COL_LABELS = {
+  quality: 'Quality', cpu: 'eCPU', timestamp: 'Age',
+  oq: 'Overall Quality (OQ)', cr: 'Cold Resist (CR)', cd: 'Conductivity (CD)',
+  dr: 'Decay Resist (DR)', hr: 'Heat Resist (HR)', ma: 'Malleability (MA)',
+  sr: 'Shock Resist (SR)', ut: 'Unit Toughness (UT)', fl: 'Flavor (FL)', pe: 'Potential Energy (PE)',
+};
+
+function scdLoadColPref() {
+  try {
+    const p = JSON.parse(localStorage.getItem('scd-colpref') || 'null');
+    if (p && Array.isArray(p.order)) {
+      scdState.colOrder = p.order;
+      scdState.colHidden = new Set(Array.isArray(p.hidden) ? p.hidden : []);
+      return;
+    }
+  } catch (_) { /* fall through to defaults */ }
+  scdState.colOrder = [...SCD_COLUMNS];
+  scdState.colHidden = new Set();
+}
+function scdSaveColPref() {
+  try {
+    localStorage.setItem('scd-colpref', JSON.stringify({ order: scdState.colOrder, hidden: [...scdState.colHidden] }));
+  } catch (_) { /* best effort */ }
+}
+// every movable column in the user's order (hidden included) — a column added
+// later lands before its default neighbour, as on Resources
+function scdColsAll() {
+  if (!scdState.colOrder) scdLoadColPref();
+  const out = scdState.colOrder.filter((f, i, a) => SCD_COLUMNS.includes(f) && a.indexOf(f) === i);
+  SCD_COLUMNS.forEach((f, i) => {
+    if (out.includes(f)) return;
+    const next = SCD_COLUMNS.slice(i + 1).find((d) => out.includes(d));
+    const at = next ? out.indexOf(next) : -1;
+    if (at >= 0) out.splice(at, 0, f); else out.push(f);
+  });
+  return out;
+}
+function scdCols() { return scdColsAll().filter((f) => !scdState.colHidden.has(f)); }
+
+function scdColHeadHtml(f, rel) {
+  if (f === 'quality') return '<th>Quality</th>';
+  if (f === 'cpu') return '<th title="Estimated credits per unit — players vote it on each resource\'s page">eCPU</th>';
+  if (f === 'timestamp') return '<th>Age</th>';
+  return `<th class="${rel.has(f) ? 'lab-rel-h' : 'lab-dim'}">${f.toUpperCase()}</th>`;
+}
 
 // The server ranks the best-resource lists by the active formulas (re-fetched on
 // toggle) and by the Mustafar filter, so we just read its resourceQuality.
@@ -426,19 +476,35 @@ function scdStatCell(spawn, field, relevant) {
   return `<td class="stat ${qualityClass(pct)} ${cls}" title="${pct.toFixed(1)}%">${v}</td>`;
 }
 
+// eCPU with the site's up/down vote arrows — both were lost when the site page
+// was rebuilt from this one, which never had the column (Dustin, 2026-10-30)
+function scdCpuClass(cpu) {
+  return cpu >= 15 ? 'q-great' : cpu >= 9 ? 'q-good' : cpu >= 5 ? 'q-fair'
+    : cpu >= 3 ? 'q-ok' : cpu >= 1 ? 'q-poor' : 'stat_off';
+}
+function scdCpuCellHtml(spawn) {
+  const cpu = safeInt(spawn.cpu);
+  const rid = safeInt(spawn.resourceId);
+  return `<td class="stat scd-cpu ${scdCpuClass(cpu)}">${rid ? `<i class="fa-solid fa-arrow-up scd-cpuvote" data-cpuvote="up" data-rid="${rid}" title="eCPU feels too low — vote it up"></i>` : ''}<span data-cpuval>${cpu || '--'}</span>${rid ? `<i class="fa-solid fa-arrow-down scd-cpuvote" data-cpuvote="down" data-rid="${rid}" title="eCPU feels too high — vote it down"></i>` : ''}</td>`;
+}
+
 function scdSpawnRowHtml(spawn, group, highlight, rel) {
   const q = scdSpawnQuality(spawn);
   // Age like the site's Best tab ("Added 3 days ago", exact date on hover) —
   // Philosophy/Eponine's request
   const ts = safeInt(spawn.timestamp);
+  const cell = (f) => {
+    if (f === 'quality') return `<td class="stat ${qualityClass(q / 10)}">${q.toFixed(2)}</td>`;
+    if (f === 'cpu') return scdCpuCellHtml(spawn);
+    if (f === 'timestamp') return `<td class="scd-agecell" ${ts ? `title="${escapeHtml(fmtDate(ts))}"` : ''}>${ts ? `Added ${fmtAgo(ts)}` : '--'}</td>`;
+    return scdStatCell(spawn, f, rel.has(f));
+  };
   return `<tr class="scd-row ${highlight ? 'activeResource' : ''}" data-group="${group}">
     ${addCellHtml(safeInt(spawn.resourceId), spawn.resourceName)}
     ${wishCellHtml(safeInt(spawn.resourceId), spawn.resourceName)}
     <td class="col-text"><span class="scd-reslink" data-res="${escapeHtml(spawn.resourceName || '')}"
       title="${escapeHtml(spawn.resourceTypeName || 'Open resource page')}">${escapeHtml(spawn.resourceName || '')}</span></td>
-    <td class="stat ${qualityClass(q / 10)}">${q.toFixed(2)}</td>
-    ${SCD_STATS.map((f) => scdStatCell(spawn, f, rel.has(f))).join('')}
-    <td class="scd-agecell" ${ts ? `title="${escapeHtml(fmtDate(ts))}"` : ''}>${ts ? `Added ${fmtAgo(ts)}` : '--'}</td>
+    ${scdCols().map(cell).join('')}
   </tr>`;
 }
 
@@ -469,9 +535,8 @@ function renderScdTable() {
 
   const rel = scdRelevantStats();
   $('#scd-head').innerHTML =
-    '<th class="pin-cell"></th><th class="pin-cell"></th><th class="col-name">Resource Name</th><th>Quality</th>' +
-    SCD_STATS.map((f) => `<th class="${rel.has(f) ? 'lab-rel-h' : 'lab-dim'}">${f.toUpperCase()}</th>`).join('') +
-    '<th>Age</th>';
+    '<th class="pin-cell"></th><th class="pin-cell"></th><th class="col-name">Resource Name</th>'
+    + scdCols().map((f) => scdColHeadHtml(f, rel)).join('');
 
   const listKey = scdState.tab === 'current' ? 'currentBestResourceList' : 'serverBestResourceList';
   const groups = (s.resourceDtoList || []).map((dto) => {
@@ -480,7 +545,7 @@ function renderScdTable() {
     const spawns = [...(dto[listKey] || [])].sort((a, b) => scdSpawnQuality(b) - scdSpawnQuality(a));
     const age = scdState.tab === 'current' && spawns.length ? scdSpawnAge(spawns[0].timestamp) : '';
     const header = `<tr class="scd-group" data-toggle="${dto.resourceTypeCode}">
-      <td class="col-text" colspan="${SCD_STATS.length + 5}">
+      <td class="col-text" colspan="${scdCols().length + 3}">
         <i class="fa-solid fa-caret-down"></i> ${escapeHtml(dto.resourceTypeName || '')}
         ${age ? `<span class="scd-age">${age}</span>` : ''}
         ${spawns.length ? '' : '<span class="scd-age">(none in spawn)</span>'}
@@ -978,7 +1043,70 @@ async function refetchScdBest() {
   renderScdTable();
 }
 
+// ---- column picker dialog (the Resources one's markup and behaviour) ----
+function scdRenderColsList() {
+  $('#scd-cols-list').innerHTML = scdColsAll().map((f) => `<div class="rescol-row" draggable="true" data-colfield="${escapeHtml(f)}">
+      <i class="fa-solid fa-grip-vertical rescol-grip"></i>
+      <label class="rescol-label">
+        <input type="checkbox" ${scdState.colHidden.has(f) ? '' : 'checked'} data-coltoggle="${escapeHtml(f)}">
+        <span>${escapeHtml(SCD_COL_LABELS[f] || f)}</span>
+      </label>
+    </div>`).join('');
+}
+
+function initScdCols() {
+  scdLoadColPref();
+  const list = $('#scd-cols-list');
+  const changed = () => { scdSaveColPref(); scdRenderColsList(); renderScdTable(); };
+  $('#scd-cols-btn').addEventListener('click', () => { scdRenderColsList(); $('#scd-cols-modal').hidden = false; });
+  $('#scd-cols-x').addEventListener('click', () => { $('#scd-cols-modal').hidden = true; });
+  $('#scd-cols-modal').addEventListener('click', (e) => { if (e.target === $('#scd-cols-modal')) $('#scd-cols-modal').hidden = true; });
+  $('#scd-cols-reset').addEventListener('click', () => {
+    scdState.colOrder = [...SCD_COLUMNS];
+    scdState.colHidden = new Set();
+    changed();
+  });
+  list.addEventListener('change', (e) => {
+    const cb = e.target.closest('[data-coltoggle]');
+    if (!cb) return;
+    if (cb.checked) scdState.colHidden.delete(cb.dataset.coltoggle); else scdState.colHidden.add(cb.dataset.coltoggle);
+    changed();
+  });
+  let dragField = null;
+  const clearOver = () => list.querySelectorAll('.rescol-over').forEach((el) => el.classList.remove('rescol-over'));
+  list.addEventListener('dragstart', (e) => {
+    const row = e.target.closest('[data-colfield]');
+    if (!row) return;
+    dragField = row.dataset.colfield;
+    e.dataTransfer.effectAllowed = 'move';
+    row.classList.add('rescol-dragging');
+  });
+  list.addEventListener('dragend', (e) => {
+    e.target.closest('[data-colfield]')?.classList.remove('rescol-dragging');
+    clearOver();
+  });
+  list.addEventListener('dragover', (e) => {
+    const row = e.target.closest('[data-colfield]');
+    if (!row || !dragField || row.dataset.colfield === dragField) return;
+    e.preventDefault();
+    clearOver();
+    row.classList.add('rescol-over');
+  });
+  list.addEventListener('drop', (e) => {
+    const row = e.target.closest('[data-colfield]');
+    if (!row || !dragField) return;
+    e.preventDefault();
+    const order = scdColsAll().filter((f) => f !== dragField);
+    const at = order.indexOf(row.dataset.colfield);
+    order.splice(at < 0 ? order.length : at, 0, dragField);
+    scdState.colOrder = order;
+    dragField = null;
+    changed();
+  });
+}
+
 function initSchematicPage() {
+  initScdCols();
   // Breadcrumb back-nav: plain "Schematics", or a category-filtered list
   $('#scd-crumbs').addEventListener('click', (e) => {
     const cat = e.target.closest('[data-catnav]');
@@ -1114,6 +1242,25 @@ function initSchematicPage() {
 
   // Group collapse + add-to-stockpile + resource-name → resource detail page
   $('#scd-body').addEventListener('click', async (e) => {
+    // eCPU vote — same call as the resource page (±0.6, clamped server-side)
+    const vote = e.target.closest('[data-cpuvote]');
+    if (vote) {
+      const res = await apiFetch('POST', 'api/resources.php', {
+        data: { action: 'cpu', id: safeInt(vote.dataset.rid), dir: vote.dataset.cpuvote },
+      }).catch((err) => ({ ok: false, error: String(err) }));
+      if (!res.ok) { toast(res.error || 'Vote failed', false); return; }
+      const cpu = safeInt(res.data.cpu);
+      // every row of this resource (it can rank in several slots) follows
+      document.querySelectorAll(`#scd-body [data-cpuvote="up"][data-rid="${safeInt(vote.dataset.rid)}"]`).forEach((up) => {
+        const td = up.closest('td');
+        td.className = `stat scd-cpu ${scdCpuClass(cpu)}`;
+        td.querySelector('[data-cpuval]').textContent = cpu || '--';
+      });
+      (scdState.schematic?.resourceDtoList || []).forEach((dto) => ['currentBestResourceList', 'serverBestResourceList']
+        .forEach((k) => (dto[k] || []).forEach((sp) => { if (safeInt(sp.resourceId) === safeInt(vote.dataset.rid)) sp.cpu = cpu; })));
+      toast(`eCPU nudged ${vote.dataset.cpuvote} — now ${cpu}`);
+      return;
+    }
     const addCell = e.target.closest('[data-add]');
     if (addCell) { handleAddCellClick(addCell, e); return; }
     const wishCell = e.target.closest('[data-wish]');

@@ -1240,6 +1240,9 @@ tr.harv-dragging td, tr.fac-dragging td, tr.mys-dragging td, tr.inv-dragging td 
    LEADS every name cell, so tagged and untagged names align in one column —
    the icon fills the slot when the row has tags (hover for chips) */
 .stk-tagslot { display: inline-block; width: 22px; flex-shrink: 0; }
+/* hanging indent: a long name wraps under its first letter, not under the tag slot */
+.data-grid td.res-name:has(> .stk-tagslot:first-child) { padding-left: 30px; text-indent: -22px; }
+.data-grid td.res-name:has(> .stk-tagslot:first-child) * { text-indent: 0; }
 .stk-tagind { color: var(--text-muted); font-size: 10px; cursor: pointer; vertical-align: 1px; }
 .stk-tagind:hover { color: var(--accent-hover); }
 /* resources grid: superscript "top resource for N schematics" count, like the site */
@@ -1754,7 +1757,14 @@ td .harv-name { font-size: inherit; font-weight: inherit; color: inherit; }
 .mm-archsel { border-color: var(--border); color: var(--text-primary); }
 .mm-archsel:hover { border-color: var(--accent); color: var(--text-hover); }
 /* My Inventory sub-head row: tag cloud left, "Email all" checkbox right */
-.inv-subhead { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.inv-subhead { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+/* restock forecast: pace window + cover days */
+.inv-pace { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-primary); white-space: nowrap; }
+.inv-pace > i { color: var(--text-muted); font-size: 12px; }
+.inv-pace .inv-pace-sel { width: auto; min-width: 0; padding-top: 2px; padding-bottom: 2px; }
+.inv-pace .inv-num { width: 60px; padding-top: 2px; padding-bottom: 2px; }
+.inv-pace-sep { color: var(--text-muted); }
+.inv-suggest { color: var(--text-hover); font-weight: 600; }
 .inv-subhead .fac-tagbar { margin-bottom: 0; flex: 1 1 auto; }
 .inv-subhead .fac-tagbar[hidden] { display: none; }
 .inv-allmail { display: flex; align-items: center; gap: 6px; font-size: 13px; margin-left: auto;

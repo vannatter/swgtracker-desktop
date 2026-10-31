@@ -8,6 +8,9 @@ const INV_COLUMNS = [
   ['Vendor', 'vendor', 'col-text'],
   ['Match Price', 'match_price', 'col-num'],
   ['Sales', 'sales_count', 'stat', 'Sales the mail parser matched to this item — click a count to see them'],
+  ['Sold/wk', 'pace', 'stat', 'How many you sell a week, from your matched sales over the pace window picked above the list'],
+  ['Days Left', 'days_left', 'stat', 'How long your stock lasts at that pace — red under 3 days, yellow at a week or less'],
+  ['Suggest', 'suggest', 'stat', 'How many to add to cover the days picked above the list at your current pace'],
   ['Updated', 'last_updated', 'col-text'],
 ];
 
@@ -22,6 +25,92 @@ const invState = { page: 1, perPage: 100, hasNext: false, sortField: 'item_name'
                    lastSel: null,         // last-toggled checkbox (anchor for shift-click ranges)
                    selected: new Set(),
                    editMode: false };   // every Stocked/Threshold cell is a box — run down a column without clicking // click-marked rows (Veizyr) — survive re-renders and window switches
+
+// ---- restock forecast: sell pace from matched sales (api/inventory.php sends
+// sold_7d / sold_30d / sold_90d) → days of stock left → how many to add to
+// cover N days. Pace window + cover days are per device.
+const INV_PACE_KEY = 'inv-pace';
+const INV_PACE_DAYS = [7, 30, 90];
+const INV_RUNOUT_DAYS = 7;            // "Running out" filter + the Home tile
+// sorted here, not by the server: they hang off the pace prefs
+const INV_CLIENT_SORT = new Set(['pace', 'days_left', 'suggest']);
+function invPace() {
+  let p = {};
+  try { p = JSON.parse(localStorage.getItem(INV_PACE_KEY) || '{}') || {}; } catch (_) {}
+  const days = INV_PACE_DAYS.includes(safeInt(p.days)) ? safeInt(p.days) : 30;
+  const cover = Math.min(180, Math.max(1, safeInt(p.cover) || 14));
+  return { days, cover };
+}
+function invSavePace(p) {
+  try { localStorage.setItem(INV_PACE_KEY, JSON.stringify(p)); } catch (_) {}
+}
+// units a day over the pace window; null = the site hasn't sent pace yet
+function invRate(item, pace = invPace()) {
+  const sold = item[`sold_${pace.days}d`];
+  if (sold === undefined) return null;
+  return safeInt(sold) / pace.days;
+}
+// days of stock left at that pace; null = no recent sales (it isn't running out)
+function invDaysLeft(item, pace = invPace()) {
+  const rate = invRate(item, pace);
+  if (!rate) return null;
+  return Math.max(0, safeInt(item.stocked)) / rate;
+}
+// how many to add so stock covers `cover` days
+function invSuggest(item, pace = invPace()) {
+  const rate = invRate(item, pace);
+  if (!rate) return 0;
+  return Math.max(0, Math.ceil(rate * pace.cover) - safeInt(item.stocked));
+}
+// warnings-off items (threshold -1) and one-offs never count as running out
+const invRunningOut = (item, pace = invPace()) => {
+  if (safeInt(item.threshold) < 0 || Number(item.one_off)) return false;
+  const d = invDaysLeft(item, pace);
+  return d !== null && d <= INV_RUNOUT_DAYS;
+};
+function invSortVal(item, field, pace) {
+  if (field === 'pace') return invRate(item, pace) ?? -1;
+  if (field === 'suggest') return invSuggest(item, pace);
+  const d = invDaysLeft(item, pace);
+  return d === null ? Infinity : d;
+}
+function invClientSort(rows) {
+  const f = invState.sortField;
+  if (!INV_CLIENT_SORT.has(f)) return rows;
+  const pace = invPace(), dir = invState.sortOrder === 'ASC' ? 1 : -1;
+  return rows.map((r) => [r, invSortVal(r, f, pace)])
+    .sort((a, b) => {
+      // no-pace rows sit at the bottom either way
+      const ai = a[1] === Infinity || a[1] === -1, bi = b[1] === Infinity || b[1] === -1;
+      if (ai !== bi) return ai ? 1 : -1;
+      return (a[1] - b[1]) * dir || String(a[0].item_name).localeCompare(String(b[0].item_name));
+    })
+    .map(([r]) => r);
+}
+function invPaceCells(item, pace) {
+  const off = '<span class="stat_off">—</span>';
+  const rate = invRate(item, pace);
+  if (rate === null) return `<td class="stat">${off}</td><td class="stat">${off}</td><td class="stat">${off}</td>`;
+  const sold = safeInt(item[`sold_${pace.days}d`]);
+  const wk = rate * 7;
+  const wkTxt = !sold ? off : wk < 10 ? wk.toFixed(1).replace(/\.0$/, '') : fmtNum(Math.round(wk));
+  const d = invDaysLeft(item, pace);
+  const warnOff = safeInt(item.threshold) < 0;
+  const dCls = d === null || warnOff ? '' : d < 3 ? ' inv-neg' : d <= INV_RUNOUT_DAYS ? ' inv-low' : '';
+  const dTxt = d === null ? off : d < 1 ? (safeInt(item.stocked) > 0 ? '&lt;1d' : '0d') : d >= 365 ? '365d+' : `${Math.floor(d)}d`;
+  const add = invSuggest(item, pace);
+  const tip = sold
+    ? `Sold ${fmtNum(sold)} in the last ${pace.days} days — about ${wk < 10 ? wk.toFixed(1) : Math.round(wk)} a week`
+    : `No matched sales in the last ${pace.days} days`;
+  return `<td class="stat" title="${tip}">${wkTxt}</td>`
+    + `<td class="stat${dCls}" title="${d === null ? tip : `${tip}; ${fmtNum(Math.max(0, safeInt(item.stocked)))} in stock lasts about ${d < 1 ? 'under a day' : `${Math.floor(d)} day${Math.floor(d) === 1 ? '' : 's'}`}`}">${dTxt}</td>`
+    + `<td class="stat${add ? ' inv-suggest' : ''}" title="${add ? `Add ${fmtNum(add)} to cover ${pace.cover} days` : `Stock already covers ${pace.cover} days`}">${add ? `+${fmtNum(add)}` : off}</td>`;
+}
+function invSyncPaceControls() {
+  const p = invPace();
+  $('#inv-pace-days').value = String(p.days);
+  $('#inv-pace-cover').value = String(p.cover);
+}
 
 // tags live as one comma-separated string server-side, like stockpile/factories
 const invTags = (i) => String(i.tags || '').split(',').map((t) => t.trim()).filter(Boolean);
@@ -160,7 +249,7 @@ function invRenderVendorSug() {
 // a look on an item no sale has counted against yet
 const invSalesClickable = (item) => safeInt(item.sales_count) > 0 || (typeof invLogState !== 'undefined' && invLogState.on);
 
-function invRowHtml(item, idx) {
+function invRowHtml(item, idx, pace = invPace()) {
   const stocked = safeInt(item.stocked);
   const threshold = safeInt(item.threshold);
   // a NEGATIVE threshold (-1) = this item never warns — not low, not oversold
@@ -184,6 +273,7 @@ function invRowHtml(item, idx) {
     <td class="col-text">${escapeHtml(item.vendor || '') || '<span class="stat_off">—</span>'}</td>
     <td class="col-num">${item.match_price != null && item.match_price !== '' ? fmtNum(item.match_price) : '<span class="stat_off">—</span>'}</td>
     <td class="stat ${invSalesClickable(item) ? 'inv-sales' : ''}" ${invSalesClickable(item) ? `data-sales="${idx}" title="${safeInt(item.sales_count) ? 'Click to see the matched sales' : 'Click to see this item’s history'}"` : ''}>${safeInt(item.sales_count) ? fmtNum(item.sales_count) : '<span class="stat_off">—</span>'}</td>
+    ${invPaceCells(item, pace)}
     <td class="col-text res-type">${fmtAgoTip(item.last_updated)}</td>
     <td class="pin-cell" data-invalert="${idx}" title="${Number(item.notify_email)
         ? 'Emailing you when this drops to its threshold or oversells — click to stop'
@@ -202,7 +292,7 @@ function invRowHtml(item, idx) {
   </tr>`;
 }
 
-const invRowsHtml = (item, idx) => invRowHtml(item, idx);
+const invRowsHtml = (item, idx, pace) => invRowHtml(item, idx, pace);
 
 // Page size is the user's (100 / 250 / 500 / All, remembered per device), but the
 // paging runs over the WHOLE grouped + sorted list, so a group's items stay
@@ -238,6 +328,7 @@ function renderInvRows() {
   const spacer = `<tr class="stk-group-gap"><td colspan="${invColCount()}"></td></tr>`;
   const parts = [];
   const pi = invPageSlice(sections, (s) => invState.grpCollapsed.has(s.key), invPageSize(), invState.page);
+  const pace = invPace();
   invState.page = pi.page; invState.pageInfo = pi;
   pi.out.forEach(({ sec, items }) => {
     const collapsed = invState.grpCollapsed.has(sec.key);
@@ -245,7 +336,7 @@ function renderInvRows() {
       if (parts.length) parts.push(spacer);
       parts.push(grpTableHeaderHtml(sec.key, sec.name, sec.items.length, collapsed, sec.key !== 'un', invColCount(), 'col-actions', sec.key !== 'un', true));
     }
-    if (!collapsed) parts.push(...items.map(([item, idx]) => invRowsHtml(item, idx)));
+    if (!collapsed) parts.push(...items.map(([item, idx]) => invRowsHtml(item, idx, pace)));
   });
   $('#inv-body').innerHTML = parts.join('');
   invRenderPager();
@@ -436,8 +527,8 @@ async function loadInventory() {
   // Inventories run to a few hundred; invFetchAll walks the 500-row page cap.
   const params = {
     search: vendor ? `vendor:"${vendor}"` : (q && scope ? `${scope}:${q}` : q),
-    sort: invState.sortField,
-    order: invState.sortOrder,
+    sort: INV_CLIENT_SORT.has(invState.sortField) ? 'item_name' : invState.sortField,
+    order: INV_CLIENT_SORT.has(invState.sortField) ? 'ASC' : invState.sortOrder,
   };
   $('#inv-scope').disabled = !!vendor;
   if (Date.now() - (invState.filterVendorsAt || 0) > 60000) invLoadFilterVendors().then(invFillVendorFilter);
@@ -463,6 +554,8 @@ async function loadInventory() {
 
   let rows = res.data.results || [];
   if (both) rows = rows.filter(invItemMatches(q));
+  if (filter === 'runout') rows = rows.filter((i) => invRunningOut(i));
+  rows = invClientSort(rows);
   invState.hasNext = false; invState.vendorCapped = false;   // the page itself is kept (edits repaint in place)
   invState.items = rows;
   invFillVendorFilter();
@@ -724,6 +817,17 @@ function initInventory() {
     loadInventory();
   });
   $('#inv-low').addEventListener('change', () => { invState.page = 1; loadInventory(); });
+  // pace window / cover days: numbers are already on the rows — repaint, or
+  // refetch when the list itself depends on them (Running out / a pace sort)
+  invSyncPaceControls();
+  const invPaceChanged = () => {
+    invSavePace({ days: safeInt($('#inv-pace-days').value), cover: safeInt($('#inv-pace-cover').value) });
+    invSyncPaceControls();
+    if ($('#inv-filter').value === 'runout' || INV_CLIENT_SORT.has(invState.sortField)) loadInventory();
+    else renderInvRows();
+  };
+  $('#inv-pace-days').addEventListener('change', invPaceChanged);
+  $('#inv-pace-cover').addEventListener('change', invPaceChanged);
   $('#inv-scope').addEventListener('change', () => { invState.page = 1; loadInventory(); });
   $('#inv-vendor').addEventListener('change', () => { invState.page = 1; loadInventory(); });
   // paging is local (the whole list is loaded) — no refetch, just repaint
@@ -1033,6 +1137,21 @@ function initInventory() {
     ['#inv-bulk-stocked', '#inv-bulk-threshold', '#inv-bulk-vendor', '#inv-bulk-tags'].forEach((s) => { $(s).value = ''; });
     loadInventory();
   });
+  // Restock to suggested: each checked row's Stocked goes up by its own
+  // Suggest number (so one PUT per row — bulk_set takes a single value)
+  $('#inv-bulk-suggest').addEventListener('click', async () => {
+    const pace = invPace();
+    const rows = invState.items.filter((i) => invState.checked.has(String(i.id)) && invSuggest(i, pace) > 0);
+    if (!rows.length) { toast(`The selected items already cover ${pace.cover} days`, false); return; }
+    const results = await Promise.all(rows.map((i) =>
+      apiFetch('PUT', 'api/inventory.php', { data: { inventory_id: safeInt(i.id), stocked: safeInt(i.stocked) + invSuggest(i, pace) } })
+        .catch((e) => ({ ok: false, error: String(e) }))));
+    const failed = results.filter((r) => !r.ok).length;
+    const n = rows.length - failed;
+    toast(failed ? `${failed} of ${rows.length} couldn't be restocked` : `Restocked ${fmtNum(n)} item${n === 1 ? '' : 's'} to cover ${pace.cover} days`, !failed);
+    invState.checked.clear();
+    loadInventory();
+  });
   // bulk Delete: confirm, then remove the selected items from inventory
   $('#inv-bulk-delete').addEventListener('click', async () => {
     const ids = [...invState.checked].map(String);
@@ -1076,7 +1195,7 @@ function initInventory() {
       invState.sortOrder = invState.sortOrder === 'DESC' ? 'ASC' : 'DESC';
     } else {
       invState.sortField = field;
-      invState.sortOrder = field === 'item_name' || field === 'vendor' ? 'ASC' : 'DESC';
+      invState.sortOrder = field === 'item_name' || field === 'vendor' || field === 'days_left' ? 'ASC' : 'DESC';
     }
     invState.page = 1;
     loadInventory();

@@ -31,7 +31,7 @@ const HOME_WIDGETS = {
   resource: { name: 'Resource', icon: 'fa-gem', hint: 'is it still in spawn, score and planets', search: 'Search resources…' },
   schematic: { name: 'Schematic', icon: 'fa-scroll', hint: 'the best resource in spawn for each of its slots', search: 'Search schematics…' },
   class: { name: 'Profession', icon: 'fa-user-group', hint: 'population and trend for one class', search: 'Search classes…' },
-  inv_restock: { name: 'My Inventory restock', icon: 'fa-boxes-stacked', hint: 'how many of your tracked items need restocking', search: null },
+  inv_restock: { name: 'My Inventory restock', icon: 'fa-boxes-stacked', hint: 'how many of your tracked items need restocking, and how many run out this week', search: null },
   factories: { name: 'Factories', icon: 'fa-industry', hint: 'runs in progress, finished runs to collect, and what’s due next', search: null },
   harvesters: { name: 'Harvesters', icon: 'fa-oil-well', hint: 'full hoppers, and how the rest are filling', search: null },
   sales: { name: 'Sales', icon: 'fa-tags', hint: 'credits and sales over a window, with the trend', search: null,
@@ -524,9 +524,11 @@ function homeWidgetTileHtml(w) {
         `${fmtNum(safeInt(p.count))} players${chg ? ` · ${chg > 0 ? '+' : ''}${chg} recent` : ''}`, spark(hist, p.color || 'var(--accent)'), attrs);
     }
     case 'inv_restock': {
-      const n = safeInt(d.count), neg = safeInt(d.negative);
+      const n = safeInt(d.count), neg = safeInt(d.negative), out = safeInt(d.runout);
+      const sub = [neg ? `${fmtNum(neg)} oversold` : '', out ? `${fmtNum(out)} run${out === 1 ? 's' : ''} out this week at your sales pace` : '']
+        .filter(Boolean).join(' · ');
       return homeTile(label, `<span class="hm-link" data-hmgo="inventory">${n ? `${fmtNum(n)} item${n === 1 ? '' : 's'} to restock` : 'Nothing to restock'}</span>`,
-        neg ? `${fmtNum(neg)} oversold` : 'every tracked item is above its threshold', '', '', attrs);
+        sub || 'every tracked item is above its threshold', '', '', attrs);
     }
     case 'factories': {
       const parts = [];
@@ -588,10 +590,19 @@ async function homeWidgetFetch(w) {
       return item ? { ok: true, data: { item, history: (homeState.profData.history || {})[p.key] || [] } } : { ok: false, error: 'class not in the feed' };
     }
     case 'inv_restock': {
-      const r = await apiFetch('GET', 'api/inventory.php', { params: { inventory_type: 'restock', perpage: 500 } });
-      if (!r.ok) return r;
-      const rows = (r.data && r.data.results) || [];
-      return { ok: true, data: { count: rows.length, negative: rows.filter((i) => safeInt(i.stocked) < 0).length } };
+      // the whole list (one-offs are already left out): threshold restocks AND
+      // pace run-outs (inventory.js invRunningOut) come from the same rows
+      const rows = [];
+      for (let page = 1; page <= 10; page++) {
+        const r = await apiFetch('GET', 'api/inventory.php', { params: { page, perpage: 500 } });
+        if (!r.ok) return r;
+        const got = (r.data && r.data.results) || [];
+        rows.push(...got);
+        if (got.length < 500) break;
+      }
+      const restock = rows.filter((i) => safeInt(i.threshold) >= 0 && safeInt(i.stocked) <= safeInt(i.threshold));
+      return { ok: true, data: { count: restock.length, negative: restock.filter((i) => safeInt(i.stocked) < 0).length,
+        runout: typeof invRunningOut === 'function' ? rows.filter((i) => invRunningOut(i)).length : 0 } };
     }
     case 'factories': {
       const r = await apiFetch('GET', 'api/factories.php');

@@ -5,7 +5,12 @@
    restock tile; stock only crosses to Inventory through Move → Inventory.
 
    A row is one item at one location. Locations are the grouping (no folders):
-   a named house / container / backpack, or a factory's hopper. */
+   a named house / container / backpack, or a factory's hopper.
+
+   Phase 2 ties it to the rest of the app: the schematic page shows what you
+   hold for each component slot (and what N crafts are short), Log a craft draws
+   the parts down (with Undo), a finished factory run drops into its hopper, and
+   an item's "Used in" lists the schematics that take it. */
 
 const CMP_SOURCES = {
   factory: ['fa-industry', 'Factory run'],
@@ -16,7 +21,7 @@ const CMP_SOURCES = {
 const CMP_VIEW_KEY = 'cmp-view';
 
 const cmpState = {
-  rows: [], locations: [], items: [], factories: [], loaded: false,
+  rows: [], locations: [], items: [], factories: [], links: [], loaded: false,
   view: 'item',            // 'item' | 'location' — what the group rows are
   collapsed: new Set(),    // group keys folded shut
   editId: null,            // row open in the add/edit dialog (null = adding)
@@ -61,6 +66,7 @@ async function cmpFetch() {
   cmpState.locations = res.data.locations || [];
   cmpState.items = res.data.items || [];
   cmpState.factories = res.data.factories || [];
+  cmpState.links = res.data.links || [];
   cmpState.loaded = true;
   return res;
 }
@@ -157,7 +163,7 @@ function cmpItemHeadHtml(key, name, rows, totals, collapsed) {
         <i class="fa-solid ${collapsed ? 'fa-caret-right' : 'fa-caret-down'} stk-caret stk-caret-trail" data-cgtoggle="${escapeHtml(key)}"></i>
       </span></div>
     </td>
-    <td class="col-actions"><button class="btn btn-icon${th >= 0 ? ' mys-alert-on' : ''}" data-cthresh="${escapeHtml(name)}"
+    <td class="col-actions"><button class="btn btn-icon" data-cuses="${escapeHtml(name)}" title="Which schematics use this"><i class="fa-solid fa-diagram-project"></i></button><button class="btn btn-icon${th >= 0 ? ' mys-alert-on' : ''}" data-cthresh="${escapeHtml(name)}"
       title="${th >= 0 ? `Warns at ${fmtNum(th)} or fewer in total — click to change` : 'Set a low-stock warning on this item’s total'}"><i class="fa-${th >= 0 ? 'solid' : 'regular'} fa-bell"></i></button></td>
   </tr>`;
 }
@@ -592,9 +598,10 @@ function initComponents() {
   $('#cmp-locs-open').addEventListener('click', openCmpLocs);
 
   $('#cmp-body').addEventListener('click', (e) => {
-    const t = e.target.closest('[data-cmove],[data-cedit],[data-cdel],[data-cthresh],[data-cgrp]');
+    const t = e.target.closest('[data-cmove],[data-cedit],[data-cdel],[data-cthresh],[data-cuses],[data-cgrp]');
     if (!t) return;
-    if (t.dataset.cmove) openCmpMove(safeInt(t.dataset.cmove));
+    if (t.dataset.cuses) openCmpUses(t.dataset.cuses);
+    else if (t.dataset.cmove) openCmpMove(safeInt(t.dataset.cmove));
     else if (t.dataset.cedit) openCmpDialog(cmpState.rows.find((r) => safeInt(r.id) === safeInt(t.dataset.cedit)));
     else if (t.dataset.cdel) removeCmpRow(safeInt(t.dataset.cdel));
     else if (t.dataset.cthresh) openCmpThresh(t.dataset.cthresh);
@@ -675,4 +682,446 @@ function initComponents() {
   $('#cmp-thresh-cancel').addEventListener('click', () => { $('#cmp-thresh-modal').hidden = true; });
   bindBackdropClose($('#cmp-thresh-modal'), () => { $('#cmp-thresh-modal').hidden = true; });
   $('#cmp-thresh-val').addEventListener('keydown', (e) => { if (e.key === 'Enter') saveCmpThresh(false); });
+
+  initCmpCraft();
+}
+
+// ---- phase 2: schematics, factory runs, crafting ----------------------------
+
+// Part names the way players type them vs. the way schematics name them:
+// "Reinforced Fiberpanels" ≈ "Reinforced Fiber Panel". Same rule as
+// api/components.php cmp_name_match — exact once squeezed, or containing a
+// two-word-plus part name ("Kimogila Scale" is not the "Kimogila" ship).
+function cmpWords(s) {
+  return String(s || '').toLowerCase().replace(/\([^)]*\)/g, ' ').split(/[^a-z0-9]+/).filter(Boolean)
+    .map((w) => (w.length > 4 && w.endsWith('ies') ? `${w.slice(0, -3)}y`
+      : w.length > 3 && w.endsWith('s') && !w.endsWith('ss') ? w.slice(0, -1) : w));
+}
+function cmpNameMatch(item, part) {
+  const pw = cmpWords(part), a = cmpWords(item).join(''), b = pw.join('');
+  if (!a || !b) return false;
+  return a === b || (pw.length >= 2 && b.length >= 8 && a.includes(b));
+}
+
+const cmpSlotLabel = (c) => String(c.desc || '').replace(/\s*\(optional\)\s*$/i, '');
+// a "schematic" slot is labelled for its role ("Inner Liner") — the part it takes
+// is that schematic (Synthetic Cloth); names come from ?slot_names, cached
+const cmpSlotNames = new Map();
+async function cmpEnsureSlotNames(comps) {
+  const need = comps.filter((c) => c.type === 'schematic' && !cmpSlotNames.has(String(c.id)))
+    .map((c) => safeInt(c.id)).filter(Boolean);
+  if (!need.length) return;
+  const res = await apiFetch('GET', 'api/components.php', { params: { slot_names: need.join(',') } });
+  const names = (res.ok && res.data && res.data.names) || {};
+  need.forEach((id) => cmpSlotNames.set(String(id), names[id] || ''));
+}
+function cmpSlotParts(c) {
+  const out = [cmpSlotLabel(c)];
+  if (c.type === 'schematic') out.push(cmpSlotNames.get(String(c.id)) || '');
+  (Array.isArray(c.categoryItems) ? c.categoryItems : []).forEach((ci) => out.push(ci.schematicName));
+  return out.filter(Boolean);
+}
+// your pick for a slot (shared by every schematic using it), '' = match by name
+const cmpLink = (slotId) => (cmpState.links.find((l) => String(l.slot_id) === String(slotId)) || {}).item_name || '';
+// the stacks that fill a slot: the picked item, else whatever matches the part's names
+function cmpSlotRows(c, pick = cmpLink(c.id)) {
+  if (pick) return cmpState.rows.filter((r) => String(r.item_name).toLowerCase() === pick.toLowerCase());
+  const parts = cmpSlotParts(c);
+  return cmpState.rows.filter((r) => parts.some((p) => cmpNameMatch(r.item_name, p)));
+}
+const cmpUnits = (rows) => rows.reduce((t, r) => t + safeInt(r.units), 0);
+const cmpItemNames = () => [...cmpTotals().values()].sort((a, b) => a.name.localeCompare(b.name));
+
+// -- schematic page: what you hold per slot, and what N crafts would be short --
+
+const scdCmp = { n: 1 };
+async function cmpSchematicHoldings(s) {
+  const box = $('#scd-cmp');
+  if (!box) return;
+  box.hidden = true;
+  const comps = (s.componentTypes || []).filter((c) => safeInt(c.number) > 0);
+  if (!comps.length) return;
+  try {
+    if (!cmpState.loaded) await cmpFetch();
+    await cmpEnsureSlotNames(comps);
+  } catch (_) { return; }
+  if (scdState.schematic !== s) return;   // navigated on while loading
+  if (!cmpState.rows.length) return;      // not using Components — the page stays as it was
+  cmpPaintHoldings(s);
+}
+function cmpPaintHoldings(s) {
+  const n = Math.max(1, scdCmp.n);
+  (s.componentTypes || []).forEach((c, i) => {
+    const line = document.querySelector(`#scd-components [data-ci="${i}"]`);
+    if (!line) return;
+    line.querySelector('.scd-have')?.remove();
+    if (safeInt(c.number) <= 0) return;
+    const have = cmpUnits(cmpSlotRows(c));
+    const need = safeInt(c.number) * n;
+    const opt = c.optional === 'yes';
+    const [cls, txt] = have >= need ? ['ok', `have ${fmtNum(have)}`]
+      : opt ? ['muted', have ? `have ${fmtNum(have)}` : 'none held']
+        : [have ? 'short' : 'none', `${have ? `have ${fmtNum(have)} · ` : ''}short ${fmtNum(need - have)}`];
+    const linked = cmpLink(c.id);
+    line.insertAdjacentHTML('beforeend', ` <a role="button" class="scd-have ${cls}" data-cmplink="${i}"
+      title="${linked ? `Counting your “${escapeHtml(linked)}”` : 'Matched by name from My Components'} — click to pick which item fills this slot">${txt}</a>`);
+  });
+  $('#scd-cmp-n').value = String(n);
+  $('#scd-cmp').hidden = false;
+}
+
+// which of your items fills a slot — saved per slot, so it carries to every schematic using it
+let cmpLinkCtx = null;
+function openCmpLink(c, done) {
+  cmpLinkCtx = { c, done };
+  $('#cmp-link-title').textContent = `Which item fills “${cmpSlotLabel(c)}”?`;
+  const auto = [...new Set(cmpSlotRows(c, '').map((r) => r.item_name))];
+  const cur = cmpLink(c.id).toLowerCase();
+  $('#cmp-link-sel').innerHTML = `<option value="">Match by name${auto.length ? ` — ${escapeHtml(auto.join(', '))}` : ' — nothing matches yet'}</option>`
+    + cmpItemNames().map((t) => `<option value="${escapeHtml(t.name)}"${t.name.toLowerCase() === cur ? ' selected' : ''}>${escapeHtml(t.name)} (${fmtNum(t.units)})</option>`).join('');
+  $('#cmp-link-modal').hidden = false;
+  $('#cmp-link-sel').focus();
+}
+async function cmpSaveLink(c, item_name) {
+  const res = await apiFetch('POST', 'api/components.php', { data: { action: 'link', slot_id: String(c.id), item_name } });
+  if (!res.ok) return res;
+  cmpState.links = cmpState.links.filter((l) => String(l.slot_id) !== String(c.id));
+  if (item_name) cmpState.links.push({ slot_id: String(c.id), item_name });
+  return res;
+}
+async function saveCmpLink() {
+  const { c, done } = cmpLinkCtx || {};
+  if (!c) return;
+  const res = await cmpSaveLink(c, $('#cmp-link-sel').value);
+  if (!res.ok) { toast(res.error || 'Save failed', false); checkAuthError(res.error); return; }
+  $('#cmp-link-modal').hidden = true;
+  if (done) done();
+}
+
+// -- Log a craft: pick a schematic + quantity, draw the parts down -------------
+
+const cmpCraft = { sid: '', name: '', comps: [], pick: {}, draw: {}, searchTimer: null };
+
+async function openCmpCraft(preset = null) {
+  try { if (!cmpState.loaded) await cmpFetch(); } catch (_) {}
+  Object.assign(cmpCraft, { sid: '', name: '', comps: [], pick: {}, draw: {} });
+  $('#cmp-craft-qty').value = String(Math.max(1, safeInt(preset && preset.qty) || 1));
+  $('#cmp-craft-search').value = '';
+  $('#cmp-craft-sug').hidden = true;
+  $('#cmp-craft-slots').innerHTML = '';
+  $('#cmp-craft-hint').textContent = '';
+  $('#cmp-craft-modal').hidden = false;
+  if (preset && preset.id) {
+    await cmpCraftUse(preset.id, preset.name, preset.comps);
+    $('#cmp-craft-qty').focus();
+  } else {
+    $('#cmp-craft-pickwrap').hidden = false;
+    $('#cmp-craft-name').hidden = true;
+    $('#cmp-craft-search').focus();
+  }
+}
+
+async function cmpCraftUse(id, name, comps = null) {
+  $('#cmp-craft-pickwrap').hidden = true;
+  const head = $('#cmp-craft-name');
+  head.innerHTML = `<i class="fa-solid fa-scroll"></i> ${escapeHtml(name || 'Schematic')}`
+    + (comps ? '' : ' <a role="button" class="cmp-craft-change" data-ccchange>change</a>');
+  head.hidden = false;
+  if (!comps) {
+    $('#cmp-craft-slots').innerHTML = '<div class="settings-hint"><span class="spinner"></span> Loading the schematic…</div>';
+    let res;
+    try { res = await api().get_schematic(id); } catch (e) { res = { ok: false, error: String(e) }; }
+    const s = res.ok && res.data ? (res.data.schematic || res.data) : null;
+    if (!s) { $('#cmp-craft-slots').innerHTML = `<div class="settings-hint">Couldn't load it: ${escapeHtml(res.error || 'server error')}</div>`; return; }
+    comps = s.componentTypes || [];
+    name = s.schematicName || name;
+  }
+  cmpCraft.sid = String(id);
+  cmpCraft.name = name;
+  cmpCraft.comps = comps.map((c, i) => ({ c, i })).filter((u) => safeInt(u.c.number) > 0);
+  cmpCraft.pick = {};
+  cmpCraft.comps.forEach(({ c, i }) => { cmpCraft.pick[i] = cmpLink(c.id); });
+  try { await cmpEnsureSlotNames(cmpCraft.comps.map((u) => u.c)); } catch (_) {}
+  cmpCraftAllocate();
+  cmpCraftRender();
+}
+
+// default draws: required slots fill from the biggest stacks first; optional ones start at 0
+function cmpCraftAllocate(only = null) {
+  const qty = Math.max(1, safeInt($('#cmp-craft-qty').value));
+  cmpCraft.comps.forEach(({ c, i }) => {
+    if (only !== null && only !== i) return;
+    const rows = cmpSlotRows(c, cmpCraft.pick[i]).slice().sort((a, b) => safeInt(b.units) - safeInt(a.units));
+    let left = c.optional === 'yes' ? 0 : safeInt(c.number) * qty;
+    cmpCraft.draw[i] = {};
+    rows.forEach((r) => {
+      const take = Math.min(left, safeInt(r.units));
+      cmpCraft.draw[i][safeInt(r.id)] = take;
+      left -= take;
+    });
+  });
+}
+
+function cmpCraftRender() {
+  const qty = Math.max(1, safeInt($('#cmp-craft-qty').value));
+  const names = cmpItemNames();
+  if (!cmpCraft.comps.length) {
+    $('#cmp-craft-slots').innerHTML = '<div class="settings-hint">This schematic takes no components — nothing to draw down.</div>';
+    cmpCraftHint();
+    return;
+  }
+  $('#cmp-craft-slots').innerHTML = cmpCraft.comps.map(({ c, i }) => {
+    const opt = c.optional === 'yes';
+    const need = safeInt(c.number) * qty;
+    const rows = cmpSlotRows(c, cmpCraft.pick[i]);
+    const pick = String(cmpCraft.pick[i] || '').toLowerCase();
+    return `<div class="cmp-craft-slot" data-cslot="${i}">
+      <div class="cmp-craft-slothead">
+        <span class="cmp-craft-slotname">${escapeHtml(cmpSlotLabel(c))}
+          <span class="cmp-planet">${opt ? 'optional · ' : ''}${fmtNum(safeInt(c.number))} each${opt ? '' : ` · ${fmtNum(need)} needed`}</span></span>
+        <select class="form-select filter-select cmp-craft-pick" data-cpick="${i}" title="Which of your items fills this slot — remembered for every schematic that uses it">
+          <option value="">Match by name</option>
+          ${names.map((t) => `<option value="${escapeHtml(t.name)}"${t.name.toLowerCase() === pick ? ' selected' : ''}>${escapeHtml(t.name)}</option>`).join('')}
+        </select>
+      </div>
+      ${rows.length ? rows.map((r) => `<div class="cmp-craft-row">
+          <span class="cmp-craft-from">${escapeHtml(r.item_name)} <span class="cmp-planet">${escapeHtml(cmpLocName(r.location_id))} · ${fmtNum(safeInt(r.units))} there</span></span>
+          <input type="number" class="form-control filter-input cmp-craft-amt" min="0" max="${safeInt(r.units)}"
+                 data-cdraw="${i}:${safeInt(r.id)}" value="${safeInt((cmpCraft.draw[i] || {})[safeInt(r.id)])}">
+        </div>`).join('')
+        : `<div class="settings-hint cmp-craft-none">${opt ? 'None held — skipped.' : 'None held — pick the item above if yours is named differently.'}</div>`}
+      <div class="cmp-craft-short" data-cshort="${i}"></div>
+    </div>`;
+  }).join('');
+  cmpCraftHint();
+}
+
+// per-slot shortfall + the footer total, live as the amounts change
+function cmpCraftHint() {
+  const qty = Math.max(1, safeInt($('#cmp-craft-qty').value));
+  let total = 0, short = 0;
+  cmpCraft.comps.forEach(({ c, i }) => {
+    const used = Object.values(cmpCraft.draw[i] || {}).reduce((t, u) => t + safeInt(u), 0);
+    total += used;
+    const el = document.querySelector(`[data-cshort="${i}"]`);
+    const miss = c.optional === 'yes' ? 0 : Math.max(0, safeInt(c.number) * qty - used);
+    if (miss) short++;
+    if (el) el.textContent = miss ? `Short ${fmtNum(miss)} — logged anyway, with what you have` : '';
+  });
+  $('#cmp-craft-hint').textContent = total
+    ? `Uses ${fmtNum(total)} part${total === 1 ? '' : 's'}${short ? ` · ${short} slot${short === 1 ? '' : 's'} short` : ''}`
+    : '';
+  $('#cmp-craft-go').disabled = !cmpCraft.sid || !total;
+}
+
+async function cmpCraftSearch() {
+  const q = $('#cmp-craft-search').value.trim();
+  const box = $('#cmp-craft-sug');
+  if (q.length < 2) { box.hidden = true; return; }
+  let res;
+  try { res = await api().search_schematics({ search: q, page: 1 }); } catch (_) { res = null; }
+  if ($('#cmp-craft-search').value.trim() !== q) return; // typed on meanwhile
+  const rows = ((res && res.ok && res.data && res.data.results) || []).slice(0, 10);
+  box.innerHTML = rows.length ? rows.map((s) => `<div class="inv-vendor-opt" data-ccpick="${escapeHtml(String(s.id))}" data-name="${escapeHtml(s.name)}">${escapeHtml(s.name)}${s.parent ? ` <span class="cmp-planet">${escapeHtml(s.parent)}</span>` : ''}</div>`).join('')
+    : '<div class="inv-vendor-opt stat_off">No schematics match</div>';
+  box.hidden = false;
+}
+
+async function doCmpCraft() {
+  const qty = Math.max(1, safeInt($('#cmp-craft-qty').value));
+  const draws = [];
+  cmpCraft.comps.forEach(({ i }) => Object.entries(cmpCraft.draw[i] || {}).forEach(([id, u]) => {
+    if (safeInt(u) > 0) draws.push({ id: safeInt(id), units: safeInt(u) });
+  }));
+  if (!draws.length) { toast('Nothing to draw down — set how many of each part it used', false); return; }
+  const btn = $('#cmp-craft-go');
+  btn.disabled = true;
+  let res;
+  try {
+    // a changed pick is remembered for every schematic that uses the slot
+    for (const { c, i } of cmpCraft.comps) {
+      if (String(cmpCraft.pick[i] || '') !== cmpLink(c.id)) await cmpSaveLink(c, cmpCraft.pick[i] || '');
+    }
+    res = await apiFetch('POST', 'api/components.php', { data: {
+      action: 'craft', schematic_id: cmpCraft.sid, schematic_name: cmpCraft.name, quantity: qty, draws } });
+  } catch (e) { res = { ok: false, error: e.message || String(e) }; }
+  btn.disabled = false;
+  if (!res.ok) { toast(`Couldn't log it: ${res.error || 'server error'}`, false); checkAuthError(res.error); return; }
+  $('#cmp-craft-modal').hidden = true;
+  const logId = safeInt(res.data.log_id);
+  toastAction(`Logged ${fmtNum(qty)} × ${cmpCraft.name} — ${fmtNum(safeInt(res.data.used))} parts used`, 'Undo', () => cmpUncraft(logId));
+  cmpAfterChange();
+}
+
+async function cmpUncraft(logId) {
+  const res = await apiFetch('POST', 'api/components.php', { data: { action: 'uncraft', log_id: logId } });
+  if (!res.ok) { toast(res.error || 'Undo failed', false); return false; }
+  toast('Parts put back');
+  cmpAfterChange();
+  return true;
+}
+
+// refresh whatever is showing Components data
+async function cmpAfterChange() {
+  try { await cmpFetch(); } catch (_) { return; }
+  const page = typeof currentPageKey === 'function' ? currentPageKey() : '';
+  if (page === 'components') { cmpFillLocFilter(); renderComponents(); }
+  if (page === 'schematic' && scdState.schematic) cmpPaintHoldings(scdState.schematic);
+}
+
+// -- a finished factory run → its hopper (factories.js offers it on Done) -------
+
+async function cmpCollectRun(f, units) {
+  const item_name = String(f.product || '').trim();
+  const res = await apiFetch('POST', 'api/components.php', { data: {
+    action: 'factory_collect', factory_id: safeInt(f.id), item_name, units } });
+  if (!res.ok) { toast(`Couldn't add the run: ${res.error || 'server error'}`, false); checkAuthError(res.error); return; }
+  toast(`${fmtNum(units)} × ${item_name} added to ${res.data.location || 'its hopper'}`);
+  if (cmpState.loaded) cmpAfterChange();
+}
+
+// -- Used in: the schematics that take an item ---------------------------------
+
+let cmpUsesRows = [];
+async function openCmpUses(name) {
+  cmpUsesRows = [];
+  $('#cmp-uses-title').textContent = `${name} — used in`;
+  $('#cmp-uses-filter').value = '';
+  $('#cmp-uses-filter').hidden = true;
+  $('#cmp-uses-list').innerHTML = '<div class="settings-hint"><span class="spinner"></span> Looking through the schematics…</div>';
+  $('#cmp-uses-modal').hidden = false;
+  const res = await apiFetch('GET', 'api/components.php', { params: { uses: name } });
+  if (!res.ok) { $('#cmp-uses-list').innerHTML = `<div class="settings-hint">${escapeHtml(res.error || 'Lookup failed')}</div>`; return; }
+  // one line per schematic, even when it takes the item in two slots
+  const seen = new Map();
+  (res.data.schematics || []).forEach((r) => { if (!seen.has(String(r.id))) seen.set(String(r.id), r); });
+  cmpUsesRows = [...seen.values()];
+  $('#cmp-uses-filter').hidden = cmpUsesRows.length < 12;
+  renderCmpUses();
+}
+function renderCmpUses() {
+  const q = $('#cmp-uses-filter').value.trim().toLowerCase();
+  const rows = cmpUsesRows.filter((r) => !q || String(r.name).toLowerCase().includes(q));
+  $('#cmp-uses-list').innerHTML = rows.length ? rows.map((r) => `<a role="button" class="cmp-uses-row" data-cuschem="${escapeHtml(String(r.id))}" data-name="${escapeHtml(r.name)}">
+      <span>${escapeHtml(r.name)}</span>
+      <span class="cmp-planet">${escapeHtml(cmpSlotLabel({ desc: r.slot }))} · ${fmtNum(safeInt(r.number))}${r.optional === 'yes' ? ' · optional' : ''}</span></a>`).join('')
+    : `<div class="settings-hint">${cmpUsesRows.length ? 'None match that filter.' : 'No schematic takes this by name. If a schematic uses it under another name, open that schematic and click the slot’s “have / short” tag to pick it.'}</div>`;
+}
+
+// -- history: crafts (with Undo) and collected runs ----------------------------
+
+async function openCmpLog() {
+  $('#cmp-log-list').innerHTML = '<div class="settings-hint"><span class="spinner"></span> Loading…</div>';
+  $('#cmp-log-modal').hidden = false;
+  const res = await apiFetch('GET', 'api/components.php', { params: { log: 1 } });
+  if (!res.ok) { $('#cmp-log-list').innerHTML = `<div class="settings-hint">${escapeHtml(res.error || 'Load failed')}</div>`; return; }
+  const log = res.data.log || [];
+  $('#cmp-log-list').innerHTML = log.length ? log.map((l) => {
+    const parts = (l.detail || []).map((p) => `${fmtNum(safeInt(p.units))} ${escapeHtml(p.item_name)}${p.location ? ` <span class="cmp-planet">${escapeHtml(p.location)}</span>` : ''}`).join(', ');
+    const craft = l.kind === 'craft';
+    return `<div class="cmp-log-row${safeInt(l.undone) ? ' cmp-log-undone' : ''}">
+      <i class="fa-solid ${craft ? 'fa-hammer' : 'fa-industry'} cmp-log-ico"></i>
+      <div class="cmp-log-main">
+        <div><b>${craft ? `Crafted ${fmtNum(safeInt(l.quantity))} × ${escapeHtml(l.title)}` : `Factory run: ${fmtNum(safeInt(l.quantity))} × ${escapeHtml(l.title)}`}</b></div>
+        <div class="cmp-log-parts">${craft ? 'Used ' : 'Into '}${parts || '—'}</div>
+      </div>
+      <span class="cmp-log-when">${fmtAgoTip(l.created_at)}</span>
+      ${craft ? (safeInt(l.undone) ? '<span class="cmp-planet">put back</span>'
+        : `<button class="btn btn-sm btn-outline-secondary" data-cuncraft="${safeInt(l.id)}" title="Put these parts back">Undo</button>`) : ''}
+    </div>`;
+  }).join('') : '<div class="settings-hint">Nothing yet — crafts you log and factory runs you send to a hopper show up here.</div>';
+}
+
+function initCmpCraft() {
+  $('#cmp-craft-open').addEventListener('click', () => openCmpCraft());
+  $('#cmp-log-open').addEventListener('click', openCmpLog);
+
+  // craft dialog
+  const closeCraft = () => { $('#cmp-craft-modal').hidden = true; };
+  $('#cmp-craft-cancel').addEventListener('click', closeCraft);
+  bindBackdropClose($('#cmp-craft-modal'), closeCraft);
+  $('#cmp-craft-go').addEventListener('click', doCmpCraft);
+  $('#cmp-craft-search').addEventListener('input', () => {
+    clearTimeout(cmpCraft.searchTimer);
+    cmpCraft.searchTimer = setTimeout(cmpCraftSearch, 250);
+  });
+  $('#cmp-craft-search').addEventListener('blur', () => setTimeout(() => { $('#cmp-craft-sug').hidden = true; }, 150));
+  $('#cmp-craft-sug').addEventListener('mousedown', (e) => {
+    const opt = e.target.closest('[data-ccpick]');
+    if (!opt) return;
+    e.preventDefault();
+    $('#cmp-craft-sug').hidden = true;
+    cmpCraftUse(opt.dataset.ccpick, opt.dataset.name);
+  });
+  $('#cmp-craft-name').addEventListener('click', (e) => {
+    if (!e.target.closest('[data-ccchange]')) return;
+    Object.assign(cmpCraft, { sid: '', comps: [], draw: {} });
+    $('#cmp-craft-name').hidden = true;
+    $('#cmp-craft-slots').innerHTML = '';
+    $('#cmp-craft-pickwrap').hidden = false;
+    cmpCraftHint();
+    $('#cmp-craft-search').focus();
+  });
+  $('#cmp-craft-qty').addEventListener('input', () => { cmpCraftAllocate(); cmpCraftRender(); });
+  $('#cmp-craft-slots').addEventListener('change', (e) => {
+    const sel = e.target.closest('[data-cpick]');
+    if (!sel) return;
+    const i = safeInt(sel.dataset.cpick);
+    cmpCraft.pick[i] = sel.value;
+    cmpCraftAllocate(i);
+    cmpCraftRender();
+  });
+  $('#cmp-craft-slots').addEventListener('input', (e) => {
+    const inp = e.target.closest('[data-cdraw]');
+    if (!inp) return;
+    const [i, id] = inp.dataset.cdraw.split(':').map(safeInt);
+    const v = Math.min(Math.max(0, safeInt(inp.value)), safeInt(inp.max));
+    (cmpCraft.draw[i] = cmpCraft.draw[i] || {})[id] = v;
+    cmpCraftHint();
+  });
+
+  // link picker (schematic page)
+  $('#cmp-link-save').addEventListener('click', saveCmpLink);
+  $('#cmp-link-cancel').addEventListener('click', () => { $('#cmp-link-modal').hidden = true; });
+  bindBackdropClose($('#cmp-link-modal'), () => { $('#cmp-link-modal').hidden = true; });
+
+  // used in
+  $('#cmp-uses-done').addEventListener('click', () => { $('#cmp-uses-modal').hidden = true; });
+  bindBackdropClose($('#cmp-uses-modal'), () => { $('#cmp-uses-modal').hidden = true; });
+  $('#cmp-uses-filter').addEventListener('input', renderCmpUses);
+  $('#cmp-uses-list').addEventListener('click', (e) => {
+    const a = e.target.closest('[data-cuschem]');
+    if (!a) return;
+    $('#cmp-uses-modal').hidden = true;
+    openSchematicPage(a.dataset.cuschem, a.dataset.name);
+  });
+
+  // history
+  $('#cmp-log-done').addEventListener('click', () => { $('#cmp-log-modal').hidden = true; });
+  bindBackdropClose($('#cmp-log-modal'), () => { $('#cmp-log-modal').hidden = true; });
+  $('#cmp-log-list').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-cuncraft]');
+    if (!b) return;
+    b.disabled = true;
+    if (await cmpUncraft(safeInt(b.dataset.cuncraft))) openCmpLog();
+    else b.disabled = false;
+  });
+
+  // schematic page: the N-crafts box, the have/short tags, Log craft
+  $('#scd-cmp-n').addEventListener('input', () => {
+    scdCmp.n = Math.max(1, safeInt($('#scd-cmp-n').value));
+    if (scdState.schematic) cmpPaintHoldings(scdState.schematic);
+  });
+  $('#scd-components').addEventListener('click', (e) => {
+    const a = e.target.closest('[data-cmplink]');
+    if (!a || !scdState.schematic) return;
+    e.stopPropagation();
+    const c = (scdState.schematic.componentTypes || [])[safeInt(a.dataset.cmplink)];
+    if (c) openCmpLink(c, () => cmpPaintHoldings(scdState.schematic));
+  });
+  $('#scd-cmp-craft').addEventListener('click', () => {
+    const s = scdState.schematic;
+    if (!s) return;
+    openCmpCraft({ id: scdState.id, name: s.schematicName, comps: s.componentTypes || [], qty: scdCmp.n });
+  });
 }

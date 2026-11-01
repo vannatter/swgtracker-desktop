@@ -238,6 +238,7 @@ function initNav() {
   initNavLayout();  // the saved order first — folds and search read the rebuilt list
   initNavGroups();
   initNavSearch();
+  if (typeof initNavBadges === 'function') initNavBadges(); // New / Updated flags (navbadges.js)
   initGlobalSearch();
   initShortcuts();
   // Scope to the sidebar — Bootstrap tab markup also uses .nav-item (see scd-tabs).
@@ -312,7 +313,7 @@ function goForward() {
 
 function showPage(key, opts = {}) {
   if (!document.getElementById(`page-${key}`)) return; // never blank the app on a bad key
-  // Quests are dev-mode gated (quests.js questsGated — remove the `dev-only` class to launch)
+  // Quests can be re-gated to dev mode (quests.js questsGated — the `dev-only` class)
   if ((key === 'quests' || key === 'quest' || key === 'npc') && typeof questsGated === 'function' && questsGated()) key = 'home';
   // Record where we were so back can return there — but a back/forward hop
   // manages the stacks itself, and a fresh navigation drops the forward trail.
@@ -327,6 +328,7 @@ function showPage(key, opts = {}) {
     pet: 'pets', creature: 'creatures', special: 'specials', quest: 'quests', npc: 'quests' }[key] || key;
   document.querySelectorAll('.nav-item').forEach((n) => n.classList.toggle('active', n.dataset.page === navKey));
   syncNavGroupDots();
+  if (typeof navBadgeVisit === 'function') navBadgeVisit(navKey);
   document.querySelectorAll('.page').forEach((p) => p.classList.toggle('active', p.id === `page-${key}`));
   // pages that size themselves from their container (Leaflet maps) re-measure on every visit
   document.dispatchEvent(new CustomEvent('page:show', { detail: { key } }));
@@ -851,7 +853,8 @@ function renderBellPanel(inbox) {
 }
 
 function initBroadcasts() {
-  $('#broadcast-bar-close').addEventListener('click', () => {
+  // the whole bar dismisses (Dustin: "clickable anywhere to close"), not just the ×
+  $('#broadcast-bar').addEventListener('click', () => {
     // dismiss just the banner's current message; the rest surface in turn
     const inbox = loadBroadcastInbox();
     const open = inbox.filter((i) => !i.dismissed);

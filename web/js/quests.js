@@ -6,13 +6,11 @@
    (api/comments.php kind=quest, the shared cmtMount component) shown as a gallery.
    Also feeds a "Quests" layer on Planet Maps (?map=<planet>) and global search. */
 
-// ---- DEV-MODE GATE -------------------------------------------------------------
-// Quests ship hidden behind dev mode for now (Dustin, 2026-10-22). The ONE switch is
-// the `dev-only` class on the sidebar's <li data-page="quests"> in index.html: the nav
-// entry hides by CSS (body:not(.dev-mode) .dev-only), and everything else here —
-// showPage's fallback to Home, global-search hits, the Planet Maps layer toggle —
-// asks questsGated(), which reads that class. To launch: delete `dev-only` from that
-// <li> (and from .qd-pm-toggle's className in questLayerAttach below). Done.
+// ---- GATE -----------------------------------------------------------------------
+// Quests launched to everyone 2026-11-01 (dev-mode gated from 2026-10-22). The switch
+// is still the `dev-only` class on the sidebar's <li data-page="quests"> in index.html:
+// add it back (and to .qd-pm-toggle's className in questLayerAttach) to re-gate —
+// showPage's fallback, global-search hits and the Planet Maps toggle all ask this.
 function questsGated() {
   const li = document.querySelector('.app-sidebar .nav-item[data-page="quests"]');
   return !!(li && li.classList.contains('dev-only') && !document.body.classList.contains('dev-mode'));
@@ -88,7 +86,7 @@ function questWpOnMap(wp) {
 // List
 // =================================================================================
 const questsState = { rows: [], total: 0, page: 1, per: 50, loaded: false, seq: 0, catsLoaded: false,
-  q: '', category: '', planet: '', minLevel: '', maxLevel: '', type: '', repeatable: '', unused: false,
+  q: '', category: '', planet: '', minLevel: '', maxLevel: '', type: '', repeatable: '', unused: false, community: '',
   sortField: 'title', sortOrder: 'ASC' };
 // [label, sort key (null = not server-sortable), class]
 const QUESTS_COLUMNS = [
@@ -140,6 +138,7 @@ async function fetchQuests() {
   if (s.type) params.type = s.type;
   if (s.repeatable !== '') params.repeatable = s.repeatable;
   if (s.unused) params.unused = 1;
+  if (s.community) params.community = s.community;
   let res;
   try { res = await apiFetch('GET', 'api/quests.php', { params }); } catch (e) { res = { ok: false, error: String(e) }; }
   if (seq !== s.seq) return; // a newer filter won
@@ -164,7 +163,10 @@ function renderQuests() {
   $('#quests-body').innerHTML = rows.map((q) => {
     const planets = questPlanetSquares(q.planets);
     const flags = [q.type === 'group' ? '<span class="q-flag q-flag-group" title="Group quest">Group</span>' : '',
-      safeInt(q.repeatable) ? '<i class="fa-solid fa-repeat q-flag-rep" title="Repeatable"></i>' : ''].join('');
+      safeInt(q.repeatable) ? '<i class="fa-solid fa-repeat q-flag-rep" title="Repeatable"></i>' : '',
+      q.community ? (q.community.verified ? '<span class="q-flag qc-flag-comm" title="Submitted by a player, confirmed by others">Community</span>'
+        : '<span class="q-flag qc-flag-unv" title="Submitted by a player — not confirmed yet">Unverified</span>') : '',
+      q.edited ? '<i class="fa-solid fa-pen-nib q-flag-rep" title="Corrected by the community"></i>' : ''].join('');
     const nC = safeInt(q.comments); const nS = safeInt(q.screenshots);
     const notes = (nC ? `<span class="q-cnt" title="${nC} note${nC === 1 ? '' : 's'}"><i class="fa-regular fa-comment"></i> ${nC}</span>` : '')
       + (nS ? `<span class="q-cnt" title="${nS} screenshot${nS === 1 ? '' : 's'}"><i class="fa-regular fa-image"></i> ${nS}</span>` : '');
@@ -190,8 +192,8 @@ function renderQuests() {
 // open the list with filters preset (detail page's category chip, other pages) — the list's deep link
 function openQuestsFiltered(f = {}) {
   const s = questsState;
-  Object.assign(s, { q: '', category: '', planet: '', minLevel: '', maxLevel: '', type: '', repeatable: '', unused: false, page: 1 });
-  ['q', 'category', 'planet', 'type', 'repeatable'].forEach((k) => { if (f[k] != null) s[k] = String(f[k]); });
+  Object.assign(s, { q: '', category: '', planet: '', minLevel: '', maxLevel: '', type: '', repeatable: '', unused: false, community: '', page: 1 });
+  ['q', 'category', 'planet', 'type', 'repeatable', 'community'].forEach((k) => { if (f[k] != null) s[k] = String(f[k]); });
   if (f.minLevel != null) s.minLevel = String(f.minLevel);
   if (f.maxLevel != null) s.maxLevel = String(f.maxLevel);
   questsSyncControls();
@@ -210,6 +212,7 @@ function questsSyncControls() {
   $('#quests-type').value = s.type;
   $('#quests-repeat').value = s.repeatable;
   $('#quests-unused').checked = s.unused;
+  $('#quests-community').value = s.community;
 }
 
 // =================================================================================
@@ -228,7 +231,6 @@ async function openQuestPage(slug) {
   $('#quest-body').innerHTML = '';
   $('#quest-empty').hidden = true;
   $('#quest-loading').hidden = false;
-  $('#quest-copyall').hidden = true;
   let res;
   try { res = await apiFetch('GET', 'api/quests.php', { params: { id: slug } }); } catch (e) { res = { ok: false, error: String(e) }; }
   if (seq !== qdState.seq) return;
@@ -283,13 +285,60 @@ function qdStepHtml(st) {
   return `<li class="qd-step${onMap ? ' qd-step-mapped' : ''}" data-qstep="${st.n}"${onMap ? ` title="Click to show it on the map"` : ''}>
     <span class="qd-stepnum">${st.n}</span>
     <div class="qd-stepmain">
-      <div class="qd-steptop"><span class="qd-kind">${escapeHtml(st.kind_label || questTidyId(st.kind))}</span><span class="qd-steptitle">${escapeHtml(st.title || '')}</span></div>
+      <div class="qd-steptop"><span class="qd-kind">${escapeHtml(st.kind_label || questTidyId(st.kind))}</span><span class="qd-steptitle">${escapeHtml(st.title || '')}</span>${(st.edited || []).length ? '<i class="fa-solid fa-pen-nib qc-stepedited" title="Corrected by the community — see History"></i>' : ''}</div>
       ${st.desc && st.desc !== st.title ? `<div class="qd-stepdesc">${escapeHtml(st.desc)}</div>` : ''}
       ${qdStepFacts(st)}
       ${st.comm ? `<div class="qd-comm"><i class="fa-solid fa-tower-broadcast"></i> ${escapeHtml(st.comm)}</div>` : ''}
       ${wpHtml}
     </div>
   </li>`;
+}
+
+// The page's hero card: giver avatar + title, a meta row of filter chips, the versions switcher,
+// the description at a readable measure, the community banner, and the actions grouped right
+// (Edit — the primary — right-most).
+function qdHeroHtml(q, title, steps, mapped, variantsHtml) {
+  const r = q.rewards || {};
+  const giver = (q.givers || []).find((g) => g.npc_id) || (q.givers || [])[0] || null;
+  const avatar = giver && giver.photo
+    ? `<button type="button" class="qd-hero-av" data-npcopen="${escapeHtml(String(giver.npc_id || ''))}" title="${escapeHtml(giver.name)}"><img src="${escapeHtml(questImgUrl(giver.photo))}" alt="" loading="lazy"></button>`
+    : `<span class="qd-hero-av is-blank" aria-hidden="true"><i class="fa-solid fa-book-journal-whills"></i></span>`;
+  const sub = giver ? `<div class="qd-hero-sub">from ${questNpcName(giver.name || 'Unknown', giver.npc_id)}${(q.givers || []).length > 1 ? ` <span class="qd-muted">+${q.givers.length - 1} more</span>` : ''}</div>`
+    : q.variant ? `<div class="qd-hero-sub">${escapeHtml(q.variant)}</div>` : '';
+  const chip = (html, attrs = '', cls = '') => `<${attrs ? 'button type="button"' : 'span'} class="qd-chip${cls ? ` ${cls}` : ''}" ${attrs}>${html}</${attrs ? 'button' : 'span'}>`;
+  const lvl = safeInt(q.level);
+  const planets = [...new Set(steps.filter((s) => s.wp).map((s) => s.wp.planet))];
+  const meta = [
+    lvl ? chip(`<span class="qd-chip-l">Level</span> ${lvl}`, `data-qfilter="level" data-val="${lvl}" title="Quests around level ${lvl}"`) : '',
+    chip(q.type === 'group' ? '<i class="fa-solid fa-users"></i> Group' : '<i class="fa-solid fa-user"></i> Solo', `data-qfilter="type" data-val="${q.type === 'group' ? 'group' : 'solo'}" title="All ${q.type === 'group' ? 'group' : 'solo'} quests"`),
+    ...planets.map((p) => questPlanetBadge(p)),
+    q.category ? chip(`<i class="fa-solid fa-layer-group"></i> ${escapeHtml(q.category)}`, `data-qfilter="category" data-val="${escapeHtml(q.category)}" title="All ${escapeHtml(q.category)} quests"`) : '',
+    steps.length ? chip(`<i class="fa-solid fa-list-ol"></i> ${steps.length} step${steps.length === 1 ? '' : 's'}`) : '',
+    safeInt(r.xp) ? chip(`<i class="fa-solid fa-star"></i> ${questFmtNum(r.xp)} <span class="qd-muted">${escapeHtml(questXpType(r.xp_type))}</span>`, '', 'qd-chip-reward') : '',
+    safeInt(r.credits) ? chip(`<i class="fa-solid fa-coins"></i> ${questFmtNum(r.credits)} cr`, '', 'qd-chip-reward') : '',
+    safeInt(q.repeatable) ? chip('<i class="fa-solid fa-repeat"></i> Repeatable') : '',
+    qcEditedChip(q),
+  ].filter(Boolean).join('');
+  const anyWay = steps.some((s) => questWayCmd(s.wp));
+  const pmPlanet = mapped.length && QUEST_PLANETS[mapped[0].wp.planet] ? QUEST_PLANETS[mapped[0].wp.planet].pm : '';
+  const actions = [
+    anyWay ? '<button type="button" class="btn btn-sm btn-outline-secondary" data-qcopyall title="Copy every step’s /way, one per line"><i class="fa-regular fa-clone"></i> <span class="qd-act-l">Copy all waypoints</span></button>' : '',
+    pmPlanet ? `<button type="button" class="btn btn-sm btn-outline-secondary" data-qpm="${pmPlanet}" title="Open Planet Maps with the quest layer"><i class="fa-solid fa-map-location-dot"></i> <span class="qd-act-l">Planet Map</span></button>` : '',
+    '<button type="button" class="btn btn-sm btn-outline-secondary" data-qchist title="Who changed what on this quest"><i class="fa-solid fa-clock-rotate-left"></i> <span class="qd-act-l">History</span></button>',
+    '<button type="button" class="btn btn-sm btn-accent" data-qcedit title="Fix a step, a waypoint or the details — live for everyone"><i class="fa-solid fa-pen"></i> Edit</button>',
+  ].join('');
+  return `<section class="qd-hero">
+    <div class="qd-hero-top">${avatar}
+      <div class="qd-hero-id"><h2 class="qd-hero-title">${escapeHtml(title)}</h2>${sub}</div>
+      <div class="qd-hero-actions">${actions}</div>
+    </div>
+    <div class="qd-hero-meta">${meta}</div>
+    ${variantsHtml}
+    ${q.desc || (q.summary && q.summary !== q.desc) ? `<div class="qd-hero-desc">
+      ${q.desc ? `<p class="qd-desc">${escapeHtml(q.desc)}</p>` : ''}
+      ${q.summary && q.summary !== q.desc ? `<p class="qd-summary"><span class="qd-muted">On completion:</span> ${escapeHtml(q.summary)}</p>` : ''}</div>` : ''}
+    ${qcBannerHtml(q)}
+  </section>`;
 }
 
 function renderQuestPage(q) {
@@ -300,15 +349,6 @@ function renderQuestPage(q) {
     .map((s, i) => Object.assign({}, s, { n: safeInt(s.n) || i + 1 }));
   qdState.steps = steps;
   const r = q.rewards || {};
-  const stat = (label, val, attrs) => `<div class="gx-dstat beast-stat${attrs ? ' beast-stat-link' : ''}" ${attrs || ''}><div class="gx-dstat-l">${escapeHtml(label)}</div><div class="gx-dstat-v gx-dstat-sm">${val}</div></div>`;
-  const stats = [
-    stat('Category', escapeHtml(q.category || '—'), q.category ? `data-qfilter="category" data-val="${escapeHtml(q.category)}" title="All ${escapeHtml(q.category)} quests"` : ''),
-    stat('Level', safeInt(q.level) ? String(safeInt(q.level)) : '—', safeInt(q.level) ? `data-qfilter="level" data-val="${safeInt(q.level)}" title="Quests around level ${safeInt(q.level)}"` : ''),
-    stat('XP', safeInt(r.xp) ? `${questFmtNum(r.xp)}${r.xp_type ? ` <span class="qd-muted">${escapeHtml(questXpType(r.xp_type))}</span>` : ''}` : '—'),
-    stat('Credits', safeInt(r.credits) ? questFmtNum(r.credits) : '—'),
-    stat('Type', q.type === 'group' ? 'Group' : 'Solo', `data-qfilter="type" data-val="${q.type === 'group' ? 'group' : 'solo'}" title="All ${q.type === 'group' ? 'group' : 'solo'} quests"`),
-    stat('Repeatable', safeInt(q.repeatable) ? 'Yes' : 'No'),
-  ].join('');
 
   // rewards
   const loot = r.loot || [];
@@ -362,12 +402,13 @@ function renderQuestPage(q) {
 
   // same quest, other giver / faction / profession path (api: variants, may be absent on older deploys)
   const variants = (Array.isArray(q.variants) ? q.variants : []).filter((v) => v && v.id && v.id !== q.id);
-  const variantsHtml = variants.length ? `<div class="qd-variants"><span class="qd-muted">Other versions:</span> ${variants.map((v) => `<a role="button" class="qd-chainlink" data-questopen="${escapeHtml(v.id)}" title="${escapeHtml(v.title || '')}">${escapeHtml(v.variant || v.title || questTidyId(v.id))}</a>`).join(' · ')}</div>` : '';
+  const variantsHtml = variants.length ? `<div class="qd-vswitch"><span class="qd-vswitch-l">Versions</span><div class="qd-seg" role="group" aria-label="Other versions of this quest">
+      <span class="qd-seg-btn is-on" aria-current="true">${escapeHtml(q.variant || 'This one')}</span>
+      ${variants.map((v) => `<button type="button" class="qd-seg-btn" data-questopen="${escapeHtml(v.id)}" title="${escapeHtml(v.title || '')}">${escapeHtml(v.variant || v.title || questTidyId(v.id))}</button>`).join('')}</div></div>` : '';
 
   const mapped = steps.filter((s) => questWpOnMap(s.wp));
   const offMap = steps.filter((s) => s.wp && !questWpOnMap(s.wp));
   const anyWp = steps.some((s) => s.wp);
-  $('#quest-copyall').hidden = !steps.some((s) => questWayCmd(s.wp));
   const mapCol = anyWp ? `<div class="qd-mapcol">
       ${mapped.length ? `<div class="qd-maptabs" id="qd-maptabs"></div><div class="qd-mapbox"><div id="qd-map" class="pm-map qd-map"></div></div>`
         : '<div class="qd-nomap empty-state is-compact">None of this quest’s waypoints are on a planet map.</div>'}
@@ -375,13 +416,7 @@ function renderQuestPage(q) {
     </div>` : '';
 
   $('#quest-body').innerHTML = `
-    <div class="beast-namerow qd-namerow"><h2 class="beast-name">${escapeHtml(title)}</h2>${q.variant ? `<span class="q-variant qd-variant">${escapeHtml(q.variant)}</span>` : ''}
-      ${[...new Set(steps.filter((s) => s.wp).map((s) => s.wp.planet))].map((p) => questPlanetBadge(p)).join(' ')}
-      ${q.type === 'group' ? '<span class="q-flag q-flag-group">Group</span>' : ''}${safeInt(q.repeatable) ? '<span class="q-flag"><i class="fa-solid fa-repeat"></i> Repeatable</span>' : ''}</div>
-    <div class="gx-detail-stats beast-stats">${stats}</div>
-    ${variantsHtml}
-    ${q.desc ? `<p class="qd-desc">${escapeHtml(q.desc)}</p>` : ''}
-    ${q.summary && q.summary !== q.desc ? `<p class="qd-summary"><span class="qd-muted">On completion:</span> ${escapeHtml(q.summary)}</p>` : ''}
+    ${qdHeroHtml(q, title, steps, mapped, variantsHtml)}
     <div class="qd-main${anyWp ? '' : ' qd-main-nomap'}">
       <div class="qd-stepscol">
         <section class="hm-section qd-fold" data-qfold="steps">
@@ -696,8 +731,7 @@ function questLayerAttach(L, map, getPlanet) {
   const Ctl = L.Control.extend({
     options: { position: 'topright' },
     onAdd() {
-      // dev-only: part of the Quests gate (see questsGated at the top of this file)
-      const div = L.DomUtil.create('div', 'leaflet-bar pm-toggle qd-pm-toggle dev-only');
+      const div = L.DomUtil.create('div', 'leaflet-bar pm-toggle qd-pm-toggle');
       div.innerHTML = '<a role="button" title="Show where quest steps send you on this planet">Quests: <b>off</b></a>';
       L.DomEvent.disableClickPropagation(div);
       L.DomEvent.on(div, 'click', (e) => {
@@ -1028,6 +1062,7 @@ async function npcPickPhoto(btn) {
 function questsQueryChanged() { questsState.page = 1; fetchQuests(); }
 
 function initQuests() {
+  initQuestCommunity();
   // planets for the filter, in the order players think of them
   $('#quests-planet').innerHTML = '<option value="">All planets</option>'
     + Object.keys(QUEST_PLANETS).map((raw) => `<option value="${raw}">${escapeHtml(questPlanetLabel(raw))}</option>`).join('');
@@ -1036,7 +1071,7 @@ function initQuests() {
     clearTimeout(t);
     t = setTimeout(() => { questsState.q = $('#quests-search').value.trim(); questsQueryChanged(); }, 250);
   });
-  [['#quests-category', 'category'], ['#quests-planet', 'planet'], ['#quests-type', 'type'], ['#quests-repeat', 'repeatable']]
+  [['#quests-category', 'category'], ['#quests-planet', 'planet'], ['#quests-type', 'type'], ['#quests-repeat', 'repeatable'], ['#quests-community', 'community']]
     .forEach(([id, key]) => $(id).addEventListener('change', () => { questsState[key] = $(id).value; questsQueryChanged(); }));
   [['#quests-minlvl', 'minLevel'], ['#quests-maxlvl', 'maxLevel']].forEach(([id, key]) => {
     let lt = null;
@@ -1057,7 +1092,6 @@ function initQuests() {
     questsQueryChanged();
   });
   $('#quest-refresh').addEventListener('click', () => { if (qdState.slug) openQuestPage(qdState.slug); });
-  $('#quest-copyall').addEventListener('click', questCopyAllWays);
 
   // one delegate for both pages: rows/links → quest, chips → filtered list, steps ↔ map
   const onClick = (e) => {
@@ -1174,4 +1208,292 @@ function initQuests() {
     const cur = document.querySelector('.page.active');
     if (cur && ['page-quests', 'page-quest', 'page-npc'].includes(cur.id)) showPage('home');
   }).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+}
+
+// =================================================================================
+// Community editing (api/quests.php ?quest_edit / ?history) — the quest flavor of the
+// schematic pencils + community submissions. Any signed-in member can correct a quest
+// (live at once, every change in the history; an admin reverts any edit, a member undoes
+// their own latest), or submit a new one: it publishes as unverified until two other
+// members confirm it. Corrections are an overlay on the imported data, so a re-import
+// never wipes them (includes/quest_community.inc.php).
+// =================================================================================
+const qcState = { mode: 'edit', quest: null, busy: false };
+const QC_FIELD_LABELS = { title: 'title', description: 'description', summary: 'completion text', category: 'category', level: 'level',
+  type: 'solo/group', repeatable: 'repeatable', xp: 'XP', credits: 'credits', desc: 'description', wp: 'waypoint' };
+
+async function qcPost(data) {
+  let r;
+  try { r = await apiFetch('POST', 'api/quests.php?quest_edit=1', { data }); } catch (e) { r = { ok: false, error: String(e) }; }
+  const err = !r.ok || (r.data && r.data.error) ? ((r.data && r.data.error) || r.error || 'Could not save that') : '';
+  return { r, err: /401|sign in/i.test(err) ? 'Sign in to swgtracker.com in Settings to edit quests.' : err };
+}
+
+// the namerow chip + the community banner (renderQuestPage calls these)
+function qcEditedChip(q) {
+  const e = q.edits || {};
+  if (!safeInt(e.count)) return '';
+  return `<button type="button" class="q-flag qc-edited" data-qchist title="Last edit by ${escapeHtml(e.last_by || 'someone')} — click for the full history"><i class="fa-solid fa-pen-nib"></i> Community-edited</button>`;
+}
+function qcBannerHtml(q) {
+  const c = q.community; if (!c) return '';
+  const me = q.me || {};
+  const btn = (act, label, icon, cls = 'btn-outline-secondary', title = '') => `<button type="button" class="btn btn-sm ${cls}" data-qcact="${act}"${title ? ` title="${escapeHtml(title)}"` : ''}><i class="fa-solid ${icon}"></i> ${label}</button>`;
+  const acts = [];
+  if (!c.verified) {
+    if (c.mine) acts.push(btn('retract', 'Retract', 'fa-trash-can', 'btn-outline-secondary', 'Take it down — you can still rework it later'), btn('rework', 'Rework', 'fa-pen-to-square', 'btn-outline-secondary', 'Fix your quest — answers the flags'));
+    if (me.admin) acts.push(btn('approve', 'Approve', 'fa-circle-check', 'btn-outline-secondary', 'Admin: verify it now'));
+    if (!c.mine) {   // Confirm (the red primary) stays right-most
+      acts.push(btn('flag', 'Something’s wrong', 'fa-flag', 'btn-outline-secondary', 'Say what needs fixing — the submitter sees it'));
+      acts.push(c.voted ? btn('unvote', 'Confirmed', 'fa-check', 'btn-outline-secondary qc-voted', 'You confirmed it — click to take that back')
+        : btn('vote', 'Confirm', 'fa-check', 'btn-accent', 'You’ve done this quest and it’s right'));
+    }
+  }
+  if (me.admin) acts.unshift(btn('pull', 'Pull', 'fa-ban', 'btn-outline-secondary', 'Admin: take it down for everyone'));
+  const flags = (c.flags || []).map((f) => `<div class="qc-flagrow"><i class="fa-solid fa-flag"></i> <b>${escapeHtml(f.by)}</b> ${escapeHtml(f.note)} <span class="qd-muted">${fmtAgoTip(f.at)}</span></div>`).join('');
+  return `<div class="qc-banner${c.verified ? ' is-verified' : ''}">
+    <div class="qc-bannermain"><i class="fa-solid ${c.verified ? 'fa-circle-check' : 'fa-people-group'}"></i>
+      <span>Community quest by <b>${escapeHtml(c.by)}</b> — ${c.verified ? 'verified by players'
+        : `unverified · ${safeInt(c.votes)} of ${safeInt(c.needed)} confirmations${c.mine ? ' (other players confirm it)' : ''}`}</span>
+      ${acts.length ? `<span class="qc-acts">${acts.join('')}</span>` : ''}</div>
+    ${flags ? `<div class="qc-flags">${flags}</div>` : ''}
+  </div>`;
+}
+
+// ---- history (the schematic page's clock dialog, with reverts) ----
+function qcValueText(field, v) {
+  if (v === null || v === undefined || v === '') return '<span class="stat_off">(empty)</span>';
+  if (field === 'wp') return `${escapeHtml(questPlanetLabel(v.planet))} ${safeInt(v.x)}, ${safeInt(v.z)}${v.name ? ` <span class="stat_off">${escapeHtml(v.name)}</span>` : ''}`;
+  if (field === 'repeatable') return v ? 'yes' : 'no';
+  if (field === 'xp' || field === 'credits') return questFmtNum(v);
+  const s = String(v);
+  return `“${escapeHtml(s.length > 140 ? `${s.slice(0, 140)}…` : s)}”`;
+}
+function qcEditSentence(ed) {
+  const who = `<b>${escapeHtml(ed.by)}</b>`;
+  const what = `${escapeHtml(QC_FIELD_LABELS[ed.field] || ed.label || ed.field)}${ed.step ? ` of step ${safeInt(ed.step)}` : ''}`;
+  if (ed.revert_of) return `${who} reverted the ${what} to ${qcValueText(ed.field, ed.new)}`;
+  const long = ed.field === 'description' || ed.field === 'summary' || ed.field === 'desc';
+  return `${who} set the ${what} to ${qcValueText(ed.field, ed.new)}${!long && ed.old !== null && ed.old !== undefined ? ` <span class="stat_off">(was ${qcValueText(ed.field, ed.old)})</span>` : ''}`;
+}
+async function qcShowHistory() {
+  const q = qdState.quest; if (!q) return;
+  document.querySelector('.qc-histbox')?.remove();
+  let res;
+  try { res = await apiFetch('GET', 'api/quests.php', { params: { history: q.id } }); } catch (e) { res = { ok: false, error: String(e) }; }
+  const edits = (res.ok && res.data && res.data.edits) || [];
+  const ov = document.createElement('div');
+  ov.className = 'sb-lightbox scd-histbox qc-histbox'; // sb-lightbox = Escape closes it
+  ov.innerHTML = `<div class="scd-histcard">
+      <div class="scd-histhead"><i class="fa-solid fa-clock-rotate-left"></i> Community edit history
+        <button class="btn btn-icon" data-histclose title="Close"><i class="fa-solid fa-xmark"></i></button></div>
+      ${!res.ok && !edits.length ? `<div class="empty-state is-compact">${escapeHtml((res.data && res.data.error) || res.error || 'Could not load the history.')}</div>`
+        : edits.length ? edits.map((ed) => `<div class="scd-editrow${ed.reverted ? ' qc-reverted' : ''}"><span class="scd-editwhat">${qcEditSentence(ed)}${ed.reverted ? ' <span class="qc-revtag">reverted</span>' : ''}</span>
+            <span class="scd-editwhen">${fmtAgoTip(ed.at)}${ed.can_revert ? ` <button type="button" class="btn btn-sm btn-outline-secondary qc-revert" data-qcrevert="${safeInt(ed.id)}" title="Put the old value back">Revert</button>` : ''}</span></div>`).join('')
+        : '<div class="empty-state is-compact">No community edits yet — anyone can fix this quest with Edit, and every change lands here.</div>'}
+    </div>`;
+  ov.addEventListener('click', async (e) => {
+    if (e.target === ov || e.target.closest('[data-histclose]')) { ov.remove(); return; }
+    const rv = e.target.closest('[data-qcrevert]');
+    if (!rv || rv.disabled) return;
+    if (!confirmArm(rv, 'Click again to revert')) return;
+    rv.disabled = true;
+    const { err } = await qcPost({ action: 'revert', edit_id: safeInt(rv.dataset.qcrevert) });
+    if (err) { rv.disabled = false; toast(err, false); return; }
+    toast('Edit reverted');
+    ov.remove();
+    await openQuestPage(q.id);
+    qcShowHistory();
+  });
+  document.body.appendChild(ov);
+}
+
+// ---- the edit / submit / rework dialog (key-gate modal) ----
+function qcPlanetOptions(sel) {
+  return `<option value="">No waypoint</option>${Object.keys(QUEST_PLANETS).map((raw) => `<option value="${raw}"${raw === sel ? ' selected' : ''}>${escapeHtml(questPlanetLabel(raw))}</option>`).join('')}`;
+}
+function qcStepRowHtml(st, n, canRemove) {
+  const wp = st.wp || null;
+  return `<div class="qc-step" data-qci="${st.i === undefined || st.i === null ? '' : safeInt(st.i)}">
+    <div class="qc-stephead"><span class="qd-stepnum">${n}</span>
+      <input type="text" class="form-control filter-input qc-st-title" maxlength="255" placeholder="Step title — e.g. Talk to Bob" value="${escapeHtml(st.title || '')}" autocomplete="off">
+      ${canRemove ? '<button type="button" class="btn btn-icon qc-st-del" title="Remove this step"><i class="fa-solid fa-xmark"></i></button>' : ''}</div>
+    <textarea class="form-control filter-input qc-st-desc" rows="2" maxlength="4000" placeholder="What to do (optional)">${escapeHtml(st.desc && st.desc !== st.title ? st.desc : '')}</textarea>
+    <div class="qc-wprow">
+      <input type="text" class="form-control filter-input qc-st-quick" placeholder="Paste a /way line" autocomplete="off" title="Paste “/way tatooine 3490 0 -4871 name” to fill the waypoint">
+      <select class="form-select filter-select qc-st-planet">${qcPlanetOptions(wp ? wp.planet : '')}</select>
+      <input type="number" class="form-control filter-input qc-st-x" min="-8192" max="8192" step="1" placeholder="X" value="${wp ? safeInt(wp.x) : ''}">
+      <input type="number" class="form-control filter-input qc-st-z" min="-8192" max="8192" step="1" placeholder="Z" value="${wp ? safeInt(wp.z) : ''}">
+      <input type="text" class="form-control filter-input qc-st-wpname" maxlength="200" placeholder="Waypoint name" value="${escapeHtml(wp && wp.name ? wp.name : '')}">
+    </div>
+    ${wp && wp.cell ? `<div class="settings-sub">Inside a building (${escapeHtml(wp.cell)}) — changing these numbers saves them as a world position.</div>` : ''}
+  </div>`;
+}
+function qcRenumber() {
+  document.querySelectorAll('#qc-steps .qc-step').forEach((row, i) => { row.querySelector('.qd-stepnum').textContent = i + 1; });
+}
+function qcOpenDialog(mode) {
+  const q = mode === 'submit' ? null : qdState.quest;
+  if (mode !== 'submit' && !q) return;
+  if (q && q.me && !q.me.signed_in) { toast('Sign in to swgtracker.com in Settings to edit quests.', false); return; }
+  qcState.mode = mode; qcState.quest = q;
+  const m = $('#qc-modal');
+  const free = mode !== 'edit';   // submit/rework can add and remove steps
+  $('#qc-h').textContent = mode === 'submit' ? 'Submit a quest' : mode === 'rework' ? 'Rework your quest' : 'Edit quest';
+  $('#qc-hint').innerHTML = mode === 'submit' ? 'It goes live right away as <b>unverified</b> — two other players confirm it.'
+    : mode === 'rework' ? 'Saving replaces your quest and clears its flags.'
+      : 'Fixes go live for everyone at once and land in the quest’s history.';
+  $('#qc-title').value = q ? (q.title || '') : '';
+  $('#qc-category').value = q ? (q.category || '') : '';
+  $('#qc-level').value = q && safeInt(q.level) ? safeInt(q.level) : '';
+  $('#qc-type').value = q && q.type === 'group' ? 'group' : 'solo';
+  $('#qc-repeatable').checked = !!(q && safeInt(q.repeatable));
+  $('#qc-xp').value = q && safeInt(q.xp) ? safeInt(q.xp) : '';
+  $('#qc-credits').value = q && safeInt(q.credits) ? safeInt(q.credits) : '';
+  $('#qc-desc').value = q ? (q.desc || '') : '';
+  $('#qc-summary').value = q ? (q.summary || '') : '';
+  const steps = q ? (qdState.steps || []) : [{}, {}];
+  $('#qc-steps').innerHTML = steps.map((s, i) => qcStepRowHtml(free ? Object.assign({}, s, { i: null }) : s, i + 1, free)).join('');
+  $('#qc-addstep').hidden = !free;
+  $('#qc-status').textContent = '';
+  $('#qc-save').innerHTML = mode === 'submit' ? '<i class="fa-solid fa-paper-plane"></i> Submit quest' : '<i class="fa-solid fa-check"></i> Save';
+  m.hidden = false;
+  $('#qc-title').focus();
+}
+function qcReadStep(row) {
+  const v = (s) => row.querySelector(s).value.trim();
+  const planet = v('.qc-st-planet');
+  const wp = planet && v('.qc-st-x') !== '' && v('.qc-st-z') !== '' ? { planet, x: Math.round(Number(v('.qc-st-x'))), z: Math.round(Number(v('.qc-st-z'))), name: v('.qc-st-wpname') } : null;
+  return { i: row.dataset.qci === '' ? null : safeInt(row.dataset.qci), title: v('.qc-st-title'), desc: v('.qc-st-desc'), wp, planetOnly: !!planet && !wp };
+}
+async function qcSave() {
+  if (qcState.busy) return;
+  const status = $('#qc-status');
+  const num = (id) => { const s = $(id).value.trim(); return s === '' ? null : Math.max(0, Math.round(Number(s))); };
+  const fields = {
+    title: $('#qc-title').value.trim(), category: $('#qc-category').value.trim(), level: num('#qc-level'),
+    type: $('#qc-type').value, repeatable: $('#qc-repeatable').checked ? 1 : 0, xp: num('#qc-xp') || 0, credits: num('#qc-credits') || 0,
+    description: $('#qc-desc').value.trim(), summary: $('#qc-summary').value.trim(),
+  };
+  if (fields.title.length < (qcState.mode === 'edit' ? 2 : 4)) { status.textContent = 'Give the quest a title.'; $('#qc-title').focus(); return; }
+  const rows = [...document.querySelectorAll('#qc-steps .qc-step')].map(qcReadStep);
+  const half = rows.findIndex((s) => s.planetOnly);
+  if (half >= 0) { status.textContent = `Step ${half + 1}: a waypoint needs both X and Z.`; return; }
+  let data;
+  if (qcState.mode === 'edit') {
+    const q = qcState.quest;
+    const was = { title: q.title || '', category: q.category || '', level: safeInt(q.level) || null, type: q.type === 'group' ? 'group' : 'solo',
+      repeatable: safeInt(q.repeatable) ? 1 : 0, xp: safeInt(q.xp), credits: safeInt(q.credits), description: q.desc || '', summary: q.summary || '' };
+    const changes = Object.keys(fields).filter((k) => String(fields[k] ?? '') !== String(was[k] ?? '')).map((k) => ({ field: k, value: fields[k] }));
+    const wpKey = (w) => (w ? `${w.planet}|${safeInt(w.x)}|${safeInt(w.z)}|${(w.name || '').trim()}` : '');
+    rows.forEach((s) => {
+      const old = (qdState.steps || []).find((o) => safeInt(o.i) === s.i); if (!old) return;
+      if (s.title !== (old.title || '')) changes.push({ step: s.i, field: 'title', value: s.title });
+      const oldDesc = old.desc && old.desc !== old.title ? old.desc : '';
+      if (s.desc !== oldDesc) changes.push({ step: s.i, field: 'desc', value: s.desc });
+      if (wpKey(s.wp) !== wpKey(old.wp)) changes.push({ step: s.i, field: 'wp', value: s.wp });
+    });
+    if (!changes.length) { $('#qc-modal').hidden = true; return; }
+    data = { action: 'edit', quest: q.id, changes };
+  } else {
+    const steps = rows.filter((s) => s.title || s.desc || s.wp);
+    if (!steps.length) { status.textContent = 'Add at least one step.'; return; }
+    const untitled = steps.findIndex((s) => !s.title);
+    if (untitled >= 0) { status.textContent = `Step ${untitled + 1} needs a title.`; return; }
+    data = Object.assign({ action: 'submit', steps: steps.map((s) => ({ title: s.title, desc: s.desc, wp: s.wp })) }, fields);
+    if (qcState.mode === 'rework') data.quest = qcState.quest.id;
+  }
+  qcState.busy = true; $('#qc-save').disabled = true; status.textContent = 'Saving…';
+  const { r, err } = await qcPost(data);
+  qcState.busy = false; $('#qc-save').disabled = false;
+  if (err) { status.textContent = err; return; }
+  $('#qc-modal').hidden = true;
+  const d = r.data || {};
+  if (d.status === 'unchanged') return;
+  toast(d.status === 'submitted' ? 'Quest submitted — thanks! It shows as unverified until two players confirm it.'
+    : d.status === 'reworked' ? 'Quest updated' : `Saved ${safeInt(d.changed)} change${safeInt(d.changed) === 1 ? '' : 's'} — thanks`);
+  questsState.loaded = false; // the list may show the new title / quest
+  openQuestPage(d.quest || qcState.quest.id);
+}
+function qcApplyQuick(row) {
+  const p = pmParseWaypoint(row.querySelector('.qc-st-quick').value); if (!p) return;
+  const raw = String(p.planet || '').toLowerCase();
+  const code = QUEST_PLANETS[raw] ? raw : QUEST_PM_RAW[pmPlanetCode(p.planet)];
+  if (code) row.querySelector('.qc-st-planet').value = code;
+  row.querySelector('.qc-st-x').value = p.x; row.querySelector('.qc-st-z').value = p.y;
+  if (p.note && !row.querySelector('.qc-st-wpname').value) row.querySelector('.qc-st-wpname').value = p.note;
+}
+
+// ---- flag dialog ----
+function qcOpenFlag() {
+  $('#qcflag-note').value = ''; $('#qcflag-status').textContent = '';
+  $('#qcflag-modal').hidden = false; $('#qcflag-note').focus();
+}
+async function qcSaveFlag() {
+  if (qcState.busy) return;
+  const note = $('#qcflag-note').value.trim();
+  if (note.length < 5) { $('#qcflag-status').textContent = 'Say what needs fixing (a few words at least).'; return; }
+  qcState.busy = true;
+  const { err } = await qcPost({ action: 'flag', quest: qdState.quest.id, note });
+  qcState.busy = false;
+  if (err) { $('#qcflag-status').textContent = err; return; }
+  $('#qcflag-modal').hidden = true;
+  toast('Flag sent — the submitter sees it on the quest');
+  openQuestPage(qdState.quest.id);
+}
+
+async function qcAct(btn) {
+  const act = btn.dataset.qcact; const q = qdState.quest; if (!q) return;
+  if (act === 'flag') { qcOpenFlag(); return; }
+  if (act === 'rework') { qcOpenDialog('rework'); return; }
+  if ((act === 'retract' || act === 'pull') && !confirmArm(btn, act === 'pull' ? 'Click again to pull it for everyone' : 'Click again to retract')) return;
+  btn.disabled = true;
+  const { r, err } = await qcPost({ action: act, quest: q.id });
+  btn.disabled = false;
+  if (err) { toast(err, false); return; }
+  const d = r.data || {};
+  if (act === 'retract' || act === 'pull') { toast(act === 'pull' ? 'Quest pulled' : 'Quest retracted'); questsState.loaded = false; showPage('quests'); fetchQuests(); return; }
+  toast(act === 'vote' ? (d.verified ? 'Confirmed — that made it verified' : `Confirmed (${safeInt(d.votes)} of ${safeInt(d.needed)})`)
+    : act === 'unvote' ? 'Confirmation taken back' : 'Approved — it’s verified');
+  openQuestPage(q.id);
+}
+
+function initQuestCommunity() {
+  const m = $('#qc-modal'); if (!m) return;
+  $('#quests-submit').addEventListener('click', () => qcOpenDialog('submit'));
+  $('#page-quest').addEventListener('click', (e) => {
+    if (e.target.closest('[data-qchist]')) { qcShowHistory(); return; }
+    if (e.target.closest('[data-qcedit]')) { qcOpenDialog('edit'); return; }
+    if (e.target.closest('[data-qcopyall]')) { questCopyAllWays(); return; }
+    const pm = e.target.closest('[data-qpm]');
+    if (pm && typeof openPlanetMap === 'function') { openPlanetMap(pm.dataset.qpm); return; }
+    const a = e.target.closest('[data-qcact]');
+    if (a && !a.disabled) qcAct(a);
+  });
+  $('#qc-addstep').addEventListener('click', () => {
+    const box = $('#qc-steps');
+    box.insertAdjacentHTML('beforeend', qcStepRowHtml({}, box.children.length + 1, true));
+    box.lastElementChild.querySelector('.qc-st-title').focus();
+  });
+  $('#qc-steps').addEventListener('click', (e) => {
+    const del = e.target.closest('.qc-st-del'); if (!del) return;
+    del.closest('.qc-step').remove(); qcRenumber();
+  });
+  $('#qc-steps').addEventListener('paste', (e) => { const qk = e.target.closest('.qc-st-quick'); if (qk) setTimeout(() => qcApplyQuick(qk.closest('.qc-step')), 0); });
+  $('#qc-steps').addEventListener('change', (e) => { const qk = e.target.closest('.qc-st-quick'); if (qk) qcApplyQuick(qk.closest('.qc-step')); });
+  $('#qc-save').addEventListener('click', qcSave);
+  $('#qc-cancel').addEventListener('click', () => { m.hidden = true; });
+  m.addEventListener('click', (e) => { if (e.target === m) m.hidden = true; });
+  m.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') m.hidden = true;
+    else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); qcSave(); }
+  });
+  const f = $('#qcflag-modal');
+  $('#qcflag-save').addEventListener('click', qcSaveFlag);
+  $('#qcflag-cancel').addEventListener('click', () => { f.hidden = true; });
+  f.addEventListener('click', (e) => { if (e.target === f) f.hidden = true; });
+  f.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') f.hidden = true;
+    else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); qcSaveFlag(); }
+  });
 }

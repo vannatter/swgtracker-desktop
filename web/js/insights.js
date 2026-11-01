@@ -62,6 +62,8 @@ async function loadInsights() {
   renderInsVendorPerf();
   insFillPriceItems();
   if (insState.tab === 'pricing') loadInsPrices();
+  insMomLoad();   // insights-momentum.js — its own fetch, fixed windows
+  insProfitLoad();   // insights-profit.js — profit by item + same item across vendors
 }
 
 // ---- Customer loyalty scoring ---------------------------------------------
@@ -785,7 +787,9 @@ function drawInsTrend(trend, weekly) {
 
   const padL = 8, padR = 8, padT = 12, padB = 22;
   const vals = pts.map((p) => (cumulative ? p.cum : p.total));
-  const max = Math.max(1, ...vals);
+  // the prior-period overlay (insights-compare.js) shares the y scale
+  const overlay = typeof insCompareOverlayVals === 'function' ? insCompareOverlayVals(cumulative) : [];
+  const max = Math.max(1, ...vals, ...overlay);
   const x = (i) => padL + (i / (pts.length - 1)) * (w - padL - padR);
   const y = (v) => (h - padB) - (v / max) * (h - padT - padB);
 
@@ -820,6 +824,8 @@ function drawInsTrend(trend, weekly) {
     ctx.fillText(pts[i].label, x(i), h - 6);
   });
 
+  if (overlay.length) insCompareOverlayDraw(ctx, x, y, cumulative);
+
   insState.trendPts = pts.map((p, i) => ({ ...p, x: x(i), y: y(vals[i]), weekly, cumulative }));
 }
 
@@ -836,6 +842,7 @@ function insTrendHover(evt) {
     ? `<b>through ${escapeHtml(best.label)}</b> — ${fmtNum(best.cum)} total`
     : `<b>${span}${escapeHtml(best.label)}</b> — ${fmtNum(best.total)}`
       + ` · ${fmtNum(best.count)} sale${best.count === 1 ? '' : 's'}`;
+  if (typeof insComparePriorTip === 'function') tip.innerHTML += insComparePriorTip(best);
   tip.style.left = Math.min(Math.max(best.x, 60), rect.width - 60) + 'px';
   tip.hidden = false;
 }

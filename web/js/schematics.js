@@ -638,7 +638,7 @@ function renderSchematicPage(s) {
     const looted = c.looted === 'yes' ? ' <span class="scd-age">(looted)</span>' : '';
     const sub = items.length ? `<div class="scd-catitems" data-catitems="${i}" hidden>${items.map((ci) =>
       `<a role="button" class="scd-complink" data-schem="${escapeHtml(String(ci.schematicId))}">${escapeHtml(ci.schematicName || '')}</a>`).join('')}</div>` : '';
-    return `<div class="scd-line${chid ? ' scd-hiddenrow' : ''}">${verb} <span class="scd-eqty" data-eqty="${escapeHtml(String(c.id ?? ''))}" title="${chid ? 'Removed by a community edit (count 0) — click to set a count and bring it back' : 'Community-editable — click to fix the count'}">${safeInt(c.number)}</span> ${kind}${name}${looted}${chid ? ' <span class="scd-hidden-tag">hidden</span>' : ''}</div>${sub}`;
+    return `<div class="scd-line${chid ? ' scd-hiddenrow' : ''}" data-ci="${i}">${verb} <span class="scd-eqty" data-eqty="${escapeHtml(String(c.id ?? ''))}" title="${chid ? 'Removed by a community edit (count 0) — click to set a count and bring it back' : 'Community-editable — click to fix the count'}">${safeInt(c.number)}</span> ${kind}${name}${looted}${chid ? ' <span class="scd-hidden-tag">hidden</span>' : ''}</div>${sub}`;
   }).join('') : '<div class="scd-line">None</div>';
 
   // Formula switches — toggling re-fetches the server-ranked best lists for the
@@ -655,6 +655,8 @@ function renderSchematicPage(s) {
   renderScdTable();
   updateScdMysButton();
   updateScdMustafarBtn();
+  // what you hold in My Components per slot (components.js) — quiet when you don't use it
+  if (typeof cmpSchematicHoldings === 'function') cmpSchematicHoldings(s);
 }
 
 function updateScdMustafarBtn() {
@@ -679,6 +681,7 @@ async function openSchematicPage(id, name) {
   $('#scd-benefit').innerHTML = '';
   $('#scd-resneeded').innerHTML = '';
   $('#scd-components').innerHTML = '';
+  if ($('#scd-cmp')) $('#scd-cmp').hidden = true;
   $('#scd-formulas').innerHTML = '';
   $('#scd-body').innerHTML = '';
   $('#scd-head').innerHTML = '';

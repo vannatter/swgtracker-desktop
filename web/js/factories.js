@@ -799,11 +799,18 @@ function initFactories() {
         : confirmArmLabeled(done, 'End run?'))) return;
       if (reset && !confirmArmLabeled(reset, 'Restart run?')) return;
       const id = safeInt((done || reset).dataset.facdone || (done || reset).dataset.facreset);
+      // what came off the line, read before the stop clears the clock — Done offers it to
+      // the factory's hopper in My Components (components.js)
+      const f = facState.items.find((x) => safeInt(x.id) === id);
+      const made = f && done ? facUnitsDone(f) : 0;
       const res = await facPost({ action: 'stop', id });
       if (res.ok) {
         if (reset) {
           const r2 = await facPost({ action: 'start', id });
           toast(r2.ok ? 'Run restarted from the top' : (r2.error || 'Stopped, but the restart failed'), r2.ok);
+        } else if (made > 0 && String(f.product || '').trim() && typeof cmpCollectRun === 'function') {
+          const run = { ...f };
+          toastAction(`Nice haul — ${fmtNum(made)} × ${String(f.product).trim()}`, 'Add to hopper', () => cmpCollectRun(run, made));
         } else {
           toast('Nice haul — run cleared');
         }

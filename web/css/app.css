@@ -101,6 +101,7 @@ html, body {
   font-size: 13px; color: var(--text-hover);
 }
 #broadcast-bar .fa-bullhorn { color: var(--accent); }
+#broadcast-bar { cursor: pointer; }
 #broadcast-bar-msg { flex: 1; min-width: 0; }
 #broadcast-bar button { background: transparent; border: 0; color: var(--text-muted);
   cursor: pointer; font-size: 15px; padding: 0 4px; }
@@ -1799,6 +1800,15 @@ td .harv-name { font-size: inherit; font-weight: inherit; color: inherit; }
   padding: 4px 10px; border-radius: 4px; cursor: pointer; line-height: 1.5; white-space: nowrap; }
 .cmp-view .seg-btn.active { background: var(--bg-secondary); color: var(--text-hover); }
 .page-head .cmp-srcfilter { width: auto; }
+/* many header controls: the filters give ground so Add Component stays on the title row, right-most */
+#page-components .page-head #cmp-locfilter, #page-components .page-head .cmp-srcfilter { flex: 0 1 150px; min-width: 124px; }
+#page-components .page-head #cmp-search { min-width: 80px; }
+#page-components .page-head #cmp-add-open, #page-components .page-head .cmp-view { flex: none; white-space: nowrap; }
+/* wrapped (small windows): later rows hug the right, so Add Component is still the right-most control */
+#page-components .page-head { justify-content: flex-end; column-gap: 8px; }
+#page-components .page-head h1 { margin-right: auto; white-space: nowrap; flex: none; }
+/* desktop widths: one row — the filters and search shrink instead of whole controls dropping down */
+@media (min-width: 1280px) { #page-components .page-head { flex-wrap: nowrap; } }
 #cmp-grid .cmp-src { color: var(--text-muted); text-align: center; }
 #cmp-grid .cmp-notes { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #cmp-grid tr.cmp-grp { cursor: pointer; }
@@ -1823,6 +1833,45 @@ td .harv-name { font-size: inherit; font-weight: inherit; color: inherit; }
 .cmp-loc-count { flex: 0 0 28px; text-align: right; color: var(--text-muted); font-size: 12px; }
 .cmp-loc-addrow { margin-top: 4px; }
 .cmp-loc-fac { margin-top: 10px; }
+/* phase 2 — schematic have/short tags, Log a craft, Used in, History */
+.scd-have { font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--border);
+  color: var(--text-muted); cursor: pointer; white-space: nowrap; text-decoration: none; margin-left: 4px; }
+.scd-have:hover { color: var(--text-hover); border-color: var(--text-muted); }
+.scd-have.ok { color: var(--q-fair); border-color: currentColor; }
+.scd-have.short { color: var(--q-accept); border-color: currentColor; }
+.scd-have.none { color: var(--accent); border-color: currentColor; }
+.scd-cmp { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap;
+  margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+.scd-cmp-n { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); margin: 0; }
+.scd-cmp-n input { width: 64px; padding: 2px 6px; }
+.cmp-craft-card { max-width: 560px; }
+.cmp-craft-name { font-weight: 600; margin: 0 0 4px; }
+.cmp-craft-name i { color: var(--text-muted); margin-right: 4px; }
+.cmp-craft-change { font-size: 12px; font-weight: 400; margin-left: 6px; cursor: pointer; }
+.cmp-craft-qty { max-width: 120px; }
+.cmp-craft-slots { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; max-height: 46vh; overflow-y: auto; }
+.cmp-craft-slot { border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; }
+.cmp-craft-slothead { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.cmp-craft-slotname { flex: 1 1 auto; min-width: 0; font-weight: 600; font-size: 13px; }
+.cmp-craft-pick { flex: 0 0 170px; width: 170px; font-size: 12px; }
+.cmp-craft-row { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.cmp-craft-from { flex: 1 1 auto; min-width: 0; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cmp-craft-amt { flex: 0 0 90px; width: 90px; }
+.cmp-craft-none { margin: 2px 0 0; }
+.cmp-craft-short { font-size: 11px; color: var(--q-accept); }
+.cmp-craft-short:empty { display: none; }
+.cmp-uses-list { display: flex; flex-direction: column; gap: 2px; margin: 12px 0 8px; max-height: 50vh; overflow-y: auto; }
+.cmp-uses-row { display: flex; justify-content: space-between; gap: 10px; padding: 5px 6px; border-radius: 4px;
+  cursor: pointer; color: var(--text-primary); text-decoration: none; font-size: 13px; }
+.cmp-uses-row:hover { background: var(--bg-input); color: var(--text-hover); }
+#cmp-uses-filter { margin-top: 8px; }
+.cmp-log-row { display: flex; align-items: center; gap: 10px; padding: 7px 4px; border-bottom: 1px solid var(--border); font-size: 13px; }
+.cmp-log-row:last-child { border-bottom: 0; }
+.cmp-log-undone { opacity: .55; }
+.cmp-log-ico { flex: 0 0 16px; color: var(--text-muted); text-align: center; }
+.cmp-log-main { flex: 1 1 auto; min-width: 0; }
+.cmp-log-parts { font-size: 12px; color: var(--text-muted); }
+.cmp-log-when { flex: none; font-size: 11px; color: var(--text-muted); white-space: nowrap; }
 .inv-subhead .fac-tagbar { margin-bottom: 0; flex: 1 1 auto; }
 .inv-subhead .fac-tagbar[hidden] { display: none; }
 .inv-allmail { display: flex; align-items: center; gap: 6px; font-size: 13px; margin-left: auto;
@@ -4775,3 +4824,73 @@ tr.top-new td.col-name { color: var(--text-hover); }
 .idea-count { text-align: right; }
 .idea-admin-row { display: flex; gap: 18px; margin-top: 10px; font-size: 13px; }
 .idea-admin-row label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+
+/* ── Sales Insights: compare to the prior period + month projection (insights-compare.js) ── */
+.ins-kpi-delta { font-size: 11px; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ins-kpi-delta .ins-kpi-vs { color: var(--text-muted); }
+.ins-proj { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; margin: 4px 0 2px;
+  padding: 8px 14px; background: var(--bg-card); border: 1px dashed var(--border); border-radius: 8px;
+  font-size: 12px; color: var(--text-muted); flex-shrink: 0; cursor: help; }
+.ins-proj > i { color: var(--accent); }
+.ins-proj-main { color: var(--text-hover); }
+.ins-proj-main b { color: var(--accent); font-size: 14px; }
+.ins-cmp-seg { margin-left: auto; margin-right: 6px; }
+.ins-cmp-seg:not([hidden]) + .ins-seg { margin-left: 0; }
+
+/* ── Insights → Items: Heating up / Cooling off + Time to sell (insights-momentum.js) ── */
+#ins-mom .ins-panel-head h2 i { font-size: 12px; margin-right: 3px; }
+#ins-mom .ins-leaders { max-height: 330px; overflow-y: auto; }
+.ins-mom-row .ins-lead-val { font-variant-numeric: tabular-nums; }
+.ins-mom-row .ins-up { color: #45e97e; }        /* beat .ins-lead-rank / -val's own colors */
+.ins-mom-row .ins-down { color: var(--accent); }
+#ins-sell-body tr[data-insjump] { cursor: pointer; }
+
+/* ── Insights → Items: Sales lost to empty stock; Customers: New vs returning + Gone quiet (insights-lost.js) ── */
+.ins-lost-cols { margin-bottom: 14px; }
+.ins-lost-cols > .ins-panel { min-width: 0; }   /* grid items: let the chart/table shrink */
+.ins-lost-sum { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; line-height: 1.5; margin-bottom: 10px; }
+.ins-lost-sum > i { color: var(--accent); margin-top: 3px; }
+.ins-lost-sum .stat_off { display: block; font-size: 12px; color: var(--text-muted); }
+#ins-lost .ins-tablewrap { max-height: 360px; }
+#ins-lost tr[data-lostitem], #ins-quiet tr[data-quiet] { cursor: pointer; }
+.ins-lost-now { display: inline-block; font-size: 10px; padding: 1px 6px; border-radius: 8px; margin-left: 6px;
+  background: rgba(220,53,69,.18); color: var(--accent); vertical-align: 1px; white-space: nowrap; }
+.ins-quiet-wrap { max-height: 220px; }
+.ins-newret { display: flex; gap: 4px; height: 172px; align-items: stretch; }
+.ins-newret-col { flex: 1 1 0; display: flex; flex-direction: column; align-items: center; gap: 5px; min-width: 0; }
+.ins-newret-track { flex: 1 1 auto; width: 70%; max-width: 26px; display: flex; flex-direction: column-reverse; }
+.ins-newret-seg { width: 100%; }
+.ins-newret-seg.ret { background: rgba(122,138,153,.35); }
+.ins-newret-seg.new { background: var(--accent-dark); border-radius: 3px 3px 0 0; }
+.ins-newret-label { font-size: 10px; color: var(--text-muted); height: 12px; white-space: nowrap; overflow: visible; }
+.ins-loyalty-legend i.newret-new { background: var(--accent-dark); }
+.ins-loyalty-legend i.newret-ret { background: rgba(122,138,153,.35); }
+
+/* ── Sales Insights: Profit by item + Same item, different vendors (insights-profit.js) ── */
+.ins-prof-strip { display: flex; flex-wrap: wrap; gap: 8px 28px; align-items: baseline; margin-bottom: 8px; }
+.ins-prof-strip > div { display: flex; flex-direction: column; gap: 2px; }
+.ins-prof-strip b { font-size: 18px; font-weight: 700; color: var(--text-primary); }
+.ins-prof-strip b.ins-up { color: #45e97e; }
+.ins-prof-strip b.ins-down { color: var(--accent); }
+.ins-prof-note { font-size: 12px; color: var(--text-muted); margin-bottom: 8px; line-height: 1.4; }
+.ins-prof-costcell { white-space: nowrap; }
+.ins-prof-cost { width: 110px; height: 26px; padding: 2px 8px; text-align: right; display: inline-block;
+  background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--border); border-radius: 4px; font: inherit; }
+.ins-prof-cost:focus { outline: none; border-color: var(--accent); }
+.ins-prof-cost::placeholder { color: var(--text-muted); opacity: .7; }
+.ins-prof-src-buy { color: var(--text-muted); margin-left: 4px; font-size: 11px; }
+.ins-prof-inv { color: var(--text-muted); font-size: 10px; margin-left: 4px; }
+#ins-vcmp-body tr.ins-vcmp-item td { font-weight: 600; border-top: 1px solid var(--border); }
+#ins-vcmp-body tr.ins-vcmp-vendor td.col-name { padding-left: 26px; }
+#ins-vcmp-body tr.ins-vcmp-vendor td { color: var(--text-muted); }
+#ins-vcmp-body tr.ins-vcmp-vendor td.ins-up { color: #45e97e; }
+
+/* ── New / Updated page flags (navbadges.js) ─────────────────────────────────
+   A .nav-pill variant: red NEW, quiet UPDATED; fades out on the first visit.
+   The collapsed rail shrinks it to a dot on the icon. */
+.nav-pill.nav-flag { font-size: 8.5px; letter-spacing: .03em; text-transform: uppercase; padding: 1px 4px; line-height: 12px; border-radius: 6px; flex: 0 0 auto; transition: opacity .6s ease, transform .6s ease; }
+.app-sidebar .nav-item:has(> .nav-flag) { white-space: nowrap; } /* a flag never pushes the label onto two lines */
+.nav-pill.nav-flag-upd { background: var(--bg-input); color: var(--text-muted); }
+.nav-pill.nav-flag.nav-flag-out { opacity: 0; transform: scale(.85); }
+.app-sidebar.collapsed .nav-item .nav-pill.nav-flag { font-size: 0; min-width: 0; width: 7px; height: 7px; padding: 0; top: 5px; right: 12px; border-radius: 50%; }
+.app-sidebar.collapsed .nav-item .nav-pill.nav-flag-upd { background: var(--text-muted); }

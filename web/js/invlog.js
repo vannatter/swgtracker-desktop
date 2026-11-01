@@ -21,11 +21,12 @@ const INVLOG_SOURCES = {
   delete: ['Removed', ''],
   mail_delete: ['Mail deleted', 'its sale was given back'],
   mail_restore: ['Mail restored', 'its sale counts again'],
+  reassign: ['Moved by hand', 'a sale counted toward a different item with Count toward…'],
 };
 const INVLOG_FILTERS = {
   '': '',
   unmatched: 'unmatched',
-  sale: 'sale',
+  sale: 'sale,reassign',
   edits: 'edit,bulk,restock,create,delete',
   mail: 'mail_delete,mail_restore',
 };
@@ -71,6 +72,10 @@ function invLogDetail(r, idx, where) {
   }
   if (r.source === 'unmatched') {
     parts.push(`<button type="button" class="btn btn-link invlog-link" data-invlog-track="${where}:${idx}" title="Add this item to My Inventory — later sales will count against it">Track it</button>`);
+  }
+  // Count toward… — put a missed sale in a bucket (or move one that landed wrong)
+  if (r.sale_id && r.buyer && (r.source === 'unmatched' || r.source === 'sale')) {
+    parts.push(`<button type="button" class="btn btn-link invlog-link" data-invlog-cnt="${where}:${idx}" title="Count this sale toward another item or a bucket${r.source === 'sale' ? ', or uncount it' : ''}">Count toward…</button>`);
   }
   return parts.join(' · ');
 }
@@ -175,6 +180,18 @@ function initInvLog() {
   document.addEventListener('click', (e) => {
     const raw = e.target.closest('[data-invlog-raw]');
     if (raw && typeof mmShowRaw === 'function') { mmShowRaw(raw.dataset.invlogRaw); return; }
+    const cnt = e.target.closest('[data-invlog-cnt]');
+    if (cnt && typeof invOpenReassign === 'function') {
+      const [w, i] = cnt.dataset.invlogCnt.split(':');
+      const r = (w === 'item' ? invLogState.itemRows : invLogState.rows)[Number(i)];
+      if (!r) return;
+      // the log row's item_name is the sale's name for unmatched rows, the item's for counted ones
+      invOpenReassign({ id: r.sale_id, item: r.source === 'unmatched' ? r.item_name : (r.sale_item || r.item_name),
+        vendor: r.sale_vendor || '', sale_type: r.sale_type, sale_amount: r.sale_amount, sale_timestamp: r.sale_timestamp,
+        counted_by: r.source === 'sale' ? r.inventory_id : null },
+        () => (w === 'item' && invLogState.item ? invLogItemHistory(invLogState.item) : invLogLoad()));
+      return;
+    }
     const track = e.target.closest('[data-invlog-track]');
     if (!track) return;
     const [where, idx] = track.dataset.invlogTrack.split(':');

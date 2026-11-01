@@ -85,16 +85,22 @@ def auto_notes() -> str:
         subj = re.sub(r"^v[0-9.]+ — ", "", subj).strip()  # drop version prefixes
         # dev/tooling commits (ci:/chore:/docs:) stay out of user-facing notes
         if subj and not subj.lower().startswith(("merge", "bundle", "ci:", "chore:", "docs:")):
-            lines.append(subj)
+            lines.extend(re.split(r";\s+", subj))  # one commit often carries several '; ' changes
+    return as_bullets(lines)
+
+
+def as_bullets(lines: list[str]) -> str:
+    """'• a\n• b' for the update chip, trimmed to the server's 500-char cap."""
+    lines = [l.strip().rstrip(".") for l in lines if l.strip()]
     if not lines:
         return "Minor fixes and improvements"
     text = "• " + "\n• ".join(lines[:8])
-    if len(text) <= 490:
+    if len(text) <= 990:
         return text
-    # server caps notes at 500 — trim on a word boundary so we never cut mid-word
-    cut = text[:489]
+    # server caps notes at 1000 (app/deploy.php) — trim on a word boundary so we never cut mid-word
+    cut = text[:989]
     sp = cut.rfind(" ")
-    if sp > 400:
+    if sp > 900:
         cut = cut[:sp]
     return cut.rstrip() + "…"
 
@@ -144,6 +150,9 @@ def main() -> int:
 
     version = args.version or next_version()
     min_shell = args.min_shell or MIN_SHELL
+    if args.notes and not args.notes.lstrip().startswith("•"):
+        # ship.py hands over its one-line '; '-separated message — same bullets as Discord
+        args.notes = as_bullets(re.split(r";\s+", re.sub(r"^v[0-9.]+ — ", "", args.notes.strip())))
     if args.deploy and not args.notes:
         args.notes = auto_notes()
         print("notes (from git):")

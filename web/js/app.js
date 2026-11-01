@@ -93,6 +93,7 @@ const PAGE_LOADERS = {
   harvesters: () => loadHarvesters(),
   factories: () => loadFactories(),
   inventory: () => loadInventory(),
+  components: () => loadComponents(),
   alerts: () => loadAlerts(),
   notes: () => loadNotes(),
   macros: () => loadMacros(),
@@ -102,6 +103,7 @@ const PAGE_LOADERS = {
   monitor: () => loadMail(),
   scanner: () => loadScanner(),
   settings: () => { loadSettings(); loadScanConfig(); }, // scan config renders into #set-scan-section
+  ideas: () => loadIdeas(),
   about: () => loadAbout(),
 };
 const loadedPages = new Set();
@@ -1264,6 +1266,7 @@ async function boot() {
   initCharactersPage();
   initHarvesters();
   initInventory();
+  initComponents();
   initInvLog();
   initSettings();
   initAlerts();
@@ -1275,6 +1278,7 @@ async function boot() {
   initScanner();
   initFactories();
   initNotesPage();
+  initIdeas();
   initMacros();
   initAliases();
   initCommunityMacros();

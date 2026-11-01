@@ -13,7 +13,7 @@ const PUR_PERIODS = [['7 Day', '7_day'], ['30 Day', '30_day'], ['90 Day', '90_da
 const purState = { page: 1, sortField: 'purchase_timestamp', sortOrder: 'DESC' };
 
 function buildPurHeader() {
-  $('#pur-head').innerHTML = sortableHeaderHtml(PUR_COLUMNS, purState.sortField, purState.sortOrder);
+  $('#pur-head').innerHTML = sortableHeaderHtml(PUR_COLUMNS, purState.sortField, purState.sortOrder) + '<th class="pin-cell"></th>';
 }
 
 function buildPurCards() {
@@ -58,6 +58,8 @@ function purRowHtml(row) {
     ${f(row.seller || '')}
     <td class="col-num sale-amount">${fmtNum(row.purchase_amount)}</td>
     <td class="col-text">${fmtDate(row.purchase_timestamp)}</td>
+    <td class="pin-cell"><button class="btn btn-icon" data-pur2cmp data-item="${escapeHtml(row.item || '')}" data-seller="${escapeHtml(row.seller || '')}"
+      data-amount="${safeInt(row.purchase_amount)}" title="Add to My Components — a part or looted add-in you'll craft with"><i class="fa-solid fa-gears"></i></button></td>
   </tr>`;
 }
 
@@ -119,6 +121,14 @@ function initPurchases() {
 
   // click an item/seller cell to filter to it
   $('#pur-body').addEventListener('click', (e) => {
+    // a bought part → My Components (components.js), prefilled from the purchase
+    const add = e.target.closest('[data-pur2cmp]');
+    if (add) {
+      const seller = add.dataset.seller;
+      openCmpDialog(null, { item_name: add.dataset.item, source: 'bought', units: 1,
+        notes: `Bought${seller ? ` from ${seller}` : ''} for ${fmtNum(safeInt(add.dataset.amount))} cr` });
+      return;
+    }
     const cell = e.target.closest('[data-purfilter]');
     if (!cell) return;
     $('#pur-search').value = cell.dataset.purfilter;

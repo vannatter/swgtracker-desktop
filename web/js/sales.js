@@ -60,7 +60,7 @@ function updateSalesCards(summaries) {
   });
 }
 
-function saleRowHtml(sale) {
+function saleRowHtml(sale, idx) {
   const type = String(sale.sale_type ?? '');
   const typeText = type === '1' ? 'Vendor' : type === '2' ? 'Bazaar' : type;
   // item/buyer/vendor/location click-filter the page (aggregates follow)
@@ -74,7 +74,10 @@ function saleRowHtml(sale) {
         <i class="fa-solid fa-address-card sales-scorecard" data-scorecard="${escapeHtml(sale.buyer)}"
            title="Open ${escapeHtml(sale.buyer)}'s customer scorecard"></i></td>`
     : '<td class="col-text"></td>';
-  return `<tr>
+  // the server says whether this sale counts (tracked / counted_by — the same
+  // matcher as the parser, buckets included); older sites leave them out
+  const flag = sale.tracked === undefined ? '' : ` data-tracked="${sale.tracked ? 1 : 0}"`;
+  return `<tr data-sidx="${idx}"${flag}>
     ${f(sale.item || '', 'col-name res-name')}
     <td>${escapeHtml(typeText)}</td>
     ${buyerCell}
@@ -130,10 +133,12 @@ async function loadSales() {
     if (!filtered) mailSetupOffer($('#sales-empty'));
     $('#sales-status').textContent = '';
   } else {
+    salesState.rows = sales;
+    salesState.serverFlags = sales[0].tracked !== undefined;
     $('#sales-body').innerHTML = sales.map(saleRowHtml).join('');
     $('#sales-status').textContent = `Page ${page} of ${totalPages} — ${fmtNum(total)} total sales`;
     // flag sold items that aren't in My Inventory (index fetched once, then kept fresh)
-    if (salesInvNames) salesMarkMissing();
+    if (salesState.serverFlags || salesInvNames) salesMarkMissing();
     else salesLoadInvNames().then(salesMarkMissing);
   }
 
@@ -186,16 +191,28 @@ async function salesLoadInvNames() {
 }
 
 function salesMarkMissing() {
-  if (!salesInvNames) return;
+  if (!salesState.serverFlags && !salesInvNames) return;
   document.querySelectorAll('#sales-body td.col-name[data-filter]').forEach((td) => {
-    const vendors = salesInvNames.get(salesNormItem(td.dataset.filter));
     const tr = td.closest('tr');
+    const sale = salesState.rows?.[Number(tr?.dataset.sidx)];
+    // Count toward… — move this sale's count to another item (or a bucket)
+    if (sale && sale.id && !td.querySelector('.sales-cnt')) {
+      td.insertAdjacentHTML('beforeend', ` <i class="fa-solid fa-right-left sales-cnt" data-salecnt="1" title="${sale.counted_by
+        ? 'Counts toward one of your items — click to count it toward another (or a bucket), or uncount it'
+        : 'Count this sale toward one of your items (or a bucket)'}"></i>`);
+    }
+    let missing;
+    if (tr?.dataset.tracked !== undefined) {
+      missing = tr.dataset.tracked === '0';
+    } else {
+    const vendors = salesInvNames.get(salesNormItem(td.dataset.filter));
     let saleVendor = salesNormItem(tr?.children[3]?.dataset.filter);
     // Bazaar sales carry no vendor; treat them as the pseudo-vendor "Bazaar" so a
     // Bazaar-tracked inventory row matches them (Danvar). Vendor-less rows still
     // catch everything via vendors.has('').
     if (!saleVendor && (tr?.children[1]?.textContent || '').trim().toLowerCase() === 'bazaar') saleVendor = 'bazaar';
-    const missing = !vendors || !(vendors.has('') || vendors.has(saleVendor));
+    missing = !vendors || !(vendors.has('') || vendors.has(saleVendor));
+    }
     const ico = td.querySelector('.sales-notinv');
     if (missing && !ico) {
       td.insertAdjacentHTML('beforeend',
@@ -210,6 +227,8 @@ function salesMarkMissing() {
 
 // inventory.js calls this after any add so the flags clear without a reload
 function salesOnInvAdded(name, vendor) {
+  // server-flagged rows: ask again rather than guess (buckets, extra names)
+  if (salesState.serverFlags && $('#page-sales')?.classList.contains('active')) { loadSales(); return; }
   if (salesInvNames) {
     const k = salesNormItem(name);
     if (!salesInvNames.has(k)) salesInvNames.set(k, new Set());
@@ -266,6 +285,12 @@ function initSales() {
   buildSalesHeader();
 
   $('#sales-body').addEventListener('click', (e) => {
+    const cnt = e.target.closest('[data-salecnt]');
+    if (cnt) {
+      const sale = salesState.rows?.[Number(cnt.closest('tr')?.dataset.sidx)];
+      if (sale && typeof invOpenReassign === 'function') invOpenReassign(sale, () => loadSales());
+      return;
+    }
     const add = e.target.closest('[data-addinv]');
     if (add) {
       const tr = add.closest('tr');

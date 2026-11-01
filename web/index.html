@@ -6,7 +6,7 @@
   <title>SWG Tracker Desktop</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.1/css/all.min.css">
-  <link rel="stylesheet" href="css/app.css?v=20261031a">
+  <link rel="stylesheet" href="css/app.css?v=20261031g">
   <link rel="stylesheet" href="css/share.css?v=20261022x">
   <link rel="stylesheet" href="css/quests.css?v=20261022cm">
 </head>
@@ -76,6 +76,7 @@
         <li class="nav-item nav-group-item" data-page="myschematics" data-group="mystuff"><i class="fa-solid fa-screwdriver-wrench"></i> My Schematics
           <span id="nav-mys-pill" class="nav-pill" title="Upgrades available across your schematics" hidden></span></li>
         <li class="nav-item nav-group-item" data-page="stockpile" data-group="mystuff"><i class="fa-solid fa-cubes"></i> My Stockpile</li>
+        <li class="nav-item nav-group-item" data-page="components" data-group="mystuff"><i class="fa-solid fa-gears"></i> My Components</li>
         <li class="nav-item nav-group-item" data-page="wishlist" data-group="mystuff"><i class="fa-solid fa-heart"></i> My Wishlist</li>
         <li class="nav-group-head" data-navgroup="vendors"><i class="fa-solid fa-tags"></i> Sales <i class="fa-solid fa-caret-down nav-group-caret"></i><span class="nav-group-dot" hidden></span></li>
         <li class="nav-item nav-group-item" data-page="sales" data-group="vendors"><i class="fa-solid fa-tags"></i> My Sales</li>
@@ -95,6 +96,7 @@
         <li class="nav-item nav-group-item" data-page="macros" data-group="tools" title="Manage your in-game macros (macros.txt)"><i class="fa-solid fa-wand-magic-sparkles"></i> Macros</li>
         <li class="nav-item nav-group-item" data-page="aliases" data-group="tools" title="Manage your in-game aliases (aliases.txt)"><i class="fa-solid fa-terminal"></i> Aliases</li>
         <li class="nav-item nav-group-item" data-page="scanner" data-group="tools"><i class="fa-solid fa-expand"></i> Scanner</li>
+        <li class="nav-item" data-page="ideas" title="Post and upvote ideas for what gets built next"><i class="fa-solid fa-lightbulb"></i> Ideas</li>
         <li class="nav-item" data-page="settings"><i class="fa-solid fa-gear"></i> Settings</li>
         <li class="nav-item" data-page="about"><i class="fa-solid fa-circle-info"></i> About</li>
       </ul>
@@ -1050,6 +1052,42 @@
       </section>
 
       <!-- Inventory page -->
+      <section id="page-components" class="page">
+        <div class="page-head">
+          <h1>My Components</h1>
+          <i class="fa-solid fa-circle-info info-tip"
+             title="Crafting stock between your resources and your vendors: factory-made subcomponents, looted add-ins like scales and hides, and bought parts — and where each stack sits (a factory hopper, a house, a storage container, your backpack). Nothing here touches My Inventory or your sales unless you Move it to Inventory."></i>
+          <select id="cmp-locfilter" class="form-select filter-select head-filter" title="Only what's kept at this location">
+            <option value="">All locations</option>
+          </select>
+          <select id="cmp-srcfilter" class="form-select filter-select cmp-srcfilter" title="Where the parts came from">
+            <option value="">All sources</option>
+            <option value="factory">Factory runs</option>
+            <option value="crafted">Hand-crafted</option>
+            <option value="looted">Looted</option>
+            <option value="bought">Bought</option>
+          </select>
+          <input id="cmp-search" type="text" class="form-control filter-input head-search" placeholder="Search..." title="Matches item names, stats / notes, tags and locations">
+          <div id="cmp-view" class="seg-toggle cmp-view" role="group" aria-label="Group by">
+            <button class="seg-btn" data-cview="item" title="One block per item, with every place it's kept">By item</button>
+            <button class="seg-btn" data-cview="location" title="One block per location — what's in each hopper, house and backpack">By location</button>
+          </div>
+          <button id="cmp-locs-open" class="btn btn-sm btn-outline-secondary" title="Your houses, storage containers, backpacks and factory hoppers"><i class="fa-solid fa-warehouse"></i> Locations</button>
+          <button id="cmp-add-open" class="btn btn-sm btn-accent"><i class="fa-solid fa-plus"></i> Add Component</button>
+          <button class="btn btn-icon" data-refresh="components" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
+        </div>
+
+        <div class="table-wrap">
+          <table class="data-grid" id="cmp-grid">
+            <thead><tr id="cmp-head"></tr></thead>
+            <tbody id="cmp-body"></tbody>
+          </table>
+          <div id="cmp-loading" class="grid-loading" hidden><span class="spinner"></span> Loading…</div>
+          <div id="cmp-empty" class="grid-empty" hidden></div>
+        </div>
+        <div class="pager"><span id="cmp-status" class="pager-status"></span></div>
+      </section>
+
       <section id="page-inventory" class="page">
         <div class="page-head">
           <h1>My Inventory</h1>
@@ -1255,6 +1293,33 @@
       </section>
 
       <!-- Settings page -->
+      <!-- Ideas board: post + upvote development ideas (api/ideas.php; site /ideas.php mirrors) -->
+      <section id="page-ideas" class="page">
+        <div class="page-head">
+          <h1>Ideas</h1>
+          <i class="fa-solid fa-circle-info info-tip"
+             title="Ideas for what gets built next. Post one, upvote the ones you want — the most-wanted rise to the top. You can edit or delete your own idea until the developer marks it Planned."></i>
+          <select id="ideas-status" class="form-select filter-select head-filter" title="Status">
+            <option value="">All statuses</option><option value="open">Open</option><option value="planned">Planned</option>
+            <option value="progress">In progress</option><option value="shipped">Shipped</option><option value="declined">Declined</option>
+          </select>
+          <select id="ideas-category" class="form-select filter-select" title="Category"></select>
+          <select id="ideas-sort" class="form-select filter-select" title="Order">
+            <option value="top">Top voted</option><option value="new">Newest</option>
+          </select>
+          <input id="ideas-search" type="text" class="form-control filter-input head-search" placeholder="Search ideas...">
+          <label id="ideas-mine-wrap" class="ideas-mine" title="Only the ideas you posted" hidden><input type="checkbox" id="ideas-mine"> Mine</label>
+          <button id="ideas-new" class="btn btn-sm btn-accent"><i class="fa-solid fa-lightbulb"></i> Post Idea</button>
+          <button class="btn btn-icon" data-refresh="ideas" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
+        </div>
+        <div class="ideas-wrap table-wrap">
+          <div id="ideas-list" class="ideas-list"></div>
+          <div id="ideas-loading" class="grid-loading" hidden><span class="spinner"></span> Loading…</div>
+          <div id="ideas-empty" class="grid-empty" hidden></div>
+        </div>
+        <div class="pager"><span id="ideas-status-line" class="pager-status"></span></div>
+      </section>
+
       <!-- About: versions, what's new, thanks -->
       <section id="page-about" class="page">
         <div class="page-head"><h1>About</h1></div>
@@ -2559,6 +2624,154 @@
     </div>
   </div>
 
+  <!-- My Components: add / edit -->
+  <div id="cmp-add-modal" class="key-gate" hidden>
+    <div class="key-gate-card sp-card inv-add-card">
+      <h2 id="cmp-modal-title">Add Component</h2>
+      <label class="sp-field-label">Component name</label>
+      <input id="cmp-new-name" type="text" class="form-control filter-input settings-input-wide" placeholder="e.g. Reinforced Fiber Panels, Kimogila Scale" autocomplete="off">
+      <div class="inv-add-row">
+        <div class="inv-add-field">
+          <label class="sp-field-label">Units</label>
+          <input id="cmp-new-units" type="number" class="form-control filter-input" value="1" min="0">
+        </div>
+        <div class="inv-add-field">
+          <label class="sp-field-label">Crate size <span class="settings-sub">optional</span></label>
+          <input id="cmp-new-crate" type="number" class="form-control filter-input" min="0" placeholder="e.g. 25" title="Units in a crate — shows crate counts, and moving to Inventory counts crates">
+        </div>
+      </div>
+      <label class="sp-field-label">Location <span class="settings-sub">a house, container, backpack or factory hopper — type a new one to add it</span></label>
+      <div class="inv-vendor-wrap">
+        <input id="cmp-new-loc" type="text" class="form-control filter-input settings-input-wide" placeholder="e.g. Coronet house — armor chest" autocomplete="off">
+        <div id="cmp-loc-sug" class="inv-vendor-sug" hidden></div>
+      </div>
+      <div class="inv-add-row">
+        <div class="inv-add-field">
+          <label class="sp-field-label">Source</label>
+          <select id="cmp-new-source" class="form-select filter-select">
+            <option value="factory">Factory run</option>
+            <option value="crafted">Hand-crafted</option>
+            <option value="looted">Looted</option>
+            <option value="bought">Bought</option>
+          </select>
+        </div>
+        <div class="inv-add-field">
+          <label class="sp-field-label">Quality <span class="settings-sub">optional</span></label>
+          <input id="cmp-new-quality" type="number" class="form-control filter-input" placeholder="for sorting">
+        </div>
+      </div>
+      <label class="sp-field-label">Stats / notes <span class="settings-sub">optional — e.g. +30 kinetic, 88% OQ</span></label>
+      <textarea id="cmp-new-notes" class="form-control filter-input settings-input-wide cmp-notes-input" rows="2"></textarea>
+      <label class="sp-field-label">Tags <span class="settings-sub">optional, comma-separated</span></label>
+      <input id="cmp-new-tags" type="text" class="form-control filter-input settings-input-wide" autocomplete="off">
+      <div class="inv-add-actions">
+        <button id="cmp-add-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
+        <button id="cmp-save" class="btn btn-sm btn-accent"><i class="fa-solid fa-plus"></i> Add Component</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- My Components: move some or all of a stack -->
+  <div id="cmp-move-modal" class="key-gate" hidden>
+    <div class="key-gate-card sp-card inv-add-card">
+      <h2 id="cmp-move-title">Move</h2>
+      <div id="cmp-move-from" class="settings-hint"></div>
+      <div class="inv-add-row">
+        <div class="inv-add-field">
+          <label class="sp-field-label">How many</label>
+          <div class="cmp-move-amtrow">
+            <input id="cmp-move-amt" type="number" class="form-control filter-input" min="1">
+            <select id="cmp-move-unit" class="form-select filter-select" hidden>
+              <option value="crates">crates</option>
+              <option value="units">units</option>
+            </select>
+          </div>
+        </div>
+        <div class="inv-add-field">
+          <label class="sp-field-label">To</label>
+          <select id="cmp-move-dest" class="form-select filter-select"></select>
+        </div>
+      </div>
+      <div id="cmp-move-newloc-wrap" hidden>
+        <label class="sp-field-label">New location</label>
+        <input id="cmp-move-newloc" type="text" class="form-control filter-input settings-input-wide" placeholder="e.g. Backpack, Theed house" autocomplete="off">
+      </div>
+      <div id="cmp-move-inv-wrap" hidden>
+        <label class="sp-field-label">Inventory item <span class="settings-sub">its Stocked goes up — sales then count it down like any item</span></label>
+        <select id="cmp-move-inv" class="form-select filter-select settings-input-wide"></select>
+        <div id="cmp-move-new-wrap" hidden>
+          <label class="sp-field-label">New item name <span class="settings-sub">the exact vendor listing name</span></label>
+          <input id="cmp-move-newname" type="text" class="form-control filter-input settings-input-wide" autocomplete="off">
+          <label class="sp-field-label">Vendor <span class="settings-sub">optional</span></label>
+          <input id="cmp-move-newvendor" type="text" class="form-control filter-input settings-input-wide" autocomplete="off">
+        </div>
+      </div>
+      <div id="cmp-move-hint" class="settings-hint cmp-move-hint"></div>
+      <div class="inv-add-actions">
+        <button id="cmp-move-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
+        <button id="cmp-move-go" class="btn btn-sm btn-accent"><i class="fa-solid fa-right-left"></i> Move</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- My Components: locations manager -->
+  <div id="cmp-locs-modal" class="key-gate" hidden>
+    <div class="key-gate-card sp-card inv-add-card cmp-locs-card">
+      <h2>Locations</h2>
+      <div class="settings-hint">Where your parts are kept. Rename or set a planet and it updates every stack there.</div>
+      <div id="cmp-locs-list" class="cmp-locs-list"></div>
+      <div class="cmp-loc-row cmp-loc-addrow">
+        <span class="cmp-loc-ico"><i class="fa-solid fa-plus"></i></span>
+        <input id="cmp-loc-newname" class="form-control filter-input cmp-loc-name" placeholder="House, container or backpack" autocomplete="off">
+        <input id="cmp-loc-newplanet" class="form-control filter-input cmp-loc-planet" placeholder="Planet" autocomplete="off">
+        <button id="cmp-loc-add" class="btn btn-sm btn-outline-secondary">Add</button>
+      </div>
+      <select id="cmp-loc-fac" class="form-select filter-select settings-input-wide cmp-loc-fac"></select>
+      <div class="inv-add-actions">
+        <button id="cmp-locs-done" class="btn btn-sm btn-accent">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- My Components: low-stock warning on an item's total -->
+  <div id="cmp-thresh-modal" class="key-gate" hidden>
+    <div class="key-gate-card sp-card inv-add-card">
+      <h2 id="cmp-thresh-title">Low-stock warning</h2>
+      <label class="sp-field-label">Warn me at or below <span class="settings-sub">the total across every location</span></label>
+      <input id="cmp-thresh-val" type="number" class="form-control filter-input" min="0" placeholder="e.g. 50">
+      <div id="cmp-thresh-now" class="settings-hint"></div>
+      <div class="inv-add-actions">
+        <button id="cmp-thresh-off" class="btn btn-sm btn-outline-secondary">Turn off</button>
+        <button id="cmp-thresh-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
+        <button id="cmp-thresh-save" class="btn btn-sm btn-accent"><i class="fa-solid fa-bell"></i> Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Ideas: post / edit dialog -->
+  <div id="idea-modal" class="key-gate" hidden>
+    <div class="key-gate-card sp-card idea-card-dlg">
+      <h2 id="idea-modal-title">Post an idea</h2>
+      <label class="sp-field-label">Title</label>
+      <input id="idea-title" type="text" class="form-control filter-input settings-input-wide" maxlength="120"
+             placeholder="e.g. Show spawn age when hovering a resource" autocomplete="off">
+      <label class="sp-field-label">Category</label>
+      <select id="idea-cat" class="form-select filter-select settings-input-wide"></select>
+      <label class="sp-field-label">Details <span class="settings-sub">what you'd use it for helps most</span></label>
+      <textarea id="idea-desc" class="form-control settings-input-wide idea-desc-input" maxlength="2000" rows="6"
+                placeholder="What should it do, and what problem does it solve for you?"></textarea>
+      <div id="idea-desc-count" class="settings-hint idea-count"></div>
+      <div id="idea-admin-row" class="idea-admin-row" hidden>
+        <label><input type="checkbox" id="idea-dev"> Post as Dev</label>
+        <label id="idea-pinned-wrap"><input type="checkbox" id="idea-pinned"> Pin to the top</label>
+      </div>
+      <div class="inv-add-actions">
+        <button id="idea-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
+        <button id="idea-save" class="btn btn-sm btn-accent"><i class="fa-solid fa-lightbulb"></i> Post idea</button>
+      </div>
+    </div>
+  </div>
+
   <div id="inv-add-modal" class="key-gate" hidden>
     <div class="key-gate-card sp-card inv-add-card">
       <h2 id="inv-modal-title">Add Inventory Item</h2>
@@ -2567,6 +2780,19 @@
              placeholder="e.g. UL Composite Armor Helmet 7000/5000/6000 [SENA]" autocomplete="off">
       <div class="settings-hint">Use the exact in-game name — sales parsed from your mail
         automatically deplete the matching item's stock.</div>
+      <label class="sp-field-label">Match <span class="settings-sub">how a sale finds this item</span></label>
+      <div class="inv-match-seg" id="inv-new-match" role="group" aria-label="Match">
+        <button type="button" class="seg-btn active" data-invmatch="exact">Exact name</button>
+        <button type="button" class="seg-btn" data-invmatch="words">Words in order</button>
+      </div>
+      <div id="inv-match-hint" class="settings-hint"></div>
+      <label class="sp-field-label">Extra names <span class="settings-sub">optional — other exact names that count here too</span></label>
+      <div id="inv-extra-chips" class="inv-extra-chips"></div>
+      <div class="inv-extra-add">
+        <input id="inv-extra-input" type="text" class="form-control filter-input" placeholder="Paste a sale's exact name" autocomplete="off">
+        <button id="inv-extra-addbtn" type="button" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-plus"></i> Add</button>
+      </div>
+      <div id="inv-match-preview" class="settings-hint inv-match-preview"></div>
       <label class="sp-field-label">Vendor <span class="settings-sub">optional — which vendor sells it, so you know where to restock</span></label>
       <div class="inv-vendor-wrap">
         <input id="inv-new-vendor" type="text" class="form-control filter-input settings-input-wide"
@@ -3197,6 +3423,24 @@
     </div>
   </div>
 
+  <!-- Count toward… — move one sale's count to another item (or uncount it) -->
+  <div id="inv-reassign-modal" class="key-gate" hidden>
+    <div class="key-gate-card sp-card inv-reassign-card">
+      <h2>Count this sale toward…</h2>
+      <div id="inv-reassign-sale" class="inv-reassign-sale"></div>
+      <input id="inv-reassign-q" type="text" class="form-control filter-input settings-input-wide" placeholder="Search your items…" autocomplete="off">
+      <select id="inv-reassign-list" class="form-select inv-reassign-list" size="8" aria-label="Inventory item"></select>
+      <label class="inv-reassign-also" id="inv-reassign-also-wrap"><input type="checkbox" id="inv-reassign-also">
+        Also match this name from now on <span class="settings-sub">— later sales with this exact name count here on their own</span></label>
+      <div class="inv-add-actions">
+        <button id="inv-reassign-un" type="button" class="btn btn-sm btn-outline-secondary" title="This sale stops counting against any item — its stock goes back">Uncount</button>
+        <span class="inv-selbar-sep"></span>
+        <button id="inv-reassign-cancel" type="button" class="btn btn-sm btn-outline-secondary">Cancel</button>
+        <button id="inv-reassign-ok" type="button" class="btn btn-sm btn-accent"><i class="fa-solid fa-check"></i> Count it</button>
+      </div>
+    </div>
+  </div>
+
   <div id="inv-sales-modal" class="key-gate" hidden>
     <div class="key-gate-card sp-card inv-sales-card">
       <div class="mm-raw-head">
@@ -3422,7 +3666,7 @@
 
   <!-- Classic scripts sharing one top-level scope; app.js boots last. -->
   <script src="js/class_caps.js?v=20261012a"></script>
-  <script src="js/shared.js?v=20261023aw"></script>
+  <script src="js/shared.js?v=20261031b"></script>
   <script src="js/shop.js?v=20261017b"></script>
   <script src="js/help.js?v=20261012a"></script>
   <script src="js/resources.js?v=20261026sp"></script>
@@ -3434,11 +3678,12 @@
   <script src="js/wishlist.js?v=20261022es"></script>
   <script src="js/myschematics.js?v=20261022es"></script>
   <script src="js/schemcalc.js?v=20261022es"></script>
-  <script src="js/inventory.js?v=20261031a"></script>
-  <script src="js/invlog.js?v=20261022es"></script>
-  <script src="js/sales.js?v=20261026sc"></script>
+  <script src="js/inventory.js?v=20261031b"></script>
+  <script src="js/components.js?v=20261031b"></script>
+  <script src="js/invlog.js?v=20261031b"></script>
+  <script src="js/sales.js?v=20261031b"></script>
   <script src="js/insights.js?v=20261022es"></script>
-  <script src="js/purchases.js?v=20261022es"></script>
+  <script src="js/purchases.js?v=20261031b"></script>
   <script src="js/harvesters.js?v=20261027br"></script>
   <script src="js/factories.js?v=20261022es"></script>
   <script src="js/customers.js?v=20261022es"></script>
@@ -3468,6 +3713,7 @@
   <script src="js/decor.js?v=20261027h4"></script>
   <script src="js/home.js?v=20261031a"></script>
   <script src="js/mailsetup.js?v=20261019a"></script>
-  <script src="js/app.js?v=20261027hd"></script>
+  <script src="js/ideas.js?v=20261031d"></script>
+  <script src="js/app.js?v=20261031c"></script>
 </body>
 </html>

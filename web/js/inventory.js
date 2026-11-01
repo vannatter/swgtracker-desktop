@@ -24,6 +24,7 @@ const invState = { page: 1, perPage: 100, hasNext: false, sortField: 'item_name'
                    checked: new Set(),    // checkbox selection — bulk edit / multi-drag filing
                    lastSel: null,         // last-toggled checkbox (anchor for shift-click ranges)
                    selected: new Set(),
+                   dlg: { match: 'exact', extra: [], extraWas: [] },   // the Add/Edit dialog's Match + Extra names
                    editMode: false };   // every Stocked/Threshold cell is a box — run down a column without clicking // click-marked rows (Veizyr) — survive re-renders and window switches
 
 // ---- restock forecast: sell pace from matched sales (api/inventory.php sends
@@ -110,6 +111,29 @@ function invSyncPaceControls() {
   const p = invPace();
   $('#inv-pace-days').value = String(p.days);
   $('#inv-pace-cover').value = String(p.cover);
+}
+
+// ---- sale-matching buckets: match_mode 'words' (the item name's words appear
+// in the sale name, whole and in order) + extra names matched exactly. The
+// server's matcher (includes/inventory_match.php) decides what counts — the
+// helpers here only pick sensible defaults in the dialogs.
+const invNormName = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+const invTokens = (s) => invNormName(s).split(' ')
+  .map((t) => t.replace(/^["'`()[\]{}<>,.;:!?]+|["'`()[\]{}<>,.;:!?]+$/g, '')).filter(Boolean);
+function invWordsMatch(rule, name) {
+  const need = invTokens(rule);
+  if (!need.length) return false;
+  let i = 0;
+  for (const t of invTokens(name)) { if (t === need[i] && ++i === need.length) return true; }
+  return false;
+}
+const invIsBucket = (item) => item.match_mode === 'words' || (item.extra_names || []).length > 0;
+function invBucketTip(item) {
+  const extra = item.extra_names || [];
+  const parts = [];
+  if (item.match_mode === 'words') parts.push(`Bucket — counts every sale whose name has the words “${item.item_name}” in that order`);
+  if (extra.length) parts.push(`${item.match_mode === 'words' ? 'plus' : 'Also counts'} ${extra.length} extra name${extra.length === 1 ? '' : 's'}: ${extra.slice(0, 5).join(' · ')}${extra.length > 5 ? ' …' : ''}`);
+  return parts.join(' — ');
 }
 
 // tags live as one comma-separated string server-side, like stockpile/factories
@@ -266,7 +290,8 @@ function invRowHtml(item, idx, pace = invPace()) {
       ? invQuickInput('stocked', idx, stocked)
       : `${stockCls ? `<i class="fa-solid fa-triangle-exclamation inv-warnico" title="${stocked < 0 ? 'Oversold — stock is negative' : 'At or below restock threshold'}"></i>` : ''}${fmtNum(stocked)}`}</td>
     <td class="col-name res-name"><span class="stk-tagslot">${tagged
-      ? `<i class="fa-solid fa-tag stk-tagind" data-invtaghover="${idx}"></i>` : ''}</span>${escapeHtml(item.item_name || '')}</td>
+      ? `<i class="fa-solid fa-tag stk-tagind" data-invtaghover="${idx}"></i>` : ''}</span>${escapeHtml(item.item_name || '')}${invIsBucket(item)
+      ? ` <i class="fa-solid fa-layer-group inv-bucketico" title="${escapeHtml(invBucketTip(item))}"></i>` : ''}</td>
     <td class="stat inv-edit${threshold >= 0 ? '' : ' inv-nowarn'}" data-edit="threshold" data-idx="${idx}" title="${threshold >= 0
         ? 'Click to edit — warns at or below this number; set it to -1 to turn off this item’s low-stock and oversold warnings'
         : 'Warnings are off for this item (threshold -1) — click to set a threshold'}">${invState.editMode ? invQuickInput('threshold', idx, threshold) : fmtNum(threshold)}</td>
@@ -720,6 +745,7 @@ async function addInvItem() {
     if (editId) {
       res = await apiFetch('PUT', 'api/inventory.php', { data: {
         inventory_id: safeInt(editId),
+        match_mode: invState.dlg.match,
         item_name: name,
         vendor: $('#inv-new-vendor').value.trim(),
         stocked: safeInt($('#inv-new-stocked').value),
@@ -730,6 +756,7 @@ async function addInvItem() {
     } else {
       res = await apiFetch('POST', 'api/inventory.php', { data: {
         item_name: name,
+        match_mode: invState.dlg.match,
         vendor: $('#inv-new-vendor').value.trim(),
         stocked: safeInt($('#inv-new-stocked').value),
         threshold: safeInt($('#inv-new-threshold').value),
@@ -743,6 +770,16 @@ async function addInvItem() {
     }
   } catch (e) { res = { ok: false, error: String(e) }; }
   btn.disabled = false;
+  // extra names: apply what changed in the dialog (adds/removes, one call each)
+  const savedId = editId ? safeInt(editId) : safeInt(res.ok && res.data && res.data.inventory_id);
+  if (res.ok && savedId) {
+    const was = new Set(invState.dlg.extraWas), now = new Set(invState.dlg.extra);
+    const calls = [...[...now].filter((n) => !was.has(n)).map((n) => ['extra_add', n]),
+                   ...[...was].filter((n) => !now.has(n)).map((n) => ['extra_remove', n])];
+    const results = await Promise.all(calls.map(([action, n]) =>
+      apiFetch('POST', 'api/inventory.php', { data: { action, inventory_id: savedId, name: n } }).catch((e) => ({ ok: false, error: String(e) }))));
+    if (results.some((r) => !r.ok)) toast('Saved, but the extra names didn’t — site update pending?', false);
+  }
   if (res.ok) {
     toast(editId ? `${name} updated` : `${name} added to inventory`);
     $('#inv-add-modal').hidden = true;
@@ -787,11 +824,131 @@ function openInvDialog(item = null, clone = false, preset = null) {
     $('#inv-new-stocked').value = clone && item ? String(safeInt(item.stocked)) : '10';
     $('#inv-new-threshold').value = clone && item ? String(safeInt(item.threshold)) : '1';
   }
+  const src = item || null;
+  invState.dlg = { match: src && src.match_mode === 'words' ? 'words' : 'exact',
+                   extra: [...((src && src.extra_names) || [])], extraWas: clone ? [] : [...((src && src.extra_names) || [])] };
+  $('#inv-extra-input').value = '';
+  invDlgSetMatch(invState.dlg.match);
+  invDlgRenderExtra();
+  invDlgPreview(true);
   modal.hidden = false;
   // preset arrives with name+vendor filled — the stock count is what's left to set
   ((item && !clone) ? $('#inv-new-vendor') : preset ? $('#inv-new-stocked') : nameInput).focus();
   if (clone) nameInput.select();
   if (preset) $('#inv-new-stocked').select();
+}
+
+// ---- the Add/Edit dialog's Match + Extra names + live preview ----
+function invDlgSetMatch(mode) {
+  invState.dlg.match = mode === 'words' ? 'words' : 'exact';
+  document.querySelectorAll('#inv-new-match [data-invmatch]').forEach((b) => b.classList.toggle('active', b.dataset.invmatch === invState.dlg.match));
+  $('#inv-match-hint').textContent = invState.dlg.match === 'words'
+    ? 'A bucket: every word of the name must appear in the sale’s name, whole and in the same order — “CL54 Elite Carbine” counts CL54 "Dog" Elite Carbine and CL54 "Cat" Elite Carbine. An item with the exact name still wins.'
+    : 'The sale’s name must be exactly this (spacing and capitals don’t matter).';
+}
+function invDlgRenderExtra() {
+  const list = invState.dlg.extra;
+  $('#inv-extra-chips').innerHTML = list.length
+    ? list.map((n, i) => `<span class="fac-tag inv-extra-chip" title="${escapeHtml(n)}">${escapeHtml(n)}<i class="fa-solid fa-xmark" data-invextrarm="${i}" title="Remove"></i></span>`).join('')
+    : '<span class="stat_off">None</span>';
+}
+let invPreviewTimer = null, invPreviewSeq = 0;
+function invDlgPreview(now = false) {
+  clearTimeout(invPreviewTimer);
+  invPreviewTimer = setTimeout(async () => {
+    const el = $('#inv-match-preview');
+    const name = $('#inv-new-name').value.trim();
+    if (!name) { el.textContent = ''; return; }
+    const seq = ++invPreviewSeq;
+    const editId = $('#inv-add-modal').dataset.editId || '';
+    let res;
+    try {
+      res = await apiFetch('GET', 'api/inventory.php', { params: {
+        action: 'preview', item_name: name, match_mode: invState.dlg.match, vendor: $('#inv-new-vendor').value.trim(),
+        extra_names: JSON.stringify(invState.dlg.extra), id: editId } });
+    } catch (e) { res = { ok: false }; }
+    if (seq !== invPreviewSeq) return;            // a newer keystroke won
+    if (!res.ok || !res.data || res.data.count === undefined) { el.textContent = ''; return; }
+    const d = res.data;
+    if (!d.count) { el.innerHTML = `<i class="fa-solid fa-magnifying-glass"></i> No sales in the last ${d.days || 90} days fit this yet.`; return; }
+    const eg = (d.examples || []).slice(0, 3).map((x) => `<span class="inv-prev-eg">${escapeHtml(x)}</span>`).join(', ');
+    const taken = Object.entries(d.taken_by || {});
+    el.innerHTML = `<i class="fa-solid fa-magnifying-glass"></i> Fits <b>${fmtNum(d.count)}</b> sale${d.count === 1 ? '' : 's'} in the last ${d.days || 90} days — e.g. ${eg}`
+      + (d.taken ? `<div class="inv-prev-taken">${fmtNum(d.taken)} of them still count toward ${taken.slice(0, 2).map(([n, c]) => `“${escapeHtml(n)}” (${fmtNum(c)})`).join(', ')}${taken.length > 2 ? ` and ${taken.length - 2} more` : ''} — an exact name (or a bucket with more words) wins</div>` : '');
+  }, now ? 0 : 400);
+}
+
+// ---- Count toward… — one sale's count moves to another item (or nowhere).
+// Used by My Inventory's sales list, the activity log and My Sales.
+// sale: { id, item, vendor, sale_type, sale_amount, sale_timestamp, counted_by }
+const invReassign = { sale: null, after: null, items: [], at: 0 };
+async function invOpenReassign(sale, after) {
+  invReassign.sale = sale; invReassign.after = after || null;
+  const at = sale.sale_type == 2 && !sale.vendor ? 'Bazaar' : (sale.vendor || '');
+  $('#inv-reassign-sale').innerHTML = `<b>${escapeHtml(String(sale.item || '').replace(/\s+/g, ' '))}</b>`
+    + `<span class="stat_off">${at ? ` · ${escapeHtml(at)}` : ''}${sale.sale_amount != null ? ` · ${fmtNum(sale.sale_amount)} cr` : ''}${sale.sale_timestamp ? ` · ${fmtAgo(sale.sale_timestamp)}` : ''}</span>`;
+  $('#inv-reassign-q').value = '';
+  $('#inv-reassign-un').hidden = !safeInt(sale.counted_by);
+  $('#inv-reassign-modal').hidden = false;
+  if (Date.now() - invReassign.at > 60000 || !invReassign.items.length) {
+    $('#inv-reassign-list').innerHTML = '<option disabled>Loading…</option>';
+    const res = await invFetchAll({ sort: 'item_name', order: 'ASC' });
+    invReassign.items = (res.ok && res.data && res.data.results) || [];
+    invReassign.at = Date.now();
+  }
+  invRenderReassignList(true);
+  $('#inv-reassign-q').focus();
+}
+function invRenderReassignList(preselect = false) {
+  const sale = invReassign.sale;
+  const q = invNormName($('#inv-reassign-q').value);
+  const cur = safeInt(sale.counted_by);
+  const list = invReassign.items
+    .filter((i) => !q || invNormName(i.item_name).includes(q) || invNormName(i.vendor).includes(q))
+    .sort((a, b) => (invIsBucket(b) - invIsBucket(a)) || String(a.item_name).localeCompare(String(b.item_name)));
+  const sel = $('#inv-reassign-list');
+  const keep = sel.value;
+  sel.innerHTML = list.length ? list.map((i) => `<option value="${safeInt(i.id)}">${invIsBucket(i) ? '◆ ' : ''}${escapeHtml(String(i.item_name).replace(/\s+/g, ' '))}${i.vendor ? ` — ${escapeHtml(i.vendor)}` : ''}${safeInt(i.id) === cur ? '  (counts it now)' : ''}</option>`).join('')
+    : '<option disabled>No items match</option>';
+  // first pick: a bucket whose words fit this sale, else nothing
+  const fit = preselect ? list.find((i) => i.match_mode === 'words' && safeInt(i.id) !== cur && invWordsMatch(i.item_name, sale.item)) : null;
+  sel.value = fit ? String(fit.id) : (list.some((i) => String(i.id) === keep) ? keep : '');
+  invSyncReassignAlso();
+}
+function invSyncReassignAlso() {
+  const sale = invReassign.sale;
+  const t = invReassign.items.find((i) => String(i.id) === $('#inv-reassign-list').value);
+  const nm = invNormName(sale.item);
+  // offer "also match" only when the name wouldn't match this item on its own
+  const already = !t || invNormName(t.item_name) === nm || (t.extra_names || []).some((x) => invNormName(x) === nm)
+    || (t.match_mode === 'words' && invWordsMatch(t.item_name, sale.item));
+  $('#inv-reassign-also-wrap').hidden = already;
+  $('#inv-reassign-also').checked = !already && invIsBucket(t);
+  $('#inv-reassign-ok').disabled = !t || safeInt(t.id) === safeInt(sale.counted_by);
+}
+async function invDoReassign(saleId, inventoryId, also) {
+  return apiFetch('POST', 'api/inventory.php', { data: inventoryId
+    ? { action: 'reassign', sale_id: saleId, inventory_id: inventoryId, also_match_name: !!also }
+    : { action: 'unassign', sale_id: saleId } }).catch((e) => ({ ok: false, error: String(e) }));
+}
+async function invReassignSubmit(unassign) {
+  const sale = invReassign.sale;
+  const target = unassign ? null : invReassign.items.find((i) => String(i.id) === $('#inv-reassign-list').value);
+  if (!unassign && !target) return;
+  const res = await invDoReassign(sale.id, target ? safeInt(target.id) : 0, !$('#inv-reassign-also-wrap').hidden && $('#inv-reassign-also').checked);
+  if (!res.ok || !res.data || !res.data.status) { toast(res.error || 'Couldn’t move that sale — site update pending?', false); return; }
+  $('#inv-reassign-modal').hidden = true;
+  invReassign.at = 0;   // extra names / stock changed
+  const after = invReassign.after;
+  const prev = safeInt(res.data.previous_inventory_id);
+  const done = () => { if (typeof loadInventory === 'function' && invState.items.length) loadInventory(); if (after) after(); };
+  done();
+  const label = target ? `Counted toward “${String(target.item_name).replace(/\s+/g, ' ')}”` : 'Sale uncounted — its stock went back';
+  toastAction(label, 'Undo', async () => {
+    const u = await invDoReassign(sale.id, prev, false);
+    toast(u.ok ? 'Undone' : (u.error || 'Undo failed'), !!u.ok);
+    done();
+  });
 }
 
 function initInventory() {
@@ -962,16 +1119,27 @@ function initInventory() {
         const res = await api().inventory_sales(item.id);
         rows = (res.ok && res.data && res.data.results) || [];
       } catch (_) { /* renders the empty message */ }
+      // a bucket's list says which actual names sold
+      const named = invIsBucket(item);
+      invState.salesRows = rows;
       $('#inv-sales-body').innerHTML = rows.length
         ? `<table class="inv-sales-table"><thead><tr>
-             <th>When</th><th>Buyer</th><th>Vendor</th><th class="col-num">Amount</th>
-           </tr></thead><tbody>${rows.map((s) => `<tr>
+             <th>When</th>${named ? '<th>Sold as</th>' : ''}<th>Buyer</th><th>Vendor</th><th class="col-num">Amount</th><th></th>
+           </tr></thead><tbody>${rows.map((s, i) => `<tr>
              <td>${fmtAgoTip(s.sale_timestamp)}</td>
+             ${named ? `<td class="inv-sold-as">${escapeHtml(String(s.item || '').replace(/\s+/g, ' '))}</td>` : ''}
              <td>${escapeHtml(s.buyer || '')}</td>
              <td>${escapeHtml(s.vendor || '')}</td>
              <td class="col-num sale-amount">${fmtNum(s.sale_amount)} cr</td>
+             <td class="col-actions"><button type="button" class="btn btn-icon" data-invsalemv="${i}" title="Count this sale toward another item, or uncount it"><i class="fa-solid fa-right-left"></i></button></td>
            </tr>`).join('')}</tbody></table>`
         : '<div class="empty-state is-compact">No matched sales for this item yet.</div>';
+      $('#inv-sales-body').onclick = (ev) => {
+        const b = ev.target.closest('[data-invsalemv]');
+        const s = b && invState.salesRows[Number(b.dataset.invsalemv)];
+        if (!s) return;
+        invOpenReassign({ ...s, counted_by: item.id }, renderSales);
+      };
     };
     // History tab (invlog.js) when Settings has inventory activity on
     if (typeof invLogSalesTabs === 'function') invLogSalesTabs(item, renderSales);
@@ -1183,6 +1351,37 @@ function initInventory() {
     $(s).addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#inv-bulk-apply').click(); }));
 
   $('#inv-add').addEventListener('click', addInvItem);
+  // Match + Extra names + preview
+  $('#inv-new-match').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-invmatch]');
+    if (!b) return;
+    invDlgSetMatch(b.dataset.invmatch);
+    invDlgPreview();
+  });
+  ['#inv-new-name', '#inv-new-vendor'].forEach((sel) => $(sel).addEventListener('input', () => invDlgPreview()));
+  const invAddExtra = () => {
+    const v = $('#inv-extra-input').value.replace(/\s+/g, ' ').trim();
+    if (!v) return;
+    if (!invState.dlg.extra.some((x) => invNormName(x) === invNormName(v))) invState.dlg.extra.push(v);
+    $('#inv-extra-input').value = '';
+    invDlgRenderExtra(); invDlgPreview();
+  };
+  $('#inv-extra-addbtn').addEventListener('click', invAddExtra);
+  $('#inv-extra-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); invAddExtra(); } });
+  $('#inv-extra-chips').addEventListener('click', (e) => {
+    const x = e.target.closest('[data-invextrarm]');
+    if (!x) return;
+    invState.dlg.extra.splice(Number(x.dataset.invextrarm), 1);
+    invDlgRenderExtra(); invDlgPreview();
+  });
+  // Count toward…
+  $('#inv-reassign-q').addEventListener('input', () => invRenderReassignList());
+  $('#inv-reassign-list').addEventListener('change', invSyncReassignAlso);
+  $('#inv-reassign-list').addEventListener('dblclick', () => { if (!$('#inv-reassign-ok').disabled) invReassignSubmit(false); });
+  $('#inv-reassign-ok').addEventListener('click', () => invReassignSubmit(false));
+  $('#inv-reassign-un').addEventListener('click', () => invReassignSubmit(true));
+  $('#inv-reassign-cancel').addEventListener('click', () => { $('#inv-reassign-modal').hidden = true; });
+  bindBackdropClose($('#inv-reassign-modal'), () => { $('#inv-reassign-modal').hidden = true; });
   // Enter anywhere in the dialog submits
   $('#inv-add-modal').addEventListener('keydown', (e) => { if (e.key === 'Enter') addInvItem(); });
 

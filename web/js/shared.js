@@ -871,6 +871,21 @@ function toast(msg, ok = true) {
   _toastTimer = setTimeout(() => el.classList.remove('show'), 2500);
 }
 
+// toast with one action button (Undo) — stays up longer and takes clicks
+function toastAction(msg, label, fn, ok = true) {
+  toast(msg, ok);
+  const el = document.getElementById('toast');
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'toast-act';
+  btn.textContent = label;
+  btn.addEventListener('click', () => { el.classList.remove('show', 'has-act'); clearTimeout(_toastTimer); fn(); });
+  el.append(' ', btn);
+  el.classList.add('has-act');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => el.classList.remove('show', 'has-act'), 8000);
+}
+
 // Matches the API's 401 bodies: "Invalid API key" / "Missing API key"
 const isAuthError = (err) => /api key/i.test(String(err || ''));
 

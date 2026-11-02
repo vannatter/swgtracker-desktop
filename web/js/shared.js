@@ -402,7 +402,7 @@ function cmtShrinkImage(file, maxW = 1920) {
 
 // ---- account-level preferences (api/prefs.php, synced server-side so the
 // email crons honor them too) ----------------------------------------------
-const appPrefs = { ignore_mustafar: 0, name: '', _loaded: false }; // name = site username (greeting)
+const appPrefs = { ignore_mustafar: 0, power_tools: 0, name: '', _loaded: false }; // name = site username (greeting)
 
 async function loadPrefs(force = false) {
   if (appPrefs._loaded && !force) return appPrefs;
@@ -410,8 +410,22 @@ async function loadPrefs(force = false) {
     const r = await apiFetch('GET', 'api/prefs.php');
     if (r.ok && r.data && r.data.prefs) { Object.assign(appPrefs, r.data.prefs); appPrefs._loaded = true; }
   } catch (_) { /* older site deploy — defaults apply */ }
+  applyPowerTools();
   return appPrefs;
 }
+
+// ---- Advanced tools (users.power_tools via api/prefs.php) -------------------
+// Power-user depth (production runs, stack history, box checks …) stays off
+// unless the user turns on Settings → Advanced tools. Off = every page as before.
+// powerTools() is the check; body.power-tools shows anything marked .power-only.
+// The last known value is remembered so the class is right before prefs load.
+function powerTools() { return !!Number(appPrefs.power_tools); }
+function applyPowerTools() {
+  try { localStorage.setItem('powerTools', powerTools() ? '1' : '0'); } catch (_) { /* ignore */ }
+  if (document.body) document.body.classList.toggle('power-tools', powerTools());
+}
+try { if (localStorage.getItem('powerTools') === '1') appPrefs.power_tools = 1; } catch (_) { /* ignore */ }
+if (document.body) document.body.classList.toggle('power-tools', powerTools());
 
 // Mustafarian resource classes are named "Mustafarian …" throughout the tree.
 // candidateType = the candidate's class; requiredType = what the slot/rule asks

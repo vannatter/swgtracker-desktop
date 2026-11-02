@@ -161,6 +161,7 @@ function cmpPlanRender() {
       <div class="cmp-plan-pmain">
         <div class="cmp-plan-pname">${escapeHtml(n.label)}${n.role && n.role !== n.label ? ` <span class="cmp-planet">${escapeHtml(n.role)}</span>` : ''}</div>
         <div class="cmp-plan-for">for ${escapeHtml([...n.for].join(', '))}</div>
+        ${powerTools() && n.have ? `<div class="cmp-plan-for cmp-where" title="Where yours are (Advanced tools)"><i class="fa-solid fa-location-dot"></i> ${escapeHtml(cmpWhere(n.rows))}</div>` : ''}
       </div>
       <div class="cmp-plan-nums">
         <span title="Needed across the plan">need <b>${fmtNum(n.need)}</b></span>

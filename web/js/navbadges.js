@@ -13,6 +13,8 @@ const PAGE_BADGES = {
   ideas: { tag: 'new', since: '2026-11-01' },
   quests: { tag: 'new', since: '2026-11-02' },
   settings: { tag: 'updated', since: '2026-11-02' },
+  prices: { tag: 'new', since: '2026-11-02' },
+  upkeep: { tag: 'new', since: '2026-11-02' },
   insights: { tag: 'updated', since: '2026-11-01' },
   inventory: { tag: 'updated', since: '2026-11-01' },
   sales: { tag: 'updated', since: '2026-11-01' },
@@ -37,6 +39,8 @@ function initNavBadges() {
   Object.keys(PAGE_BADGES).forEach((key) => {
     const item = document.querySelector(`.app-sidebar .nav-item[data-page="${key}"]`);
     if (!item || item.querySelector('.nav-flag') || !navBadgeLive(key, seen)) return;
+    // an Advanced-tools page stays unflagged (and can't dot its group) while the switch is off
+    if (item.classList.contains('power-only') && !document.body.classList.contains('power-tools')) return;
     const upd = PAGE_BADGES[key].tag === 'updated';
     const pill = document.createElement('span');
     pill.className = `nav-pill nav-flag${upd ? ' nav-flag-upd' : ''}`;

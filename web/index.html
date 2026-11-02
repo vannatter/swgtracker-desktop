@@ -6,7 +6,7 @@
   <title>SWG Tracker Desktop</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.1/css/all.min.css">
-  <link rel="stylesheet" href="css/app.css?v=20261102al">
+  <link rel="stylesheet" href="css/app.css?v=20261103cs">
   <link rel="stylesheet" href="css/share.css?v=20261022x">
   <link rel="stylesheet" href="css/quests.css?v=20261102qp">
 </head>
@@ -83,6 +83,8 @@
         <li class="nav-item nav-group-item" data-page="customers" data-group="vendors"><i class="fa-solid fa-users"></i> My Customers</li>
         <li class="nav-item nav-group-item" data-page="purchases" data-group="vendors"><i class="fa-solid fa-cart-shopping"></i> My Purchases</li>
         <li class="nav-item nav-group-item" data-page="inventory" data-group="vendors"><i class="fa-solid fa-warehouse"></i> My Inventory</li>
+        <li class="nav-item nav-group-item power-only" data-page="upkeep" data-group="vendors"><i class="fa-solid fa-store"></i> Vendor Upkeep</li>
+        <li class="nav-item nav-group-item" data-page="prices" data-group="vendors" title="Going rates from everyone's tracked sales"><i class="fa-solid fa-scale-balanced"></i> Price Guide</li>
         <li class="nav-group-head" data-navgroup="structures"><i class="fa-solid fa-building"></i> Structures <i class="fa-solid fa-caret-down nav-group-caret"></i><span class="nav-group-dot" hidden></span></li>
         <li class="nav-item nav-group-item" data-page="harvesters" data-group="structures"><i class="fa-solid fa-tractor"></i> Harvesters
           <span id="nav-harv-pill" class="nav-pill" title="Full hoppers waiting to be emptied" hidden></span></li>
@@ -1105,6 +1107,9 @@
           <button id="cmp-plan-open" class="btn btn-icon" title="Plan crafts — what the schematics you want to make need, against what you hold"><i class="fa-solid fa-list-check"></i></button>
           <button id="cmp-craft-open" class="btn btn-icon" title="Log a craft — draw down the parts it used"><i class="fa-solid fa-hammer"></i></button>
           <button id="cmp-log-open" class="btn btn-icon" title="History — crafts you logged and factory runs sent to a hopper"><i class="fa-solid fa-clock-rotate-left"></i></button>
+          <!-- Advanced tools (Settings) — only shown with body.power-tools -->
+          <button id="cmp-runs-open" class="btn btn-icon power-only" title="Production runs — log a run and see every batch you've made"><i class="fa-solid fa-industry"></i></button>
+          <button id="cmp-check-open" class="btn btn-icon power-only" title="Box check — count what's in a location and fix anything that's off"><i class="fa-solid fa-clipboard-check"></i></button>
           <button class="btn btn-icon" data-refresh="components" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
           <button id="cmp-add-open" class="btn btn-sm btn-accent"><i class="fa-solid fa-plus"></i> Add Component</button>
         </div>
@@ -1221,6 +1226,8 @@
 
         <div class="mm-cards" id="mm-cards"></div>
 
+        <div id="isd-panel" class="isd-panel" hidden></div>
+
         <div id="mm-massdel-slot" class="mm-massdel-row"></div>
 
         <div class="table-wrap">
@@ -1326,6 +1333,38 @@
 
       <!-- Settings page -->
       <!-- Ideas board: post + upvote development ideas (api/ideas.php; site /ideas.php mirrors) -->
+      <!-- Price Guide: anonymous going rates from everyone's tracked sales (js/priceguide.js) -->
+      <section id="page-prices" class="page">
+        <div class="page-head">
+          <h1>Price Guide</h1>
+          <i class="fa-solid fa-circle-info info-tip"
+             title="Going rates from everyone who tracks sales, over the last 90 days, updated nightly. Prices are per unit. An item only shows once at least 3 different sellers have sold it and no one seller makes up most of its sales, and prices are rounded — so no one's own prices can be picked out. Click a row for more."></i>
+          <input id="pg-search" type="text" class="form-control filter-input head-search head-filter" placeholder="Search items...">
+          <select id="pg-sort" class="form-select filter-select" title="Order">
+            <option value="sales">Most sold</option><option value="name">Name</option><option value="price">Highest price</option>
+          </select>
+          <button class="btn btn-icon" data-refresh="prices" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
+        </div>
+        <div class="table-wrap">
+          <table class="data-grid pg-grid">
+            <thead><tr>
+              <th class="col-name">Item</th><th class="col-num" title="The middle price — half sell for less, half for more (per unit)">Going rate</th>
+              <th class="col-num" title="The middle half of prices (per unit)">Typical range</th><th class="col-num" title="The stack size it usually sells in">Sold as</th>
+              <th class="col-num">Sales · 90 days</th><th class="col-num" title="Last 30 days against the 60 before">Trend</th>
+            </tr></thead>
+            <tbody id="pg-body"></tbody>
+          </table>
+          <div id="pg-loading" class="grid-loading" hidden><span class="spinner"></span> Loading…</div>
+          <div id="pg-empty" class="grid-empty" hidden></div>
+        </div>
+        <div class="pager pg-foot">
+          <span id="pg-status" class="pager-status"></span>
+          <label class="form-check form-switch pg-contrib" title="Your sales count toward the guide anonymously. Turn this off to leave them out from the next nightly update.">
+            <input class="form-check-input" type="checkbox" id="pg-contrib" disabled> Include my sales
+          </label>
+        </div>
+      </section>
+
       <section id="page-ideas" class="page">
         <div class="page-head">
           <h1>Ideas</h1>
@@ -1350,6 +1389,31 @@
           <div id="ideas-empty" class="grid-empty" hidden></div>
         </div>
         <div class="pager"><span id="ideas-status-line" class="pager-status"></span></div>
+      </section>
+
+      <!-- Vendor Upkeep (Advanced tools): maintenance, visits and the game's vendor-status mail (js/vendor-upkeep.js) -->
+      <section id="page-upkeep" class="page">
+        <div class="page-head">
+          <h1>Vendor Upkeep</h1>
+          <i class="fa-solid fa-circle-info info-tip"
+             title="Every vendor you run: found from your vendor sales and the game's vendor mail (empty, not used in a long time, in danger of being removed), or added by hand. Enter a maintenance pool and hourly rate to see days left; tap Visited when you stop by. Reminders are optional and land in the bell."></i>
+          <select id="vu-filter" class="form-select filter-select head-filter" title="Which vendors">
+            <option value="">All vendors</option><option value="attention">Needs attention</option><option value="hidden">Hidden</option>
+          </select>
+          <input id="vu-search" type="text" class="form-control filter-input head-search" placeholder="Search...">
+          <button id="vu-remind-open" class="btn btn-icon" title="Reminders — a heads-up in the bell when a vendor needs you"><i class="fa-solid fa-bell"></i></button>
+          <button class="btn btn-icon" data-refresh="upkeep" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
+          <button id="vu-add-open" class="btn btn-sm btn-accent"><i class="fa-solid fa-plus"></i> Add Vendor</button>
+        </div>
+        <div class="table-wrap">
+          <table class="data-grid" id="vu-grid">
+            <thead><tr><th>Vendor</th><th>Status</th><th>Maintenance</th><th>Last visit</th><th>Last sale</th><th class="col-actions"></th></tr></thead>
+            <tbody id="vu-body"></tbody>
+          </table>
+          <div id="vu-loading" class="grid-loading" hidden><span class="spinner"></span> Loading…</div>
+          <div id="vu-empty" class="grid-empty" hidden></div>
+        </div>
+        <div class="pager"><span id="vu-status" class="pager-status"></span></div>
       </section>
 
       <!-- About: versions, what's new, thanks -->
@@ -2346,6 +2410,15 @@
           </div>
         </div>
 
+        <div class="settings-section" id="set-pg">
+          <h2>Price Guide <span class="settings-sub">Going rates built from everyone's tracked sales — anonymous, rounded, and only shown once 3+ different sellers back a price.</span></h2>
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="set-pg-contrib" disabled>
+            <label class="form-check-label" for="set-pg-contrib">Include my sales in the Price Guide
+              <span class="settings-sub">— saves straight away; takes effect at the next nightly update. Shared with swgtracker.com.</span></label>
+          </div>
+        </div>
+
         <div class="settings-section">
           <h2>Preferences</h2>
           <div class="form-check form-switch">
@@ -2399,6 +2472,11 @@
             <input class="form-check-input" type="checkbox" id="set-ignoremust">
             <label class="form-check-label" for="set-ignoremust">Ignore Mustafarian resources
               <span class="settings-sub">Hides them from schematic upgrade suggestions and spawn alerts — unless a slot or rule asks for a Mustafarian class outright. Synced to your account.</span></label>
+          </div>
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="set-power">
+            <label class="form-check-label" for="set-power">Advanced tools
+              <span class="settings-sub">Extra depth for power users — production runs, full component history and box checks in My Components. Off, everything works as usual. Synced to your account.</span></label>
           </div>
         </div>
 
@@ -2687,6 +2765,72 @@
   </div>
 
   <!-- My Components: add / edit -->
+  <!-- Vendor Upkeep dialogs (js/vendor-upkeep.js) -->
+  <div id="vu-modal" class="key-gate" hidden>
+    <div class="key-gate-card sp-card inv-add-card">
+      <h2 id="vu-modal-title">Add Vendor</h2>
+      <label class="sp-field-label">Vendor name <span class="settings-sub">as it shows in game</span></label>
+      <input id="vu-f-name" type="text" class="form-control filter-input settings-input-wide" autocomplete="off">
+      <label class="sp-field-label">Where <span class="settings-sub">optional — planet, city or mall</span></label>
+      <input id="vu-f-planet" type="text" class="form-control filter-input settings-input-wide" autocomplete="off">
+      <div class="inv-add-row">
+        <div class="inv-add-field" id="vu-f-pool-wrap">
+          <label class="sp-field-label">Maintenance pool <span class="settings-sub">optional</span></label>
+          <input id="vu-f-pool" type="text" class="form-control filter-input" placeholder="e.g. 50k" inputmode="decimal">
+        </div>
+        <div class="inv-add-field">
+          <label class="sp-field-label">Credits / hour <span class="settings-sub">optional</span></label>
+          <input id="vu-f-rate" type="text" class="form-control filter-input" placeholder="e.g. 15" inputmode="decimal">
+        </div>
+        <div class="inv-add-field">
+          <label class="sp-field-label">Visit every <span class="settings-sub">days, optional</span></label>
+          <input id="vu-f-every" type="text" class="form-control filter-input" placeholder="e.g. 14" inputmode="numeric">
+        </div>
+      </div>
+      <label class="sp-field-label">Notes <span class="settings-sub">optional</span></label>
+      <textarea id="vu-f-notes" class="form-control filter-input settings-input-wide" rows="2"></textarea>
+      <div class="inv-add-actions">
+        <button id="vu-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
+        <button id="vu-save" class="btn btn-sm btn-accent"><i class="fa-solid fa-plus"></i> Add Vendor</button>
+      </div>
+    </div>
+  </div>
+  <div id="vu-topup-modal" class="key-gate" hidden>
+    <div class="key-gate-card sp-card inv-add-card">
+      <h2>Topped up <span id="vu-topup-name" class="settings-sub"></span></h2>
+      <p class="settings-sub">Enter what the vendor's maintenance pool shows now — days left count down from here. This also marks it visited.</p>
+      <div class="inv-add-row">
+        <div class="inv-add-field">
+          <label class="sp-field-label">Pool now</label>
+          <input id="vu-t-pool" type="text" class="form-control filter-input" placeholder="e.g. 50k" inputmode="decimal">
+        </div>
+        <div class="inv-add-field">
+          <label class="sp-field-label">Credits / hour</label>
+          <input id="vu-t-rate" type="text" class="form-control filter-input" placeholder="e.g. 15" inputmode="decimal">
+        </div>
+      </div>
+      <div class="inv-add-actions">
+        <button id="vu-t-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
+        <button id="vu-t-save" class="btn btn-sm btn-accent"><i class="fa-solid fa-coins"></i> Save</button>
+      </div>
+    </div>
+  </div>
+  <div id="vu-remind-modal" class="key-gate" hidden>
+    <div class="key-gate-card sp-card inv-add-card">
+      <h2>Vendor reminders</h2>
+      <label class="form-check form-switch vu-remind-row"><input id="vu-r-on" class="form-check-input" type="checkbox">
+        <span>Remind me when a vendor needs me <span class="settings-sub">maintenance running low, the game's vendor warnings, or a visit due — each once, in the bell</span></span></label>
+      <label class="sp-field-label">Warn when maintenance has this many days left</label>
+      <select id="vu-r-days" class="form-select filter-select">
+        <option value="1">1 day</option><option value="2">2 days</option><option value="3">3 days</option><option value="5">5 days</option><option value="7">7 days</option><option value="14">14 days</option>
+      </select>
+      <div class="inv-add-actions">
+        <button id="vu-r-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
+        <button id="vu-r-save" class="btn btn-sm btn-accent"><i class="fa-solid fa-check"></i> Save</button>
+      </div>
+    </div>
+  </div>
+
   <div id="cmp-add-modal" class="key-gate" hidden>
     <div class="key-gate-card sp-card inv-add-card">
       <h2 id="cmp-modal-title">Add Component</h2>
@@ -2890,6 +3034,87 @@
       <div id="cmp-log-list" class="cmp-uses-list"></div>
       <div class="inv-add-actions">
         <button id="cmp-log-done" class="btn btn-sm btn-accent">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- My Components, Advanced tools: log a production run (components-power.js) -->
+  <div id="cmp-run-modal" class="key-gate" hidden>
+    <div class="key-gate-card sp-card inv-add-card">
+      <h2>Log a production run</h2>
+      <label class="sp-field-label">What it made</label>
+      <div class="inv-vendor-wrap">
+        <input id="cmp-run-name" type="text" class="form-control filter-input settings-input-wide" placeholder="e.g. Reinforced Fiber Panels" autocomplete="off" list="cmp-run-names">
+        <datalist id="cmp-run-names"></datalist>
+      </div>
+      <div class="inv-add-row">
+        <div class="inv-add-field">
+          <label class="sp-field-label">Units</label>
+          <input id="cmp-run-units" type="number" class="form-control filter-input" min="1" placeholder="e.g. 1000">
+        </div>
+        <div class="inv-add-field">
+          <label class="sp-field-label">Crate size <span class="settings-sub">optional</span></label>
+          <input id="cmp-run-crate" type="number" class="form-control filter-input" min="0" placeholder="e.g. 25">
+        </div>
+        <div class="inv-add-field">
+          <label class="sp-field-label">Quality <span class="settings-sub">optional</span></label>
+          <input id="cmp-run-quality" type="number" class="form-control filter-input" placeholder="e.g. 92">
+        </div>
+      </div>
+      <label class="sp-field-label">Made</label>
+      <select id="cmp-run-by" class="form-select filter-select settings-input-wide"></select>
+      <label class="sp-field-label">Went to <span class="settings-sub">the box, house, backpack or hopper it's in — type a new one to add it</span></label>
+      <div class="inv-vendor-wrap">
+        <input id="cmp-run-loc" type="text" class="form-control filter-input settings-input-wide" placeholder="e.g. Box X" autocomplete="off">
+        <div id="cmp-run-loc-sug" class="inv-vendor-sug" hidden></div>
+      </div>
+      <label class="sp-field-label">Stats / notes <span class="settings-sub">optional — resources used, experimentation, anything that tells this batch apart</span></label>
+      <textarea id="cmp-run-stats" class="form-control filter-input settings-input-wide cmp-notes-input" rows="2"></textarea>
+      <div class="settings-hint">Each run is its own batch with a run number — it never merges with stacks from other runs.</div>
+      <div class="inv-add-actions">
+        <button id="cmp-run-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
+        <button id="cmp-run-go" class="btn btn-sm btn-accent"><i class="fa-solid fa-industry"></i> Log run</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- My Components, Advanced tools: production runs list -->
+  <div id="cmp-runs-modal" class="key-gate" hidden>
+    <div class="key-gate-card sp-card inv-add-card cmp-locs-card">
+      <h2>Production runs</h2>
+      <div id="cmp-runs-list" class="cmp-uses-list"></div>
+      <div class="inv-add-actions">
+        <button id="cmp-runs-done" class="btn btn-sm btn-outline-secondary">Done</button>
+        <button id="cmp-runs-new" class="btn btn-sm btn-accent"><i class="fa-solid fa-plus"></i> Log a run</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- My Components, Advanced tools: box check -->
+  <div id="cmp-check-modal" class="key-gate" hidden>
+    <div class="key-gate-card sp-card inv-add-card cmp-locs-card">
+      <h2>Box check</h2>
+      <label class="sp-field-label">Location</label>
+      <select id="cmp-check-loc" class="form-select filter-select settings-input-wide"></select>
+      <div id="cmp-check-when" class="settings-hint"></div>
+      <div id="cmp-check-list" class="cmp-uses-list"></div>
+      <label class="sp-field-label">Why <span class="settings-sub">optional — saved on anything you correct</span></label>
+      <input id="cmp-check-reason" type="text" class="form-control filter-input settings-input-wide" maxlength="200" placeholder="e.g. counted after the weekend" autocomplete="off">
+      <div class="inv-add-actions">
+        <span id="cmp-check-hint" class="settings-hint cmp-craft-hint"></span>
+        <button id="cmp-check-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
+        <button id="cmp-check-go" class="btn btn-sm btn-accent"><i class="fa-solid fa-clipboard-check"></i> Save check</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- My Components, Advanced tools: a stack's / run's / location's history -->
+  <div id="cmp-ledger-modal" class="key-gate" hidden>
+    <div class="key-gate-card sp-card inv-add-card cmp-locs-card">
+      <h2 id="cmp-ledger-title">History</h2>
+      <div id="cmp-ledger-list" class="cmp-uses-list"></div>
+      <div class="inv-add-actions">
+        <button id="cmp-ledger-done" class="btn btn-sm btn-accent">Done</button>
       </div>
     </div>
   </div>
@@ -3871,7 +4096,7 @@
 
   <!-- Classic scripts sharing one top-level scope; app.js boots last. -->
   <script src="js/class_caps.js?v=20261012a"></script>
-  <script src="js/shared.js?v=20261031b"></script>
+  <script src="js/shared.js?v=20261103ra"></script>
   <script src="js/shop.js?v=20261017b"></script>
   <script src="js/help.js?v=20261012a"></script>
   <script src="js/resources.js?v=20261026sp"></script>
@@ -3883,9 +4108,10 @@
   <script src="js/wishlist.js?v=20261022es"></script>
   <script src="js/myschematics.js?v=20261022es"></script>
   <script src="js/schemcalc.js?v=20261022es"></script>
-  <script src="js/inventory.js?v=20261031b"></script>
-  <script src="js/components.js?v=20261102pl"></script>
-  <script src="js/components-plan.js?v=20261102pl"></script>
+  <script src="js/inventory.js?v=20261102pg"></script>
+  <script src="js/components.js?v=20261103ra"></script>
+  <script src="js/components-plan.js?v=20261103ra"></script>
+  <script src="js/components-power.js?v=20261103ra"></script>
   <script src="js/invlog.js?v=20261031b"></script>
   <script src="js/sales.js?v=20261031b"></script>
   <script src="js/insights.js?v=20261101cmp"></script>
@@ -3898,11 +4124,12 @@
   <script src="js/factories.js?v=20261101p2"></script>
   <script src="js/customers.js?v=20261022es"></script>
   <script src="js/characters.js?v=20261022es"></script>
-  <script src="js/settings.js?v=20261102al"></script>
+  <script src="js/settings.js?v=20261103ra"></script>
   <script src="js/insight-alerts.js?v=20261102al"></script>
   <script src="js/alerts.js?v=20261023ac"></script>
   <script src="js/lab.js?v=20261022es"></script>
-  <script src="js/mail.js?v=20261022es"></script>
+  <script src="js/mail.js?v=20261102isd"></script>
+  <script src="js/isd.js?v=20261102isd"></script>
   <script src="js/notes.js?v=20261022es"></script>
   <script src="js/macro_commands.js?v=20261012a"></script>
   <script src="js/macros.js?v=20261022es"></script>
@@ -3925,7 +4152,9 @@
   <script src="js/home.js?v=20261031a"></script>
   <script src="js/mailsetup.js?v=20261019a"></script>
   <script src="js/ideas.js?v=20261031d"></script>
-  <script src="js/navbadges.js?v=20261102nb"></script>
-  <script src="js/app.js?v=20261102rn"></script>
+  <script src="js/priceguide.js?v=20261102pg"></script>
+  <script src="js/vendor-upkeep.js?v=20261102vu"></script>
+  <script src="js/navbadges.js?v=20261103nb"></script>
+  <script src="js/app.js?v=20261102vu"></script>
 </body>
 </html>

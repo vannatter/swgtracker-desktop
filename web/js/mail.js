@@ -34,6 +34,7 @@ const MM_CATS = {
 const MM_CAT_ORDER = ['sale', 'purchase', 'banktip', 'factory', 'factory-ingredients', 'structure', 'guild', 'other', 'archived'];
 
 async function loadMail() {
+  if (typeof isdLoadPanel === 'function') isdLoadPanel(); // survey droid reports (js/isd.js) — hidden unless you have any
   let state = null;
   try {
     const res = await api().monitor_state();

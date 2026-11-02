@@ -94,6 +94,7 @@ const PAGE_LOADERS = {
   factories: () => loadFactories(),
   inventory: () => loadInventory(),
   components: () => loadComponents(),
+  upkeep: () => loadVendorUpkeep(),
   alerts: () => loadAlerts(),
   notes: () => loadNotes(),
   macros: () => loadMacros(),
@@ -104,6 +105,7 @@ const PAGE_LOADERS = {
   scanner: () => loadScanner(),
   settings: () => { loadSettings(); loadScanConfig(); }, // scan config renders into #set-scan-section
   ideas: () => loadIdeas(),
+  prices: () => loadPriceGuide(),
   about: () => loadAbout(),
 };
 const loadedPages = new Set();
@@ -1333,6 +1335,7 @@ async function boot() {
   initFactories();
   initNotesPage();
   initIdeas();
+  initPriceGuide();
   initMacros();
   initAliases();
   initCommunityMacros();

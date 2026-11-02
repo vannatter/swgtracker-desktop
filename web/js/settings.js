@@ -155,6 +155,7 @@ async function loadSettings() {
   // account-level prefs (server-side — the email crons honor them too)
   loadPrefs(true).then((p) => {
     $('#set-ignoremust').checked = !!p.ignore_mustafar;
+    if ($('#set-power')) $('#set-power').checked = !!Number(p.power_tools);
     const u = $('#set-username');
     if (u) { u.value = p.name || ''; u.dataset.orig = p.name || ''; }
   });
@@ -262,6 +263,15 @@ async function saveSettings() {
       if (!res.ok) throw new Error(res.error || 'Could not save the Mustafarian preference — site update pending?');
       appPrefs.ignore_mustafar = wantMust;
       if (typeof loadedPages !== 'undefined') loadedPages.clear(); // suggestions re-filter on next visit
+    }
+    // Advanced tools — server-side too; flips body.power-tools right away
+    const wantPower = $('#set-power') && $('#set-power').checked ? 1 : 0;
+    if ($('#set-power') && wantPower !== (powerTools() ? 1 : 0)) {
+      const res = await apiFetch('PUT', 'api/prefs.php', { data: { power_tools: wantPower } });
+      if (!res.ok) throw new Error(res.error || 'Could not save Advanced tools — site update pending?');
+      appPrefs.power_tools = wantPower;
+      applyPowerTools();
+      if (typeof loadedPages !== 'undefined') loadedPages.delete('components'); // re-render with/without the extras
     }
     // Sales Alerts switches — server-side too (js/insight-alerts.js)
     if (typeof insaSavePrefs === 'function') await insaSavePrefs();

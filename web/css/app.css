@@ -4951,3 +4951,94 @@ tr.top-new td.col-name { color: var(--text-hover); }
 #set-insa .form-check { margin-bottom: 6px; }
 #set-insa .set-insa-days { display: inline-block; width: 64px; padding: 1px 22px 1px 8px; margin: 0 4px; vertical-align: baseline; }
 #set-insa-off { margin-bottom: 8px; }
+
+/* ---- Price Guide (js/priceguide.js) + My Inventory market chip ---- */
+.pg-grid tr.pg-row { cursor: pointer; }
+.pg-grid tr.pg-open td { border-bottom-color: transparent; }
+.pg-grid .pg-med { font-weight: 600; color: var(--text-primary, #eee); }
+.pg-grid .pg-sellers { color: var(--text-muted); font-size: 12px; }
+.pg-trend { font-size: 12px; white-space: nowrap; }
+.pg-trend.pg-up { color: #45e97e; }
+.pg-trend.pg-down { color: var(--accent); }
+.pg-trend.pg-flat { color: var(--text-muted); }
+.pg-detail-row td { padding-top: 0; }
+.pg-detail { display: flex; gap: 18px; align-items: flex-end; justify-content: space-between; color: var(--text-muted); font-size: 13px; line-height: 1.5; }
+.pg-detail b { color: var(--text-primary, #eee); }
+.pg-weekly { flex: 0 0 220px; }
+.pg-spark { display: flex; align-items: flex-end; gap: 3px; height: 40px; }
+.pg-bar { flex: 1; background: var(--accent); opacity: .75; border-radius: 2px 2px 0 0; min-height: 3px; }
+.pg-bar-gap { background: transparent; border-bottom: 2px dotted var(--text-muted); opacity: .5; height: 3px; }
+.pg-spark-empty { font-size: 12px; }
+.pg-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.pg-contrib { margin: 0; font-size: 13px; color: var(--text-muted); white-space: nowrap; }
+.pg-chip { margin-left: 5px; font-size: 11px; text-indent: 0; cursor: pointer; opacity: .85; }
+.pg-chip:hover { opacity: 1; }
+.pg-chip-low { color: #e0a84a; }
+.pg-chip-high { color: #7aa7e0; }
+
+/* ---- Vendor Upkeep (js/vendor-upkeep.js) — Advanced tools ---- */
+/* gated by the Advanced-tools rule (.power-only) in the Components power block below */
+#vu-grid td { vertical-align: top; }
+#vu-grid td.vu-name, #vu-grid td.vu-warn, #vu-grid th:nth-child(-n+2) { text-align: left; }
+#vu-grid .vu-name b { font-weight: 600; }
+#vu-grid .vu-notes { max-width: 260px; white-space: normal; }
+#vu-grid .vu-src { font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: var(--text-muted);
+  border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; margin-left: 4px; white-space: nowrap; }
+#vu-grid .vu-warn { white-space: normal; max-width: 340px; }
+.vu-chip { display: inline-block; font-size: 12px; line-height: 1.35; padding: 2px 8px; border-radius: 10px; margin: 0 4px 3px 0;
+  background: var(--bg-tertiary); border: 1px solid var(--border); }
+.vu-chip.ok { color: var(--accent-green); border-color: transparent; background: transparent; padding-left: 0; }
+.vu-chip.warn { color: #e0a33a; border-color: rgba(224,163,58,.45); }
+.vu-chip.bad { color: var(--accent); border-color: var(--accent); }
+.vu-maint { display: grid; grid-template-columns: auto 64px auto; align-items: center; gap: 6px; white-space: nowrap; }
+.vu-maint .vu-days { font-weight: 600; min-width: 34px; }
+.vu-maint .vu-bar { height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; }
+.vu-maint .vu-bar span { display: block; height: 100%; background: var(--accent-green); }
+.vu-maint.warn .vu-bar span { background: #e0a33a; }
+.vu-maint.warn .vu-days { color: #e0a33a; }
+.vu-maint.bad .vu-bar span { background: var(--accent); }
+.vu-maint.bad .vu-days { color: var(--accent); }
+.vu-maint .vu-pool { font-size: 12px; color: var(--text-muted); }
+#vu-grid td.col-actions { white-space: nowrap; text-align: right; width: 1%; }
+#vu-remind-open.active { color: var(--accent); }
+.vu-remind-row { display: flex; gap: 10px; align-items: flex-start; margin: 4px 0 12px; }
+
+/* ---- Advanced tools (Settings → Advanced tools; js/components-power.js) ----
+   Power-user extras carry .power-only and stay hidden unless body.power-tools. */
+body:not(.power-tools) .power-only { display: none !important; }
+.cmp-run-badge { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 9px; font-size: 11px; line-height: 17px;
+  background: var(--bg-elev, rgba(255,255,255,.06)); color: var(--text-muted); border: 1px solid var(--border, rgba(255,255,255,.1)); white-space: nowrap; text-indent: 0; }
+.cmp-where { color: var(--text-muted); font-size: 12px; }
+.scd-have-where { margin-left: 6px; }
+.cmp-run-row { text-decoration: none; color: inherit; cursor: pointer; }
+.cmp-run-row:hover { background: var(--bg-hover, rgba(255,255,255,.04)); }
+.cmp-run-no { min-width: 38px; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
+.cmp-run-row .cmp-planet { margin-left: 6px; }
+.cmp-ledger-delta { font-weight: 700; font-variant-numeric: tabular-nums; margin-left: 4px; }
+.cmp-ledger-delta.up { color: var(--success, #3fb67a); }
+.cmp-ledger-delta.down { color: var(--accent); }
+.cmp-check-head, .cmp-check-row { display: grid; grid-template-columns: 1fr 80px 96px; gap: 8px; align-items: center; padding: 4px 0; }
+.cmp-check-head { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--text-muted); border-bottom: 1px solid var(--border, rgba(255,255,255,.08)); }
+.cmp-check-head span:not(:first-child), .cmp-check-exp { text-align: right; font-variant-numeric: tabular-nums; }
+.cmp-check-name { min-width: 0; overflow-wrap: anywhere; }
+.cmp-check-amt { text-align: right; }
+.cmp-check-amt.cmp-check-off { border-color: var(--accent); }
+
+/* ---- Survey droid reports on the Mail page (js/isd.js) ---- */
+.isd-panel { border: 1px solid var(--border); border-radius: 8px; background: var(--bg-card, var(--bg-elev)); margin-bottom: 14px; }
+.isd-head { display: flex; align-items: center; gap: 8px; padding: 10px 14px; font-weight: 600; border-bottom: 1px solid var(--border); }
+.isd-head .fa-satellite { color: var(--accent); }
+.isd-count { color: var(--text-muted); font-weight: 400; }
+.isd-row { display: flex; align-items: baseline; gap: 12px; padding: 8px 14px; cursor: pointer; border-top: 1px solid var(--border); }
+.isd-list .isd-row:first-child { border-top: 0; }
+.isd-row:hover { background: var(--bg-hover, rgba(255,255,255,.03)); }
+.isd-what { white-space: nowrap; }
+.isd-sum { flex: 1; min-width: 0; color: var(--text-muted); }
+.isd-when { color: var(--text-muted); white-space: nowrap; font-size: 12px; }
+.isd-items { padding: 4px 14px 10px 28px; }
+.isd-item { display: flex; gap: 12px; padding: 3px 0; font-size: 13px; }
+.isd-name { min-width: 140px; font-weight: 600; }
+.isd-cls { flex: 1; min-width: 0; color: var(--text-muted); }
+.isd-res { white-space: nowrap; color: var(--text-muted); }
+.isd-res-planet_added, .isd-res-added { color: var(--success, #4caf7a); }
+.isd-res-pending { color: var(--warning, #e0a040); }

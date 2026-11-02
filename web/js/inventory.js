@@ -291,7 +291,7 @@ function invRowHtml(item, idx, pace = invPace()) {
       : `${stockCls ? `<i class="fa-solid fa-triangle-exclamation inv-warnico" title="${stocked < 0 ? 'Oversold — stock is negative' : 'At or below restock threshold'}"></i>` : ''}${fmtNum(stocked)}`}</td>
     <td class="col-name res-name"><span class="stk-tagslot">${tagged
       ? `<i class="fa-solid fa-tag stk-tagind" data-invtaghover="${idx}"></i>` : ''}</span>${escapeHtml(item.item_name || '')}${invIsBucket(item)
-      ? ` <i class="fa-solid fa-layer-group inv-bucketico" title="${escapeHtml(invBucketTip(item))}"></i>` : ''}</td>
+      ? ` <i class="fa-solid fa-layer-group inv-bucketico" title="${escapeHtml(invBucketTip(item))}"></i>` : ''}${typeof pgInvChip === 'function' ? pgInvChip(item) : ''}</td>
     <td class="stat inv-edit${threshold >= 0 ? '' : ' inv-nowarn'}" data-edit="threshold" data-idx="${idx}" title="${threshold >= 0
         ? 'Click to edit — warns at or below this number; set it to -1 to turn off this item’s low-stock and oversold warnings'
         : 'Warnings are off for this item (threshold -1) — click to set a threshold'}">${invState.editMode ? invQuickInput('threshold', idx, threshold) : fmtNum(threshold)}</td>
@@ -590,6 +590,7 @@ async function loadInventory() {
   // inventory changed under us — Sales' not-in-inventory index refetches on next use
   if (typeof salesInvNames !== 'undefined') salesInvNames = null;
   invNotifySweep(); // manual stock edits + fresh sale matches alert immediately
+  if (typeof pgInvHints === 'function') pgInvHints();   // Price Guide: quiet below/above-market chips
   if (!rows.length) {
     // still render folder rows (if any) so an empty list can be organized
     renderInvRows();

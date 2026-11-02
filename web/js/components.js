@@ -21,7 +21,7 @@ const CMP_SOURCES = {
 const CMP_VIEW_KEY = 'cmp-view';
 
 const cmpState = {
-  rows: [], locations: [], items: [], factories: [], links: [], loaded: false,
+  rows: [], locations: [], items: [], factories: [], links: [], runs: [], loaded: false,
   view: 'item',            // 'item' | 'location' — what the group rows are
   collapsed: new Set(),    // group keys folded shut
   editId: null,            // row open in the add/edit dialog (null = adding)
@@ -67,6 +67,9 @@ async function cmpFetch() {
   cmpState.items = res.data.items || [];
   cmpState.factories = res.data.factories || [];
   cmpState.links = res.data.links || [];
+  cmpState.runs = res.data.runs || [];   // the production runs current stacks came from (Advanced tools)
+  // the switch rides along — keeps body.power-tools right even if Settings never loaded prefs
+  if (res.data.power !== undefined && typeof applyPowerTools === 'function') { appPrefs.power_tools = safeInt(res.data.power); applyPowerTools(); }
   cmpState.loaded = true;
   return res;
 }
@@ -130,7 +133,7 @@ function cmpRowHtml(r) {
   const crates = cmpCrates(safeInt(r.units), r.crate_size);
   return `<tr data-cid="${safeInt(r.id)}">
     <td class="col-name res-name"><span class="stk-tagslot">${tagged
-      ? `<i class="fa-solid fa-tag stk-tagind" title="${escapeHtml(cmpTags(r).join(', '))}"></i>` : ''}</span>${firstTxt}</td>
+      ? `<i class="fa-solid fa-tag stk-tagind" title="${escapeHtml(cmpTags(r).join(', '))}"></i>` : ''}</span>${firstTxt}${cmpRowRunHtml(r)}</td>
     <td class="pin-cell cmp-src" title="${srcLabel}"><i class="fa-solid ${ico}"></i></td>
     <td class="stat">${fmtNum(safeInt(r.units))}</td>
     <td class="stat"${crates ? ` title="${fmtNum(safeInt(r.crate_size))} a crate"` : ''}>${crates || '<span class="stat_off">—</span>'}</td>
@@ -139,7 +142,7 @@ function cmpRowHtml(r) {
     <td class="col-text res-type">${fmtAgoTip(r.updated_at)}</td>
     <td class="col-actions">
       <button class="btn btn-icon" data-cmove="${safeInt(r.id)}" title="Move — to another location, or onto a vendor (Inventory)"><i class="fa-solid fa-right-left"></i></button>
-      <button class="btn btn-icon" data-cedit="${safeInt(r.id)}" title="Edit"><i class="fa-solid fa-pen"></i></button>
+      ${cmpRowHistBtn(r)}<button class="btn btn-icon" data-cedit="${safeInt(r.id)}" title="Edit"><i class="fa-solid fa-pen"></i></button>
       <button class="btn btn-icon" data-cdel="${safeInt(r.id)}" title="Remove"><i class="fa-solid fa-trash-can"></i></button>
     </td>
   </tr>`;
@@ -685,6 +688,7 @@ function initComponents() {
 
   initCmpCraft();
   initCmpPlan();   // components-plan.js
+  initCmpPower();  // components-power.js — Advanced tools
 }
 
 // ---- phase 2: schematics, factory runs, crafting ----------------------------
@@ -756,6 +760,7 @@ function cmpPaintHoldings(s) {
     const line = document.querySelector(`#scd-components [data-ci="${i}"]`);
     if (!line) return;
     line.querySelector('.scd-have')?.remove();
+    line.querySelector('.scd-have-where')?.remove();
     if (safeInt(c.number) <= 0) return;
     const have = cmpUnits(cmpSlotRows(c));
     const need = safeInt(c.number) * n;
@@ -764,8 +769,11 @@ function cmpPaintHoldings(s) {
       : opt ? ['muted', have ? `have ${fmtNum(have)}` : 'none held']
         : [have ? 'short' : 'none', `${have ? `have ${fmtNum(have)} · ` : ''}short ${fmtNum(need - have)}`];
     const linked = cmpLink(c.id);
+    // Advanced tools: where yours are, run by run
+    const where = powerTools() && have ? cmpWhere(cmpSlotRows(c)) : '';
     line.insertAdjacentHTML('beforeend', ` <a role="button" class="scd-have ${cls}" data-cmplink="${i}"
-      title="${linked ? `Counting your “${escapeHtml(linked)}”` : 'Matched by name from My Components'} — click to pick which item fills this slot">${txt}</a>`);
+      title="${linked ? `Counting your “${escapeHtml(linked)}”` : 'Matched by name from My Components'}${where ? ` — ${escapeHtml(where)}` : ''} — click to pick which item fills this slot">${txt}</a>`
+      + (where ? `<span class="scd-have-where cmp-where">${escapeHtml(where)}</span>` : ''));
   });
   $('#scd-cmp-n').value = String(n);
   $('#scd-cmp').hidden = false;
@@ -886,7 +894,7 @@ function cmpCraftRender() {
         </select>
       </div>
       ${rows.length ? rows.map((r) => `<div class="cmp-craft-row">
-          <span class="cmp-craft-from">${escapeHtml(r.item_name)} <span class="cmp-planet">${escapeHtml(cmpLocName(r.location_id))} · ${fmtNum(safeInt(r.units))} there</span></span>
+          <span class="cmp-craft-from">${escapeHtml(r.item_name)} <span class="cmp-planet">${escapeHtml(cmpLocName(r.location_id))} · ${fmtNum(safeInt(r.units))} there</span>${cmpRowRunHtml(r)}</span>
           <input type="number" class="form-control filter-input cmp-craft-amt" min="0" max="${safeInt(r.units)}"
                  data-cdraw="${i}:${safeInt(r.id)}" value="${safeInt((cmpCraft.draw[i] || {})[safeInt(r.id)])}">
         </div>`).join('')

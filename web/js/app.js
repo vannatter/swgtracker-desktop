@@ -447,7 +447,7 @@ async function checkForUpdate() {
   const b = $('#build-id');
   b.classList.add('has-update');
   b.innerHTML = `<i class="fa-solid fa-circle-up"></i>v${escapeHtml(info.latest)} available`;
-  b.title = (info.notes ? info.notes + '\n\n' : '') + `Version ${info.latest} is available — click to download`;
+  b.title = (info.notes ? relNotesBrief(info.notes) + '\n\n' : '') + `Version ${info.latest} is available — click to download`;
   return info;
 }
 let _shellUpdate = null;   // version.json says a newer app exists
@@ -492,7 +492,47 @@ function renderBundleChip(pending) {
   b.hidden = false;
   b.classList.add('has-update');
   b.innerHTML = `<i class="fa-solid fa-cloud-arrow-down"></i>ui ${escapeHtml(pending.version)} ready`;
-  b.title = (pending.notes ? pending.notes + '\n\n' : '') + 'A UI update is ready — click to apply now (no restart); it applies on its own in a few minutes';
+  b.title = (pending.notes ? relNotesBrief(pending.notes) + '\n\n' : '') + 'A UI update is ready — click to apply now (no restart); it applies on its own in a few minutes';
+}
+
+// ---- Release notes ----
+// Notes arrive as '• a\n• b' (UI bundles), '- a\n- b' (shell version.json) or
+// older free text. A release can run to a dozen-plus bullets, so they render
+// grouped by their "Page:" prefix ("Quests: …", "Sales Insights: …").
+function relNotesItems(notes) {
+  return String(notes || '').split(/\n+/)
+    .map((l) => l.replace(/^\s*[•\-*]\s*/, '').trim())
+    .filter(Boolean);
+}
+function relNotesGroups(notes) {
+  const groups = [];
+  const byKey = new Map();
+  for (const line of relNotesItems(notes)) {
+    // a short leading "Page:" (≤4 words) is the group; "+N more" and plain lines go under Also
+    const m = /^\+\d+ more$/.test(line) ? null : line.match(/^([^:—]{2,32}?):\s+(.+)$/);
+    const key = m && m[1].trim().split(/\s+/).length <= 4 ? m[1].trim() : '';
+    if (!byKey.has(key)) { const g = { key, items: [] }; byKey.set(key, g); groups.push(g); }
+    byKey.get(key).items.push(key ? m[2] : line);
+  }
+  // ungrouped lines read best last, under "Also" (or bare when nothing else is grouped)
+  const loose = byKey.get('');
+  if (loose && groups.length > 1) { groups.splice(groups.indexOf(loose), 1); groups.push(loose); }
+  return groups;
+}
+function relNotesHtml(notes) {
+  const groups = relNotesGroups(notes);
+  if (!groups.length) return '—';
+  const solo = groups.length === 1 && !groups[0].key;
+  return `<div class="rn-list">${groups.map((g) => `<div class="rn-group">
+      ${solo ? '' : `<div class="rn-head">${escapeHtml(g.key || 'Also')}</div>`}
+      <ul>${g.items.map((t) => `<li${/^\+\d+ more$/.test(t) ? ' class="rn-more"' : ''}>${escapeHtml(t)}</li>`).join('')}</ul>
+    </div>`).join('')}</div>`;
+}
+// plain-text digest for a hover title — a full dozen bullets makes an unreadable tooltip
+function relNotesBrief(notes, max = 6) {
+  const items = relNotesItems(notes);
+  const head = items.slice(0, max).map((t) => `• ${t}`).join('\n');
+  return items.length > max ? `${head}\n…and ${items.length - max} more — the full list is in About` : head;
 }
 
 // ---- About page ----
@@ -551,16 +591,27 @@ async function loadAbout() {
       hist = (h?.ok && Array.isArray(h.data)) ? h.data : [];
     } catch (_) { /* offline — fall through */ }
     if (hist.length) {
+      // newest release open, older ones fold to "N changes \u00b7 Quests, Sales Insights\u2026"
+      const cell = (r, i) => {
+        if (i === 0) return relNotesHtml(r.notes);
+        const groups = relNotesGroups(r.notes);
+        const n = groups.reduce((s, g) => s + g.items.length, 0);
+        if (n <= 1) return relNotesHtml(r.notes);
+        const names = groups.map((g) => g.key).filter(Boolean);
+        const sum = `${n} changes${names.length ? ` \u00b7 ${names.slice(0, 3).join(', ')}${names.length > 3 ? '\u2026' : ''}` : ''}`;
+        return `<details class="rn-fold"><summary>${escapeHtml(sum)}</summary>${relNotesHtml(r.notes)}</details>`;
+      };
       $('#about-notes').innerHTML = `<table class="inv-sales-table"><thead><tr>
           <th>Version</th><th>Published</th><th>Changes</th>
-        </tr></thead><tbody>${hist.map((r) => `<tr>
+        </tr></thead><tbody>${hist.map((r, i) => `<tr>
           <td>${escapeHtml(r.version)}${st?.active_version === r.version ? ' <span class="mm-tracked" title="You are here"><i class="fa-solid fa-check"></i></span>' : ''}</td>
           <td>${fmtAgoTip(r.published)}</td>
-          <td class="about-note-cell">${escapeHtml(r.notes || '\u2014')}</td>
+          <td class="about-note-cell">${cell(r, i)}</td>
         </tr>`).join('')}</tbody></table>`;
+    } else if (st?.active_notes) {
+      $('#about-notes').innerHTML = relNotesHtml(st.active_notes);
     } else {
-      $('#about-notes').textContent = st?.active_notes
-        || 'Release history isn\u2019t available right now.';
+      $('#about-notes').textContent = 'Release history isn\u2019t available right now.';
     }
   } catch (_) { /* leave the dashes */ }
 }

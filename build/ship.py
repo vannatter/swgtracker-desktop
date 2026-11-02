@@ -55,6 +55,29 @@ def notes_to_bullets(message: str) -> list[str]:
     return [p.strip().rstrip(".") for p in parts if p.strip()]
 
 
+DISCORD_MAX = 1990  # Discord hard-caps message content at 2000 chars
+
+
+def discord_messages(version_label: str, message: str) -> list[str]:
+    """The announce as one or more Discord posts, each under DISCORD_MAX. Splits only
+    between bullets (a long release used to be chopped mid-sentence at 1990 chars);
+    follow-up posts are headed '(continued)'. A single over-long bullet is cut on a
+    word boundary as a last resort."""
+    head = f"**Desktop release {version_label}**"
+    lines = [f"• {b}" for b in notes_to_bullets(message)]
+    posts, cur = [], head
+    for line in lines:
+        if len(line) > DISCORD_MAX - 40:
+            cut = line[:DISCORD_MAX - 41]
+            line = cut[:cut.rfind(" ")].rstrip() + "…"
+        if len(cur) + 1 + len(line) > DISCORD_MAX:
+            posts.append(cur)
+            cur = f"**Desktop release {version_label}** (continued)"
+        cur += "\n" + line
+    posts.append(cur)
+    return posts
+
+
 def announce_discord(version_label: str, message: str) -> None:
     """Post 'Desktop release <version>:' + bullet points to Discord. Best-effort:
     a webhook failure never fails the ship (the release already went out)."""
@@ -62,20 +85,23 @@ def announce_discord(version_label: str, message: str) -> None:
     if not hook:
         print("discord: no webhook configured (build/ship_secrets.json) — skipped")
         return
-    bullets = notes_to_bullets(message)
-    body = f"**Desktop release {version_label}**\n" + "\n".join(f"• {b}" for b in bullets)
-    body = body[:1990]  # Discord hard-caps content at 2000 chars
-    try:
-        req = urllib.request.Request(
-            hook, data=json.dumps({"content": body}).encode("utf-8"),
-            # Discord's Cloudflare 403s the default Python urllib UA — send a real one
-            headers={"Content-Type": "application/json", "User-Agent": "swgtracker-ship/1.0"},
-            method="POST")
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            ok = 200 <= resp.status < 300
-        print(f"discord: announced {version_label}" if ok else f"discord: HTTP {resp.status}")
-    except Exception as e:  # noqa: BLE001 — never let an announce break a ship
-        print(f"discord: announce failed ({e}) — release still went out")
+    posts = discord_messages(version_label, message)
+    for i, body in enumerate(posts, 1):
+        try:
+            req = urllib.request.Request(
+                hook, data=json.dumps({"content": body}).encode("utf-8"),
+                # Discord's Cloudflare 403s the default Python urllib UA — send a real one
+                headers={"Content-Type": "application/json", "User-Agent": "swgtracker-ship/1.0"},
+                method="POST")
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                ok = 200 <= resp.status < 300
+            part = f" (part {i}/{len(posts)})" if len(posts) > 1 else ""
+            print(f"discord: announced {version_label}{part}" if ok else f"discord: HTTP {resp.status}")
+            if not ok:
+                return
+        except Exception as e:  # noqa: BLE001 — never let an announce break a ship
+            print(f"discord: announce failed ({e}) — release still went out")
+            return
 
 
 def run(*cmd, check=True, capture=True):
@@ -149,6 +175,16 @@ def main() -> int:
           + (", tag + trigger installer build" if shell and not args.no_tag else "")
           + (", rebuild .app" if shell and not args.no_app else ""))
     if args.dry_run:
+        # preview the notes exactly as they'll land — never touches the webhook
+        if ui:
+            sys.path.insert(0, str(ROOT / "build"))
+            from publish_bundle import as_bullets, split_message  # noqa: E402
+            notes = as_bullets(split_message(args.message))
+            print(f"\nin-app notes ({len(notes)} chars):\n{notes}")
+        label = f"v{new_version}" if shell else "<bundle version>"
+        posts = discord_messages(label, args.message)
+        for i, body in enumerate(posts, 1):
+            print(f"\ndiscord post {i}/{len(posts)} ({len(body)} chars):\n{body}")
         return 0
 
     if shell:

@@ -8,6 +8,7 @@ to swgtracker.com in one command via app/deploy.php.
     python3 build/publish_bundle.py --activate 2026.07.08.1  # rollback / re-activate
     python3 build/publish_bundle.py                          # build only (manual upload)
     python3 build/publish_bundle.py --tag                    # also git-tag bundle-<version>
+    python3 build/publish_bundle.py --notes-only --notes "a; b"  # preview stored notes, no build
 
 Deploy auth: "deploy_token" in config.json (matches bundle_deploy_token in the
 site's config.php). Optional "deploy_url" overrides the endpoint for testing.
@@ -89,20 +90,37 @@ def auto_notes() -> str:
     return as_bullets(lines)
 
 
+# app/deploy.php stores up to 8000 chars of notes (it was 1000 until 2026-11-02,
+# which cut 2026.11.01.2's What's New off mid-sentence after 7 of 12 bullets)
+NOTES_MAX = 7900
+
+
 def as_bullets(lines: list[str]) -> str:
-    """'• a\n• b' for the update chip, trimmed to the server's 500-char cap."""
+    """'• a\n• b' for the update chip / About / bundle-history. Every bullet is kept
+    whole: if the list ever outgrows NOTES_MAX, whole bullets drop off the end and
+    a final '• +N more' says so — never a silent mid-sentence cut."""
     lines = [l.strip().rstrip(".") for l in lines if l.strip()]
     if not lines:
         return "Minor fixes and improvements"
-    text = "• " + "\n• ".join(lines[:8])
-    if len(text) <= 990:
-        return text
-    # server caps notes at 1000 (app/deploy.php) — trim on a word boundary so we never cut mid-word
-    cut = text[:989]
-    sp = cut.rfind(" ")
-    if sp > 900:
-        cut = cut[:sp]
-    return cut.rstrip() + "…"
+    kept: list[str] = []
+    for i, line in enumerate(lines):
+        rest = len(lines) - i - 1
+        tail = f"\n• +{rest} more" if rest else ""
+        candidate = "• " + "\n• ".join(kept + [line])
+        if len(candidate) + len(tail) > NOTES_MAX:
+            break
+        kept.append(line)
+    if not kept:  # one monster bullet — keep its start, but say it was cut
+        return "• " + lines[0][:NOTES_MAX - 20].rstrip() + "…"
+    text = "• " + "\n• ".join(kept)
+    if len(kept) < len(lines):
+        text += f"\n• +{len(lines) - len(kept)} more"
+    return text
+
+
+def split_message(message: str) -> list[str]:
+    """ship.py's one-line '; '-separated message (optionally 'vX.Y.Z — ' prefixed) → clauses."""
+    return re.split(r";\s+", re.sub(r"^v[0-9.]+ — ", "", message.strip()))
 
 
 def shell_version() -> str:
@@ -128,7 +146,17 @@ def main() -> int:
     ap.add_argument("--deploy", action="store_true", help="upload + activate on swgtracker.com")
     ap.add_argument("--list", action="store_true", help="show active + stored versions")
     ap.add_argument("--activate", metavar="VERSION", help="re-activate a stored version (rollback)")
+    ap.add_argument("--notes-only", action="store_true",
+                    help="print the formatted notes (as the app will store them) and exit — "
+                         "no bundle is built, nothing is uploaded")
     args = ap.parse_args()
+
+    if args.notes_only:
+        notes = (args.notes if args.notes.lstrip().startswith("•")
+                 else as_bullets(split_message(args.notes)) if args.notes else auto_notes())
+        print(notes)
+        print(f"\n[{len(notes)} chars, {notes.count('•')} bullets — cap {NOTES_MAX}]")
+        return 0
 
     if args.list:
         body = deploy_call("list")
@@ -152,7 +180,7 @@ def main() -> int:
     min_shell = args.min_shell or MIN_SHELL
     if args.notes and not args.notes.lstrip().startswith("•"):
         # ship.py hands over its one-line '; '-separated message — same bullets as Discord
-        args.notes = as_bullets(re.split(r";\s+", re.sub(r"^v[0-9.]+ — ", "", args.notes.strip())))
+        args.notes = as_bullets(split_message(args.notes))
     if args.deploy and not args.notes:
         args.notes = auto_notes()
         print("notes (from git):")

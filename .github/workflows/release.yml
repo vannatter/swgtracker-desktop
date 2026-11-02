@@ -116,7 +116,8 @@ jobs:
           RANGE=${PREV:+$PREV..}${RELEASE_TAG}
           # keep dev/tooling commits (ci:/chore:/docs:) out of user-facing notes
           git log --format='%s' $RANGE | sed -nE 's/^v[0-9.]+ — (.+)$/- \1/p' \
-            | { grep -viE '^- (ci|chore|docs):' || true; } | head -20 > notes.md
+            | { grep -viE '^- (ci|chore|docs):' || true; } | head -20 \
+            | sed -E 's/; +/\n- /g' > notes.md   # one '; '-clause per bullet, like the bundle notes
           [ -s notes.md ] || echo "SWG Tracker Desktop ${RELEASE_TAG}" > notes.md
           cat notes.md
       - name: Stable-name aliases (evergreen /releases/latest/download URLs)
@@ -144,5 +145,6 @@ jobs:
             -H "X-Deploy-Token: ${DEPLOY_TOKEN}" \
             --data-urlencode "version=${VER}" \
             --data-urlencode "url=https://swgtracker.com/download.php" \
-            --data-urlencode "notes=$(head -c 480 notes.md)"
+            --data-urlencode "notes=$(awk '{ n += length($0) + 1; if (n > 7900) exit; print }' notes.md)"
+          # ^ whole lines only, under deploy.php's 8000-char cap (head -c 480 cut mid-sentence)
           echo "version.json published — installed apps will offer v${VER}"

@@ -158,6 +158,7 @@ async function loadSettings() {
     const u = $('#set-username');
     if (u) { u.value = p.name || ''; u.dataset.orig = p.name || ''; }
   });
+  if (typeof insaLoadPrefs === 'function') insaLoadPrefs();   // Sales Alerts (server-side)
 
   refreshDatasetStatus();
 }
@@ -262,6 +263,8 @@ async function saveSettings() {
       appPrefs.ignore_mustafar = wantMust;
       if (typeof loadedPages !== 'undefined') loadedPages.clear(); // suggestions re-filter on next visit
     }
+    // Sales Alerts switches — server-side too (js/insight-alerts.js)
+    if (typeof insaSavePrefs === 'function') await insaSavePrefs();
     // a changed date format must invalidate every already-rendered page —
     // cached pages would keep showing dates in the old style until relaunch
     const fmtChanged = ($('#set-datefmt').value === 'intl') !== (appDateFmt === 'intl')

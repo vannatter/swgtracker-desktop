@@ -684,6 +684,7 @@ function initComponents() {
   $('#cmp-thresh-val').addEventListener('keydown', (e) => { if (e.key === 'Enter') saveCmpThresh(false); });
 
   initCmpCraft();
+  initCmpPlan();   // components-plan.js
 }
 
 // ---- phase 2: schematics, factory runs, crafting ----------------------------
@@ -967,6 +968,7 @@ async function cmpAfterChange() {
   const page = typeof currentPageKey === 'function' ? currentPageKey() : '';
   if (page === 'components') { cmpFillLocFilter(); renderComponents(); }
   if (page === 'schematic' && scdState.schematic) cmpPaintHoldings(scdState.schematic);
+  if (!$('#cmp-plan-modal').hidden) cmpPlanRender();   // a craft logged from the planner
 }
 
 // -- a finished factory run → its hopper (factories.js offers it on Done) -------

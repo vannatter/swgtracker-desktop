@@ -6,9 +6,9 @@
   <title>SWG Tracker Desktop</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.1/css/all.min.css">
-  <link rel="stylesheet" href="css/app.css?v=20261101bc">
+  <link rel="stylesheet" href="css/app.css?v=20261102al">
   <link rel="stylesheet" href="css/share.css?v=20261022x">
-  <link rel="stylesheet" href="css/quests.css?v=20261101qc">
+  <link rel="stylesheet" href="css/quests.css?v=20261102qp">
 </head>
 <body>
   <div id="holiday-bar" class="holiday-bar" hidden></div>
@@ -455,6 +455,7 @@
             <div id="scd-cmp" class="scd-cmp" hidden>
               <label class="scd-cmp-n" title="The have / short tags count what you hold in My Components for this many crafts">From My Components, for
                 <input id="scd-cmp-n" type="number" min="1" value="1" class="form-control filter-input"> craft(s)</label>
+              <button id="scd-cmp-plan" class="btn btn-sm btn-outline-secondary" title="Add these crafts to a plan — every part they need, against what you hold"><i class="fa-solid fa-list-check"></i> Plan</button>
               <button id="scd-cmp-craft" class="btn btn-sm btn-outline-secondary" title="Draw down the parts these crafts used"><i class="fa-solid fa-hammer"></i> Log craft</button>
             </div>
           </div>
@@ -1101,6 +1102,7 @@
             <button class="seg-btn" data-cview="location" title="One block per location — what's in each hopper, house and backpack">By location</button>
           </div>
           <button id="cmp-locs-open" class="btn btn-icon" title="Locations — your houses, storage containers, backpacks and factory hoppers"><i class="fa-solid fa-warehouse"></i></button>
+          <button id="cmp-plan-open" class="btn btn-icon" title="Plan crafts — what the schematics you want to make need, against what you hold"><i class="fa-solid fa-list-check"></i></button>
           <button id="cmp-craft-open" class="btn btn-icon" title="Log a craft — draw down the parts it used"><i class="fa-solid fa-hammer"></i></button>
           <button id="cmp-log-open" class="btn btn-icon" title="History — crafts you logged and factory runs sent to a hopper"><i class="fa-solid fa-clock-rotate-left"></i></button>
           <button class="btn btn-icon" data-refresh="components" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
@@ -2179,6 +2181,9 @@
           <select id="quests-community" class="form-select filter-select beast-sel" title="Community-submitted quests">
             <option value="">All quests</option><option value="submitted">Community quests</option><option value="unverified">Needs confirming</option>
           </select>
+          <select id="quests-mine" class="form-select filter-select beast-sel" title="Quests you're tracking — tick off steps on a quest's page">
+            <option value="">Everyone's quests</option><option value="any">My quests</option><option value="active">In progress</option><option value="done">Done</option>
+          </select>
           <label class="pin-toggle ms-auto" title="Also list quests nobody hands out (unused or test content)"><input id="quests-unused" type="checkbox"> Unused</label>
         </div>
         <div class="table-wrap">
@@ -2314,6 +2319,30 @@
               <option>10</option><option>15</option><option>30</option>
             </select>
             <span>minutes</span>
+          </div>
+        </div>
+
+        <!-- Sales alerts: insight nudges, switches stored server-side (js/insight-alerts.js) -->
+        <div class="settings-section" id="set-insa">
+          <h2>Sales Alerts <span class="settings-sub">Nudges worked out from your Sales Insights — each lands in the bell and as a desktop notification, once per episode. Shared with your Settings on swgtracker.com.</span></h2>
+          <div id="set-insa-off" class="settings-sub" hidden>Sales alerts need the latest swgtracker.com update and a saved API key.</div>
+          <div class="form-check form-switch set-insa-row">
+            <input class="form-check-input" type="checkbox" id="set-insa-stockout">
+            <label class="form-check-label" for="set-insa-stockout">An item has been out of stock for
+              <select id="set-insa-days" class="form-select filter-select settings-select-narrow set-insa-days">
+                <option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="5">5</option><option value="7">7</option>
+              </select> days
+              <span class="settings-sub">— with an estimate of the sales it's cost you (tracked inventory items only)</span></label>
+          </div>
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="set-insa-quiet">
+            <label class="form-check-label" for="set-insa-quiet">A regular buyer has gone quiet
+              <span class="settings-sub">— someone who's bought on 3+ days is well past their usual gap</span></label>
+          </div>
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="set-insa-heating">
+            <label class="form-check-label" for="set-insa-heating">An item is heating up
+              <span class="settings-sub">— selling 3× its usual pace or more; worth checking your stock</span></label>
           </div>
         </div>
 
@@ -2782,6 +2811,31 @@
   </div>
 
   <!-- My Components: log a craft (draws its parts down) -->
+  <!-- My Components: craft planner (before the craft / link dialogs so they open on top of it) -->
+  <div id="cmp-plan-modal" class="key-gate" hidden>
+    <div class="key-gate-card sp-card inv-add-card cmp-plan-card">
+      <h2>Craft planner</h2>
+      <div class="cmp-plan-top">
+        <select id="cmp-plan-sel" class="form-select filter-select" title="Your saved plans"></select>
+        <input id="cmp-plan-name" type="text" class="form-control filter-input" maxlength="96" placeholder="Plan name, e.g. Composite armor set" autocomplete="off">
+        <button id="cmp-plan-del" class="btn btn-icon" title="Delete this plan" hidden><i class="fa-solid fa-trash-can"></i></button>
+      </div>
+      <label class="sp-field-label">What you want to craft</label>
+      <div class="inv-vendor-wrap">
+        <input id="cmp-plan-search" type="text" class="form-control filter-input settings-input-wide" placeholder="Add a schematic…" autocomplete="off" spellcheck="false">
+        <div id="cmp-plan-sug" class="inv-vendor-sug" hidden></div>
+      </div>
+      <div id="cmp-plan-targets" class="cmp-plan-targets"></div>
+      <div class="cmp-plan-subhead"><span>Parts needed</span><span id="cmp-plan-sum" class="cmp-planet"></span></div>
+      <div id="cmp-plan-parts" class="cmp-plan-parts"></div>
+      <div class="inv-add-actions">
+        <button id="cmp-plan-copy" class="btn btn-sm btn-outline-secondary cmp-plan-copy" disabled title="Copy what you're still short of"><i class="fa-regular fa-clone"></i> Shopping list</button>
+        <button id="cmp-plan-cancel" class="btn btn-sm btn-outline-secondary">Close</button>
+        <button id="cmp-plan-save" class="btn btn-sm btn-accent" disabled><i class="fa-solid fa-floppy-disk"></i> Save plan</button>
+      </div>
+    </div>
+  </div>
+
   <div id="cmp-craft-modal" class="key-gate" hidden>
     <div class="key-gate-card sp-card inv-add-card cmp-craft-card">
       <h2>Log a craft</h2>
@@ -3830,7 +3884,8 @@
   <script src="js/myschematics.js?v=20261022es"></script>
   <script src="js/schemcalc.js?v=20261022es"></script>
   <script src="js/inventory.js?v=20261031b"></script>
-  <script src="js/components.js?v=20261101p2"></script>
+  <script src="js/components.js?v=20261102pl"></script>
+  <script src="js/components-plan.js?v=20261102pl"></script>
   <script src="js/invlog.js?v=20261031b"></script>
   <script src="js/sales.js?v=20261031b"></script>
   <script src="js/insights.js?v=20261101cmp"></script>
@@ -3843,7 +3898,8 @@
   <script src="js/factories.js?v=20261101p2"></script>
   <script src="js/customers.js?v=20261022es"></script>
   <script src="js/characters.js?v=20261022es"></script>
-  <script src="js/settings.js?v=20261020a"></script>
+  <script src="js/settings.js?v=20261102al"></script>
+  <script src="js/insight-alerts.js?v=20261102al"></script>
   <script src="js/alerts.js?v=20261023ac"></script>
   <script src="js/lab.js?v=20261022es"></script>
   <script src="js/mail.js?v=20261022es"></script>
@@ -3863,13 +3919,13 @@
   <script src="js/shortcuts.js?v=20261022qa"></script>
   <script src="js/navlayout.js?v=20261016a"></script>
   <script src="js/beasts.js?v=20261022es"></script>
-  <script src="js/quests.js?v=20261101qc"></script>
+  <script src="js/quests.js?v=20261102qp"></script>
   <script src="js/beastcalc.js?v=20261016a"></script>
   <script src="js/decor.js?v=20261027h4"></script>
   <script src="js/home.js?v=20261031a"></script>
   <script src="js/mailsetup.js?v=20261019a"></script>
   <script src="js/ideas.js?v=20261031d"></script>
-  <script src="js/navbadges.js?v=20261101nb"></script>
-  <script src="js/app.js?v=20261101bc"></script>
+  <script src="js/navbadges.js?v=20261102nb"></script>
+  <script src="js/app.js?v=20261102rn"></script>
 </body>
 </html>

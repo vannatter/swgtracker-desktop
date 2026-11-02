@@ -86,8 +86,8 @@ function questWpOnMap(wp) {
 // List
 // =================================================================================
 const questsState = { rows: [], total: 0, page: 1, per: 50, loaded: false, seq: 0, catsLoaded: false,
-  q: '', category: '', planet: '', minLevel: '', maxLevel: '', type: '', repeatable: '', unused: false, community: '',
-  sortField: 'title', sortOrder: 'ASC' };
+  q: '', category: '', planet: '', minLevel: '', maxLevel: '', type: '', repeatable: '', unused: false, community: '', mine: '',
+  mineCounts: null, sortField: 'title', sortOrder: 'ASC' };
 // [label, sort key (null = not server-sortable), class]
 const QUESTS_COLUMNS = [
   ['Title', 'title', 'col-name'], ['Category', 'category', 'col-text'], ['Level', 'level', 'col-num'],
@@ -139,6 +139,7 @@ async function fetchQuests() {
   if (s.repeatable !== '') params.repeatable = s.repeatable;
   if (s.unused) params.unused = 1;
   if (s.community) params.community = s.community;
+  if (s.mine) params.mine = s.mine;
   let res;
   try { res = await apiFetch('GET', 'api/quests.php', { params }); } catch (e) { res = { ok: false, error: String(e) }; }
   if (seq !== s.seq) return; // a newer filter won
@@ -152,6 +153,7 @@ async function fetchQuests() {
   s.rows = res.data.quests || [];
   s.total = safeInt(res.data.total);
   s.loaded = true;
+  if (res.data.mine) { s.mineCounts = res.data.mine; questsMineLabels(); }
   renderQuests();
   const wrap = $('#quests-body').closest('.table-wrap'); if (wrap) wrap.scrollTop = 0;
 }
@@ -166,7 +168,8 @@ function renderQuests() {
       safeInt(q.repeatable) ? '<i class="fa-solid fa-repeat q-flag-rep" title="Repeatable"></i>' : '',
       q.community ? (q.community.verified ? '<span class="q-flag qc-flag-comm" title="Submitted by a player, confirmed by others">Community</span>'
         : '<span class="q-flag qc-flag-unv" title="Submitted by a player — not confirmed yet">Unverified</span>') : '',
-      q.edited ? '<i class="fa-solid fa-pen-nib q-flag-rep" title="Corrected by the community"></i>' : ''].join('');
+      q.edited ? '<i class="fa-solid fa-pen-nib q-flag-rep" title="Corrected by the community"></i>' : '',
+      questProgBadge(q.progress)].join('');
     const nC = safeInt(q.comments); const nS = safeInt(q.screenshots);
     const notes = (nC ? `<span class="q-cnt" title="${nC} note${nC === 1 ? '' : 's'}"><i class="fa-regular fa-comment"></i> ${nC}</span>` : '')
       + (nS ? `<span class="q-cnt" title="${nS} screenshot${nS === 1 ? '' : 's'}"><i class="fa-regular fa-image"></i> ${nS}</span>` : '');
@@ -186,14 +189,31 @@ function renderQuests() {
     : `Showing ${from + 1}–${from + rows.length} of ${questFmtNum(s.total)} quests`;
   $('#quests-prev').disabled = s.page <= 1;
   $('#quests-next').disabled = s.page >= pages;
-  if (s.loaded && !rows.length) { const el = $('#quests-empty'); el.hidden = false; el.textContent = 'No quests match these filters.'; }
+  if (s.loaded && !rows.length) {
+    const el = $('#quests-empty'); el.hidden = false;
+    el.textContent = s.mine && !s.q && !s.category && !s.planet ? (s.mine === 'done' ? 'No finished quests yet — tick off the last step of a quest, or use Mark done.'
+      : 'You’re not tracking any quests yet — open one and tick off its steps as you go.') : 'No quests match these filters.';
+  }
+}
+
+// your progress on a list row: “2/4” while it's going, a check once it's done
+function questProgBadge(p) {
+  if (!p) return '';
+  if (p.status === 'done') return '<span class="q-flag q-prog is-done" title="You finished this quest"><i class="fa-solid fa-check"></i> Done</span>';
+  return `<span class="q-flag q-prog" title="You’re on this one — ${safeInt(p.done)} of ${safeInt(p.total)} steps done"><i class="fa-solid fa-person-walking"></i> ${safeInt(p.total) ? `${safeInt(p.done)}/${safeInt(p.total)}` : 'On it'}</span>`;
+}
+// the My quests filter shows your counts once a list load returns them
+function questsMineLabels() {
+  const c = questsState.mineCounts; const sel = $('#quests-mine'); if (!c || !sel) return;
+  const lab = { any: `My quests (${safeInt(c.active) + safeInt(c.done)})`, active: `In progress (${safeInt(c.active)})`, done: `Done (${safeInt(c.done)})` };
+  [...sel.options].forEach((o) => { if (lab[o.value]) o.textContent = lab[o.value]; });
 }
 
 // open the list with filters preset (detail page's category chip, other pages) — the list's deep link
 function openQuestsFiltered(f = {}) {
   const s = questsState;
-  Object.assign(s, { q: '', category: '', planet: '', minLevel: '', maxLevel: '', type: '', repeatable: '', unused: false, community: '', page: 1 });
-  ['q', 'category', 'planet', 'type', 'repeatable', 'community'].forEach((k) => { if (f[k] != null) s[k] = String(f[k]); });
+  Object.assign(s, { q: '', category: '', planet: '', minLevel: '', maxLevel: '', type: '', repeatable: '', unused: false, community: '', mine: '', page: 1 });
+  ['q', 'category', 'planet', 'type', 'repeatable', 'community', 'mine'].forEach((k) => { if (f[k] != null) s[k] = String(f[k]); });
   if (f.minLevel != null) s.minLevel = String(f.minLevel);
   if (f.maxLevel != null) s.maxLevel = String(f.maxLevel);
   questsSyncControls();
@@ -213,6 +233,7 @@ function questsSyncControls() {
   $('#quests-repeat').value = s.repeatable;
   $('#quests-unused').checked = s.unused;
   $('#quests-community').value = s.community;
+  $('#quests-mine').value = s.mine;
 }
 
 // =================================================================================
@@ -282,7 +303,9 @@ function qdStepHtml(st) {
       ${way ? `<button type="button" class="btn btn-sm btn-outline-secondary qd-way" data-qway="${escapeHtml(way)}" title="${escapeHtml(way)}${where ? ' — the coordinates are inside an instance, so the in-game arrow may not lead straight there' : ''}"><i class="fa-regular fa-clone"></i> Copy /way</button>` : ''}
     </div>`;
   }
-  return `<li class="qd-step${onMap ? ' qd-step-mapped' : ''}" data-qstep="${st.n}"${onMap ? ` title="Click to show it on the map"` : ''}>
+  const done = qdStepDone(st);
+  return `<li class="qd-step${onMap ? ' qd-step-mapped' : ''}${done ? ' qd-step-done' : ''}" data-qstep="${st.n}" data-qstepi="${safeInt(st.i)}"${onMap ? ` title="Click to show it on the map"` : ''}>
+    ${st.i != null ? `<button type="button" class="qd-stepchk" data-qstepchk="${safeInt(st.i)}" role="checkbox" aria-checked="${done}" title="${done ? 'Done — click to untick' : 'Mark this step done'}"><i class="fa-solid fa-check"></i></button>` : ''}
     <span class="qd-stepnum">${st.n}</span>
     <div class="qd-stepmain">
       <div class="qd-steptop"><span class="qd-kind">${escapeHtml(st.kind_label || questTidyId(st.kind))}</span><span class="qd-steptitle">${escapeHtml(st.title || '')}</span>${(st.edited || []).length ? '<i class="fa-solid fa-pen-nib qc-stepedited" title="Corrected by the community — see History"></i>' : ''}</div>
@@ -333,6 +356,7 @@ function qdHeroHtml(q, title, steps, mapped, variantsHtml) {
       <div class="qd-hero-actions">${actions}</div>
     </div>
     <div class="qd-hero-meta">${meta}</div>
+    ${qdProgressHtml(q, steps)}
     ${variantsHtml}
     ${q.desc || (q.summary && q.summary !== q.desc) ? `<div class="qd-hero-desc">
       ${q.desc ? `<p class="qd-desc">${escapeHtml(q.desc)}</p>` : ''}
@@ -690,13 +714,120 @@ function questCopyAllWays() {
 }
 
 // =================================================================================
+// Your progress (api/quests.php ?progress — includes/quest_progress.inc.php): step
+// checkboxes, the hero's progress strip, Copy remaining waypoints, and My quests on the list.
+// Ticking the last step marks the quest done; unticking one puts it back to in progress.
+// =================================================================================
+const qdProg = () => (qdState.quest && qdState.quest.progress) || null;
+const qdStepDone = (st) => { const p = qdProg(); return !!(p && st.i != null && (p.steps || []).includes(safeInt(st.i))); };
+
+function qdProgressHtml(q, steps) {
+  const p = q.progress || null;
+  const tracked = steps.filter((s) => s.i != null);
+  const total = tracked.length;
+  const done = p ? tracked.filter((s) => (p.steps || []).includes(safeInt(s.i))).length : 0;
+  const left = steps.filter((s) => !qdStepDone(s) && questWayCmd(s.wp)).length;
+  if (!p) {
+    return `<div class="qd-prog" id="qd-prog"><span class="qd-prog-l"><i class="fa-regular fa-circle"></i> Not started</span>
+      <span class="qd-prog-acts"><button type="button" class="btn btn-sm btn-outline-secondary" data-qprog="active" title="Add it to My quests — or just tick off a step"><i class="fa-solid fa-play"></i> Start tracking</button></span></div>`;
+  }
+  const pct = total ? Math.round((done / total) * 100) : (p.status === 'done' ? 100 : 0);
+  const isDone = p.status === 'done';
+  const label = isDone ? `<i class="fa-solid fa-circle-check"></i> Done${p.completed ? ` <span class="qd-muted">${escapeHtml(fmtAgo(p.completed))}</span>` : ''}`
+    : `<i class="fa-solid fa-person-walking"></i> In progress${total ? ` — <b>${done}</b> of ${total} step${total === 1 ? '' : 's'}` : ''}`;
+  return `<div class="qd-prog${isDone ? ' is-done' : ''}" id="qd-prog">
+    <span class="qd-prog-l">${label}</span>
+    ${total ? `<span class="qd-prog-bar" role="progressbar" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${done}"><span style="width:${pct}%"></span></span>` : ''}
+    <span class="qd-prog-acts">
+      <button type="button" class="btn btn-sm btn-outline-secondary" data-qprog="none" title="Clear your progress on this quest"><i class="fa-solid fa-rotate-left"></i> Reset</button>
+      ${!isDone && left && left < steps.filter((s) => questWayCmd(s.wp)).length ? `<button type="button" class="btn btn-sm btn-outline-secondary" data-qcopyleft title="Copy the /way of every step you haven't ticked"><i class="fa-regular fa-clone"></i> Copy remaining (${left})</button>` : ''}
+      ${!isDone ? '<button type="button" class="btn btn-sm btn-outline-secondary" data-qprog="done" title="Tick every step"><i class="fa-solid fa-check-double"></i> Mark done</button>' : ''}
+    </span></div>`;
+}
+
+let qpBusy = false;
+async function qpPost(data) {
+  let r;
+  try { r = await apiFetch('POST', 'api/quests.php?progress=1', { data }); } catch (e) { r = { ok: false, error: String(e) }; }
+  const err = !r.ok || (r.data && r.data.error) ? ((r.data && r.data.error) || r.error || 'Could not save your progress') : '';
+  return { r, err: /401|sign in/i.test(err) ? 'Sign in to swgtracker.com in Settings to track quests.' : err };
+}
+// repaint the bits progress touches (step ticks + the strip) without rebuilding the page / map
+function qdRefreshProgress() {
+  const q = qdState.quest; if (!q) return;
+  document.querySelectorAll('#quest-body .qd-step[data-qstepi]').forEach((li) => {
+    const st = qdState.steps.find((x) => String(safeInt(x.i)) === li.dataset.qstepi);
+    const done = st ? qdStepDone(st) : false;
+    li.classList.toggle('qd-step-done', done);
+    const b = li.querySelector('.qd-stepchk');
+    if (b) { b.setAttribute('aria-checked', String(done)); b.title = done ? 'Done — click to untick' : 'Mark this step done'; }
+  });
+  const strip = $('#qd-prog');
+  if (strip) strip.outerHTML = qdProgressHtml(q, qdState.steps);
+  questsState.loaded = false;   // the list's badges + My quests counts reload next visit
+}
+async function qdToggleStep(btn) {
+  if (qpBusy || !qdState.quest) return;
+  const i = safeInt(btn.dataset.qstepchk);
+  const on = btn.getAttribute('aria-checked') !== 'true';
+  const was = qdState.quest.progress ? JSON.parse(JSON.stringify(qdState.quest.progress)) : null;
+  // optimistic: tick it now, put it back if the save fails
+  const p = qdState.quest.progress || { status: 'active', steps: [] };
+  p.steps = on ? [...new Set([...(p.steps || []), i])] : (p.steps || []).filter((x) => x !== i);
+  qdState.quest.progress = p; qdRefreshProgress();
+  qpBusy = true;
+  const { r, err } = await qpPost({ quest: qdState.quest.id, action: 'step', step: i, done: on });
+  qpBusy = false;
+  if (err) { qdState.quest.progress = was; qdRefreshProgress(); toast(err, false); return; }
+  const before = was && was.status;
+  qdState.quest.progress = (r.data || {}).progress || null;
+  qdRefreshProgress();
+  if (qdState.quest.progress && qdState.quest.progress.status === 'done' && before !== 'done') toast('Quest complete — nice work');
+}
+async function qdSetStatus(btn) {
+  if (qpBusy || !qdState.quest) return;
+  const st = btn.dataset.qprog;
+  if (st === 'none' && !confirmArm(btn, 'Click again to clear your progress')) return;
+  qpBusy = true; btn.disabled = true;
+  const { r, err } = await qpPost({ quest: qdState.quest.id, action: 'status', status: st });
+  qpBusy = false; btn.disabled = false;
+  if (err) { toast(err, false); return; }
+  qdState.quest.progress = (r.data || {}).progress || null;
+  qdRefreshProgress();
+  toast(st === 'done' ? 'Marked done' : st === 'none' ? 'Progress cleared' : 'Tracking it — find it under My quests');
+}
+function questCopyLeftWays() {
+  const lines = qdState.steps.filter((s) => s.wp && !qdStepDone(s)).map((s) => questWayCmd(s.wp)).filter(Boolean);
+  const uniq = [...new Set(lines)];
+  if (!uniq.length) { toast('No waypoints left on this quest', false); return; }
+  copyTextToClipboard(uniq.join('\n'), `Copied ${uniq.length} remaining waypoint${uniq.length === 1 ? '' : 's'}`);
+}
+function initQuestProgress() {
+  $('#quests-mine').addEventListener('change', () => { questsState.mine = $('#quests-mine').value; questsQueryChanged(); });
+  $('#page-quest').addEventListener('click', (e) => {
+    const chk = e.target.closest('[data-qstepchk]');
+    if (chk) { e.stopPropagation(); qdToggleStep(chk); return; }
+    const pr = e.target.closest('[data-qprog]');
+    if (pr && !pr.disabled) { qdSetStatus(pr); return; }
+    if (e.target.closest('[data-qcopyleft]')) questCopyLeftWays();
+  });
+}
+
+// =================================================================================
 // Planet Maps: an optional "Quests" layer (pmCreateMap calls this when the hook exists)
 // =================================================================================
 const questLayerCache = {};
+// a quest page's Planet Map button sets this: the layer switches on and that quest's pins stand out
+let questPmFocus = '';
+let questLayerLive = null;   // the Planet Maps layer, once its map exists — the button redraws it
 function questLayerAttach(L, map, getPlanet) {
   const layer = L.layerGroup();
-  let on = false; let seq = 0;
+  let on = false; let seq = 0; let toggleEl = null; let focus = '';
   async function draw() {
+    if (questPmFocus) {
+      focus = questPmFocus; questPmFocus = '';
+      if (!on) { on = true; layer.addTo(map); if (toggleEl) toggleEl.querySelector('b').textContent = 'on'; }
+    }
     layer.clearLayers();
     if (!on || questsGated()) return;
     const raw = QUEST_PM_RAW[getPlanet()];
@@ -713,12 +844,15 @@ function questLayerAttach(L, map, getPlanet) {
     // one marker per spot; a spot shared by many quests lists them all
     const spots = new Map();
     pts.forEach((p) => { const k = `${safeInt(p.x)},${safeInt(p.z)}`; if (!spots.has(k)) spots.set(k, []); spots.get(k).push(p); });
+    const focusLL = [];
     spots.forEach((list) => {
       const p0 = list[0];
+      const isFocus = !!focus && list.some((p) => p.quest === focus);
+      if (isFocus) focusLL.push(pmToLatLng(safeInt(p0.x), safeInt(p0.z)));
       const way = `/way ${raw} ${safeInt(p0.x)} 0 ${safeInt(p0.z)} ${p0.name || ''}`.trim();
       const shown = list.slice(0, 8);
-      const icon = L.divIcon({ className: 'qd-qpin', html: `<i class="fa-solid fa-book-journal-whills"></i>${list.length > 1 ? `<span>${list.length}</span>` : ''}`, iconSize: [18, 18], iconAnchor: [9, 9], popupAnchor: [0, -8] });
-      L.marker(pmToLatLng(safeInt(p0.x), safeInt(p0.z)), { icon, title: p0.name || p0.title || '' })
+      const icon = L.divIcon({ className: `qd-qpin${isFocus ? ' is-focus' : ''}`, html: `<i class="fa-solid fa-book-journal-whills"></i>${list.length > 1 ? `<span>${list.length}</span>` : ''}`, iconSize: [18, 18], iconAnchor: [9, 9], popupAnchor: [0, -8] });
+      L.marker(pmToLatLng(safeInt(p0.x), safeInt(p0.z)), { icon, title: p0.name || p0.title || '', zIndexOffset: isFocus ? 1000 : 0 })
         .bindPopup(`<div class="pm-popup qd-popup">
           <div class="qd-pop-wp"><b>${escapeHtml(p0.name || 'Quest waypoint')}</b> &middot; ${safeInt(p0.x)}, ${safeInt(p0.z)}</div>
           ${shown.map((p) => `<div><a role="button" class="qd-poplink" data-questopen="${escapeHtml(p.quest)}">${escapeHtml(p.title || questTidyId(p.quest))}</a>
@@ -727,16 +861,19 @@ function questLayerAttach(L, map, getPlanet) {
           <a role="button" class="pm-copy qd-popcopy" data-pmcopy="${escapeHtml(way)}" title="${escapeHtml(way)}"><i class="fa-regular fa-clone"></i> Copy /way</a></div>`, { autoPan: false, maxWidth: 320 })
         .addTo(layer);
     });
+    if (focusLL.length) map.fitBounds(L.latLngBounds(focusLL).pad(0.6), { maxZoom: 1 });
   }
   const Ctl = L.Control.extend({
     options: { position: 'topright' },
     onAdd() {
       const div = L.DomUtil.create('div', 'leaflet-bar pm-toggle qd-pm-toggle');
       div.innerHTML = '<a role="button" title="Show where quest steps send you on this planet">Quests: <b>off</b></a>';
+      toggleEl = div;
       L.DomEvent.disableClickPropagation(div);
       L.DomEvent.on(div, 'click', (e) => {
         L.DomEvent.preventDefault(e);
         on = !on; div.querySelector('b').textContent = on ? 'on' : 'off';
+        if (!on) focus = '';
         if (on) layer.addTo(map); else map.removeLayer(layer);
         draw();
       });
@@ -744,7 +881,9 @@ function questLayerAttach(L, map, getPlanet) {
     },
   });
   map.addControl(new Ctl());
-  return { planetChanged: draw };
+  questLayerLive = { planetChanged: draw };
+  if (questPmFocus) draw();   // the map was just built for a quest's Planet Map button
+  return questLayerLive;
 }
 
 // =================================================================================
@@ -1063,6 +1202,7 @@ function questsQueryChanged() { questsState.page = 1; fetchQuests(); }
 
 function initQuests() {
   initQuestCommunity();
+  initQuestProgress();
   // planets for the filter, in the order players think of them
   $('#quests-planet').innerHTML = '<option value="">All planets</option>'
     + Object.keys(QUEST_PLANETS).map((raw) => `<option value="${raw}">${escapeHtml(questPlanetLabel(raw))}</option>`).join('');
@@ -1466,7 +1606,13 @@ function initQuestCommunity() {
     if (e.target.closest('[data-qcedit]')) { qcOpenDialog('edit'); return; }
     if (e.target.closest('[data-qcopyall]')) { questCopyAllWays(); return; }
     const pm = e.target.closest('[data-qpm]');
-    if (pm && typeof openPlanetMap === 'function') { openPlanetMap(pm.dataset.qpm); return; }
+    if (pm && typeof openPlanetMap === 'function') {
+      questPmFocus = (qdState.quest && qdState.quest.id) || '';
+      openPlanetMap(pm.dataset.qpm);
+      // same planet as last time → Planet Maps only refreshes, so draw the layer ourselves
+      setTimeout(() => { if (questPmFocus && questLayerLive) questLayerLive.planetChanged(); }, 60);
+      return;
+    }
     const a = e.target.closest('[data-qcact]');
     if (a && !a.disabled) qcAct(a);
   });

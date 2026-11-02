@@ -4894,3 +4894,60 @@ tr.top-new td.col-name { color: var(--text-hover); }
 .nav-pill.nav-flag.nav-flag-out { opacity: 0; transform: scale(.85); }
 .app-sidebar.collapsed .nav-item .nav-pill.nav-flag { font-size: 0; min-width: 0; width: 7px; height: 7px; padding: 0; top: 5px; right: 12px; border-radius: 50%; }
 .app-sidebar.collapsed .nav-item .nav-pill.nav-flag-upd { background: var(--text-muted); }
+
+/* ---- Release notes (About · What's new): grouped by "Page:" prefix ---- */
+.about-history .about-note-cell { white-space: normal; min-width: 280px; }
+.rn-list { display: flex; flex-direction: column; gap: 8px; font-size: 13px; line-height: 1.5; }
+.rn-head { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); margin-bottom: 2px; }
+.rn-group ul { margin: 0; padding-left: 18px; }
+.rn-group li { margin: 2px 0; color: var(--text-primary); }
+.rn-group li.rn-more { list-style: none; margin-left: -18px; color: var(--text-muted); font-style: italic; }
+.rn-fold > summary { cursor: pointer; color: var(--text-muted); list-style: none; }
+.rn-fold > summary::before { content: '\25B8'; display: inline-block; width: 1em; transition: transform .15s; }
+.rn-fold[open] > summary::before { transform: rotate(90deg); }
+.rn-fold[open] > summary { margin-bottom: 6px; }
+.rn-fold > summary:hover { color: var(--text-hover); }
+
+
+/* ── My Components: craft planner ───────────────────────────────────────────── */
+.cmp-plan-card { max-width: 680px; }
+.cmp-plan-top { display: flex; gap: 8px; align-items: center; margin-bottom: 4px; }
+.cmp-plan-top select { flex: 0 1 200px; min-width: 0; }
+.cmp-plan-top input { flex: 1 1 auto; min-width: 0; }
+.cmp-plan-targets { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+.cmp-plan-target { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px; }
+.cmp-plan-tname { flex: 0 1 auto; min-width: 0; font-weight: 600; font-size: 13px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cmp-plan-target .cmp-planet { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cmp-plan-target .spinner { margin-right: auto; }
+.cmp-plan-target:not(:has(.cmp-planet, .spinner)) .cmp-plan-tname { margin-right: auto; }
+.cmp-plan-err { color: var(--accent); }
+.cmp-plan-qty { flex: 0 0 78px; width: 78px; padding: 2px 6px; }
+.cmp-plan-target .btn-icon { flex: none; width: 28px; height: 28px; }
+.cmp-plan-subhead { display: flex; justify-content: space-between; align-items: baseline; margin: 14px 0 6px;
+  font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); }
+.cmp-plan-parts { display: flex; flex-direction: column; gap: 6px; max-height: 40vh; overflow-y: auto; }
+.cmp-plan-part { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; }
+.cmp-plan-part.is-short { border-left: 3px solid var(--q-accept); }
+.cmp-plan-part.is-ok { border-left: 3px solid var(--q-fair); opacity: .8; }
+.cmp-plan-pmain { flex: 1 1 auto; min-width: 0; }
+.cmp-plan-pname { font-weight: 600; font-size: 13px; }
+.cmp-plan-for { font-size: 11px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cmp-plan-nums { flex: none; display: flex; gap: 10px; font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+.cmp-plan-nums b { color: var(--text-primary); font-weight: 600; }
+.cmp-plan-short { min-width: 74px; text-align: right; }
+.is-short .cmp-plan-short, .is-short .cmp-plan-short b { color: var(--q-accept); }
+.is-ok .cmp-plan-short { color: var(--q-fair); }
+.cmp-plan-acts { flex: none; display: flex; align-items: center; gap: 6px; }
+.cmp-plan-acts .btn-icon { width: 28px; height: 28px; }
+.cmp-plan-makesel { width: 130px; font-size: 12px; padding: 2px 24px 2px 6px; }
+.cmp-plan-copy { margin-right: auto; }
+@media (max-width: 720px) {
+  .cmp-plan-part { flex-wrap: wrap; }
+  .cmp-plan-pmain { flex-basis: 100%; }
+  .cmp-plan-nums { flex: 1 1 auto; }
+}
+
+/* ---- Settings → Sales Alerts (js/insight-alerts.js) ---- */
+#set-insa .form-check { margin-bottom: 6px; }
+#set-insa .set-insa-days { display: inline-block; width: 64px; padding: 1px 22px 1px 8px; margin: 0 4px; vertical-align: baseline; }
+#set-insa-off { margin-bottom: 8px; }

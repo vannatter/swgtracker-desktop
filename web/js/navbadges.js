@@ -9,9 +9,10 @@
 // like any other pill. Seen state is per device (localStorage) — losing it only means
 // seeing a flag twice.
 const PAGE_BADGES = {
-  components: { tag: 'new', since: '2026-11-01' },
+  components: { tag: 'new', since: '2026-11-02' },
   ideas: { tag: 'new', since: '2026-11-01' },
-  quests: { tag: 'new', since: '2026-11-01' },
+  quests: { tag: 'new', since: '2026-11-02' },
+  settings: { tag: 'updated', since: '2026-11-02' },
   insights: { tag: 'updated', since: '2026-11-01' },
   inventory: { tag: 'updated', since: '2026-11-01' },
   sales: { tag: 'updated', since: '2026-11-01' },

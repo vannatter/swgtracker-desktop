@@ -5042,3 +5042,12 @@ body:not(.power-tools) .power-only { display: none !important; }
 .isd-res { white-space: nowrap; color: var(--text-muted); }
 .isd-res-planet_added, .isd-res-added { color: var(--success, #4caf7a); }
 .isd-res-pending { color: var(--warning, #e0a040); }
+
+/* ---- Ideas: Shipped this week — folded under the active list (default view) ---- */
+.ideas-shipped { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+.ideas-shipped-head { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 2px; background: none; border: 0;
+  color: var(--text-muted); font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; text-align: left; cursor: pointer; }
+.ideas-shipped-head:hover { color: var(--text-hover); }
+.ideas-shipped-head .fa-solid { width: 12px; font-size: 11px; }
+.ideas-shipped-n { min-width: 20px; padding: 0 6px; border-radius: 10px; background: var(--bg-secondary); color: var(--text-primary); font-size: 11px; text-align: center; }
+

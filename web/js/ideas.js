@@ -7,7 +7,7 @@
 const IDEA_STATUS_LABELS = { open: 'Open', planned: 'Planned', progress: 'In progress', shipped: 'Shipped', declined: 'Declined' };
 const IDEA_CATEGORIES = ['Crafting', 'Resources', 'Sales & Inventory', 'Beasts', 'Galaxy', 'App', 'Website', 'Other'];
 
-const ideaState = { ideas: [], me: { signed_in: false, admin: false }, editId: null, expanded: new Set(), loading: false,
+const ideaState = { ideas: [], main: [], shipped: [], shippedOpen: false, me: { signed_in: false, admin: false }, editId: null, expanded: new Set(), loading: false,
                     threadOpen: new Set(),   // idea ids with their comment thread showing
                     threads: new Map() };    // idea id -> { loading, comments, draft } — drafts survive repaints
 
@@ -126,17 +126,23 @@ function ideaCardHtml(it) {
 function renderIdeas() {
   const list = $('#ideas-list');
   const empty = $('#ideas-empty');
-  if (!ideaState.ideas.length) {
-    list.innerHTML = '';
-    const filtered = $('#ideas-status').value || $('#ideas-category').value || $('#ideas-search').value.trim();
-    empty.textContent = filtered ? 'No ideas match these filters.' : 'No ideas yet — be the first to post one.';
+  // default view: what's still to come; ideas shipped this past week sit folded underneath
+  const st = ideaState;
+  const shipped = st.shipped.length ? `<div class="ideas-shipped${st.shippedOpen ? ' open' : ''}">
+      <button type="button" class="ideas-shipped-head" data-ishipped aria-expanded="${st.shippedOpen}">
+        <i class="fa-solid fa-chevron-${st.shippedOpen ? 'down' : 'right'}"></i> Shipped this week <span class="ideas-shipped-n">${fmtNum(st.shipped.length)}</span></button>
+      ${st.shippedOpen ? st.shipped.map(ideaCardHtml).join('') : ''}
+    </div>` : '';
+  if (!st.main.length) {
+    const filtered = $('#ideas-status').value !== 'active' || $('#ideas-category').value || $('#ideas-search').value.trim();
+    empty.textContent = filtered ? 'No ideas match these filters.' : (st.shipped.length ? 'Nothing open right now — everything here has shipped. Post the next one!' : 'No ideas yet — be the first to post one.');
     empty.hidden = false;
   } else {
     empty.hidden = true;
-    list.innerHTML = ideaState.ideas.map(ideaCardHtml).join('');
   }
-  $('#ideas-status-line').textContent = ideaState.ideas.length
-    ? `${fmtNum(ideaState.ideas.length)} idea${ideaState.ideas.length === 1 ? '' : 's'}` : '';
+  list.innerHTML = st.main.map(ideaCardHtml).join('') + shipped;
+  $('#ideas-status-line').textContent = st.main.length
+    ? `${fmtNum(st.main.length)} idea${st.main.length === 1 ? '' : 's'}` : '';
 }
 
 async function loadIdeas() {
@@ -158,7 +164,9 @@ async function loadIdeas() {
     $('#ideas-empty').hidden = false;
     return;
   }
-  ideaState.ideas = res.data.ideas || [];
+  ideaState.main = res.data.ideas || [];
+  ideaState.shipped = res.data.recent_shipped || [];
+  ideaState.ideas = ideaState.main.concat(ideaState.shipped);   // lookups (votes, comments, admin) span both
   ideaState.me = res.data.me || { signed_in: false, admin: false };
   $('#ideas-mine-wrap').hidden = !ideaState.me.signed_in;
   renderIdeas();
@@ -245,6 +253,7 @@ function initIdeas() {
   $('#ideas-new').addEventListener('click', () => ideaOpenDialog());
 
   $('#ideas-list').addEventListener('click', async (e) => {
+    if (e.target.closest('[data-ishipped]')) { ideaState.shippedOpen = !ideaState.shippedOpen; renderIdeas(); return; }
     const b = e.target.closest('[data-ivote],[data-imore],[data-iedit],[data-idel],[data-ipin],[data-icmt],[data-icmtpost],[data-icmtdel]');
     if (!b) return;
     const it = (id) => ideaState.ideas.find((i) => String(i.id) === id);

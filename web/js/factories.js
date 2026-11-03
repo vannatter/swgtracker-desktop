@@ -120,6 +120,7 @@ function facCardHtml(f, embed = false) {
           <input class="form-control filter-input" data-facfield="quantity" value="${f.quantity || ''}"
                  inputmode="numeric" ${f.started_at ? 'disabled' : ''}></label>
       </div>
+      ${typeof facReadyCardHtml === 'function' ? facReadyCardHtml(f) : ''}
       ${open ? `<div class="fac-grid fac-meta">
         <label class="fac-field"><span class="fac-label">Group</span>
           <select class="form-select filter-select" data-facfield="group_id">
@@ -335,6 +336,7 @@ function renderFactories() {
   facUpdateViewToggle();
   facCacheForNotify();
   facSyncSel();
+  if (typeof facReadyPaint === 'function') facReadyPaint();   // Advanced tools: parts ready? (factories-ready.js)
 
   // spotlight the card "Manufacture" just filled, once, then let it fade
   if (facState.flashId) {
@@ -438,6 +440,7 @@ async function facClone(f) {
     name: facCloneName(f.name),
     owner: f.owner || '',
     product: f.product || '',
+    schematic_id: f.schematic_id || '',
     time_value: f.time_value || null,
     time_unit: f.time_unit || 's',
     quantity: f.quantity || null,
@@ -453,6 +456,14 @@ async function facClone(f) {
     toast(`Duplicated — ${facCloneName(f.name)} is ready to start`);
     loadFactories();
   }
+}
+
+async function facStartRun(f) {
+  clearTimeout(facState.saveTimers[f.id]);
+  await facPost({ action: 'save', factory: f });   // capture any unsaved edits
+  const res = await facPost({ action: 'start', id: f.id });
+  if (res.ok) loadFactories();
+  return res;
 }
 
 async function facPost(body) {
@@ -501,6 +512,7 @@ function facNotifySweep() {
 
 function initFactories() {
   setInterval(facNotifySweep, 30000); // app-wide: fires even off-page
+  if (typeof initFacReady === 'function') initFacReady();   // Advanced tools readiness (factories-ready.js)
 
   // press tracking for the deferred-render guard in renderFactories(). The
   // flush runs a tick later so the click dispatches against the OLD dom first;
@@ -606,10 +618,12 @@ function initFactories() {
       : field === 'time_value' ? (parseFloat(e.target.value) || 0)
       : field === 'group_id' ? (e.target.value ? Number(e.target.value) : null)
       : e.target.value;
+    if (field === 'product') f.schematic_id = '';   // a new product = match its schematic afresh
     facSaveSoon(f);
     // change (not input) = a committed edit, so a re-render never fights typing
     if (['time_value', 'time_unit', 'quantity', 'group_id', 'owner', 'tags', 'planet'].includes(field)) renderFactories();
     if (field === 'notify_desktop') facCacheForNotify();
+    if (field === 'product' && typeof facReadyPaint === 'function') facReadyPaint();
   });
 
   $('#fac-list').addEventListener('mousedown', (e) => {
@@ -727,7 +741,7 @@ function initFactories() {
       const card = pick.closest('[data-facid]');
       const f = card && facState.items.find((x) => String(x.id) === card.dataset.facid);
       if (h && f) {
-        Object.assign(f, { product: h.product, time_value: h.time_value, time_unit: h.time_unit, quantity: h.quantity });
+        Object.assign(f, { product: h.product, time_value: h.time_value, time_unit: h.time_unit, quantity: h.quantity, schematic_id: '' });
         facState.histOpen = null;
         facPost({ action: 'save', factory: f }).then(() => renderFactories());
       }
@@ -764,10 +778,10 @@ function initFactories() {
         toast('Set the per-unit time and quantity first', false);
         return;
       }
-      clearTimeout(facState.saveTimers[f.id]);
-      await facPost({ action: 'save', factory: f });   // capture any unsaved edits
-      const res = await facPost({ action: 'start', id: f.id });
-      if (res.ok) loadFactories();
+      // Advanced tools: a run whose schematic takes parts opens the readiness check first
+      // — it starts the run itself (factories-ready.js)
+      if (typeof facReadyGate === 'function' && await facReadyGate(f)) return;
+      await facStartRun(f);
       return;
     }
     const clone = e.target.closest('[data-facclone]');

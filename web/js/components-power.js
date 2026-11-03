@@ -8,7 +8,9 @@
        api/components.php for everyone so it's there the day you turn this on
      - box check: what should be in a location → count → correct what's off
      - where it is: "1,000 — 800 in Box X (run #12, q92) · 200 in Hopper" on the
-       schematic page tags, the planner and Log a craft */
+       schematic page tags, the planner and Log a craft
+     - slot links that take several items or a words-in-order pattern, the draw order
+       Log a craft fills from (components.js), and Factories readiness (factories-ready.js) */
 
 const cmpRun = (id) => (cmpState.runs || []).find((r) => safeInt(r.id) === safeInt(id)) || null;
 
@@ -20,18 +22,22 @@ function cmpRunLabel(r) {
   return `run #${safeInt(run.run_no)}${q}`;
 }
 
-// where a set of stacks sits: "800 in Box X (run #12, q92) · 200 in Hopper: Pelgo 1"
+// where a set of stacks sits: "800 in Box X (run #12, q92) · 200 in Hopper: Pelgo 1" — with the
+// item named when several fill it: "2,000 — 1,000 XX1 in Box X · 1,000 XX2 in Hopper"
 function cmpWhere(rows) {
   const parts = new Map();
-  rows.filter((r) => safeInt(r.units) > 0).forEach((r) => {
+  rows = rows.filter((r) => safeInt(r.units) > 0);
+  const several = new Set(rows.map((r) => String(r.item_name).toLowerCase())).size > 1;
+  rows.forEach((r) => {
     const label = cmpRunLabel(r);
-    const k = `${safeInt(r.location_id)}|${label}`;
-    const e = parts.get(k) || { units: 0, loc: cmpLocName(r.location_id), label };
+    const k = `${several ? String(r.item_name).toLowerCase() : ''}|${safeInt(r.location_id)}|${label}`;
+    const e = parts.get(k) || { units: 0, loc: cmpLocName(r.location_id), label, item: several ? r.item_name : '' };
     e.units += safeInt(r.units);
     parts.set(k, e);
   });
-  return [...parts.values()].sort((a, b) => b.units - a.units)
-    .map((e) => `${fmtNum(e.units)} in ${e.loc}${e.label ? ` (${e.label})` : ''}`).join(' · ');
+  const out = [...parts.values()].sort((a, b) => b.units - a.units)
+    .map((e) => `${fmtNum(e.units)}${e.item ? ` ${e.item}` : ''} in ${e.loc}${e.label ? ` (${e.label})` : ''}`).join(' · ');
+  return several ? `${fmtNum(rows.reduce((t, r) => t + safeInt(r.units), 0))} — ${out}` : out;
 }
 
 // -- the stack's run badge + history button (cmpRowHtml asks for these) --------

@@ -45,8 +45,8 @@ function cmpPlanRollup() {
     if (!e || !safeInt(t.qty)) return;
     e.comps.forEach((c) => {
       if (c.optional === 'yes') return;
-      const pick = cmpLink(c.id);
-      const key = pick ? `L:${pick.toLowerCase()}` : `${c.type === 'schematic' ? 'S' : 'C'}:${c.id}`;
+      const link = cmpLinkOf(c.id), pick = cmpLinkLabel(link);
+      const key = link ? cmpLinkKey(link) : `${c.type === 'schematic' ? 'S' : 'C'}:${c.id}`;
       let n = needs.get(key);
       if (!n) {
         const part = c.type === 'schematic' ? cmpSlotNames.get(String(c.id)) : '';
@@ -58,16 +58,10 @@ function cmpPlanRollup() {
       n.for.add(e.name || t.name);
     });
   });
-  const left = new Map(cmpState.rows.map((r) => [safeInt(r.id), safeInt(r.units)]));
+  const left = cmpLeft();
   const out = [...needs.values()].sort((a, b) => a.label.localeCompare(b.label));
   out.forEach((n) => {
-    let want = n.need;
-    n.have = 0;
-    n.rows.forEach((r) => {
-      const id = safeInt(r.id), take = Math.min(want, left.get(id) || 0);
-      left.set(id, (left.get(id) || 0) - take);
-      n.have += take; want -= take;
-    });
+    cmpGive(n, n.need, left);   // in the draw order, each stack once (components.js)
     n.making = cmpPlan.targets.filter((t) => n.makers.some((m) => m.id === String(t.sid))).reduce((s, t) => s + safeInt(t.qty), 0);
     n.short = Math.max(0, n.need - n.have - n.making);
   });
@@ -161,7 +155,7 @@ function cmpPlanRender() {
       <div class="cmp-plan-pmain">
         <div class="cmp-plan-pname">${escapeHtml(n.label)}${n.role && n.role !== n.label ? ` <span class="cmp-planet">${escapeHtml(n.role)}</span>` : ''}</div>
         <div class="cmp-plan-for">for ${escapeHtml([...n.for].join(', '))}</div>
-        ${powerTools() && n.have ? `<div class="cmp-plan-for cmp-where" title="Where yours are (Advanced tools)"><i class="fa-solid fa-location-dot"></i> ${escapeHtml(cmpWhere(n.rows))}</div>` : ''}
+        ${powerTools() && n.have ? `<div class="cmp-plan-for cmp-where" title="Where yours are (Advanced tools)"><i class="fa-solid fa-location-dot"></i> ${escapeHtml(cmpWhere(cmpTakenRows(n)))}</div>` : ''}
       </div>
       <div class="cmp-plan-nums">
         <span title="Needed across the plan">need <b>${fmtNum(n.need)}</b></span>

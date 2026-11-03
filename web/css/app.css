@@ -1104,9 +1104,10 @@ td.lab-dim { opacity: .45; }
   position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(10px);
   background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 6px;
   padding: 8px 16px; font-size: 13px; color: var(--text-hover);
-  /* above EVERYTHING — modals (z ~500-700), floating windows, lightboxes:
-     a validation toast must never hide behind the dialog that triggered it */
-  opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; z-index: 1000;
+  /* above EVERYTHING — dialogs (.key-gate 5000, the confirm 5100), floating windows,
+     lightboxes: a validation toast must never hide behind the dialog that triggered it
+     (Danvar: errors from Add to My Inventory were unreadable behind the modal) */
+  opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; z-index: 6000;
 }
 .toast-msg.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 .toast-msg.ok { border-left: 3px solid var(--accent-green); }
@@ -5051,3 +5052,39 @@ body:not(.power-tools) .power-only { display: none !important; }
 .ideas-shipped-head .fa-solid { width: 12px; font-size: 11px; }
 .ideas-shipped-n { min-width: 20px; padding: 0 6px; border-radius: 10px; background: var(--bg-secondary); color: var(--text-primary); font-size: 11px; text-align: center; }
 
+/* ---- My Components / Factories — Advanced tools: multi-item slot links, draw order, run readiness
+   (components.js link dialog + Log a craft, factories-ready.js). Everything here sits behind
+   .power-only or only renders for power users, so the switch-off pages are unchanged. */
+.cmp-craft-qtyrow { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; }
+.cmp-craft-qtyrow > div { min-width: 0; }
+.cmp-craft-qtyrow select { width: 170px; font-size: 12px; }
+.cmp-craft-linkbtn { display: inline-flex; align-items: center; gap: 6px; min-width: 0; text-align: left; }
+.cmp-craft-linkbtn span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cmp-link-items { max-height: 220px; overflow-y: auto; margin: 6px 0 10px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; }
+.cmp-link-item { display: flex; align-items: center; gap: 8px; padding: 3px 0; font-size: 13px; cursor: pointer; }
+.cmp-link-item[hidden] { display: none; }
+.cmp-link-item span:first-of-type { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cmp-link-count { margin-top: 6px; }
+.fac-ready { display: flex; align-items: center; gap: 8px; margin: 8px 0 2px; font-size: 12px; color: var(--text-muted); min-width: 0; }
+.fac-ready a { color: inherit; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fac-ready a:hover { color: var(--text-hover); }
+.fac-ready.is-ok { color: var(--q-fair); }
+.fac-ready.is-short { color: var(--q-accept); }
+.fac-ready.is-drawn span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fac-ready .btn-sm { padding: 1px 8px; font-size: 11px; }
+.fac-ready-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 6px; }
+.fac-ready-head .cmp-craft-name { flex: 1; min-width: 0; margin: 0; }
+.fac-ready-order { display: flex; flex-direction: column; margin: 0 0 0 auto; }
+.fac-ready-order select { width: 170px; font-size: 12px; }
+.fac-ready-card .cmp-craft-slots, #fac-plan-list { display: flex; flex-direction: column; gap: 6px; max-height: 48vh; overflow-y: auto; }
+.fac-plan-row { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; }
+.fac-plan-row.is-short { border-left: 3px solid var(--q-accept); }
+.fac-plan-row.is-ok { border-left: 3px solid var(--q-fair); }
+.fac-plan-row .cmp-plan-pmain { flex: 1; min-width: 0; }
+.fac-plan-st { margin-left: 6px; font-size: 11px; font-weight: 600; }
+.fac-plan-st.is-ok { color: var(--q-fair); }
+.fac-plan-st.is-short { color: var(--q-accept); }
+.fac-plan-load { width: 150px; font-size: 12px; }
+.fac-ready-card .btn[hidden] { display: none; }
+#cmp-link-sel[hidden], #cmp-link-multi[hidden], #fac-plan-sel[hidden], #fac-ready-pickwrap[hidden], #fac-ready-schem[hidden] { display: none; }
+#cmp-link-multi .filter-input, #fac-ready-search, #fac-plan-sel { width: 100%; max-width: none; }

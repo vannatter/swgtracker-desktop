@@ -6,7 +6,7 @@
   <title>SWG Tracker Desktop</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.1/css/all.min.css">
-  <link rel="stylesheet" href="css/app.css?v=20261103sh">
+  <link rel="stylesheet" href="css/app.css?v=20261103fr">
   <link rel="stylesheet" href="css/share.css?v=20261022x">
   <link rel="stylesheet" href="css/quests.css?v=20261102qp">
 </head>
@@ -991,6 +991,7 @@
           <i class="fa-solid fa-circle-info info-tip"
              title="Track factory runs — yours or anyone's whose factory you're using. Start a run and the app tells you when it's ready to collect; email alerts are per factory."></i>
           <button id="fac-newgroup" class="btn btn-sm btn-outline-secondary head-right"><i class="fa-solid fa-folder-plus"></i> New Group</button>
+          <button id="fac-ready-open" class="btn btn-sm btn-outline-secondary power-only" title="Which of your craft plan's targets you hold the parts for — and load one into an idle factory"><i class="fa-solid fa-clipboard-check"></i> Ready to run?</button>
           <button id="fac-add" class="btn btn-sm btn-accent"><i class="fa-solid fa-plus"></i> Add Factory</button>
           <button id="fac-viewtoggle" class="btn btn-icon" title="Switch to grid view"><i class="fa-solid fa-table-cells-large"></i></button>
           <button class="btn btn-icon" data-refresh="factories" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
@@ -2980,6 +2981,47 @@
     </div>
   </div>
 
+  <!-- Factories (Advanced tools): parts ready for a run? draw them on Start -->
+  <div id="fac-ready-modal" class="key-gate" hidden>
+    <div class="key-gate-card sp-card inv-add-card cmp-craft-card fac-ready-card">
+      <h2 id="fac-ready-title">Ready to run?</h2>
+      <div id="fac-ready-pickwrap" hidden>
+        <label class="sp-field-label">Schematic</label>
+        <div class="inv-vendor-wrap">
+          <input id="fac-ready-search" type="text" class="form-control filter-input settings-input-wide" placeholder="Search schematics…" autocomplete="off" spellcheck="false">
+          <div id="fac-ready-sug" class="inv-vendor-sug" hidden></div>
+        </div>
+      </div>
+      <div class="fac-ready-head">
+        <div id="fac-ready-schem" class="cmp-craft-name" hidden></div>
+        <label class="fac-ready-order"><span class="sp-field-label">Draw from</span>
+          <select id="fac-ready-order" class="form-select filter-select" title="Which stacks a run uses first — remembered">
+            <option value="big">Biggest first</option><option value="fifo">Oldest run first</option><option value="quality">Best quality first</option>
+          </select></label>
+      </div>
+      <div id="fac-ready-slots" class="cmp-craft-slots"></div>
+      <div id="fac-ready-hint" class="settings-hint cmp-move-hint"></div>
+      <div class="inv-add-actions">
+        <button id="fac-ready-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
+        <button id="fac-ready-start" class="btn btn-sm btn-outline-secondary" title="Start the run and leave your components as they are">Start without drawing</button>
+        <button id="fac-ready-draw" class="btn btn-sm btn-accent" title="Take these parts out of My Components for the run, then start it"><i class="fa-solid fa-play"></i> Draw parts &amp; start</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Factories (Advanced tools): a craft plan's targets — which can you run now? -->
+  <div id="fac-plan-modal" class="key-gate" hidden>
+    <div class="key-gate-card sp-card inv-add-card cmp-craft-card">
+      <h2>Ready to run?</h2>
+      <select id="fac-plan-sel" class="form-select filter-select settings-input-wide" title="Which craft plan"></select>
+      <div class="settings-hint cmp-move-hint">Each target checked on its own against what you hold.</div>
+      <div id="fac-plan-list" class="cmp-craft-slots"></div>
+      <div class="inv-add-actions">
+        <button id="fac-plan-done" class="btn btn-sm btn-outline-secondary">Done</button>
+      </div>
+    </div>
+  </div>
+
   <div id="cmp-craft-modal" class="key-gate" hidden>
     <div class="key-gate-card sp-card inv-add-card cmp-craft-card">
       <h2>Log a craft</h2>
@@ -2991,8 +3033,14 @@
         </div>
       </div>
       <div id="cmp-craft-name" class="cmp-craft-name" hidden></div>
-      <label class="sp-field-label">How many crafted</label>
-      <input id="cmp-craft-qty" type="number" class="form-control filter-input cmp-craft-qty" min="1" value="1">
+      <div class="cmp-craft-qtyrow">
+        <div><label class="sp-field-label">How many crafted</label>
+          <input id="cmp-craft-qty" type="number" class="form-control filter-input cmp-craft-qty" min="1" value="1"></div>
+        <div class="power-only"><label class="sp-field-label" for="cmp-craft-order">Draw from</label>
+          <select id="cmp-craft-order" class="form-select filter-select" title="Which stacks a craft uses first — remembered">
+            <option value="big">Biggest first</option><option value="fifo">Oldest run first</option><option value="quality">Best quality first</option>
+          </select></div>
+      </div>
       <div id="cmp-craft-slots" class="cmp-craft-slots"></div>
       <div id="cmp-craft-hint" class="settings-hint cmp-move-hint"></div>
       <div class="inv-add-actions">
@@ -3007,6 +3055,15 @@
     <div class="key-gate-card sp-card inv-add-card">
       <h2 id="cmp-link-title">Which item fills this slot?</h2>
       <select id="cmp-link-sel" class="form-select filter-select settings-input-wide"></select>
+      <!-- Advanced tools: several items and/or a words-in-order pattern -->
+      <div id="cmp-link-multi" hidden>
+        <div id="cmp-link-auto" class="settings-hint"></div>
+        <input id="cmp-link-filter" type="text" class="form-control filter-input settings-input-wide" placeholder="Filter your items…" autocomplete="off" spellcheck="false">
+        <div id="cmp-link-items" class="cmp-link-items"></div>
+        <label class="sp-field-label" for="cmp-link-pattern">Or every name with these words, in order</label>
+        <input id="cmp-link-pattern" type="text" class="form-control filter-input settings-input-wide" placeholder="e.g. Fiberpanel" maxlength="255" autocomplete="off" spellcheck="false">
+        <div id="cmp-link-count" class="settings-hint cmp-link-count"></div>
+      </div>
       <div class="settings-hint cmp-move-hint">Remembered for every schematic that uses this slot.</div>
       <div class="inv-add-actions">
         <button id="cmp-link-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
@@ -3176,8 +3233,8 @@
           <input id="inv-new-stocked" type="number" class="form-control filter-input" value="10" min="0">
         </div>
         <div class="inv-add-field">
-          <label class="sp-field-label">Low-stock threshold <span class="settings-sub">0 = never warn</span></label>
-          <input id="inv-new-threshold" type="number" class="form-control filter-input" value="1" min="0">
+          <label class="sp-field-label">Low-stock threshold <span class="settings-sub">-1 = never warn</span></label>
+          <input id="inv-new-threshold" type="number" class="form-control filter-input" value="1" min="-1">
         </div>
       </div>
       <label class="sp-field-label">Group <span class="settings-sub">optional — the folder it files under in My Inventory</span></label>
@@ -4106,12 +4163,12 @@
   <script src="js/schematics.js?v=20261101p2"></script>
   <script src="js/stockpile.js?v=20261022es"></script>
   <script src="js/wishlist.js?v=20261022es"></script>
-  <script src="js/myschematics.js?v=20261022es"></script>
+  <script src="js/myschematics.js?v=20261103fr"></script>
   <script src="js/schemcalc.js?v=20261022es"></script>
   <script src="js/inventory.js?v=20261102pg"></script>
-  <script src="js/components.js?v=20261103ra"></script>
-  <script src="js/components-plan.js?v=20261103ra"></script>
-  <script src="js/components-power.js?v=20261103ra"></script>
+  <script src="js/components.js?v=20261103fr"></script>
+  <script src="js/components-plan.js?v=20261103fr"></script>
+  <script src="js/components-power.js?v=20261103fr"></script>
   <script src="js/invlog.js?v=20261031b"></script>
   <script src="js/sales.js?v=20261031b"></script>
   <script src="js/insights.js?v=20261101cmp"></script>
@@ -4121,7 +4178,8 @@
   <script src="js/insights-profit.js?v=20261101prof"></script>
   <script src="js/purchases.js?v=20261031b"></script>
   <script src="js/harvesters.js?v=20261027br"></script>
-  <script src="js/factories.js?v=20261101p2"></script>
+  <script src="js/factories.js?v=20261103fr"></script>
+  <script src="js/factories-ready.js?v=20261103fr"></script>
   <script src="js/customers.js?v=20261022es"></script>
   <script src="js/characters.js?v=20261022es"></script>
   <script src="js/settings.js?v=20261103ra"></script>

@@ -1758,7 +1758,7 @@ function initMySchematics() {
       return;
     }
     $('#mysd-fac-modal').hidden = true;
-    Object.assign(f, { product: mysdState.item.name || '',
+    Object.assign(f, { product: mysdState.item.name || '', schematic_id: String(mysdState.item.schematic_id || ''),
                        time_value, time_unit: $('#mysd-fac-unit').value, quantity });
     const saved = await facPost({ action: 'save', factory: f });
     if (!saved.ok) return;

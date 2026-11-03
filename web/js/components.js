@@ -22,6 +22,7 @@ const CMP_VIEW_KEY = 'cmp-view';
 
 const cmpState = {
   rows: [], locations: [], items: [], factories: [], links: [], runs: [], loaded: false,
+  drawOrder: 'big', factoryDraws: [],
   view: 'item',            // 'item' | 'location' — what the group rows are
   collapsed: new Set(),    // group keys folded shut
   editId: null,            // row open in the add/edit dialog (null = adding)
@@ -68,6 +69,8 @@ async function cmpFetch() {
   cmpState.factories = res.data.factories || [];
   cmpState.links = res.data.links || [];
   cmpState.runs = res.data.runs || [];   // the production runs current stacks came from (Advanced tools)
+  cmpState.drawOrder = res.data.draw_order || 'big';     // Advanced tools: the stack order Log a craft draws from
+  cmpState.factoryDraws = res.data.factory_draws || [];  // Advanced tools: parts drawn for factory runs
   // the switch rides along — keeps body.power-tools right even if Settings never loaded prefs
   if (res.data.power !== undefined && typeof applyPowerTools === 'function') { appPrefs.power_tools = safeInt(res.data.power); applyPowerTools(); }
   cmpState.loaded = true;
@@ -726,17 +729,89 @@ function cmpSlotParts(c) {
   (Array.isArray(c.categoryItems) ? c.categoryItems : []).forEach((ci) => out.push(ci.schematicName));
   return out.filter(Boolean);
 }
-// your pick for a slot (shared by every schematic using it), '' = match by name
-const cmpLink = (slotId) => (cmpState.links.find((l) => String(l.slot_id) === String(slotId)) || {}).item_name || '';
-// the stacks that fill a slot: the picked item, else whatever matches the part's names
-function cmpSlotRows(c, pick = cmpLink(c.id)) {
-  if (pick) return cmpState.rows.filter((r) => String(r.item_name).toLowerCase() === pick.toLowerCase());
+// your pick for a slot (shared by every schematic using it) → { items, pattern } or null = match
+// by name. Several items or a words pattern are Advanced tools; with the switch off a link is its
+// first item, exactly as before (older links come as items: [item_name])
+function cmpLinkOf(slotId) {
+  const l = cmpState.links.find((x) => String(x.slot_id) === String(slotId));
+  if (!l) return null;
+  const items = (Array.isArray(l.items) ? l.items : [l.item_name]).map(String).filter(Boolean);
+  const out = powerTools() ? { items, pattern: String(l.pattern || '') }
+    : { items: l.item_name ? [String(l.item_name)] : items.slice(0, 1), pattern: '' };
+  return out.items.length || out.pattern ? out : null;
+}
+// a pick as words: "XX1 + XX2 + “Fiberpanel”" ('' = match by name)
+const cmpLinkLabel = (l) => (l ? [...l.items, ...(l.pattern ? [`“${l.pattern}”`] : [])].join(' + ') : '');
+const cmpLinkKey = (l) => `L:${l.items.map((x) => x.toLowerCase()).sort().join('|')}~${l.pattern.toLowerCase()}`;
+const cmpLink = (slotId) => cmpLinkLabel(cmpLinkOf(slotId));
+// a pattern link's rule = the Inventory bucket one (includes/inventory_match.php): every word
+// of the pattern, whole, in order, in the item's name
+const cmpTokens = (s) => String(s || '').toLowerCase().trim().split(/\s+/)
+  .map((t) => t.replace(/^["'`()[\]{}<>,.;:!?]+|["'`()[\]{}<>,.;:!?]+$/g, '')).filter(Boolean);
+function cmpWordsInOrder(pattern, name) {
+  const need = cmpTokens(pattern);
+  if (!need.length) return false;
+  let i = 0;
+  return cmpTokens(name).some((t) => t === need[i] && ++i === need.length);
+}
+// the stacks that fill a slot: the picked items (a name string = the one item), else whatever
+// matches the part's names
+function cmpSlotRows(c, pick = cmpLinkOf(c.id)) {
+  if (typeof pick === 'string') pick = pick ? { items: [pick], pattern: '' } : null;
+  if (pick) {
+    const names = new Set(pick.items.map((x) => x.toLowerCase()));
+    return cmpState.rows.filter((r) => names.has(String(r.item_name).toLowerCase()) || cmpWordsInOrder(pick.pattern, r.item_name));
+  }
   const parts = cmpSlotParts(c);
   return cmpState.rows.filter((r) => parts.some((p) => cmpNameMatch(r.item_name, p)));
 }
 const cmpUnits = (rows) => rows.reduce((t, r) => t + safeInt(r.units), 0);
 const cmpItemNames = () => [...cmpTotals().values()].sort((a, b) => a.name.localeCompare(b.name));
 
+// -- which stacks a need draws from ----------------------------------------------
+// Draw order (Advanced tools, saved per user as the cmp_draw_order pref): biggest stack first
+// (the default, and always with the switch off), the oldest run first, or the best quality first.
+const CMP_DRAW_ORDERS = { big: 'Biggest first', fifo: 'Oldest run first', quality: 'Best quality first' };
+const cmpDrawOrder = () => (powerTools() && CMP_DRAW_ORDERS[cmpState.drawOrder] ? cmpState.drawOrder : 'big');
+function cmpRowQuality(r) {
+  const run = r.run_id && typeof cmpRun === 'function' ? cmpRun(r.run_id) : null;
+  const q = r.quality != null && r.quality !== '' ? r.quality : run && run.quality != null && run.quality !== '' ? run.quality : null;
+  return q == null ? -1 : Number(q);
+}
+function cmpRowAge(r) {   // the run's date when there is one, else the stack's id (ids rise as stacks are made)
+  const run = r.run_id && typeof cmpRun === 'function' ? cmpRun(r.run_id) : null;
+  return [run ? safeInt(run.created_at) : Infinity, safeInt(r.id)];
+}
+function cmpSortRows(rows, order = cmpDrawOrder()) {
+  const big = (a, b) => safeInt(b.units) - safeInt(a.units) || safeInt(a.id) - safeInt(b.id);
+  const cmp = order === 'quality' ? (a, b) => cmpRowQuality(b) - cmpRowQuality(a) || big(a, b)
+    : order === 'fifo' ? (a, b) => { const [ra, ia] = cmpRowAge(a), [rb, ib] = cmpRowAge(b); return (ra === rb ? 0 : ra < rb ? -1 : 1) || ia - ib; }
+      : big;
+  return rows.slice().sort(cmp);
+}
+async function cmpSetDrawOrder(order) {
+  if (!CMP_DRAW_ORDERS[order] || order === cmpState.drawOrder) return;
+  cmpState.drawOrder = order;
+  try { await apiFetch('PUT', 'api/prefs.php', { data: { ui: { cmp_draw_order: order } } }); } catch (_) { /* kept for this session */ }
+}
+// fill a need from its stacks in draw order, out of `left` (stack id → units not yet spoken for),
+// so a stack two slots could use is only counted once. a.takes: stack id → units, a.have: total
+function cmpGive(a, want, left, order = cmpDrawOrder()) {
+  a.takes = a.takes || new Map();
+  a.have = a.have || 0;
+  cmpSortRows(a.rows, order).forEach((r) => {
+    const id = safeInt(r.id), take = Math.min(want, left.get(id) || 0);
+    if (take <= 0) return;
+    left.set(id, left.get(id) - take);
+    a.takes.set(id, (a.takes.get(id) || 0) + take);
+    a.have += take; want -= take;
+  });
+  return a;
+}
+const cmpLeft = () => new Map(cmpState.rows.map((r) => [safeInt(r.id), safeInt(r.units)]));
+// the stacks behind an allocation, each at the units it gives
+const cmpTakenRows = (a) => cmpState.rows.filter((r) => (a.takes || new Map()).get(safeInt(r.id)))
+  .map((r) => ({ ...r, units: a.takes.get(safeInt(r.id)) }));
 // -- schematic page: what you hold per slot, and what N crafts would be short --
 
 const scdCmp = { n: 1 };
@@ -754,23 +829,37 @@ async function cmpSchematicHoldings(s) {
   if (!cmpState.rows.length) return;      // not using Components — the page stays as it was
   cmpPaintHoldings(s);
 }
+// each stack counts once across the slots (two slots taking the same part were both counting
+// it): required slots claim what N crafts need first, then optional ones, then what's left over
+// goes round the same way — so the tags add up to what you hold
+function cmpSchematicAlloc(s, n) {
+  const slots = (s.componentTypes || []).map((c, i) => ({ c, i, rows: cmpSlotRows(c), need: safeInt(c.number) * n }))
+    .filter((a) => safeInt(a.c.number) > 0);
+  const left = cmpLeft();
+  slots.filter((a) => a.c.optional !== 'yes').forEach((a) => cmpGive(a, a.need, left));
+  slots.filter((a) => a.c.optional === 'yes').forEach((a) => cmpGive(a, a.need, left));
+  slots.forEach((a) => cmpGive(a, Infinity, left));
+  return slots;
+}
 function cmpPaintHoldings(s) {
   const n = Math.max(1, scdCmp.n);
+  const alloc = new Map(cmpSchematicAlloc(s, n).map((a) => [a.i, a]));
   (s.componentTypes || []).forEach((c, i) => {
     const line = document.querySelector(`#scd-components [data-ci="${i}"]`);
     if (!line) return;
     line.querySelector('.scd-have')?.remove();
     line.querySelector('.scd-have-where')?.remove();
     if (safeInt(c.number) <= 0) return;
-    const have = cmpUnits(cmpSlotRows(c));
-    const need = safeInt(c.number) * n;
+    const a = alloc.get(i);
+    const have = a.have;
+    const need = a.need;
     const opt = c.optional === 'yes';
     const [cls, txt] = have >= need ? ['ok', `have ${fmtNum(have)}`]
       : opt ? ['muted', have ? `have ${fmtNum(have)}` : 'none held']
         : [have ? 'short' : 'none', `${have ? `have ${fmtNum(have)} · ` : ''}short ${fmtNum(need - have)}`];
     const linked = cmpLink(c.id);
-    // Advanced tools: where yours are, run by run
-    const where = powerTools() && have ? cmpWhere(cmpSlotRows(c)) : '';
+    // Advanced tools: where yours are, run by run, item by item when several fill it
+    const where = powerTools() && have ? cmpWhere(cmpTakenRows(a)) : '';
     line.insertAdjacentHTML('beforeend', ` <a role="button" class="scd-have ${cls}" data-cmplink="${i}"
       title="${linked ? `Counting your “${escapeHtml(linked)}”` : 'Matched by name from My Components'}${where ? ` — ${escapeHtml(where)}` : ''} — click to pick which item fills this slot">${txt}</a>`
       + (where ? `<span class="scd-have-where cmp-where">${escapeHtml(where)}</span>` : ''));
@@ -785,23 +874,63 @@ function openCmpLink(c, done) {
   cmpLinkCtx = { c, done };
   $('#cmp-link-title').textContent = `Which item fills “${cmpSlotLabel(c)}”?`;
   const auto = [...new Set(cmpSlotRows(c, '').map((r) => r.item_name))];
+  const multi = powerTools();
+  $('#cmp-link-sel').hidden = multi;
+  $('#cmp-link-multi').hidden = !multi;
+  if (multi) {
+    // Advanced tools: tick every item that fills it, and/or words every matching name has in order
+    const cur = cmpLinkOf(c.id) || { items: [], pattern: '' };
+    const on = new Set(cur.items.map((x) => x.toLowerCase()));
+    $('#cmp-link-auto').textContent = auto.length ? `Nothing ticked = match by name: ${auto.join(', ')}` : 'Nothing ticked = match by name (nothing matches yet)';
+    $('#cmp-link-items').innerHTML = cmpItemNames().map((t) => `<label class="cmp-link-item">
+        <input type="checkbox" value="${escapeHtml(t.name)}"${on.has(t.name.toLowerCase()) ? ' checked' : ''}>
+        <span>${escapeHtml(t.name)}</span> <span class="cmp-planet">${fmtNum(t.units)}</span></label>`).join('')
+      || '<div class="settings-hint">No components yet.</div>';
+    $('#cmp-link-pattern').value = cur.pattern;
+    $('#cmp-link-filter').value = '';
+    cmpLinkPreview();
+    $('#cmp-link-modal').hidden = false;
+    $('#cmp-link-filter').focus();
+    return;
+  }
   const cur = cmpLink(c.id).toLowerCase();
   $('#cmp-link-sel').innerHTML = `<option value="">Match by name${auto.length ? ` — ${escapeHtml(auto.join(', '))}` : ' — nothing matches yet'}</option>`
     + cmpItemNames().map((t) => `<option value="${escapeHtml(t.name)}"${t.name.toLowerCase() === cur ? ' selected' : ''}>${escapeHtml(t.name)} (${fmtNum(t.units)})</option>`).join('');
   $('#cmp-link-modal').hidden = false;
   $('#cmp-link-sel').focus();
 }
-async function cmpSaveLink(c, item_name) {
-  const res = await apiFetch('POST', 'api/components.php', { data: { action: 'link', slot_id: String(c.id), item_name } });
+// what the ticked items + pattern would count, live
+function cmpLinkPicked() {
+  return { items: [...document.querySelectorAll('#cmp-link-items input:checked')].map((x) => x.value),
+    pattern: $('#cmp-link-pattern').value.trim().replace(/\s+/g, ' ') };
+}
+function cmpLinkPreview() {
+  const { c } = cmpLinkCtx || {};
+  if (!c) return;
+  const p = cmpLinkPicked();
+  const rows = cmpSlotRows(c, p.items.length || p.pattern ? p : null);
+  const names = [...new Set(rows.map((r) => r.item_name))];
+  $('#cmp-link-count').textContent = rows.length
+    ? `Counts ${fmtNum(cmpUnits(rows))} across ${names.length === 1 ? names[0] : `${names.length} items: ${names.join(', ')}`}`
+    : 'Counts nothing you hold yet';
+}
+async function cmpSaveLink(c, item_name, pattern = null) {
+  // a list of items (+ pattern) is Advanced tools; a single name is the link older clients know
+  const multi = Array.isArray(item_name);
+  const data = multi ? { action: 'link', slot_id: String(c.id), items: item_name, pattern: pattern || '' }
+    : { action: 'link', slot_id: String(c.id), item_name };
+  const res = await apiFetch('POST', 'api/components.php', { data });
   if (!res.ok) return res;
   cmpState.links = cmpState.links.filter((l) => String(l.slot_id) !== String(c.id));
-  if (item_name) cmpState.links.push({ slot_id: String(c.id), item_name });
+  if (res.data && res.data.link) cmpState.links.push(res.data.link);
+  else if (!multi && item_name) cmpState.links.push({ slot_id: String(c.id), item_name, items: [item_name], pattern: '' });
   return res;
 }
 async function saveCmpLink() {
   const { c, done } = cmpLinkCtx || {};
   if (!c) return;
-  const res = await cmpSaveLink(c, $('#cmp-link-sel').value);
+  const p = cmpLinkPicked();
+  const res = powerTools() ? await cmpSaveLink(c, p.items, p.pattern) : await cmpSaveLink(c, $('#cmp-link-sel').value);
   if (!res.ok) { toast(res.error || 'Save failed', false); checkAuthError(res.error); return; }
   $('#cmp-link-modal').hidden = true;
   if (done) done();
@@ -819,6 +948,7 @@ async function openCmpCraft(preset = null) {
   $('#cmp-craft-sug').hidden = true;
   $('#cmp-craft-slots').innerHTML = '';
   $('#cmp-craft-hint').textContent = '';
+  $('#cmp-craft-order').value = cmpDrawOrder();
   $('#cmp-craft-modal').hidden = false;
   if (preset && preset.id) {
     await cmpCraftUse(preset.id, preset.name, preset.comps);
@@ -849,25 +979,30 @@ async function cmpCraftUse(id, name, comps = null) {
   cmpCraft.name = name;
   cmpCraft.comps = comps.map((c, i) => ({ c, i })).filter((u) => safeInt(u.c.number) > 0);
   cmpCraft.pick = {};
-  cmpCraft.comps.forEach(({ c, i }) => { cmpCraft.pick[i] = cmpLink(c.id); });
+  // Advanced tools: the slot's link itself (several items / a pattern, edited in the link dialog);
+  // otherwise the one picked name, as before
+  cmpCraft.comps.forEach(({ c, i }) => { cmpCraft.pick[i] = powerTools() ? cmpLinkOf(c.id) : cmpLink(c.id); });
   try { await cmpEnsureSlotNames(cmpCraft.comps.map((u) => u.c)); } catch (_) {}
   cmpCraftAllocate();
   cmpCraftRender();
 }
 
-// default draws: required slots fill from the biggest stacks first; optional ones start at 0
+// default draws: required slots fill in the draw order (biggest stacks first unless Advanced tools
+// says otherwise); optional ones start at 0. A stack two slots could use is drawn once — a slot
+// re-filled on its own gets what the other slots haven't already taken
 function cmpCraftAllocate(only = null) {
   const qty = Math.max(1, safeInt($('#cmp-craft-qty').value));
+  const left = cmpLeft();
+  if (only !== null) {
+    cmpCraft.comps.forEach(({ i }) => {
+      if (i !== only) Object.entries(cmpCraft.draw[i] || {}).forEach(([id, u]) => left.set(safeInt(id), (left.get(safeInt(id)) || 0) - safeInt(u)));
+    });
+  }
   cmpCraft.comps.forEach(({ c, i }) => {
     if (only !== null && only !== i) return;
-    const rows = cmpSlotRows(c, cmpCraft.pick[i]).slice().sort((a, b) => safeInt(b.units) - safeInt(a.units));
-    let left = c.optional === 'yes' ? 0 : safeInt(c.number) * qty;
+    const a = cmpGive({ rows: cmpSlotRows(c, cmpCraft.pick[i]) }, c.optional === 'yes' ? 0 : safeInt(c.number) * qty, left);
     cmpCraft.draw[i] = {};
-    rows.forEach((r) => {
-      const take = Math.min(left, safeInt(r.units));
-      cmpCraft.draw[i][safeInt(r.id)] = take;
-      left -= take;
-    });
+    a.rows.forEach((r) => { cmpCraft.draw[i][safeInt(r.id)] = a.takes.get(safeInt(r.id)) || 0; });
   });
 }
 
@@ -882,16 +1017,21 @@ function cmpCraftRender() {
   $('#cmp-craft-slots').innerHTML = cmpCraft.comps.map(({ c, i }) => {
     const opt = c.optional === 'yes';
     const need = safeInt(c.number) * qty;
-    const rows = cmpSlotRows(c, cmpCraft.pick[i]);
-    const pick = String(cmpCraft.pick[i] || '').toLowerCase();
+    const rows = cmpSortRows(cmpSlotRows(c, cmpCraft.pick[i]));
+    const multi = powerTools();
+    const pick = multi ? '' : String(cmpCraft.pick[i] || '').toLowerCase();
+    // Advanced tools: the link can be several items / a pattern — a button to the link dialog
+    const picker = multi
+      ? `<button class="btn btn-sm btn-outline-secondary cmp-craft-pick cmp-craft-linkbtn" data-clinkbtn="${i}" title="${escapeHtml(cmpLinkLabel(cmpCraft.pick[i]) || 'Match by name')} — which of your items fill this slot, remembered for every schematic that uses it"><i class="fa-solid fa-link"></i> <span>${escapeHtml(cmpLinkLabel(cmpCraft.pick[i]) || 'Match by name')}</span></button>`
+      : `<select class="form-select filter-select cmp-craft-pick" data-cpick="${i}" title="Which of your items fills this slot — remembered for every schematic that uses it">
+          <option value="">Match by name</option>
+          ${names.map((t) => `<option value="${escapeHtml(t.name)}"${t.name.toLowerCase() === pick ? ' selected' : ''}>${escapeHtml(t.name)}</option>`).join('')}
+        </select>`;
     return `<div class="cmp-craft-slot" data-cslot="${i}">
       <div class="cmp-craft-slothead">
         <span class="cmp-craft-slotname">${escapeHtml(cmpSlotLabel(c))}
           <span class="cmp-planet">${opt ? 'optional · ' : ''}${fmtNum(safeInt(c.number))} each${opt ? '' : ` · ${fmtNum(need)} needed`}</span></span>
-        <select class="form-select filter-select cmp-craft-pick" data-cpick="${i}" title="Which of your items fills this slot — remembered for every schematic that uses it">
-          <option value="">Match by name</option>
-          ${names.map((t) => `<option value="${escapeHtml(t.name)}"${t.name.toLowerCase() === pick ? ' selected' : ''}>${escapeHtml(t.name)}</option>`).join('')}
-        </select>
+        ${picker}
       </div>
       ${rows.length ? rows.map((r) => `<div class="cmp-craft-row">
           <span class="cmp-craft-from">${escapeHtml(r.item_name)} <span class="cmp-planet">${escapeHtml(cmpLocName(r.location_id))} · ${fmtNum(safeInt(r.units))} there</span>${cmpRowRunHtml(r)}</span>
@@ -948,8 +1088,9 @@ async function doCmpCraft() {
   let res;
   try {
     // a changed pick is remembered for every schematic that uses the slot
+    // (Advanced tools links are saved by the link dialog as they change)
     for (const { c, i } of cmpCraft.comps) {
-      if (String(cmpCraft.pick[i] || '') !== cmpLink(c.id)) await cmpSaveLink(c, cmpCraft.pick[i] || '');
+      if (typeof cmpCraft.pick[i] === 'string' && cmpCraft.pick[i] !== cmpLink(c.id)) await cmpSaveLink(c, cmpCraft.pick[i] || '');
     }
     res = await apiFetch('POST', 'api/components.php', { data: {
       action: 'craft', schematic_id: cmpCraft.sid, schematic_name: cmpCraft.name, quantity: qty, draws } });
@@ -977,6 +1118,7 @@ async function cmpAfterChange() {
   if (page === 'components') { cmpFillLocFilter(); renderComponents(); }
   if (page === 'schematic' && scdState.schematic) cmpPaintHoldings(scdState.schematic);
   if (!$('#cmp-plan-modal').hidden) cmpPlanRender();   // a craft logged from the planner
+  if (page === 'factories' && typeof renderFactories === 'function') renderFactories();   // a factory run's parts drawn / put back
 }
 
 // -- a finished factory run → its hopper (factories.js offers it on Done) -------
@@ -1081,6 +1223,18 @@ function initCmpCraft() {
     cmpCraftAllocate(i);
     cmpCraftRender();
   });
+  $('#cmp-craft-slots').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-clinkbtn]');
+    if (!b) return;
+    const i = safeInt(b.dataset.clinkbtn);
+    const u = cmpCraft.comps.find((x) => x.i === i);
+    if (u) openCmpLink(u.c, () => { cmpCraft.pick[i] = cmpLinkOf(u.c.id); cmpCraftAllocate(i); cmpCraftRender(); });
+  });
+  $('#cmp-craft-order').addEventListener('change', async (e) => {
+    await cmpSetDrawOrder(e.target.value);
+    cmpCraftAllocate();
+    cmpCraftRender();
+  });
   $('#cmp-craft-slots').addEventListener('input', (e) => {
     const inp = e.target.closest('[data-cdraw]');
     if (!inp) return;
@@ -1092,6 +1246,13 @@ function initCmpCraft() {
 
   // link picker (schematic page)
   $('#cmp-link-save').addEventListener('click', saveCmpLink);
+  $('#cmp-link-items').addEventListener('change', cmpLinkPreview);
+  $('#cmp-link-pattern').addEventListener('input', cmpLinkPreview);
+  $('#cmp-link-pattern').addEventListener('keydown', (e) => { if (e.key === 'Enter') saveCmpLink(); });
+  $('#cmp-link-filter').addEventListener('input', (e) => {
+    const q = e.target.value.trim().toLowerCase();
+    document.querySelectorAll('#cmp-link-items .cmp-link-item').forEach((l) => { l.hidden = !!q && !l.textContent.toLowerCase().includes(q); });
+  });
   $('#cmp-link-cancel').addEventListener('click', () => { $('#cmp-link-modal').hidden = true; });
   bindBackdropClose($('#cmp-link-modal'), () => { $('#cmp-link-modal').hidden = true; });
 

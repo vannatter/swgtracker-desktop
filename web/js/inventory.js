@@ -882,7 +882,7 @@ function invDlgPreview(now = false) {
 // ---- Count toward… — one sale's count moves to another item (or nowhere).
 // Used by My Inventory's sales list, the activity log and My Sales.
 // sale: { id, item, vendor, sale_type, sale_amount, sale_timestamp, counted_by }
-const invReassign = { sale: null, after: null, items: [], at: 0 };
+const invReassign = { sale: null, after: null, items: [], at: 0, pick: '' };
 async function invOpenReassign(sale, after) {
   invReassign.sale = sale; invReassign.after = after || null;
   const at = sale.sale_type == 2 && !sale.vendor ? 'Bazaar' : (sale.vendor || '');
@@ -890,9 +890,11 @@ async function invOpenReassign(sale, after) {
     + `<span class="stat_off">${at ? ` · ${escapeHtml(at)}` : ''}${sale.sale_amount != null ? ` · ${fmtNum(sale.sale_amount)} cr` : ''}${sale.sale_timestamp ? ` · ${fmtAgo(sale.sale_timestamp)}` : ''}</span>`;
   $('#inv-reassign-q').value = '';
   $('#inv-reassign-un').hidden = !safeInt(sale.counted_by);
+  $('#inv-reassign-sep').hidden = !safeInt(sale.counted_by);
+  invReassign.pick = '';
   $('#inv-reassign-modal').hidden = false;
   if (Date.now() - invReassign.at > 60000 || !invReassign.items.length) {
-    $('#inv-reassign-list').innerHTML = '<option disabled>Loading…</option>';
+    $('#inv-reassign-list').innerHTML = '<div class="inv-reassign-empty">Loading…</div>';
     const res = await invFetchAll({ sort: 'item_name', order: 'ASC' });
     invReassign.items = (res.ok && res.data && res.data.results) || [];
     invReassign.at = Date.now();
@@ -907,18 +909,24 @@ function invRenderReassignList(preselect = false) {
   const list = invReassign.items
     .filter((i) => !q || invNormName(i.item_name).includes(q) || invNormName(i.vendor).includes(q))
     .sort((a, b) => (invIsBucket(b) - invIsBucket(a)) || String(a.item_name).localeCompare(String(b.item_name)));
-  const sel = $('#inv-reassign-list');
-  const keep = sel.value;
-  sel.innerHTML = list.length ? list.map((i) => `<option value="${safeInt(i.id)}">${invIsBucket(i) ? '◆ ' : ''}${escapeHtml(String(i.item_name).replace(/\s+/g, ' '))}${i.vendor ? ` — ${escapeHtml(i.vendor)}` : ''}${safeInt(i.id) === cur ? '  (counts it now)' : ''}</option>`).join('')
-    : '<option disabled>No items match</option>';
   // first pick: a bucket whose words fit this sale, else nothing
-  const fit = preselect ? list.find((i) => i.match_mode === 'words' && safeInt(i.id) !== cur && invWordsMatch(i.item_name, sale.item)) : null;
-  sel.value = fit ? String(fit.id) : (list.some((i) => String(i.id) === keep) ? keep : '');
+  if (preselect) {
+    const fit = list.find((i) => i.match_mode === 'words' && safeInt(i.id) !== cur && invWordsMatch(i.item_name, sale.item));
+    invReassign.pick = fit ? String(fit.id) : '';
+  }
+  $('#inv-reassign-list').innerHTML = list.length ? list.map((i) => {
+    const id = safeInt(i.id);
+    return `<button type="button" class="inv-reassign-opt${String(id) === invReassign.pick ? ' active' : ''}${id === cur ? ' is-current' : ''}" data-rid="${id}" role="option">
+      ${invIsBucket(i) ? '<i class="fa-solid fa-layer-group inv-bucketico"></i> ' : ''}<span class="inv-reassign-name">${escapeHtml(String(i.item_name).replace(/\s+/g, ' '))}</span>${i.vendor ? `<span class="inv-reassign-vendor">${escapeHtml(i.vendor)}</span>` : ''}${id === cur ? '<span class="inv-reassign-now">counts it now</span>' : ''}
+    </button>`;
+  }).join('') : '<div class="inv-reassign-empty">No items match</div>';
+  const act = $('#inv-reassign-list .inv-reassign-opt.active');
+  if (preselect && act) act.scrollIntoView({ block: 'nearest' });
   invSyncReassignAlso();
 }
 function invSyncReassignAlso() {
   const sale = invReassign.sale;
-  const t = invReassign.items.find((i) => String(i.id) === $('#inv-reassign-list').value);
+  const t = invReassign.items.find((i) => String(i.id) === invReassign.pick);
   const nm = invNormName(sale.item);
   // offer "also match" only when the name wouldn't match this item on its own
   const already = !t || invNormName(t.item_name) === nm || (t.extra_names || []).some((x) => invNormName(x) === nm)
@@ -934,7 +942,7 @@ async function invDoReassign(saleId, inventoryId, also) {
 }
 async function invReassignSubmit(unassign) {
   const sale = invReassign.sale;
-  const target = unassign ? null : invReassign.items.find((i) => String(i.id) === $('#inv-reassign-list').value);
+  const target = unassign ? null : invReassign.items.find((i) => String(i.id) === invReassign.pick);
   if (!unassign && !target) return;
   const res = await invDoReassign(sale.id, target ? safeInt(target.id) : 0, !$('#inv-reassign-also-wrap').hidden && $('#inv-reassign-also').checked);
   if (!res.ok || !res.data || !res.data.status) { toast(res.error || 'Couldn’t move that sale — site update pending?', false); return; }
@@ -1377,8 +1385,16 @@ function initInventory() {
   });
   // Count toward…
   $('#inv-reassign-q').addEventListener('input', () => invRenderReassignList());
-  $('#inv-reassign-list').addEventListener('change', invSyncReassignAlso);
-  $('#inv-reassign-list').addEventListener('dblclick', () => { if (!$('#inv-reassign-ok').disabled) invReassignSubmit(false); });
+  $('#inv-reassign-list').addEventListener('click', (e) => {
+    const o = e.target.closest('[data-rid]');
+    if (!o) return;
+    invReassign.pick = o.dataset.rid;
+    document.querySelectorAll('#inv-reassign-list .inv-reassign-opt').forEach((b) => b.classList.toggle('active', b === o));
+    invSyncReassignAlso();
+  });
+  $('#inv-reassign-list').addEventListener('dblclick', (e) => {
+    if (e.target.closest('[data-rid]') && !$('#inv-reassign-ok').disabled) invReassignSubmit(false);
+  });
   $('#inv-reassign-ok').addEventListener('click', () => invReassignSubmit(false));
   $('#inv-reassign-un').addEventListener('click', () => invReassignSubmit(true));
   $('#inv-reassign-cancel').addEventListener('click', () => { $('#inv-reassign-modal').hidden = true; });

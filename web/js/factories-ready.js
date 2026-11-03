@@ -196,10 +196,15 @@ function facReadyButtons() {
     : !r.slots.length ? ''
       : r.ready ? `All ${r.slots.length} part${r.slots.length === 1 ? '' : 's'} ready — drawing uses ${fmtNum(parts)}.`
         : `Short on ${r.short} of ${r.slots.length} — you can still start, or draw what you have.`;
+  // Draw from only matters when the schematic takes components
+  document.querySelector('.fac-ready-order').hidden = !(r && !r.error && r.slots.length);
   const idle = facReady.f && !facReady.f.started_at;
-  $('#fac-ready-start').hidden = !idle;
+  // nothing to draw → one red Start run instead of a dead Draw button
+  facReady.canDraw = parts > 0;
+  $('#fac-ready-start').hidden = !idle || !parts;
   $('#fac-ready-draw').hidden = !idle;
-  $('#fac-ready-draw').disabled = !parts;
+  $('#fac-ready-draw').innerHTML = parts ? '<i class="fa-solid fa-play"></i> Draw parts &amp; start' : '<i class="fa-solid fa-play"></i> Start run';
+  $('#fac-ready-draw').title = parts ? 'Take these parts out of My Components for the run, then start it' : 'Start the run';
   $('#fac-ready-cancel').textContent = idle ? 'Cancel' : 'Close';
 }
 
@@ -338,7 +343,7 @@ function initFacReady() {
   $('#fac-ready-cancel').addEventListener('click', close);
   bindBackdropClose($('#fac-ready-modal'), close);
   $('#fac-ready-start').addEventListener('click', () => facReadyGo(false));
-  $('#fac-ready-draw').addEventListener('click', () => facReadyGo(true));
+  $('#fac-ready-draw').addEventListener('click', () => facReadyGo(!!facReady.canDraw));
   $('#fac-ready-order').addEventListener('change', async (e) => {
     await cmpSetDrawOrder(e.target.value);
     if (facReady.sid) facReadyUse(facReady.sid);

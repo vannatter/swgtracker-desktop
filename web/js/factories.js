@@ -568,7 +568,8 @@ function initFactories() {
     }
   });
   document.addEventListener('click', (e) => {
-    if (facState.histOpen && !e.target.closest('.fac-histbox')) {
+    // a chip click re-renders the menu first, so its target is detached — not an outside click
+    if (facState.histOpen && e.target.isConnected && !e.target.closest('.fac-histbox')) {
       facState.histOpen = null;
       document.querySelectorAll('[data-fachistmenu]').forEach((m) => { m.hidden = true; });
     }

@@ -9,6 +9,7 @@ const SALES_COLUMNS = [
   ['Location', 'location', 'col-text'],
   ['Amount', 'sale_amount', 'col-num'],
   ['Date', 'sale_timestamp', 'col-text'],
+  ['', '', 'col-actions'],
 ];
 const SALES_PERIODS = [['7 Day', '7_day'], ['30 Day', '30_day'], ['90 Day', '90_day'], ['180 Day', '180_day']];
 
@@ -85,6 +86,7 @@ function saleRowHtml(sale, idx) {
     ${f(sale.location || '')}
     <td class="col-num sale-amount">${fmtNum(sale.sale_amount)}</td>
     <td class="col-text">${fmtDate(sale.sale_timestamp)}</td>
+    <td class="col-actions"></td>
   </tr>`;
 }
 
@@ -195,11 +197,13 @@ function salesMarkMissing() {
   document.querySelectorAll('#sales-body td.col-name[data-filter]').forEach((td) => {
     const tr = td.closest('tr');
     const sale = salesState.rows?.[Number(tr?.dataset.sidx)];
+    const act = tr?.querySelector('td.col-actions');
+    if (!act) return;
     // Count toward… — move this sale's count to another item (or a bucket)
-    if (sale && sale.id && !td.querySelector('.sales-cnt')) {
-      td.insertAdjacentHTML('beforeend', ` <i class="fa-solid fa-right-left sales-cnt" data-salecnt="1" title="${sale.counted_by
+    if (sale && sale.id && !act.querySelector('.sales-cnt')) {
+      act.insertAdjacentHTML('beforeend', `<button type="button" class="btn btn-icon sales-cnt" data-salecnt="1" title="${sale.counted_by
         ? 'Counts toward one of your items — click to count it toward another (or a bucket), or uncount it'
-        : 'Count this sale toward one of your items (or a bucket)'}"></i>`);
+        : 'Count this sale toward one of your items (or a bucket)'}"><i class="fa-solid fa-right-left"></i></button>`);
     }
     let missing;
     if (tr?.dataset.tracked !== undefined) {
@@ -213,12 +217,12 @@ function salesMarkMissing() {
     if (!saleVendor && (tr?.children[1]?.textContent || '').trim().toLowerCase() === 'bazaar') saleVendor = 'bazaar';
     missing = !vendors || !(vendors.has('') || vendors.has(saleVendor));
     }
-    const ico = td.querySelector('.sales-notinv');
+    const ico = act.querySelector('.sales-notinv');
     if (missing && !ico) {
-      td.insertAdjacentHTML('beforeend',
-        ' <i class="fa-solid fa-cart-plus sales-notinv" data-addinv="1" title="Not in My Inventory —'
+      act.insertAdjacentHTML('afterbegin',
+        '<button type="button" class="btn btn-icon sales-notinv" data-addinv="1" title="Not in My Inventory —'
         + ' this sale isn\'t depleting any tracked stock (check for a name typo, or click to add it'
-        + ' with this exact name and vendor)"></i>');
+        + ' with this exact name and vendor)"><i class="fa-solid fa-cart-plus"></i></button>');
     } else if (!missing && ico) {
       ico.remove();
     }
@@ -299,7 +303,7 @@ function initSales() {
       let vendor = tr?.children[3]?.dataset.filter || '';
       if (!vendor && (tr?.children[1]?.textContent || '').trim().toLowerCase() === 'bazaar') vendor = 'Bazaar';
       openInvDialog(null, false, {
-        item_name: add.closest('td').dataset.filter,       // exact name, padding and all
+        item_name: tr.querySelector('td.col-name').dataset.filter,   // exact name, padding and all
         vendor,
       });
       return;
@@ -399,6 +403,7 @@ function initSales() {
     const th = e.target.closest('[data-sort]');
     if (!th) return;
     const field = th.dataset.sort;
+    if (!field) return;   // actions column
     if (salesState.sortField === field) {
       salesState.sortOrder = salesState.sortOrder === 'DESC' ? 'ASC' : 'DESC';
     } else {

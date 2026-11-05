@@ -815,6 +815,7 @@ async function fetchPulse() {
     $('#pulse-desktop').textContent = res.data.desktop_online != null
       ? `Desktop apps: ${res.data.desktop_online.toLocaleString()}` : '';
     showBroadcasts(res.data.broadcasts);
+    showFund(res.data.fund);
     drawPulseChart(online.history);
   } else {
     statusEl.textContent = 'Offline';
@@ -823,6 +824,23 @@ async function fetchPulse() {
     mini.title = 'Server offline';
     $('#pulse-online').innerHTML = '';
   }
+}
+
+// ---- Funding drive ----
+// The site runs a server/app fund every Nov 1 – Dec 31 for next year (PayPal
+// donations, totalled by IPN). The total rides the pulse; the card opens PayPal.
+let _fundUrl = '';
+function showFund(f) {
+  const card = $('#fund-card');
+  if (!f || !f.active) { card.hidden = true; return; }
+  _fundUrl = String(f.url || '');
+  const money = (v) => '$' + (Number.isInteger(v) ? v.toLocaleString() : Number(v).toFixed(2));
+  $('#fund-year').textContent = safeInt(f.year);
+  $('#fund-fill').style.width = `${Math.min(100, safeInt(f.pct))}%`;
+  $('#fund-sub').textContent = safeInt(f.pct) >= 100 ? 'Fully funded — thank you!'
+    : `${money(Number(f.raised) || 0)} of ${money(Number(f.goal) || 0)} · Donate`;
+  card.title = `SWG Tracker runs on donations — this covers the server and app for ${safeInt(f.year)}. Opens PayPal in your browser.`;
+  card.hidden = false;
 }
 
 // ---- Broadcasts ----
@@ -987,6 +1005,9 @@ function initDevMode() {
 // ---- Header controls ----
 function initControls() {
   // the status line IS the test button (the old dev-only Test Connection went away)
+  $('#fund-card').addEventListener('click', () => {
+    if (/^https:\/\//.test(_fundUrl)) { try { api().open_external(_fundUrl); } catch (_) { /* ignore */ } }
+  });
   $('#pulse-status').addEventListener('click', async () => {
     const el = $('#pulse-status');
     const prev = el.textContent;

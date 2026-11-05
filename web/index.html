@@ -6,7 +6,7 @@
   <title>SWG Tracker Desktop</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.1/css/all.min.css">
-  <link rel="stylesheet" href="css/app.css?v=20261103rl">
+  <link rel="stylesheet" href="css/app.css?v=20261105fd">
   <link rel="stylesheet" href="css/share.css?v=20261022x">
   <link rel="stylesheet" href="css/quests.css?v=20261102qp">
 </head>
@@ -121,6 +121,13 @@
 
       <!-- collapsed-mode stand-in for the pulse panel: pulsing dot, hover for numbers -->
       <div id="pulse-mini" class="pulse-mini"><span class="pulse-mini-dot"></span></div>
+
+      <!-- Annual funding drive (Nov 1 – Dec 31, site includes/fund.php) — rides the pulse payload -->
+      <button id="fund-card" type="button" class="fund-card" hidden>
+        <span class="fund-head"><i class="fa-solid fa-heart"></i> <span id="fund-year"></span> server fund</span>
+        <span class="fund-bar"><span id="fund-fill"></span></span>
+        <span id="fund-sub" class="fund-sub"></span>
+      </button>
 
       <!-- Server pulse; clicking the status line re-tests the connection -->
       <div class="pulse-panel">
@@ -4213,6 +4220,6 @@
   <script src="js/priceguide.js?v=20261102pg"></script>
   <script src="js/vendor-upkeep.js?v=20261102vu"></script>
   <script src="js/navbadges.js?v=20261103nb"></script>
-  <script src="js/app.js?v=20261104mx"></script>
+  <script src="js/app.js?v=20261105fd"></script>
 </body>
 </html>

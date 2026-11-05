@@ -5,7 +5,8 @@
    - bell: after an upload, any new report becomes a local alert
    Normal players never hit api/isd.php except one call when the Mail page opens. */
 
-const isdState = { lastUploaded: null, checking: false, open: new Set() };
+// open/items survive the Mail page's 10s refresh, which redraws this panel (Danvar)
+const isdState = { lastUploaded: null, checking: false, open: new Set(), items: new Map() };
 const ISD_RESULT_LABEL = {
   planet_added: 'planet added', confirmed: 'already listed', inactive: 'not in spawn on the site',
   added: 'new — added', pending: 'new — waiting for stats',
@@ -70,25 +71,30 @@ async function isdLoadPanel() {
         <span class="isd-sum">${escapeHtml(isdSummary(r).replace(/^.*? — /, '') || `${r.found} found`)}</span>
         <span class="isd-when">${fmtAgo(r.created)}</span>
       </div>
-      <div class="isd-items" id="isd-items-${r.id}" hidden></div>`).join('')}
+      <div class="isd-items" id="isd-items-${r.id}"${isdState.items.has(String(r.id)) && isdState.open.has(String(r.id)) ? '' : ' hidden'}>${isdState.items.get(String(r.id)) || ''}</div>`).join('')}
     </div>`;
 }
 
 async function isdToggle(id) {
   const box = $(`#isd-items-${id}`);
   if (!box) return;
-  if (!box.hidden) { box.hidden = true; return; }
-  if (!box.dataset.loaded) {
+  const key = String(id);
+  if (!box.hidden) { box.hidden = true; isdState.open.delete(key); return; }
+  isdState.open.add(key);
+  if (!isdState.items.has(key)) {
     const res = await apiFetch('GET', 'api/isd.php', { params: { id } });
     const items = (res.ok && res.data && res.data.report && res.data.report.items) || [];
-    box.innerHTML = items.length ? items.map((i) => `
+    isdState.items.set(key, items.length ? items.map((i) => `
       <div class="isd-item"><span class="isd-name">${escapeHtml(i.name)}</span>
         <span class="isd-cls">${escapeHtml(i.cls)}</span>
         <span class="isd-res isd-res-${escapeHtml(i.result)}">${escapeHtml(ISD_RESULT_LABEL[i.result] || i.result)}</span></div>`).join('')
-      : '<div class="isd-item muted">Nothing listed.</div>';
-    box.dataset.loaded = '1';
+      : '<div class="isd-item muted">Nothing listed.</div>');
   }
-  box.hidden = false;
+  if (!isdState.open.has(key)) return;   // closed again while loading
+  const cur = $(`#isd-items-${id}`);       // the panel may have redrawn meanwhile
+  if (!cur) return;
+  cur.innerHTML = isdState.items.get(key);
+  cur.hidden = false;
 }
 
 function initIsd() {

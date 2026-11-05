@@ -33,6 +33,8 @@ const MM_CATS = {
 };
 const MM_CAT_ORDER = ['sale', 'purchase', 'banktip', 'factory', 'factory-ingredients', 'structure', 'guild', 'other', 'archived'];
 
+let mmInvIndex = null;   // { at, has(name) } — see loadMail
+
 async function loadMail() {
   if (typeof isdLoadPanel === 'function') isdLoadPanel(); // survey droid reports (js/isd.js) — hidden unless you have any
   let state = null;
@@ -68,14 +70,25 @@ async function loadMail() {
 
   // known inventory types — sale items already tracked show a check, not a button
   // (null = lookup failed: keep the buttons, the server dedupes adds anyway)
+  // An item's extra names and word buckets count too — merged-away names shouldn't
+  // come back as + buttons (Veizyr). Cached a minute; this page polls every 10s.
   let invNames = null;
-  try {
-    const res = await api().get_inventory({ perpage: 500 });
-    const items = res.ok && res.data && res.data.results;
-    if (Array.isArray(items)) {
-      invNames = new Set(items.map((i) => String(i.item_name || '').trim().toLowerCase()));
-    }
-  } catch (_) { /* keep the buttons */ }
+  if (mmInvIndex && Date.now() - mmInvIndex.at < 60000) invNames = mmInvIndex;
+  else {
+    try {
+      const res = await invFetchAll({});
+      const items = res.ok && res.data && res.data.results;
+      if (Array.isArray(items)) {
+        const names = new Set(), words = [];
+        items.forEach((i) => {
+          names.add(invNormName(i.item_name));
+          (i.extra_names || []).forEach((x) => names.add(invNormName(x)));
+          if (i.match_mode === 'words') words.push(i.item_name);
+        });
+        invNames = mmInvIndex = { at: Date.now(), has: (n) => names.has(invNormName(n)) || words.some((w) => invWordsMatch(w, n)) };
+      }
+    } catch (_) { /* keep the buttons */ }
+  }
 
   const card = (cls, icon, val, label, tip = '') => `
     <div class="mm-card ${cls}"${tip ? ` title="${escapeHtml(tip)}"` : ''}>
@@ -122,7 +135,7 @@ async function loadMail() {
     // sale detail is "ITEM → BUYER — N credits"; the item is what you may
     // want tracked in My Inventory when it's a type you haven't added yet
     const item = r.kind === 'sale' && r.detail ? r.detail.split(' → ')[0] : '';
-    const tracked = item && invNames && invNames.has(item.trim().toLowerCase());
+    const tracked = item && invNames && invNames.has(item);
     const action = !item ? '' : tracked
       ? '<span class="mm-tracked" title="Already in My Inventory"><i class="fa-solid fa-check"></i></span>'
       : `<button class="mm-addinv" data-item="${escapeHtml(item)}"
@@ -397,6 +410,7 @@ function initMail() {
       if (res.ok) {
         toast(`Added "${btn.dataset.item}"${vendor ? ` (${vendor})` : ''} to My Inventory`);
         btn.outerHTML = '<span class="mm-tracked" title="Already in My Inventory"><i class="fa-solid fa-check"></i></span>';
+        mmInvIndex = null;
       } else {
         toast(res.error || res.data || 'Add failed', false);
         btn.disabled = false;

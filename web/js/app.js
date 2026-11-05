@@ -101,7 +101,7 @@ const PAGE_LOADERS = {
   aliases: () => loadAliases(),
   schembuilder: () => loadSchemBuilder(),
   lab: () => loadLab(),
-  monitor: () => loadMail(),
+  monitor: () => { mmInvIndex = null; loadMail(); },   // fresh inventory names on each visit
   scanner: () => loadScanner(),
   settings: () => { loadSettings(); loadScanConfig(); }, // scan config renders into #set-scan-section
   ideas: () => loadIdeas(),

@@ -134,6 +134,9 @@ body.offline #broadcast-bar { bottom: 26px; } /* stack above the offline bar */
 .bell-item-meta { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
 .bell-item-del { background: transparent; border: 0; color: var(--text-muted); cursor: pointer; }
 .bell-item-del:hover { color: var(--accent); }
+/* go-to buttons on an entry that links somewhere (appLocalAlert's link — a shipped idea) */
+.bell-item-go { display: flex; gap: 6px; margin-top: 6px; }
+.bell-item-go .btn { padding: 1px 8px; font-size: 11px; white-space: nowrap; }
 
 #offline-bar {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 250;
@@ -1729,6 +1732,8 @@ body.dev-mode .dev-pill { display: inline-flex; }
 .inv-add-row { display: flex; gap: 12px; margin-top: 12px; }
 .inv-add-field { flex: 1 1 0; display: flex; flex-direction: column; }
 .inv-add-field input { width: 100%; max-width: none; }
+.inv-add-field[hidden] { display: none; }
+.inv-oneoff-toggle { margin-top: 12px; }   /* Add/Edit dialog: one-offs have no threshold (Canda) */
 .harv-name[data-hrename] { cursor: text; border-bottom: 1px dotted transparent; }
 /* the 15px/700 title styling is for CARDS — grid rows keep the row's font */
 td .harv-name { font-size: inherit; font-weight: inherit; color: inherit; }
@@ -4011,13 +4016,17 @@ tr.gx-rowlink:hover .gx-detail-link { color: var(--text-hover); } /* hover brigh
 /* compact enough to sit near the Hot Resources cards' height — the tallest tile
    (a mini chart) sets the whole carousel row, so the charts stay short too */
 .hm-tile { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; background: var(--bg-secondary); text-align: center; min-height: 0;
-           display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
-.hm-tile-label { font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); }
+           display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 3px;
+           background: linear-gradient(180deg, rgba(120, 145, 190, .10) 0%, rgba(120, 145, 190, 0) 55%), var(--bg-secondary);
+           transition: border-color .15s; }
+.hm-tile:hover { border-color: rgba(150, 170, 210, .35); }
+.hm-tile-label { font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin-bottom: 2px; }
 .hm-tile-value { font-size: 17px; font-weight: 700; color: var(--text-hover); width: 100%; }
 .hm-tile-value .res-name, .hm-schem { cursor: pointer; }
 .hm-tile-value .res-name:hover, .hm-schem:hover { color: var(--accent-hover); }
 .hm-tile-sub { font-size: 12px; color: var(--text-muted); }
-.hm-badge { font-size: 11px; padding: 2px 9px; border-radius: 5px; background: rgba(255,255,255,.08); color: var(--text-muted); margin-top: 2px; }
+.hm-tile > .hm-tile-value:not(:has(.hm-mini)), .hm-tile > .hm-tile-sub { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hm-badge { font-size: 11px; padding: 2px 9px; border-radius: 5px; background: rgba(255,255,255,.08); color: var(--text-muted); margin-top: auto; }
 .hm-mini { width: 100%; }
 .hm-mini .gx-legend { display: none; }
 .hm-mini .gx-chartwrap svg { height: 42px; }
@@ -4815,6 +4824,7 @@ tr.top-new td.col-name { color: var(--text-hover); }
 .idea-body { flex: 1 1 auto; min-width: 0; }
 .idea-title-row { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .idea-title { font-size: 15px; font-weight: 600; color: var(--text-hover); overflow-wrap: anywhere; }
+.idea-num { margin-right: 6px; color: var(--text-muted); font-weight: 600; font-variant-numeric: tabular-nums; }
 .idea-pin-ico { color: var(--accent); font-size: 12px; }
 .idea-dev { font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; padding: 1px 7px;
             border-radius: 999px; background: var(--accent-dark); color: #fff; }
@@ -4825,6 +4835,9 @@ tr.top-new td.col-name { color: var(--text-hover); }
 .idea-st-shipped { border-color: var(--accent-green); color: var(--q-fair); }
 .idea-st-declined { color: var(--text-muted); }
 .idea-cat { padding: 1px 8px; border-radius: 999px; background: var(--bg-input); color: var(--text-primary); }
+.idea-ver { font-size: 11px; color: var(--q-fair); }
+/* the idea a bell button opened (ideaFocusApply) */
+.idea-card.idea-flash { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(226, 67, 80, .25); }
 .idea-desc { margin-top: 8px; font-size: 13px; color: var(--text-primary); white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.45; }
 .idea-desc.idea-clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .idea-more { margin-top: 2px; padding: 0; border: 0; background: none; color: var(--accent-hover); font-size: 12px; cursor: pointer; }
@@ -4940,7 +4953,8 @@ tr.top-new td.col-name { color: var(--text-hover); }
 .cmp-plan-top input { flex: 1 1 auto; min-width: 0; }
 .cmp-plan-targets { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
 .cmp-plan-target { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px; }
-.cmp-plan-tname { flex: 0 1 auto; min-width: 0; font-weight: 600; font-size: 13px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cmp-plan-tname { flex: 0 1 auto; min-width: 0; font-weight: 600; font-size: 13px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-primary); text-decoration: none; }
+.cmp-plan-tname:hover { color: var(--accent-hover); }
 .cmp-plan-target .cmp-planet { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cmp-plan-target .spinner { margin-right: auto; }
 .cmp-plan-target:not(:has(.cmp-planet, .spinner)) .cmp-plan-tname { margin-right: auto; }
@@ -4965,6 +4979,16 @@ tr.top-new td.col-name { color: var(--text-hover); }
 .cmp-plan-acts .btn-icon { width: 28px; height: 28px; }
 .cmp-plan-makesel { width: 130px; font-size: 12px; padding: 2px 24px 2px 6px; }
 .cmp-plan-copy { margin-right: auto; }
+/* Components | Resources roll-up, and the factory-crates helper on a target row */
+.cmp-plan-subhead:has(#cmp-plan-view) { align-items: center; }
+#cmp-plan-view .seg-btn { text-transform: none; letter-spacing: 0; font-weight: 500; }
+.cmp-plan-crates { flex: none; display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+.cmp-plan-crates input { width: 52px; padding: 2px 6px; }
+.cmp-plan-spawns { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-top: 3px; font-size: 12px; }
+.cmp-plan-spawnlbl { font-size: 11px; color: var(--text-muted); }
+.cmp-plan-spawn { display: inline-flex; align-items: center; gap: 5px; }
+.cmp-plan-spawn .res-name { cursor: pointer; }
+.cmp-plan-spawn .planet { font-size: 10px; }
 @media (max-width: 720px) {
   .cmp-plan-part { flex-wrap: wrap; }
   .cmp-plan-pmain { flex-basis: 100%; }
@@ -5066,6 +5090,11 @@ body:not(.power-tools) .power-only { display: none !important; }
 .isd-res { white-space: nowrap; color: var(--text-muted); }
 .isd-res-planet_added, .isd-res-added { color: var(--success, #4caf7a); }
 .isd-res-pending { color: var(--warning, #e0a040); }
+.isd-res-entered { color: var(--success, #4caf7a); }
+.isd-item { align-items: baseline; }
+.isd-enter { padding: 0 8px; font-size: 12px; line-height: 20px; }
+.isd-stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 10px 12px; margin-top: 12px; }
+.isd-stats-card .settings-hint { line-height: 1.5; }
 
 /* ---- Ideas: Shipped this week — folded under the active list (default view) ---- */
 .ideas-shipped { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 10px; display: flex; flex-direction: column; gap: 8px; }

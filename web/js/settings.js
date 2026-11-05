@@ -160,6 +160,7 @@ async function loadSettings() {
     if (u) { u.value = p.name || ''; u.dataset.orig = p.name || ''; }
   });
   if (typeof insaLoadPrefs === 'function') insaLoadPrefs();   // Sales Alerts (server-side)
+  if (typeof ideaShipLoadPrefs === 'function') ideaShipLoadPrefs();   // Ideas I backed ship (server-side)
 
   refreshDatasetStatus();
 }
@@ -275,6 +276,7 @@ async function saveSettings() {
     }
     // Sales Alerts switches — server-side too (js/insight-alerts.js)
     if (typeof insaSavePrefs === 'function') await insaSavePrefs();
+    if (typeof ideaShipSavePrefs === 'function') await ideaShipSavePrefs();   // Ideas I backed ship (js/ideas.js)
     // a changed date format must invalidate every already-rendered page —
     // cached pages would keep showing dates in the old style until relaunch
     const fmtChanged = ($('#set-datefmt').value === 'intl') !== (appDateFmt === 'intl')

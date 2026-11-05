@@ -870,14 +870,17 @@ function showBroadcasts(list) {
 
 // App-generated events (factory done, harvester full/out/despawned) share the
 // broadcast plumbing: native notification + bottom banner + a bell inbox entry
-// that sticks until deleted.
-function appLocalAlert(title, message) {
+// that sticks until deleted. `link` (optional) puts go-to buttons on the bell
+// entry: { page, focus?, label?, release? } — release adds a Release notes
+// button that opens About → What's new (a shipped idea, js/ideas.js).
+function appLocalAlert(title, message, link = null) {
   const inbox = loadBroadcastInbox();
   inbox.push({
     id: Date.now() * 10 + Math.floor(Math.random() * 10), // numeric, delete-compatible
     message: `${title} — ${message}`,
     ts: Math.floor(Date.now() / 1000),
     dismissed: false,
+    ...(link && link.page ? { link } : {}),
   });
   saveBroadcastInbox(inbox);
   try { api().notify(title, message); } catch (_) { /* shell too old */ }
@@ -916,7 +919,10 @@ function renderBellPanel(inbox) {
       </div>` : '';
   $('#bell-list').innerHTML = alertRow + (items.length ? items.map((i) => `
     <div class="bell-item ${i.dismissed ? '' : 'unread'}">
-      <div class="bell-item-msg">${escapeHtml(i.message)}</div>
+      <div class="bell-item-msg">${escapeHtml(i.message)}${i.link ? `<div class="bell-item-go">
+        <button class="btn btn-sm btn-outline-secondary" data-bcgo="${i.id}">${escapeHtml(i.link.label || 'Open')}</button>
+        ${i.link.release ? `<button class="btn btn-sm btn-outline-secondary" data-bcgo="${i.id}" data-bcrel>Release notes</button>` : ''}
+      </div>` : ''}</div>
       <span class="bell-item-meta">${i.ts ? fmtAgo(i.ts) : ''}</span>
       <button class="bell-item-del" data-delbc="${i.id}" title="Delete"><i class="fa-solid fa-trash"></i></button>
     </div>`).join('')
@@ -948,6 +954,20 @@ function initBroadcasts() {
       $('#bell-panel').hidden = true;
       showPage('alerts');
       if (typeof alShowTab === 'function') alShowTab('matches');
+      return;
+    }
+    const go = e.target.closest('[data-bcgo]');
+    if (go) {
+      const it = loadBroadcastInbox().find((i) => i.id === safeInt(go.dataset.bcgo));
+      if (!it || !it.link) return;
+      $('#bell-panel').hidden = true;
+      if (go.hasAttribute('data-bcrel')) {
+        showPage('about');
+        setTimeout(() => $('#about-notes')?.closest('.about-card')?.scrollIntoView({ block: 'start' }), 300);
+        return;
+      }
+      if (it.link.page === 'ideas' && it.link.focus && typeof ideaFocus === 'function') ideaFocus(it.link.focus);
+      showPage(it.link.page);
       return;
     }
     const del = e.target.closest('[data-delbc]');

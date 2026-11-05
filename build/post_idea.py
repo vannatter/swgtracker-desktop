@@ -5,8 +5,10 @@ Uses the API key in the desktop app's config.json (the repo copy in dev, else
 can mark an idea as a dev idea (--dev) or pin it (--pinned).
 
     venv/bin/python build/post_idea.py --title "..." --category Crafting --description "..." [--dev] [--pinned]
-    venv/bin/python build/post_idea.py --list
+    venv/bin/python build/post_idea.py --list [--full] [--status-filter open]   # --full adds who posted + description
     venv/bin/python build/post_idea.py --status shipped --id 3   # admin: open|planned|progress|shipped|declined
+    venv/bin/python build/post_idea.py --status shipped --id 3 --version 2026.11.05.1   # + the release it went out in
+        (marking Shipped notifies everyone who voted for it, once — the version rides along to their bell / push)
     venv/bin/python build/post_idea.py ... --dry-run     # show what would be sent, send nothing
 """
 import argparse
@@ -46,6 +48,8 @@ def call(method: str, data: dict | None = None, query: str = "") -> dict:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--list", action="store_true", help="list current ideas and categories")
+    ap.add_argument("--full", action="store_true", help="with --list: also print who posted it and the description")
+    ap.add_argument("--status-filter", choices=["open", "planned", "progress", "shipped", "declined"], help="with --list: only this status")
     ap.add_argument("--title")
     ap.add_argument("--category", default="Other")
     ap.add_argument("--description", default="")
@@ -53,6 +57,7 @@ def main() -> None:
     ap.add_argument("--pinned", action="store_true", help="pin to the top (admin key only)")
     ap.add_argument("--status", choices=["open", "planned", "progress", "shipped", "declined"], help="set an idea's status (admin key only; needs --id)")
     ap.add_argument("--id", type=int)
+    ap.add_argument("--version", help="with --status shipped: the release it went out in (e.g. 0.15.4 or 2026.11.05.1)")
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
 
@@ -60,12 +65,21 @@ def main() -> None:
         d = call("GET", query="?sort=new")
         print("categories:", ", ".join(d.get("categories", [])))
         for i in d.get("ideas", []):
-            print(f"#{i.get('id')} [{i.get('status')}] {i.get('votes', 0)}▲ {i.get('title')}")
+            if a.status_filter and i.get("status") != a.status_filter:
+                continue
+            print(f"#{i.get('id')} [{i.get('status')}] {i.get('votes', 0)}▲ {i.get('title')}"
+                  + (f"  — {i.get('by')} · {i.get('category', '')}" if a.full else ""))
+            if a.full and i.get("description"):
+                print("    " + str(i["description"]).replace("\n", "\n    "))
         return
     if a.status:
         if not a.id:
             ap.error("--status needs --id")
         payload = {"action": "status", "id": a.id, "status": a.status}
+        if a.version:
+            if a.status != "shipped":
+                ap.error("--version goes with --status shipped")
+            payload["version"] = a.version
         print(json.dumps(payload) if a.dry_run else json.dumps(call("POST", payload)))
         return
     if not a.title:

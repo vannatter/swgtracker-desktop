@@ -401,8 +401,19 @@ function homeCardsWrap(view, gridCls, cardsHtml) {
 }
 
 // one At a Glance tile
+// built-in tile icons, keyed by the label's text
+const HM_TILE_ICONS = {
+  'hottest resource': 'fa-fire', 'hottest schematic': 'fa-scroll', 'top scored active': 'fa-trophy',
+  'biggest city mover': 'fa-city', 'biggest guild mover': 'fa-shield-halved', 'gcw tracker': 'fa-scale-balanced',
+  'active resources': 'fa-gem', 'today’s pulse': 'fa-heart-pulse',
+};
+const hmPlain = (html) => String(html || '').replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').trim();
 function homeTile(label, value, sub, badge, extra = '', attrs = '') {
-  return `<div class="hm-tile" ${attrs}>
+  // same-height tiles: value and sub stay on one line (full text on hover), the badge sits at the bottom
+  const icon = HM_TILE_ICONS[hmPlain(label).toLowerCase()];
+  if (icon && !/<i /.test(label)) label = `<i class="fa-solid ${icon}"></i>${label}`;
+  const tip = [hmPlain(value), hmPlain(sub)].filter(Boolean).join(' — ').replace(/"/g, '&quot;');
+  return `<div class="hm-tile" ${attrs}${tip && !/title=/.test(attrs) ? ` title="${tip}"` : ''}>
       <div class="hm-tile-label">${label}</div>
       <div class="hm-tile-value">${value}</div>
       ${sub ? `<div class="hm-tile-sub">${sub}</div>` : ''}

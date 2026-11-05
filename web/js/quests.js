@@ -169,7 +169,7 @@ function renderQuests() {
       q.community ? (q.community.verified ? '<span class="q-flag qc-flag-comm" title="Submitted by a player, confirmed by others">Community</span>'
         : '<span class="q-flag qc-flag-unv" title="Submitted by a player — not confirmed yet">Unverified</span>') : '',
       q.edited ? '<i class="fa-solid fa-pen-nib q-flag-rep" title="Corrected by the community"></i>' : '',
-      questProgBadge(q.progress)].join('');
+      questProgBadge(q.progress), questSeriesBadge(q.series)].join('');
     const nC = safeInt(q.comments); const nS = safeInt(q.screenshots);
     const notes = (nC ? `<span class="q-cnt" title="${nC} note${nC === 1 ? '' : 's'}"><i class="fa-regular fa-comment"></i> ${nC}</span>` : '')
       + (nS ? `<span class="q-cnt" title="${nS} screenshot${nS === 1 ? '' : 's'}"><i class="fa-regular fa-image"></i> ${nS}</span>` : '');
@@ -201,6 +201,12 @@ function questProgBadge(p) {
   if (!p) return '';
   if (p.status === 'done') return '<span class="q-flag q-prog is-done" title="You finished this quest"><i class="fa-solid fa-check"></i> Done</span>';
   return `<span class="q-flag q-prog" title="You’re on this one — ${safeInt(p.done)} of ${safeInt(p.total)} steps done"><i class="fa-solid fa-person-walking"></i> ${safeInt(p.total) ? `${safeInt(p.done)}/${safeInt(p.total)}` : 'On it'}</span>`;
+}
+// My quests rows in a quest chain: how far through the whole chain you are (api: series, newer deploys)
+function questSeriesBadge(sr) {
+  if (!sr || !safeInt(sr.total)) return '';
+  const done = safeInt(sr.done); const total = safeInt(sr.total);
+  return `<span class="q-flag q-series${done >= total ? ' is-done' : ''}" title="Quest chain: ${escapeHtml(sr.title || '')} — ${done} of ${total} quests done"><i class="fa-solid fa-link"></i> ${done}/${total}</span>`;
 }
 // the My quests filter shows your counts once a list load returns them
 function questsMineLabels() {
@@ -357,6 +363,7 @@ function qdHeroHtml(q, title, steps, mapped, variantsHtml) {
     </div>
     <div class="qd-hero-meta">${meta}</div>
     ${qdProgressHtml(q, steps)}
+    ${qdSeriesHtml(q)}
     ${variantsHtml}
     ${q.desc || (q.summary && q.summary !== q.desc) ? `<div class="qd-hero-desc">
       ${q.desc ? `<p class="qd-desc">${escapeHtml(q.desc)}</p>` : ''}
@@ -766,6 +773,66 @@ function qdRefreshProgress() {
   if (strip) strip.outerHTML = qdProgressHtml(q, qdState.steps);
   questsState.loaded = false;   // the list's badges + My quests counts reload next visit
 }
+
+// =================================================================================
+// The quest chain (api: series — includes/quest_series.inc.php): the whole line this
+// quest sits in, named after its first quest, with your count and the next one to do.
+// A compact step list in the hero — done ticks, this quest, Next — folded past 7 to the
+// six around you. Quests off the main line ride along as "or N others" on their step.
+// =================================================================================
+function qdSeriesHtml(q) {
+  const S = q.series;
+  if (!S || !Array.isArray(S.steps) || S.steps.length < 2) return '';
+  const total = safeInt(S.total) || S.steps.length;
+  const done = S.done == null ? null : safeInt(S.done);
+  let focus = safeInt(S.here) - 1;   // the window opens on the next quest, else this one
+  S.steps.forEach((st, i) => { if (st.next) focus = i; });
+  const fold = total > 7;
+  const from = fold ? Math.max(0, Math.min(focus - 2, total - 6)) : 0;
+  const count = done == null ? `step ${safeInt(S.here)} of ${total}` : done >= total ? `all ${total} done` : `${done} of ${total} done`;
+  const next = S.next && S.next.id && S.next.id !== q.id
+    ? `<span class="qd-series-acts"><button type="button" class="btn btn-sm btn-outline-secondary" data-questopen="${escapeHtml(S.next.id)}" title="Step ${safeInt(S.next.n)} of the chain">Next quest: ${escapeHtml(S.next.title || questTidyId(S.next.id))} <i class="fa-solid fa-arrow-right"></i></button></span>` : '';
+  const rows = S.steps.map((st, i) => {
+    const cls = (st.status === 'done' ? ' is-done' : st.status === 'active' ? ' is-active' : '') + (st.here ? ' is-here' : '') + (st.next ? ' is-next' : '');
+    const alts = st.alts || [];
+    const altN = alts.length + safeInt(st.alts_more);
+    const altSame = altN && alts.every((a) => a.title === st.title);   // just other versions of it
+    const altTitle = `Or: ${alts.map((a) => a.title + (a.variant ? ` (${a.variant})` : '')).join(', ')}${safeInt(st.alts_more) ? ` +${safeInt(st.alts_more)} more` : ''}`;
+    const name = st.title || questTidyId(st.id);
+    return `<li class="qd-ss${cls}"${fold && (i < from || i >= from + 6) ? ' hidden data-qsfold' : ''}>
+      <span class="qd-ss-mark">${st.status === 'done' ? '<i class="fa-solid fa-check"></i>' : safeInt(st.n)}</span>
+      <span class="qd-ss-main">${st.here ? `<b class="qd-ss-title">${escapeHtml(name)}</b>` : `<a role="button" class="qd-ss-title" data-questopen="${escapeHtml(st.id)}" title="Open this quest">${escapeHtml(name)}</a>`}
+        ${st.variant ? `<span class="qd-muted">${escapeHtml(st.variant)}</span>` : ''}
+        ${altN ? `<span class="qd-ss-alt" title="${escapeHtml(altTitle)}">or ${altN} other${altSame ? ' version' : ''}${altN === 1 ? '' : 's'}</span>` : ''}</span>
+      ${st.here ? '<span class="qd-ss-tag">This quest</span>' : ''}
+      ${st.next && !st.here ? '<span class="qd-ss-tag is-next">Next</span>' : st.status === 'active' ? '<span class="qd-ss-tag is-active">In progress</span>' : ''}
+      <span class="qd-ss-meta">${safeInt(st.level) ? `<span class="qd-muted">Lvl ${safeInt(st.level)}</span>` : ''}${(st.planets || []).slice(0, 2).map((p) => questPlanetBadge(p, true)).join('')}</span>
+    </li>`;
+  }).join('');
+  return `<div class="qd-series${done != null && done >= total ? ' is-done' : ''}" id="qd-series">
+    <div class="qd-series-head"><span class="qd-series-l"><i class="fa-solid fa-link"></i> Quest chain: <b>${escapeHtml(S.title || '')}</b> <span class="qd-muted">· ${count}</span></span>
+      ${done != null ? `<span class="qd-prog-bar" role="progressbar" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${done}"><span style="width:${Math.round((done / total) * 100)}%"></span></span>` : ''}${next}</div>
+    <ol class="qd-series-steps">${rows}</ol>
+    ${fold ? `<button type="button" class="qd-series-more" data-qseries-more>Show all ${total} steps</button>` : ''}
+  </div>`;
+}
+// this quest's status moved (started / done / reset): refetch the chain for the new count + next
+async function qdRefreshSeries() {
+  const q = qdState.quest; const card = $('#qd-series');
+  if (!q || !card) return;   // not part of a chain
+  let r;
+  try { r = await apiFetch('GET', 'api/quests.php', { params: { series: q.id } }); } catch (_) { return; }
+  if (qdState.quest !== q || !r.ok || !r.data || !r.data.series) return;
+  q.series = r.data.series;
+  const now = $('#qd-series'); if (now) now.outerHTML = qdSeriesHtml(q);
+}
+function qdToggleSeriesFold(btn) {
+  const card = btn.closest('.qd-series'); if (!card) return;
+  const open = btn.dataset.open !== '1';
+  btn.dataset.open = open ? '1' : '';
+  card.querySelectorAll('[data-qsfold]').forEach((li) => { li.hidden = !open; });
+  btn.textContent = open ? 'Show fewer' : `Show all ${card.querySelectorAll('.qd-ss').length} steps`;
+}
 async function qdToggleStep(btn) {
   if (qpBusy || !qdState.quest) return;
   const i = safeInt(btn.dataset.qstepchk);
@@ -782,6 +849,7 @@ async function qdToggleStep(btn) {
   const before = was && was.status;
   qdState.quest.progress = (r.data || {}).progress || null;
   qdRefreshProgress();
+  if (((qdState.quest.progress || {}).status || null) !== (before || null)) qdRefreshSeries();
   if (qdState.quest.progress && qdState.quest.progress.status === 'done' && before !== 'done') toast('Quest complete — nice work');
 }
 async function qdSetStatus(btn) {
@@ -792,8 +860,10 @@ async function qdSetStatus(btn) {
   const { r, err } = await qpPost({ quest: qdState.quest.id, action: 'status', status: st });
   qpBusy = false; btn.disabled = false;
   if (err) { toast(err, false); return; }
+  const before = (qdState.quest.progress || {}).status || null;
   qdState.quest.progress = (r.data || {}).progress || null;
   qdRefreshProgress();
+  if (((qdState.quest.progress || {}).status || null) !== before) qdRefreshSeries();
   toast(st === 'done' ? 'Marked done' : st === 'none' ? 'Progress cleared' : 'Tracking it — find it under My quests');
 }
 function questCopyLeftWays() {
@@ -810,6 +880,8 @@ function initQuestProgress() {
     const pr = e.target.closest('[data-qprog]');
     if (pr && !pr.disabled) { qdSetStatus(pr); return; }
     if (e.target.closest('[data-qcopyleft]')) questCopyLeftWays();
+    const more = e.target.closest('[data-qseries-more]');
+    if (more) qdToggleSeriesFold(more);
   });
 }
 

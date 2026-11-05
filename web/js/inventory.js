@@ -20,7 +20,7 @@ const INV_COLUMNS = [
 // has no `notes`, so a sortable notes header would silently sort by item_name.
 const invState = { page: 1, perPage: 100, hasNext: false, sortField: 'item_name', sortOrder: 'ASC', items: [],
                    noteFor: null,   // inventory id open in the notes dialog
-                   groups: [], grpCollapsed: new Set(), tagFilter: null, tagEdit: null,
+                   groups: [], grpCollapsed: new Set(['soldout']), tagFilter: null, tagEdit: null,
                    checked: new Set(),    // checkbox selection — bulk edit / multi-drag filing
                    lastSel: null,         // last-toggled checkbox (anchor for shift-click ranges)
                    selected: new Set(),
@@ -279,7 +279,8 @@ function invRowHtml(item, idx, pace = invPace()) {
   // a NEGATIVE threshold (-1) = this item never warns — not low, not oversold
   // (sometimes-stocked specials — Veizyr/Epo). 0 warns again at 0, so a deliberate
   // stock of 1-2 still shouts when it runs out (Danvar).
-  const stockCls = threshold < 0 ? '' : stocked < 0 ? 'inv-neg' : stocked <= threshold ? 'inv-low' : '';
+  const oneOff = !!Number(item.one_off);   // one-offs have no threshold at all (Canda)
+  const stockCls = threshold < 0 || oneOff ? '' : stocked < 0 ? 'inv-neg' : stocked <= threshold ? 'inv-low' : '';
   const iid = String(item.id);
   const notePreview = labNotesText(item.notes);   // rich notes -> plain text for the tooltip
   const hasNotes = !!notePreview;
@@ -292,9 +293,10 @@ function invRowHtml(item, idx, pace = invPace()) {
     <td class="col-name res-name"><span class="stk-tagslot">${tagged
       ? `<i class="fa-solid fa-tag stk-tagind" data-invtaghover="${idx}"></i>` : ''}</span>${escapeHtml(item.item_name || '')}${invIsBucket(item)
       ? ` <i class="fa-solid fa-layer-group inv-bucketico" title="${escapeHtml(invBucketTip(item))}"></i>` : ''}${typeof pgInvChip === 'function' ? pgInvChip(item) : ''}</td>
-    <td class="stat inv-edit${threshold >= 0 ? '' : ' inv-nowarn'}" data-edit="threshold" data-idx="${idx}" title="${threshold >= 0
+    ${oneOff ? '<td class="stat inv-nowarn" title="One-offs have no threshold — they never warn"><span class="stat_off">—</span></td>'
+      : `<td class="stat inv-edit${threshold >= 0 ? '' : ' inv-nowarn'}" data-edit="threshold" data-idx="${idx}" title="${threshold >= 0
         ? 'Click to edit — warns at or below this number; set it to -1 to turn off this item’s low-stock and oversold warnings'
-        : 'Warnings are off for this item (threshold -1) — click to set a threshold'}">${invState.editMode ? invQuickInput('threshold', idx, threshold) : fmtNum(threshold)}</td>
+        : 'Warnings are off for this item (threshold -1) — click to set a threshold'}">${invState.editMode ? invQuickInput('threshold', idx, threshold) : fmtNum(threshold)}</td>`}
     <td class="col-text">${escapeHtml(item.vendor || '') || '<span class="stat_off">—</span>'}</td>
     <td class="col-num">${item.match_price != null && item.match_price !== '' ? fmtNum(item.match_price) : '<span class="stat_off">—</span>'}</td>
     <td class="stat ${invSalesClickable(item) ? 'inv-sales' : ''}" ${invSalesClickable(item) ? `data-sales="${idx}" title="${safeInt(item.sales_count) ? 'Click to see the matched sales' : 'Click to see this item’s history'}"` : ''}>${safeInt(item.sales_count) ? fmtNum(item.sales_count) : '<span class="stat_off">—</span>'}</td>
@@ -349,7 +351,16 @@ function invPageSize() {
 function renderInvRows() {
   let pairs = invState.items.map((item, idx) => [item, idx]);
   if (invState.tagFilter) pairs = pairs.filter(([i]) => invTags(i).includes(invState.tagFilter));
+  // One-offs view (Canda): sold-out ones (0 or less) sink into a folded "Sold
+  // out" section at the bottom — the picked sort holds within each part, and
+  // restocking one lifts it back up on the reload
+  const soldOut = $('#inv-filter').value === 'one_off' ? pairs.filter(([i]) => safeInt(i.stocked) <= 0) : [];
+  if (soldOut.length) pairs = pairs.filter(([i]) => safeInt(i.stocked) > 0);
   const sections = grpSections(invState.groups, pairs, ([i]) => i.group_id);
+  if (soldOut.length) {
+    if (!pairs.length && !invState.groups.length) sections.length = 0; // no empty Unfiled above it
+    sections.push({ key: 'soldout', g: null, name: 'Sold out', items: soldOut });
+  }
   const spacer = `<tr class="stk-group-gap"><td colspan="${invColCount()}"></td></tr>`;
   const parts = [];
   const pi = invPageSlice(sections, (s) => invState.grpCollapsed.has(s.key), invPageSize(), invState.page);
@@ -357,9 +368,11 @@ function renderInvRows() {
   invState.page = pi.page; invState.pageInfo = pi;
   pi.out.forEach(({ sec, items }) => {
     const collapsed = invState.grpCollapsed.has(sec.key);
-    if (sec.key !== 'un' || sections.length > 1) {
+    if (sec.key !== 'un' || sections.some((s) => s.key !== 'un' && s.key !== 'soldout')) {   // Sold out alone doesn't need an Unfiled header
       if (parts.length) parts.push(spacer);
-      parts.push(grpTableHeaderHtml(sec.key, sec.name, sec.items.length, collapsed, sec.key !== 'un', invColCount(), 'col-actions', sec.key !== 'un', true));
+      parts.push(sec.key === 'soldout'   // not a folder: no rename / delete / drag / select-all
+        ? grpTableHeaderHtml(sec.key, sec.name, sec.items.length, collapsed, false, invColCount(), 'col-actions')
+        : grpTableHeaderHtml(sec.key, sec.name, sec.items.length, collapsed, sec.key !== 'un', invColCount(), 'col-actions', sec.key !== 'un', true));
     }
     if (!collapsed) parts.push(...items.map(([item, idx]) => invRowsHtml(item, idx, pace)));
   });
@@ -739,6 +752,7 @@ async function addInvItem() {
   btn.disabled = true;
   const editId = $('#inv-add-modal').dataset.editId || '';
   const group = safeInt($('#inv-new-group').value);
+  const oneOff = $('#inv-new-oneoff').checked;
   let res;
   try {
     // gateway (not the shell bridge): it carries the vendor field. POST for a
@@ -750,7 +764,9 @@ async function addInvItem() {
         item_name: name,
         vendor: $('#inv-new-vendor').value.trim(),
         stocked: safeInt($('#inv-new-stocked').value),
-        threshold: safeInt($('#inv-new-threshold').value),
+        // a one-off keeps its stored threshold untouched — it just never warns
+        ...(oneOff ? {} : { threshold: safeInt($('#inv-new-threshold').value) }),
+        one_off: oneOff ? 1 : 0,
         // only when it moved — filing is metadata the row may not carry
         ...(group !== safeInt($('#inv-add-modal').dataset.groupWas) ? { group_id: group || null } : {}),
       } });
@@ -760,7 +776,8 @@ async function addInvItem() {
         match_mode: invState.dlg.match,
         vendor: $('#inv-new-vendor').value.trim(),
         stocked: safeInt($('#inv-new-stocked').value),
-        threshold: safeInt($('#inv-new-threshold').value),
+        ...(oneOff ? {} : { threshold: safeInt($('#inv-new-threshold').value) }),
+        one_off: oneOff ? 1 : 0,
       } });
       // POST has no group field — file the new row with a follow-up PUT (Danvar)
       const newId = res.ok && res.data ? safeInt(res.data.inventory_id) : 0;
@@ -782,7 +799,9 @@ async function addInvItem() {
     if (results.some((r) => !r.ok)) toast('Saved, but the extra names didn’t — site update pending?', false);
   }
   if (res.ok) {
-    toast(editId ? `${name} updated` : `${name} added to inventory`);
+    // a new one-off (or one just ticked) leaves the normal views — say where it went
+    const movedAway = oneOff && $('#inv-filter').value !== 'one_off';
+    toast(`${name} ${editId ? 'updated' : 'added to inventory'}${movedAway ? ' — find it under the One-offs filter' : ''}`);
     $('#inv-add-modal').hidden = true;
     loadInventory();
     if (typeof salesOnInvAdded === 'function') salesOnInvAdded(name, $('#inv-new-vendor').value); // clear Sales' "not in inventory" flags
@@ -825,6 +844,9 @@ function openInvDialog(item = null, clone = false, preset = null) {
     $('#inv-new-stocked').value = clone && item ? String(safeInt(item.stocked)) : '10';
     $('#inv-new-threshold').value = clone && item ? String(safeInt(item.threshold)) : '1';
   }
+  // One-off (Canda): edit/clone carry the row's flag; adding from the One-offs view starts ticked
+  $('#inv-new-oneoff').checked = item ? !!Number(item.one_off) : $('#inv-filter').value === 'one_off';
+  invDlgSyncOneOff();
   const src = item || null;
   invState.dlg = { match: src && src.match_mode === 'words' ? 'words' : 'exact',
                    extra: [...((src && src.extra_names) || [])], extraWas: clone ? [] : [...((src && src.extra_names) || [])] };
@@ -837,6 +859,11 @@ function openInvDialog(item = null, clone = false, preset = null) {
   ((item && !clone) ? $('#inv-new-vendor') : preset ? $('#inv-new-stocked') : nameInput).focus();
   if (clone) nameInput.select();
   if (preset) $('#inv-new-stocked').select();
+}
+
+// one-offs have no threshold — the field steps aside while the box is ticked
+function invDlgSyncOneOff() {
+  $('#inv-new-threshold-field').hidden = $('#inv-new-oneoff').checked;
 }
 
 // ---- the Add/Edit dialog's Match + Extra names + live preview ----
@@ -1021,6 +1048,7 @@ function initInventory() {
     $('#inv-new-vendor').value = opt.dataset.vendor;
     $('#inv-vendor-sug').hidden = true;
   });
+  $('#inv-new-oneoff').addEventListener('change', invDlgSyncOneOff);
   $('#inv-add-cancel').addEventListener('click', () => { $('#inv-add-modal').hidden = true; });
   bindBackdropClose($('#inv-add-modal'), () => { $('#inv-add-modal').hidden = true; });
   // Sales expander: one open at a time, click the count again to close
@@ -1260,7 +1288,7 @@ function initInventory() {
     let p = dragging.previousElementSibling;         // section = nearest divider above
     while (p && !p.hasAttribute('data-grpkey')) p = p.previousElementSibling;
     const key = p ? p.dataset.grpkey : 'un';
-    if (item) {
+    if (item && key !== 'soldout') {   // Sold out isn't a folder — dropping there files nothing
       const gid = key === 'un' ? null : safeInt(key);
       // the dragged row being checked pulls the whole checked set with it
       const ids = invState.checked.has(String(item.id)) && invState.checked.size > 1

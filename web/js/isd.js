@@ -3,6 +3,8 @@
    spawn, new names queued until they have stats. Two surfaces:
    - Mail page: a "Survey droid reports" panel, only for players who have any
    - bell: after an upload, any new report becomes a local alert
+   A "waiting for stats" name gets Enter stats: a dialog with just the stats
+   its class has, capped per class; the site adds it in spawn (Canda).
    Normal players never hit api/isd.php except one call when the Mail page opens. */
 
 // open/items survive the Mail page's 10s refresh, which redraws this panel (Danvar)
@@ -10,6 +12,7 @@ const isdState = { lastUploaded: null, checking: false, open: new Set(), items: 
 const ISD_RESULT_LABEL = {
   planet_added: 'planet added', confirmed: 'already listed', inactive: 'not in spawn on the site',
   added: 'new — added', pending: 'new — waiting for stats',
+  entered: 'added — you entered the stats', arrived: 'new — now on the site',
 };
 
 function isdSummary(r) {
@@ -87,7 +90,8 @@ async function isdToggle(id) {
     isdState.items.set(key, items.length ? items.map((i) => `
       <div class="isd-item"><span class="isd-name">${escapeHtml(i.name)}</span>
         <span class="isd-cls">${escapeHtml(i.cls)}</span>
-        <span class="isd-res isd-res-${escapeHtml(i.result)}">${escapeHtml(ISD_RESULT_LABEL[i.result] || i.result)}</span></div>`).join('')
+        <span class="isd-res isd-res-${escapeHtml(i.result)}">${escapeHtml(ISD_RESULT_LABEL[i.result] || i.result)}</span>${i.result === 'pending'
+          ? `<button type="button" class="btn btn-sm btn-outline-secondary isd-enter" data-isdstats="${escapeHtml(i.name)}" data-isdrep="${safeInt(id)}" title="Type in the stats from the game — the site adds it in spawn on this planet"><i class="fa-solid fa-pen"></i> Enter stats</button>` : ''}</div>`).join('')
       : '<div class="isd-item muted">Nothing listed.</div>');
   }
   if (!isdState.open.has(key)) return;   // closed again while loading
@@ -97,8 +101,92 @@ async function isdToggle(id) {
   cur.hidden = false;
 }
 
+// ---- Enter stats (key-gate modal, built once) ----
+const isdStats = { name: '', rep: 0, fields: [], busy: false };
+function isdStatsModal() {
+  let m = $('#isd-stats-modal');
+  if (m) return m;
+  document.body.insertAdjacentHTML('beforeend', `
+  <div id="isd-stats-modal" class="key-gate" hidden>
+    <div class="key-gate-card sp-card inv-add-card isd-stats-card" role="dialog" aria-modal="true" aria-labelledby="isd-stats-title">
+      <h2 id="isd-stats-title">Enter stats</h2>
+      <div class="settings-hint" id="isd-stats-what"></div>
+      <div class="isd-stats-grid" id="isd-stats-fields"></div>
+      <div class="inv-add-actions">
+        <span id="isd-stats-status" class="key-gate-status"></span>
+        <button id="isd-stats-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
+        <button id="isd-stats-save" class="btn btn-sm btn-accent"><i class="fa-solid fa-plus"></i> Add resource</button>
+      </div>
+    </div>
+  </div>`);
+  m = $('#isd-stats-modal');
+  const close = () => { m.hidden = true; };
+  $('#isd-stats-cancel').addEventListener('click', close);
+  $('#isd-stats-save').addEventListener('click', isdSaveStats);
+  m.addEventListener('click', (e) => { if (e.target === m) close(); });
+  m.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') close();
+    else if (e.key === 'Enter') { e.preventDefault(); isdSaveStats(); }
+  });
+  return m;
+}
+
+async function isdOpenStats(name, rep) {
+  const m = isdStatsModal();
+  let res;
+  try { res = await apiFetch('GET', 'api/isd.php', { params: { pending: name } }); } catch (e) { res = { ok: false, error: String(e) }; }
+  const p = res.ok && res.data && res.data.pending;
+  if (!p) { toast((res.data && res.data.error) || res.error || `${name} is no longer waiting for stats`, false); isdRefreshItems(rep); return; }
+  if (!p.fields.length) { toast(`The site doesn't know the class ${p.type_name} yet, so it can't take stats for ${name}`, false); return; }
+  Object.assign(isdStats, { name: p.name, rep, fields: p.fields });
+  $('#isd-stats-title').textContent = `Enter stats — ${p.name}`;
+  $('#isd-stats-what').innerHTML = `<b>${escapeHtml(p.type_name)}</b> · ${escapeHtml(p.planets.map((x) => x.name).join(', ') || 'no planet yet')}
+    <br>Type them from the resource's examine window. It goes in spawn on the site; the SWGAide feed's stats replace these when it lists it.`;
+  $('#isd-stats-fields').innerHTML = p.fields.map((f) => `
+    <div class="inv-add-field">
+      <label class="sp-field-label" for="isd-st-${f.code}" title="${escapeHtml(f.label)}">${f.code.toUpperCase()} <span class="settings-sub">1–${f.max}</span></label>
+      <input id="isd-st-${f.code}" data-code="${f.code}" type="number" class="form-control filter-input" min="1" max="${f.max}" step="1" autocomplete="off">
+    </div>`).join('');
+  $('#isd-stats-status').textContent = '';
+  m.hidden = false;
+  m.querySelector('input')?.focus();
+}
+
+async function isdSaveStats() {
+  if (isdStats.busy) return;
+  const status = $('#isd-stats-status');
+  const stats = {};
+  for (const f of isdStats.fields) {
+    const el = $(`#isd-st-${f.code}`);
+    const v = el.value.trim();
+    const n = Number(v);
+    if (v === '' || !Number.isInteger(n)) { status.textContent = `${f.code.toUpperCase()} is needed — a whole number.`; el.focus(); return; }
+    if (n < 1 || n > f.max) { status.textContent = `${f.code.toUpperCase()} must be between 1 and ${f.max} for this class.`; el.focus(); return; }
+    stats[f.code] = n;
+  }
+  isdStats.busy = true; $('#isd-stats-save').disabled = true; status.textContent = 'Saving…';
+  let r;
+  try { r = await apiFetch('POST', 'api/isd.php?stats=1', { data: { name: isdStats.name, stats } }); } catch (e) { r = { ok: false, error: String(e) }; }
+  isdStats.busy = false; $('#isd-stats-save').disabled = false;
+  if (!r.ok || (r.data && r.data.error)) { status.textContent = (r.data && r.data.error) || r.error || 'Could not add it.'; return; }
+  $('#isd-stats-modal').hidden = true;
+  toast(r.data.status === 'exists' ? `${isdStats.name} is already on the site — no need, it arrived meanwhile` : `${isdStats.name} added in spawn — thanks!`);
+  isdRefreshItems(isdStats.rep);
+}
+
+// drop a report's cached names and redraw it open with the new results
+async function isdRefreshItems(rep) {
+  const key = String(rep);
+  isdState.items.delete(key);
+  isdState.open.delete(key);
+  await isdLoadPanel();
+  isdToggle(rep);
+}
+
 function initIsd() {
   document.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-isdstats]');
+    if (btn) { isdOpenStats(btn.dataset.isdstats, safeInt(btn.dataset.isdrep)); return; }
     const row = e.target.closest('[data-isd]');
     if (row) isdToggle(row.dataset.isd);
   });

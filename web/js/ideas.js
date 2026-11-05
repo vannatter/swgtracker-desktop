@@ -9,7 +9,8 @@ const IDEA_CATEGORIES = ['Crafting', 'Resources', 'Sales & Inventory', 'Beasts',
 
 const ideaState = { ideas: [], main: [], shipped: [], shippedOpen: false, me: { signed_in: false, admin: false }, editId: null, expanded: new Set(), loading: false,
                     threadOpen: new Set(),   // idea ids with their comment thread showing
-                    threads: new Map() };    // idea id -> { loading, comments, draft } — drafts survive repaints
+                    threads: new Map(),      // idea id -> { loading, comments, draft } — drafts survive repaints
+                    focus: '', flash: '' };  // a bell button's idea to scroll to / briefly ring
 
 // ---- comment threads ----------------------------------------------------------
 function ideaThreadHtml(id) {
@@ -90,18 +91,19 @@ function ideaCardHtml(it) {
   const long = desc.length > 240 || desc.split('\n').length > 3;
   const open = ideaState.expanded.has(id);
   const admin = ideaState.me.admin;
-  return `<div class="idea-card${it.pinned ? ' idea-pinned' : ''}" data-iid="${id}">
+  return `<div class="idea-card${it.pinned ? ' idea-pinned' : ''}${ideaState.flash === id ? ' idea-flash' : ''}" data-iid="${id}">
     <button class="idea-vote${it.voted ? ' voted' : ''}" data-ivote="${id}"
       title="${ideaState.me.signed_in ? (it.voted ? 'Remove your vote' : 'Upvote this idea') : 'Add your key in Settings to vote'}">
       <i class="fa-solid fa-caret-up"></i><span>${fmtNum(it.votes)}</span></button>
     <div class="idea-body">
       <div class="idea-title-row">
         ${it.pinned ? '<i class="fa-solid fa-thumbtack idea-pin-ico" title="Pinned"></i>' : ''}
-        <span class="idea-title">${escapeHtml(it.title)}</span>
+        <span class="idea-num" title="Idea number — search #N to find it">#${Number(it.id) || ''}</span><span class="idea-title">${escapeHtml(it.title)}</span>
         ${it.is_dev ? '<span class="idea-dev" title="Posted by the developer">Dev</span>' : ''}
       </div>
       <div class="idea-meta">
         ${ideaStatusPill(it.status)}
+        ${it.status === 'shipped' && it.shipped_version ? `<span class="idea-ver" title="The release it went out in">in ${escapeHtml(it.shipped_version)}</span>` : ''}
         <span class="idea-cat">${escapeHtml(it.category)}</span>
         <span class="idea-by">by ${escapeHtml(it.by)} · ${fmtAgoTip(it.created)}</span>
         <button class="idea-cmt-btn${ideaState.threadOpen.has(id) ? ' active' : ''}" data-icmt="${id}"
@@ -172,7 +174,79 @@ async function loadIdeas() {
   renderIdeas();
   // open threads refetch with the list, so comments posted elsewhere show up
   ideaState.threadOpen.forEach((id) => { if (ideaState.ideas.some((i) => String(i.id) === id)) ideaLoadThread(id); });
+  if (ideaState.focus) ideaFocusApply();
 }
+
+// ---- "An idea you backed shipped" ----
+// When an idea is marked Shipped the server queues a note for everyone who voted
+// for it (and whoever posted it) — includes/idea_notify.php on the site. Every 30
+// minutes the app collects its notes (the call claims them, so each arrives once)
+// and drops each in the bell with buttons to the idea and, when the release is
+// known, About → What's new. Phone push sends the same notes from the site. The
+// "Ideas I backed ship" switch (Settings, default on) lives server-side.
+
+const IDEA_SHIP_POLL_MS = 30 * 60 * 1000;
+let ideaShipPrefs = null;   // last prefs seen — null until Settings or a poll loads them
+
+async function ideaShipSweep() {
+  let res;
+  try { res = await apiFetch('GET', 'api/ideas.php', { params: { shipped_due: 1 } }); } catch (_) { return; }
+  if (!res || !res.ok || !res.data || !Array.isArray(res.data.notes)) return;   // offline / older site / no key
+  ideaShipPrefs = res.data.prefs || ideaShipPrefs;
+  for (const n of res.data.notes) {
+    if (!n || !n.title) continue;
+    appLocalAlert(n.title, n.message || '', { page: 'ideas', focus: safeInt(n.idea_id), label: 'View idea', release: n.version || '' });
+  }
+  if (res.data.notes.length && loadedPages.has('ideas')) loadIdeas();
+}
+
+// a bell button: open the Ideas board on this idea (app.js calls it before showPage)
+function ideaFocus(id) {
+  ideaState.focus = String(id);
+  if (loadedPages.has('ideas')) loadIdeas();   // already loaded → showPage won't refetch on its own
+}
+
+// find the card — unfold Shipped this week, or widen to All statuses — then scroll to it, once
+function ideaFocusApply() {
+  const id = ideaState.focus;
+  if (ideaState.shipped.some((i) => String(i.id) === id) && !ideaState.shippedOpen) ideaState.shippedOpen = true;
+  if (!ideaState.ideas.some((i) => String(i.id) === id)) {
+    if ($('#ideas-status').value !== '') { $('#ideas-status').value = ''; loadIdeas(); return; }
+    ideaState.focus = '';
+    return;
+  }
+  ideaState.focus = '';
+  ideaState.flash = id;
+  renderIdeas();
+  document.querySelector(`#ideas-list .idea-card[data-iid="${CSS.escape(id)}"]`)?.scrollIntoView({ block: 'center' });
+  setTimeout(() => { if (ideaState.flash === id) { ideaState.flash = ''; renderIdeas(); } }, 2400);
+}
+
+// Settings: the switch (read-only call — never claims due notes)
+async function ideaShipLoadPrefs() {
+  const el = $('#set-ideas-shipped');
+  if (!el) return;
+  let res;
+  try { res = await apiFetch('GET', 'api/ideas.php', { params: { prefs: 1 } }); } catch (_) { res = null; }
+  const ok = !!(res && res.ok && res.data && res.data.prefs);
+  $('#set-ideas-off').hidden = ok;
+  el.disabled = !ok;
+  if (!ok) return;
+  ideaShipPrefs = res.data.prefs;
+  el.checked = !!ideaShipPrefs.shipped;
+}
+
+// Settings Save: only when it changed (account-side, shared with the website's Notifications)
+async function ideaShipSavePrefs() {
+  const el = $('#set-ideas-shipped');
+  if (!el || el.disabled || !ideaShipPrefs || !!ideaShipPrefs.shipped === el.checked) return;
+  const res = await apiFetch('POST', 'api/ideas.php', { data: { action: 'prefs', shipped: el.checked } });
+  if (!res.ok) throw new Error(res.error || 'failed to save idea notifications');
+  ideaShipPrefs = res.data.prefs || { shipped: el.checked };
+}
+
+// first check a little after launch (past the boot rush, behind Sales Alerts), then every 30
+setTimeout(() => { ideaShipSweep(); setInterval(ideaShipSweep, IDEA_SHIP_POLL_MS); }, 150 * 1000);
 
 function ideaOpenDialog(it = null) {
   if (!ideaState.me.signed_in) { toast('Add your user key in Settings to post ideas', false); return; }
@@ -239,7 +313,9 @@ async function ideaAdmin(data, okMsg) {
   let res;
   try { res = await apiFetch('POST', 'api/ideas.php', { data }); } catch (e) { res = { ok: false, error: String(e) }; }
   if (!res.ok) { toast(res.error || 'Update failed', false); return; }
-  if (okMsg) toast(okMsg);
+  // marking Shipped tells its backers (once) — say how many heard
+  const told = safeInt(res.data && res.data.notified);
+  if (okMsg) toast(told ? `${okMsg} — ${fmtNum(told)} backer${told === 1 ? '' : 's'} notified` : okMsg);
   loadIdeas();
 }
 

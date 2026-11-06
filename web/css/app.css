@@ -1819,6 +1819,32 @@ td .harv-name { font-size: inherit; font-weight: inherit; color: inherit; }
 .inv-selbar-sep[hidden] { display: none; }
 .inv-reassign-also { display: flex; align-items: baseline; gap: 6px; margin-top: 10px; font-size: 13px; cursor: pointer; }
 .inv-reassign-also[hidden] { display: none; }
+/* My Inventory variants (Danvar | Berrillin): one row per item with the total,
+   a chevron opens its variants as indented rows; the Add/Edit dialog lists them */
+.inv-var-toggle { border: 0; background: transparent; color: var(--text-muted); padding: 0 6px 0 0; font-size: 11px;
+  cursor: pointer; line-height: 1; }
+.inv-var-toggle i { transition: transform .15s ease; }
+.inv-var-toggle.open i { transform: rotate(90deg); }
+.inv-var-toggle:hover { color: var(--text-hover); }
+.inv-var-count { font-size: 11px; color: var(--text-muted); border: 1px solid var(--border); border-radius: 9px;
+  padding: 0 7px; margin-left: 6px; white-space: nowrap; cursor: pointer; }
+.inv-var-count:hover { color: var(--text-hover); border-color: var(--text-muted); }
+#inv-body tr.inv-var-row td { background: rgba(255, 255, 255, .025); border-top-color: transparent; }
+#inv-body tr.inv-var-row.inv-picked td { background: rgba(75, 121, 103, .18); }
+.inv-var-name { padding-left: 34px !important; color: var(--text-primary); }
+.inv-var-branch { display: inline-block; width: 10px; height: 9px; margin-right: 7px; vertical-align: 2px;
+  border-left: 1px solid var(--text-muted); border-bottom: 1px solid var(--text-muted); opacity: .6; }
+.inv-reassign-opt .inv-var-branch { margin-left: 8px; }
+.inv-add-card { max-height: calc(100vh - 40px); overflow-y: auto; }
+.inv-var-list { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 6px; }
+.inv-var-list:empty { display: none; }
+.inv-var-edit { display: grid; grid-template-columns: minmax(0, 1fr) 72px 80px 28px; gap: 6px; align-items: center; }
+.inv-var-edit input { width: 100%; max-width: none; min-width: 0; }
+.inv-var-edit-head { font-size: 11px; color: var(--text-muted); }
+.inv-var-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.inv-var-edit .btn-icon { width: 28px; min-width: 0; padding: 0; justify-self: end; }
+#inv-own-hint a { white-space: nowrap; color: var(--text-hover); text-decoration: underline dotted; text-underline-offset: 3px; }
+#inv-own-hint a:hover { color: var(--accent-hover); }
 #sales-body td.col-actions { white-space: nowrap; text-align: right; width: 1%; }
 td.col-actions .btn-icon.sales-notinv { color: var(--q-good); }
 td.col-actions .btn-icon.sales-notinv:hover { color: var(--accent); }
@@ -5141,3 +5167,5 @@ body:not(.power-tools) .power-only { display: none !important; }
 .fac-ready-card .btn[hidden] { display: none; }
 #cmp-link-sel[hidden], #cmp-link-multi[hidden], #fac-plan-sel[hidden], #fac-ready-pickwrap[hidden], #fac-ready-schem[hidden] { display: none; }
 #cmp-link-multi .filter-input, #fac-ready-search, #fac-plan-sel { width: 100%; max-width: none; }
+#inv-own-give { color: var(--text-hover); text-decoration: underline; text-underline-offset: 2px; }
+#inv-own-give:hover { color: var(--text-primary); }

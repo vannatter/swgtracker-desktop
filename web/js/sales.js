@@ -182,7 +182,8 @@ async function salesLoadInvNames() {
     try { r = await api().get_inventory({ page: p, perpage: 500 }); } catch (_) { return; }
     if (!r.ok || !r.data) return; // unknown state — leave the flags off rather than wrong
     const rows = r.data.results || [];
-    rows.forEach((i) => {
+    // an item's variants are tracked names too (they share its vendor)
+    rows.flatMap((i) => [i, ...(i.variants || [])]).forEach((i) => {
       const k = salesNormItem(i.item_name);
       if (!names.has(k)) names.set(k, new Set());
       names.get(k).add(salesNormItem(i.vendor));

@@ -363,7 +363,13 @@ async function cmpLoadInventory() {
     const res = await apiFetch('GET', 'api/inventory.php', { params: { page, perpage: 500, sort: 'item_name', order: 'ASC' } });
     if (!res.ok) break;
     const got = (res.data && res.data.results) || [];
-    all.push(...got);
+    // an item with variants: crafts go onto one variant (each has its own stock);
+    // the item itself stays pickable as its unassigned stock
+    got.forEach((i) => {
+      const vars = i.variants || [];
+      all.push(vars.length ? { ...i, stocked: i.own_stocked, item_name: `${i.item_name} (unassigned)` } : i);
+      vars.forEach((v) => all.push(v));
+    });
     if (got.length < 500) break;
   }
   cmpState.inv = all;

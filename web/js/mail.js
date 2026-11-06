@@ -83,6 +83,7 @@ async function loadMail() {
         items.forEach((i) => {
           names.add(invNormName(i.item_name));
           (i.extra_names || []).forEach((x) => names.add(invNormName(x)));
+          (i.variants || []).forEach((v) => names.add(invNormName(v.item_name)));   // each variant's own sale name
           if (i.match_mode === 'words') words.push(i.item_name);
         });
         invNames = mmInvIndex = { at: Date.now(), has: (n) => names.has(invNormName(n)) || words.some((w) => invWordsMatch(w, n)) };

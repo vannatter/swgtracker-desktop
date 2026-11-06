@@ -24,7 +24,7 @@ const invState = { page: 1, perPage: 100, hasNext: false, sortField: 'item_name'
                    checked: new Set(),    // checkbox selection — bulk edit / multi-drag filing
                    lastSel: null,         // last-toggled checkbox (anchor for shift-click ranges)
                    selected: new Set(),
-                   dlg: { match: 'exact', extra: [], extraWas: [] },   // the Add/Edit dialog's Match + Extra names
+                   dlg: { match: 'exact', extra: [], extraWas: [], vars: [], varsWas: [] },   // the Add/Edit dialog's Match + Extra names + Variants
                    editMode: false };   // every Stocked/Threshold cell is a box — run down a column without clicking // click-marked rows (Veizyr) — survive re-renders and window switches
 
 // ---- restock forecast: sell pace from matched sales (api/inventory.php sends
@@ -63,12 +63,82 @@ function invSuggest(item, pace = invPace()) {
   if (!rate) return 0;
   return Math.max(0, Math.ceil(rate * pace.cover) - safeInt(item.stocked));
 }
-// warnings-off items (threshold -1) and one-offs never count as running out
+// warnings-off items (threshold -1) and one-offs never count as running out;
+// an item with variants is running out when any of its variants is
 const invRunningOut = (item, pace = invPace()) => {
+  if (invHasVars(item)) return item.variants.some((v) => invRunningOut(v, pace));
   if (safeInt(item.threshold) < 0 || Number(item.one_off)) return false;
   const d = invDaysLeft(item, pace);
   return d !== null && d <= INV_RUNOUT_DAYS;
 };
+
+// ---- variants (Danvar | Berrillin): one item, several sale names, each with its
+// own Stocked + threshold. api/inventory.php sends them on the item as
+// `variants` (each a full row, with `label` = its name minus the item's); the
+// item's `stocked` / `sales_count` / sold_* are the totals, `own_stocked` its own
+// unassigned count. A sale named like a variant draws down that variant.
+const invHasVars = (item) => !!(item && Array.isArray(item.variants) && item.variants.length);
+const invVarLabel = (v) => String(v.label || v.item_name || '');
+// low / oversold for one stock row (an item without variants, or one variant)
+function invStockCls(row) {
+  const s = safeInt(row.stocked), t = safeInt(row.threshold);
+  if (t < 0 || Number(row.one_off)) return '';
+  return s < 0 ? 'inv-neg' : s <= t ? 'inv-low' : '';
+}
+// an item with variants is low when any variant is (oversold beats low)
+function invItemStockCls(item) {
+  if (!invHasVars(item)) return invStockCls(item);
+  const c = item.variants.map(invStockCls);
+  return c.includes('inv-neg') ? 'inv-neg' : c.includes('inv-low') ? 'inv-low' : '';
+}
+// every row that carries its own stock: variants in place of their item. The
+// restock counts, alerts and pickers work on these.
+const invLeaves = (rows) => rows.flatMap((i) => (invHasVars(i)
+  ? i.variants.map((v) => ({ ...v, parent_name: i.item_name, one_off: i.one_off })) : [i]));
+// expanded items — per viewer, remembered across launches
+const INV_VAROPEN_KEY = 'inv-var-open';
+function invVarOpen() {
+  if (!invState.varOpen) {
+    let ids = [];
+    try { ids = JSON.parse(localStorage.getItem(INV_VAROPEN_KEY) || '[]') || []; } catch (_) {}
+    invState.varOpen = new Set(ids.map(String));
+  }
+  return invState.varOpen;
+}
+function invToggleVars(id) {
+  const open = invVarOpen(), k = String(id);
+  if (open.has(k)) open.delete(k); else open.add(k);
+  try { localStorage.setItem(INV_VAROPEN_KEY, JSON.stringify([...open])); } catch (_) {}
+  renderInvRows();
+}
+// the row a cell edits: data-idx = the item; data-vi = one of its variants
+// (-1 = the item's own unassigned stock, as a stand-in row)
+function invCellItem(el) {
+  const d = el.dataset;
+  const item = invState.items[safeInt(d.idx ?? d.sales ?? d.invalert)];
+  if (!item || d.vi === undefined) return item;
+  const vi = safeInt(d.vi);
+  if (vi >= 0) return item.variants[vi];
+  if (!item._own) item._own = { id: item.id, item_name: item.item_name, stocked: safeInt(item.own_stocked), threshold: -1, _ownOf: item };
+  return item._own;
+}
+// after a variant's (or the unassigned) count changes in place: the item's total follows
+function invRecalcTotal(item) {
+  if (!invHasVars(item)) return;
+  if (item._own) item.own_stocked = item._own.stocked;
+  item.stocked = safeInt(item.own_stocked) + item.variants.reduce((n, v) => n + safeInt(v.stocked), 0);
+  const cell = document.querySelector(`#inv-body tr[data-iid="${item.id}"]:not(.inv-var-row) [data-vtotal]`);
+  if (cell) {
+    const cls = invItemStockCls(item);
+    cell.classList.toggle('inv-neg', cls === 'inv-neg');
+    cell.classList.toggle('inv-low', cls === 'inv-low');
+    cell.innerHTML = invTotalHtml(item);
+  }
+}
+function invTotalHtml(item) {
+  const cls = invItemStockCls(item);
+  return `${cls ? `<i class="fa-solid fa-triangle-exclamation inv-warnico" title="${cls === 'inv-neg' ? 'A variant is oversold' : 'A variant is at or below its restock threshold'}"></i>` : ''}${fmtNum(safeInt(item.stocked))}`;
+}
 function invSortVal(item, field, pace) {
   if (field === 'pace') return invRate(item, pace) ?? -1;
   if (field === 'suggest') return invSuggest(item, pace);
@@ -96,7 +166,7 @@ function invPaceCells(item, pace) {
   const wk = rate * 7;
   const wkTxt = !sold ? off : wk < 10 ? wk.toFixed(1).replace(/\.0$/, '') : fmtNum(Math.round(wk));
   const d = invDaysLeft(item, pace);
-  const warnOff = safeInt(item.threshold) < 0;
+  const warnOff = invHasVars(item) ? item.variants.every((v) => safeInt(v.threshold) < 0) : safeInt(item.threshold) < 0;
   const dCls = d === null || warnOff ? '' : d < 3 ? ' inv-neg' : d <= INV_RUNOUT_DAYS ? ' inv-low' : '';
   const dTxt = d === null ? off : d < 1 ? (safeInt(item.stocked) > 0 ? '&lt;1d' : '0d') : d >= 365 ? '365d+' : `${Math.floor(d)}d`;
   const add = invSuggest(item, pace);
@@ -280,20 +350,26 @@ function invRowHtml(item, idx, pace = invPace()) {
   // (sometimes-stocked specials — Veizyr/Epo). 0 warns again at 0, so a deliberate
   // stock of 1-2 still shouts when it runs out (Danvar).
   const oneOff = !!Number(item.one_off);   // one-offs have no threshold at all (Canda)
-  const stockCls = threshold < 0 || oneOff ? '' : stocked < 0 ? 'inv-neg' : stocked <= threshold ? 'inv-low' : '';
+  const vars = invHasVars(item);
+  const stockCls = invItemStockCls(item);
   const iid = String(item.id);
+  const open = vars && invVarOpen().has(iid);
   const notePreview = labNotesText(item.notes);   // rich notes -> plain text for the tooltip
   const hasNotes = !!notePreview;
   const tagged = invTags(item).length > 0;
   return `<tr class="${invState.selected.has(iid) ? 'inv-picked' : ''}" data-idx="${idx}" data-iid="${iid}"${invState.groups.length ? ' draggable="true"' : ''}>
     <td class="pin-cell inv-sel-cell"><input type="checkbox" class="inv-sel" data-selid="${iid}"${invState.checked.has(iid) ? ' checked' : ''}></td>
-    <td class="stat inv-edit ${stockCls}" data-edit="stocked" data-idx="${idx}" title="${invState.editMode ? '' : 'Click to edit'}">${invState.editMode
+    ${vars ? `<td class="stat ${stockCls}" data-vtotal="${idx}" title="Total across ${item.variants.length} variant${item.variants.length === 1 ? '' : 's'}${safeInt(item.own_stocked) ? ` and ${fmtNum(safeInt(item.own_stocked))} unassigned` : ''} — open the arrow to edit each">${invTotalHtml(item)}</td>`
+      : `<td class="stat inv-edit ${stockCls}" data-edit="stocked" data-idx="${idx}" title="${invState.editMode ? '' : 'Click to edit'}">${invState.editMode
       ? invQuickInput('stocked', idx, stocked)
-      : `${stockCls ? `<i class="fa-solid fa-triangle-exclamation inv-warnico" title="${stocked < 0 ? 'Oversold — stock is negative' : 'At or below restock threshold'}"></i>` : ''}${fmtNum(stocked)}`}</td>
+      : `${stockCls ? `<i class="fa-solid fa-triangle-exclamation inv-warnico" title="${stocked < 0 ? 'Oversold — stock is negative' : 'At or below restock threshold'}"></i>` : ''}${fmtNum(stocked)}`}</td>`}
     <td class="col-name res-name"><span class="stk-tagslot">${tagged
-      ? `<i class="fa-solid fa-tag stk-tagind" data-invtaghover="${idx}"></i>` : ''}</span>${escapeHtml(item.item_name || '')}${invIsBucket(item)
+      ? `<i class="fa-solid fa-tag stk-tagind" data-invtaghover="${idx}"></i>` : ''}</span>${vars
+      ? `<button type="button" class="inv-var-toggle${open ? ' open' : ''}" data-invvar="${idx}" aria-expanded="${open}" title="${open ? 'Hide' : 'Show'} its ${item.variants.length} variant${item.variants.length === 1 ? '' : 's'}"><i class="fa-solid fa-chevron-right"></i></button>` : ''}${escapeHtml(item.item_name || '')}${vars
+      ? ` <span class="inv-var-count" data-invvar="${idx}">${item.variants.length} variant${item.variants.length === 1 ? '' : 's'}</span>` : ''}${invIsBucket(item)
       ? ` <i class="fa-solid fa-layer-group inv-bucketico" title="${escapeHtml(invBucketTip(item))}"></i>` : ''}${typeof pgInvChip === 'function' ? pgInvChip(item) : ''}</td>
-    ${oneOff ? '<td class="stat inv-nowarn" title="One-offs have no threshold — they never warn"><span class="stat_off">—</span></td>'
+    ${vars ? '<td class="stat inv-nowarn" title="Each variant has its own threshold — open the arrow"><span class="stat_off">—</span></td>'
+      : oneOff ? '<td class="stat inv-nowarn" title="One-offs have no threshold — they never warn"><span class="stat_off">—</span></td>'
       : `<td class="stat inv-edit${threshold >= 0 ? '' : ' inv-nowarn'}" data-edit="threshold" data-idx="${idx}" title="${threshold >= 0
         ? 'Click to edit — warns at or below this number; set it to -1 to turn off this item’s low-stock and oversold warnings'
         : 'Warnings are off for this item (threshold -1) — click to set a threshold'}">${invState.editMode ? invQuickInput('threshold', idx, threshold) : fmtNum(threshold)}</td>`}
@@ -314,9 +390,60 @@ function invRowHtml(item, idx, pace = invPace()) {
         class="fa-solid fa-box-archive${Number(item.one_off) ? ' mys-alert-on' : ''}"></i></button>
       <button class="btn btn-icon" data-iclone="${idx}" title="Clone — same numbers, tweak the name"><i class="fa-solid fa-clone"></i></button>
       <button class="btn btn-icon" data-iedit="${idx}" title="Edit vendor / stock"><i class="fa-solid fa-pen"></i></button>
-      <button class="btn btn-icon" data-iremove="${idx}" title="Remove item"><i class="fa-solid fa-trash-can"></i></button>
+      <button class="btn btn-icon" data-iremove="${idx}" title="${vars ? 'Remove item and its variants' : 'Remove item'}"><i class="fa-solid fa-trash-can"></i></button>
     </td>
-  </tr>`;
+  </tr>${open ? invVarRowsHtml(item, idx, pace) : ''}`;
+}
+
+// an open item's variants, indented under it: own Stocked / Threshold (click to
+// edit, or boxes in edit mode), sales, pace and restock email per variant.
+// Vendor / price / folder / one-off are the item's — edit those on the item.
+function invVarRowsHtml(item, idx, pace) {
+  const oneOff = !!Number(item.one_off);
+  const own = safeInt(item.own_stocked);
+  const rows = item.variants.map((v, vi) => {
+    const s = safeInt(v.stocked), t = safeInt(v.threshold);
+    const cls = invStockCls({ ...v, one_off: item.one_off });
+    const ref = `data-idx="${idx}" data-vi="${vi}"`;
+    return `<tr class="inv-var-row${invState.selected.has(String(v.id)) ? ' inv-picked' : ''}" data-iid="${v.id}" data-parent="${item.id}">
+      <td class="pin-cell"></td>
+      <td class="stat inv-edit ${cls}" data-edit="stocked" ${ref} title="${invState.editMode ? '' : 'Click to edit'}">${invState.editMode
+        ? `<input type="number" class="stock-input inv-quick" data-qfield="stocked" ${ref} value="${s}">`
+        : `${cls ? `<i class="fa-solid fa-triangle-exclamation inv-warnico" title="${s < 0 ? 'Oversold — stock is negative' : 'At or below restock threshold'}"></i>` : ''}${fmtNum(s)}`}</td>
+      <td class="col-name res-name inv-var-name" title="${escapeHtml(v.item_name || '')}"><span class="inv-var-branch"></span>${escapeHtml(invVarLabel(v))}</td>
+      ${oneOff ? '<td class="stat inv-nowarn" title="One-offs have no threshold — they never warn"><span class="stat_off">—</span></td>'
+        : `<td class="stat inv-edit${t >= 0 ? '' : ' inv-nowarn'}" data-edit="threshold" ${ref} title="${t >= 0
+          ? 'Click to edit — warns at or below this number; -1 turns this variant’s warnings off'
+          : 'Warnings are off for this variant (threshold -1) — click to set a threshold'}">${invState.editMode
+          ? `<input type="number" class="stock-input inv-quick" data-qfield="threshold" ${ref} value="${t}">` : fmtNum(t)}</td>`}
+      <td class="col-text"></td>
+      <td class="col-num"></td>
+      <td class="stat ${invSalesClickable(v) ? 'inv-sales' : ''}" ${invSalesClickable(v) ? `data-sales="${idx}" data-vi="${vi}" title="${safeInt(v.sales_count) ? 'Click to see this variant’s sales' : 'Click to see this variant’s history'}"` : ''}>${safeInt(v.sales_count) ? fmtNum(v.sales_count) : '<span class="stat_off">—</span>'}</td>
+      ${invPaceCells(v, pace)}
+      <td class="col-text res-type">${fmtAgoTip(v.last_updated)}</td>
+      <td class="pin-cell" data-invalert="${idx}" data-vi="${vi}" title="${Number(v.notify_email)
+          ? 'Emailing you when this variant drops to its threshold or oversells — click to stop'
+          : 'Email me when this variant needs restocking'}"><i
+          class="fa-${Number(v.notify_email) ? 'solid' : 'regular'} fa-envelope${Number(v.notify_email) ? ' mys-alert-on' : ''}"></i></td>
+      <td class="col-actions">
+        <button class="btn btn-icon" data-iedit="${idx}" title="Edit the variants of ${escapeHtml(item.item_name || '')}"><i class="fa-solid fa-pen"></i></button>
+      </td>
+    </tr>`;
+  });
+  // stock the item held before it had variants (or sales of its own name) — shown
+  // so the total adds up; edit it here or hand it to a variant in the dialog
+  if (own) {
+    rows.push(`<tr class="inv-var-row inv-var-own" data-parent="${item.id}">
+      <td class="pin-cell"></td>
+      <td class="stat inv-edit${own < 0 ? ' inv-neg' : ''}" data-edit="stocked" data-idx="${idx}" data-vi="-1" title="${invState.editMode ? '' : 'Click to edit'}">${invState.editMode
+        ? `<input type="number" class="stock-input inv-quick" data-qfield="stocked" data-idx="${idx}" data-vi="-1" value="${own}">` : fmtNum(own)}</td>
+      <td class="col-name res-name inv-var-name" title="Stock not given to a variant yet — it counts in the total, and sales of “${escapeHtml(item.item_name || '')}” itself draw from it"><span class="inv-var-branch"></span><span class="stat_off">Unassigned</span></td>
+      <td class="stat"><span class="stat_off">—</span></td>
+      <td colspan="${INV_COLUMNS.length - 3}"></td>
+      <td class="pin-cell"></td><td class="col-actions"></td>
+    </tr>`);
+  }
+  return rows.join('');
 }
 
 const invRowsHtml = (item, idx, pace) => invRowHtml(item, idx, pace);
@@ -514,7 +641,7 @@ async function invNotifySweep() {
   let rows = [];
   try {
     const res = await api().get_inventory({ perpage: 500 });
-    rows = (res.ok && res.data && res.data.results) || [];
+    rows = invLeaves((res.ok && res.data && res.data.results) || []);   // an item with variants alerts per variant
   } catch (_) { return; }
   if (!rows.length) return;
   let prev = {};
@@ -647,7 +774,7 @@ function invQuickMove(input, step) {
   if (next) { next.focus(); next.select(); } else input.blur();
 }
 async function invQuickSave(input) {
-  const item = invState.items[safeInt(input.dataset.idx)];
+  const item = invCellItem(input);   // the item, one of its variants, or its unassigned stock
   const field = input.dataset.qfield;
   if (!item) return;
   if (input.value.trim() === '') { input.value = safeInt(item[field]); return; }
@@ -666,6 +793,7 @@ async function invQuickSave(input) {
     return;
   }
   input.classList.remove('inv-quick-saved'); void input.offsetWidth; input.classList.add('inv-quick-saved');
+  if (input.dataset.vi !== undefined) invRecalcTotal(invState.items[safeInt(input.dataset.idx)]);
   // the row's low / oversold colour follows the new numbers
   const cell = input.closest('tr')?.querySelector('[data-edit="stocked"]');
   if (cell) {
@@ -690,9 +818,8 @@ function invSetEditMode(on) {
 // Inline editor for stocked/threshold cells
 function openInvEditor(cell) {
   if (cell.querySelector('input')) return;
-  const idx = safeInt(cell.dataset.idx);
   const field = cell.dataset.edit;
-  const item = invState.items[idx];
+  const item = invCellItem(cell);   // the item, one of its variants, or its unassigned stock
   if (!item) return;
 
   const current = safeInt(item[field]);
@@ -748,6 +875,24 @@ async function removeInvItem(idx) {
 async function addInvItem() {
   const name = $('#inv-new-name').value.trim();
   if (!name) { toast('Enter an item name first', false); return; }
+  // variants: each needs a real name of its own (not the untouched "Name - " start)
+  const vars = invState.dlg.vars.map((v) => ({ ...v, item_name: String(v.item_name || '').replace(/\s+/g, ' ').trim() }));
+  if (vars.some((v) => !v.item_name.replace(/[\s\-–—:]+$/, '') || invNormName(v.item_name.replace(/[\s\-–—:]+$/, '')) === invNormName(name))) {
+    toast('Give each variant its own name — the name it sells under', false); return;
+  }
+  const varsChanged = JSON.stringify(vars) !== invState.dlg.varsOrig;
+  const dropping = invState.dlg.varsWas.filter((id) => !vars.some((v) => v.id === id));
+  if (dropping.length) {
+    // the dialog steps aside for the confirm and comes back if you change your mind
+    $('#inv-add-modal').hidden = true;
+    const ok = await confirmDialog({
+      title: `Remove ${dropping.length === 1 ? 'a variant' : `${dropping.length} variants`}?`,
+      message: `${dropping.length === 1 ? 'Its' : 'Their'} stock and sales history go with ${dropping.length === 1 ? 'it' : 'them'}. Sales under ${dropping.length === 1 ? 'that name' : 'those names'} stop counting anywhere until you add ${dropping.length === 1 ? 'it' : 'them'} back.`,
+      confirmLabel: 'Remove',
+    });
+    $('#inv-add-modal').hidden = false;
+    if (!ok) return;
+  }
   const btn = $('#inv-add');
   btn.disabled = true;
   const editId = $('#inv-add-modal').dataset.editId || '';
@@ -797,6 +942,29 @@ async function addInvItem() {
     const results = await Promise.all(calls.map(([action, n]) =>
       apiFetch('POST', 'api/inventory.php', { data: { action, inventory_id: savedId, name: n } }).catch((e) => ({ ok: false, error: String(e) }))));
     if (results.some((r) => !r.ok)) toast('Saved, but the extra names didn’t — site update pending?', false);
+    // variants: one call saves the whole list (new / renamed / re-counted / removed)
+    if (varsChanged) {
+      let vr;
+      try {
+        vr = await apiFetch('POST', 'api/inventory.php', { data: { action: 'variants', inventory_id: savedId,
+          variants: vars.map((v) => ({ id: v.id || 0, item_name: v.item_name, stocked: safeInt(v.stocked), threshold: safeInt(v.threshold) })),
+          remove: dropping } });
+      } catch (e) { vr = { ok: false, error: String(e) }; }
+      if (!vr.ok) {
+        // the item itself saved — keep the dialog open (now editing it) so the variants can be fixed
+        const modal = $('#inv-add-modal');
+        modal.dataset.editId = String(savedId);
+        $('#inv-modal-title').textContent = 'Edit Inventory Item';
+        $('#inv-add').innerHTML = '<i class="fa-solid fa-check"></i> Save';
+        invState.dlg.extraWas = [...invState.dlg.extra];
+        toast(`Saved ${name}, but not its variants: ${vr.error || 'site update pending?'}`, false);
+        loadInventory();
+        return;
+      }
+      // the new ids, so a second Save in this dialog updates instead of re-adding
+      invState.dlg.vars = ((vr.data && vr.data.variants) || []).map((v) => ({ id: safeInt(v.id), item_name: v.item_name, stocked: safeInt(v.stocked), threshold: safeInt(v.threshold) }));
+      if (typeof salesOnInvAdded === 'function') vars.forEach((v) => salesOnInvAdded(v.item_name, $('#inv-new-vendor').value));
+    }
   }
   if (res.ok) {
     // a new one-off (or one just ticked) leaves the normal views — say where it went
@@ -833,7 +1001,8 @@ function openInvDialog(item = null, clone = false, preset = null) {
     $('#inv-add').innerHTML = '<i class="fa-solid fa-check"></i> Save';
     nameInput.value = item.item_name || '';
     $('#inv-new-vendor').value = item.vendor || '';
-    $('#inv-new-stocked').value = String(safeInt(item.stocked));
+    // an item with variants edits its own (unassigned) count here — the total is a sum
+    $('#inv-new-stocked').value = String(safeInt(item.own_stocked ?? item.stocked));
     $('#inv-new-threshold').value = String(safeInt(item.threshold));
   } else {
     delete modal.dataset.editId;
@@ -850,6 +1019,12 @@ function openInvDialog(item = null, clone = false, preset = null) {
   const src = item || null;
   invState.dlg = { match: src && src.match_mode === 'words' ? 'words' : 'exact',
                    extra: [...((src && src.extra_names) || [])], extraWas: clone ? [] : [...((src && src.extra_names) || [])] };
+  // variants edit with their item (a clone starts without them — names are per vendor)
+  invState.dlg.vars = (src && !clone && invHasVars(src) ? src.variants : [])
+    .map((v) => ({ id: safeInt(v.id), item_name: v.item_name, stocked: safeInt(v.stocked), threshold: safeInt(v.threshold) }));
+  invState.dlg.varsWas = invState.dlg.vars.map((v) => v.id);
+  invState.dlg.varsOrig = JSON.stringify(invState.dlg.vars);
+  invDlgRenderVars();
   $('#inv-extra-input').value = '';
   invDlgSetMatch(invState.dlg.match);
   invDlgRenderExtra();
@@ -863,7 +1038,55 @@ function openInvDialog(item = null, clone = false, preset = null) {
 
 // one-offs have no threshold — the field steps aside while the box is ticked
 function invDlgSyncOneOff() {
-  $('#inv-new-threshold-field').hidden = $('#inv-new-oneoff').checked;
+  $('#inv-new-threshold-field').hidden = $('#inv-new-oneoff').checked || invState.dlg.vars.length > 0;
+}
+
+// ---- the Add/Edit dialog's Variants: name it sells under + Stocked + threshold each.
+// With variants, the Stocked box above becomes the item's unassigned stock — what
+// it held before (kept, never silently moved) plus sales of its own name — and
+// can be handed to the first variant in one click.
+const invVarShort = (parent, name) => {
+  const p = invNormName(parent), n = String(name || '').replace(/\s+/g, ' ').trim();
+  if (p && n.toLowerCase().startsWith(p)) {
+    const rest = n.slice(p.length).replace(/^[\s\-–—:|/,]+|[\s\-–—:|/,]+$/g, '');
+    if (rest) return rest;
+  }
+  return n;
+};
+function invDlgRenderVars() {
+  const vars = invState.dlg.vars;
+  const name = $('#inv-new-name').value.trim();
+  $('#inv-var-list').innerHTML = vars.length
+    ? '<div class="inv-var-edit inv-var-edit-head"><span>Name it sells under</span><span>Stocked</span><span>Threshold</span><span></span></div>'
+      + vars.map((v, i) => `<div class="inv-var-edit">
+          <input type="text" class="form-control filter-input" data-vf="item_name" data-vrow="${i}" value="${escapeHtml(v.item_name)}" placeholder="e.g. ${escapeHtml(name || 'Metal Chair')} - Blue" autocomplete="off">
+          <input type="number" class="form-control filter-input" data-vf="stocked" data-vrow="${i}" value="${safeInt(v.stocked)}" title="This variant’s stock">
+          <input type="number" class="form-control filter-input" data-vf="threshold" data-vrow="${i}" value="${safeInt(v.threshold)}" min="-1" title="Warns at or below this; -1 = never warn">
+          <button type="button" class="btn btn-icon" data-vrm="${i}" title="Remove this variant${v.id ? ' — its stock and sales history go with it' : ''}"><i class="fa-solid fa-xmark"></i></button>
+        </div>`).join('')
+    : '';
+  $('#inv-var-hint').textContent = vars.length
+    ? 'The list shows the item as one row with the total — open its arrow to see each variant. A sale named exactly like a variant counts against that variant.'
+    : 'Sells under several names — “Metal Chair - Blue”, “Metal Chair - Fancy”…? Add each as a variant to track its own stock, all in one row.';
+  $('#inv-var-fromextra').hidden = !invState.dlg.extra.length;
+  invDlgSyncOwn();
+}
+function invDlgSyncOwn() {
+  const has = invState.dlg.vars.length > 0;
+  $('#inv-new-stocked-label').textContent = has ? 'Unassigned stock' : 'Stocked';
+  invDlgSyncOneOff();
+  const hint = $('#inv-own-hint');
+  hint.hidden = !has;
+  if (!has) return;
+  const own = safeInt($('#inv-new-stocked').value);
+  const first = invState.dlg.vars[0];
+  hint.innerHTML = 'Stock not given to a variant yet — it stays on the item and counts in its total, and sales of the item’s own name draw from it. Each variant has its own threshold.'
+    + (own > 0 && first ? ` <a href="#" id="inv-own-give">Give ${fmtNum(own)} to “${escapeHtml(invVarShort($('#inv-new-name').value, first.item_name) || 'the first variant')}”</a>` : '');
+}
+function invDlgAddVar(name = null) {
+  const parent = $('#inv-new-name').value.trim();
+  const t = $('#inv-new-threshold').value.trim();
+  invState.dlg.vars.push({ id: 0, item_name: name ?? (parent ? `${parent} - ` : ''), stocked: 0, threshold: t === '' ? 1 : safeInt(t) });
 }
 
 // ---- the Add/Edit dialog's Match + Extra names + live preview ----
@@ -923,7 +1146,9 @@ async function invOpenReassign(sale, after) {
   if (Date.now() - invReassign.at > 60000 || !invReassign.items.length) {
     $('#inv-reassign-list').innerHTML = '<div class="inv-reassign-empty">Loading…</div>';
     const res = await invFetchAll({ sort: 'item_name', order: 'ASC' });
-    invReassign.items = (res.ok && res.data && res.data.results) || [];
+    // variants are targets of their own, listed under their item
+    invReassign.items = ((res.ok && res.data && res.data.results) || []).flatMap((i) => (invHasVars(i)
+      ? [i, ...i.variants.map((v) => ({ ...v, parent_name: i.item_name, parent_bucket: invIsBucket(i) }))] : [i]));
     invReassign.at = Date.now();
   }
   invRenderReassignList(true);
@@ -935,7 +1160,9 @@ function invRenderReassignList(preselect = false) {
   const cur = safeInt(sale.counted_by);
   const list = invReassign.items
     .filter((i) => !q || invNormName(i.item_name).includes(q) || invNormName(i.vendor).includes(q))
-    .sort((a, b) => (invIsBucket(b) - invIsBucket(a)) || String(a.item_name).localeCompare(String(b.item_name)));
+    .sort((a, b) => ((b.parent_bucket ?? invIsBucket(b)) - (a.parent_bucket ?? invIsBucket(a)))
+      || String(a.parent_name ?? a.item_name).localeCompare(String(b.parent_name ?? b.item_name))
+      || (a.parent_name !== undefined) - (b.parent_name !== undefined) || String(a.item_name).localeCompare(String(b.item_name)));
   // first pick: a bucket whose words fit this sale, else nothing
   if (preselect) {
     const fit = list.find((i) => i.match_mode === 'words' && safeInt(i.id) !== cur && invWordsMatch(i.item_name, sale.item));
@@ -944,7 +1171,7 @@ function invRenderReassignList(preselect = false) {
   $('#inv-reassign-list').innerHTML = list.length ? list.map((i) => {
     const id = safeInt(i.id);
     return `<button type="button" class="inv-reassign-opt${String(id) === invReassign.pick ? ' active' : ''}${id === cur ? ' is-current' : ''}" data-rid="${id}" role="option">
-      ${invIsBucket(i) ? '<i class="fa-solid fa-layer-group inv-bucketico"></i> ' : ''}<span class="inv-reassign-name">${escapeHtml(String(i.item_name).replace(/\s+/g, ' '))}</span>${i.vendor ? `<span class="inv-reassign-vendor">${escapeHtml(i.vendor)}</span>` : ''}${id === cur ? '<span class="inv-reassign-now">counts it now</span>' : ''}
+      ${i.parent_name !== undefined ? '<span class="inv-var-branch" title="A variant"></span>' : ''}${invIsBucket(i) ? '<i class="fa-solid fa-layer-group inv-bucketico"></i> ' : ''}<span class="inv-reassign-name">${escapeHtml(String(i.item_name).replace(/\s+/g, ' '))}</span>${i.vendor ? `<span class="inv-reassign-vendor">${escapeHtml(i.vendor)}</span>` : ''}${id === cur ? '<span class="inv-reassign-now">counts it now</span>' : ''}
     </button>`;
   }).join('') : '<div class="inv-reassign-empty">No items match</div>';
   const act = $('#inv-reassign-list .inv-reassign-opt.active');
@@ -1067,7 +1294,7 @@ function initInventory() {
       if (next) { e.preventDefault(); next.focus(); next.select(); }
     }
     else if (e.key === 'Escape') {
-      const item = invState.items[safeInt(input.dataset.idx)];
+      const item = invCellItem(input);
       if (item) input.value = safeInt(item[input.dataset.qfield]);
       input.blur();
     }
@@ -1129,7 +1356,7 @@ function initInventory() {
   // stays lit while you alt-tab to the game and read your vendor (Veizyr).
   // Clicks on anything interactive (edit cells, buttons, checkbox, folder rows) don't count.
   $('#inv-body').addEventListener('click', (e) => {
-    if (e.target.closest('button, a, input, [data-edit], [data-sales], [data-invalert], [data-invtaghover], .inv-sel-cell, .stk-group')) return;
+    if (e.target.closest('button, a, input, [data-edit], [data-sales], [data-invalert], [data-invtaghover], [data-invvar], .inv-sel-cell, .stk-group')) return;
     const tr = e.target.closest('tr[data-iid]');
     if (!tr) return;
     const iid = tr.dataset.iid;
@@ -1145,7 +1372,7 @@ function initInventory() {
   $('#inv-body').addEventListener('click', async (e) => {
     const cell = e.target.closest('[data-sales]');
     if (!cell) return;
-    const item = invState.items[Number(cell.dataset.sales)];
+    const item = invCellItem(cell);   // the item (its variants' sales too) or one variant
     if (!item) return;
     $('#inv-sales-title').textContent = `Sales — ${item.item_name}`;
     $('#inv-sales-modal').hidden = false;
@@ -1157,7 +1384,7 @@ function initInventory() {
         rows = (res.ok && res.data && res.data.results) || [];
       } catch (_) { /* renders the empty message */ }
       // a bucket's list says which actual names sold
-      const named = invIsBucket(item);
+      const named = invIsBucket(item) || invHasVars(item);   // which variant sold, too
       invState.salesRows = rows;
       $('#inv-sales-body').innerHTML = rows.length
         ? `<table class="inv-sales-table"><thead><tr>
@@ -1175,7 +1402,7 @@ function initInventory() {
         const b = ev.target.closest('[data-invsalemv]');
         const s = b && invState.salesRows[Number(b.dataset.invsalemv)];
         if (!s) return;
-        invOpenReassign({ ...s, counted_by: item.id }, renderSales);
+        invOpenReassign({ ...s, counted_by: s.counted_by || item.id }, renderSales);
       };
     };
     // History tab (invlog.js) when Settings has inventory activity on
@@ -1256,7 +1483,7 @@ function initInventory() {
   $('#inv-body').addEventListener('dragstart', (e) => {
     const el = e.target.closest('tr[data-iid]');
     if (!el) return;
-    if (e.target.closest('.inv-sel-cell')) { e.preventDefault(); return; } // checkbox stays clickable
+    if (e.target.closest('.inv-sel-cell') || el.classList.contains('inv-var-row')) { e.preventDefault(); return; } // checkbox stays clickable
     el.classList.add('inv-dragging');
     const multi = invState.checked.has(el.dataset.iid) && invState.checked.size > 1;
     if (multi) {
@@ -1346,7 +1573,8 @@ function initInventory() {
   // Suggest number (so one PUT per row — bulk_set takes a single value)
   $('#inv-bulk-suggest').addEventListener('click', async () => {
     const pace = invPace();
-    const rows = invState.items.filter((i) => invState.checked.has(String(i.id)) && invSuggest(i, pace) > 0);
+    // an item with variants restocks each variant by its own suggestion
+    const rows = invLeaves(invState.items.filter((i) => invState.checked.has(String(i.id)))).filter((i) => invSuggest(i, pace) > 0);
     if (!rows.length) { toast(`The selected items already cover ${pace.cover} days`, false); return; }
     const results = await Promise.all(rows.map((i) =>
       apiFetch('PUT', 'api/inventory.php', { data: { inventory_id: safeInt(i.id), stocked: safeInt(i.stocked) + invSuggest(i, pace) } })
@@ -1409,7 +1637,45 @@ function initInventory() {
     const x = e.target.closest('[data-invextrarm]');
     if (!x) return;
     invState.dlg.extra.splice(Number(x.dataset.invextrarm), 1);
-    invDlgRenderExtra(); invDlgPreview();
+    invDlgRenderExtra(); invDlgRenderVars(); invDlgPreview();
+  });
+  // Variants: add / edit / remove rows, turn extra names into variants, hand the
+  // unassigned stock to the first variant
+  $('#inv-var-add').addEventListener('click', () => {
+    invDlgAddVar();
+    invDlgRenderVars();
+    const last = [...document.querySelectorAll('#inv-var-list [data-vf="item_name"]')].pop();
+    if (last) { last.focus(); last.setSelectionRange(last.value.length, last.value.length); }
+  });
+  $('#inv-var-fromextra').addEventListener('click', () => {
+    invState.dlg.extra.forEach((x) => {
+      if (!invState.dlg.vars.some((v) => invNormName(v.item_name) === invNormName(x))) invDlgAddVar(x);
+    });
+    invState.dlg.extra = [];
+    invDlgRenderExtra(); invDlgRenderVars(); invDlgPreview();
+  });
+  $('#inv-var-list').addEventListener('input', (e) => {
+    const el = e.target.closest('[data-vf]');
+    const v = el && invState.dlg.vars[safeInt(el.dataset.vrow)];
+    if (!v) return;
+    v[el.dataset.vf] = el.dataset.vf === 'item_name' ? el.value : safeInt(el.value);
+    if (safeInt(el.dataset.vrow) === 0) invDlgSyncOwn();   // the hint names the first variant
+  });
+  $('#inv-var-list').addEventListener('click', (e) => {
+    const x = e.target.closest('[data-vrm]');
+    if (!x) return;
+    invState.dlg.vars.splice(safeInt(x.dataset.vrm), 1);
+    invDlgRenderVars();
+  });
+  $('#inv-new-stocked').addEventListener('input', invDlgSyncOwn);
+  $('#inv-own-hint').addEventListener('click', (e) => {
+    if (!e.target.closest('#inv-own-give')) return;
+    e.preventDefault();
+    const first = invState.dlg.vars[0];
+    if (!first) return;
+    first.stocked = safeInt(first.stocked) + safeInt($('#inv-new-stocked').value);
+    $('#inv-new-stocked').value = '0';
+    invDlgRenderVars();
   });
   // Count toward…
   $('#inv-reassign-q').addEventListener('input', () => invRenderReassignList());
@@ -1462,9 +1728,10 @@ function initInventory() {
   $('#inv-body').addEventListener('click', (e) => {
     const alertBtn = e.target.closest('[data-invalert]');
     if (alertBtn) {
-      const item = invState.items[safeInt(alertBtn.dataset.invalert)];
+      const item = invCellItem(alertBtn);   // an item (its variants follow) or one variant
       if (!item) return;
       item.notify_email = Number(item.notify_email) ? 0 : 1; // optimistic
+      if (invHasVars(item)) item.variants.forEach((v) => { v.notify_email = item.notify_email; });
       invSyncAllToggle(); // the Email-all checkbox may flip state
       renderInvRows();
       apiFetch('PUT', 'api/inventory.php', {
@@ -1493,6 +1760,8 @@ function initInventory() {
       }).catch((err) => toast(String(err), false));
       return;
     }
+    const varToggle = e.target.closest('[data-invvar]');
+    if (varToggle) { const it = invState.items[safeInt(varToggle.dataset.invvar)]; if (it) invToggleVars(it.id); return; }
     const editRow = e.target.closest('[data-iedit]');
     if (editRow) { openInvDialog(invState.items[safeInt(editRow.dataset.iedit)]); return; }
     const cloneRow = e.target.closest('[data-iclone]');

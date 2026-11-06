@@ -611,7 +611,9 @@ async function homeWidgetFetch(w) {
         rows.push(...got);
         if (got.length < 500) break;
       }
-      const restock = rows.filter((i) => safeInt(i.threshold) >= 0 && safeInt(i.stocked) <= safeInt(i.threshold));
+      // an item with variants counts each variant that needs restocking (inventory.js invLeaves)
+      const leaves = typeof invLeaves === 'function' ? invLeaves(rows) : rows;
+      const restock = leaves.filter((i) => safeInt(i.threshold) >= 0 && safeInt(i.stocked) <= safeInt(i.threshold));
       return { ok: true, data: { count: restock.length, negative: restock.filter((i) => safeInt(i.stocked) < 0).length,
         runout: typeof invRunningOut === 'function' ? rows.filter((i) => invRunningOut(i)).length : 0 } };
     }

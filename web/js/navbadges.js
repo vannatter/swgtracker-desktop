@@ -10,9 +10,9 @@
 // seeing a flag twice.
 const PAGE_BADGES = {
   components: { tag: 'updated', since: '2026-11-05' },
-  ideas: { tag: 'updated', since: '2026-11-05' },
+  ideas: { tag: 'updated', since: '2026-11-06' },
   quests: { tag: 'updated', since: '2026-11-05' },
-  settings: { tag: 'updated', since: '2026-11-05' },
+  settings: { tag: 'updated', since: '2026-11-06' },
   prices: { tag: 'new', since: '2026-11-02' },
   upkeep: { tag: 'new', since: '2026-11-02' },
   insights: { tag: 'updated', since: '2026-11-01' },

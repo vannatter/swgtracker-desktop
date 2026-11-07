@@ -161,8 +161,52 @@ async function loadSettings() {
   });
   if (typeof insaLoadPrefs === 'function') insaLoadPrefs();   // Sales Alerts (server-side)
   if (typeof ideaShipLoadPrefs === 'function') ideaShipLoadPrefs();   // Ideas I backed ship (server-side)
+  pushLoadPrefs();   // Phone notifications (server-side)
 
   refreshDatasetStatus();
+}
+
+// ---- Phone notifications (api/push.php) ----
+// Which kinds swgtracker.com pushes to the account's phones — one set of switches
+// for the account, shared with the website's Account → Notifications. A phone
+// subscribes from its own browser, so setting one up happens on the site; here
+// it's just the switches and how many devices are on. Hidden until the site
+// answers; a kind the site doesn't know yet (older deploy) keeps its row hidden.
+let pushPrefs = null;
+
+async function pushLoadPrefs() {
+  const box = $('#set-push');
+  if (!box) return;
+  let res;
+  try { res = await apiFetch('GET', 'api/push.php'); } catch (_) { res = null; }
+  const ok = !!(res && res.ok && res.data && res.data.configured && res.data.prefs);
+  box.hidden = !ok;
+  if (!ok) { pushPrefs = null; return; }
+  pushPrefs = res.data.prefs;
+  box.querySelectorAll('input[data-pushkind]').forEach((el) => {
+    const k = el.dataset.pushkind;
+    el.closest('.form-check').hidden = !(k in pushPrefs);
+    el.checked = !!pushPrefs[k];
+  });
+  const n = (res.data.devices || []).length;
+  $('#set-push-devices').textContent = n
+    ? `On for ${n} device${n === 1 ? '' : 's'} — add another on swgtracker.com → Account, from the phone itself.`
+    : 'No phones set up yet — open swgtracker.com → Account on your phone and turn notifications on there.';
+}
+
+// Settings Save: only the kinds that changed (a switch-on only covers alerts from then on)
+async function pushSavePrefs() {
+  const box = $('#set-push');
+  if (!box || box.hidden || !pushPrefs) return;
+  const next = {};
+  box.querySelectorAll('input[data-pushkind]').forEach((el) => {
+    const k = el.dataset.pushkind;
+    if (k in pushPrefs && !!pushPrefs[k] !== el.checked) next[k] = el.checked;
+  });
+  if (!Object.keys(next).length) return;
+  const res = await apiFetch('POST', 'api/push.php', { data: { action: 'prefs', ...next } });
+  if (!res.ok) throw new Error(res.error || 'failed to save phone notifications');
+  pushPrefs = (res.data && res.data.prefs) || { ...pushPrefs, ...next };
 }
 
 // ---- Offline datasets (exports/* mirror) ----
@@ -277,6 +321,7 @@ async function saveSettings() {
     // Sales Alerts switches — server-side too (js/insight-alerts.js)
     if (typeof insaSavePrefs === 'function') await insaSavePrefs();
     if (typeof ideaShipSavePrefs === 'function') await ideaShipSavePrefs();   // Ideas I backed ship (js/ideas.js)
+    await pushSavePrefs();   // Phone notifications (api/push.php)
     // a changed date format must invalidate every already-rendered page —
     // cached pages would keep showing dates in the old style until relaunch
     const fmtChanged = ($('#set-datefmt').value === 'intl') !== (appDateFmt === 'intl')
@@ -344,6 +389,9 @@ async function loadCharacters() {
 
 function initSettings() {
   $('#set-netlog-btn').addEventListener('click', netOpenWindow);
+  $('#set-push-site').addEventListener('click', async () => {
+    try { await api().open_external('https://swgtracker.com/portal/'); } catch (_) { /* ignore */ }
+  });
   document.querySelectorAll('input[name="set-maildisp"]').forEach((r) =>
     r.addEventListener('change', syncZipToggle));
   $('#set-mailzip').addEventListener('change', syncZipToggle);

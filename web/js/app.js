@@ -598,9 +598,9 @@ async function loadAbout() {
         if (i === 0) return relNotesHtml(r.notes);
         const groups = relNotesGroups(r.notes);
         const n = groups.reduce((s, g) => s + g.items.length, 0);
-        if (n <= 1) return relNotesHtml(r.notes);
+        if (!n) return relNotesHtml(r.notes);
         const names = groups.map((g) => g.key).filter(Boolean);
-        const sum = `${n} changes${names.length ? ` \u00b7 ${names.slice(0, 3).join(', ')}${names.length > 3 ? '\u2026' : ''}` : ''}`;
+        const sum = `${n} change${n === 1 ? '' : 's'}${names.length ? ` \u00b7 ${names.slice(0, 3).join(', ')}${names.length > 3 ? '\u2026' : ''}` : ''}`;
         return `<details class="rn-fold"><summary>${escapeHtml(sum)}</summary>${relNotesHtml(r.notes)}</details>`;
       };
       $('#about-notes').innerHTML = `<table class="inv-sales-table"><thead><tr>

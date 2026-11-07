@@ -4868,6 +4868,16 @@ tr.top-new td.col-name { color: var(--text-hover); }
 .idea-st-declined { color: var(--text-muted); }
 .idea-cat { padding: 1px 8px; border-radius: 999px; background: var(--bg-input); color: var(--text-primary); }
 .idea-ver { font-size: 11px; color: var(--q-fair); }
+/* the dev's label — a tinted chip, so it reads apart from the outlined status pill */
+.idea-label { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 999px;
+              border: 1px solid var(--border); background: var(--bg-input); color: var(--text-primary); }
+.idea-label i { font-size: 9px; opacity: .8; }
+.idea-lb-will_do { border-color: var(--accent-green); background: rgba(75, 121, 103, .22); color: var(--q-fair); }
+.idea-lb-researching { border-color: rgba(46, 106, 226, .45); background: rgba(46, 106, 226, .12); color: var(--text-hover); }
+.idea-lb-blocked { border-color: rgba(255, 159, 67, .45); background: rgba(255, 159, 67, .12); color: var(--q-accept); }
+.idea-lb-cant_do { border-color: rgba(175, 56, 70, .5); background: rgba(175, 56, 70, .14); color: #c98a90; }
+.idea-label-note { margin-top: 6px; font-size: 12px; color: var(--text-muted); font-style: italic; overflow-wrap: anywhere; }
+.idea-label-idea { margin: -4px 0 4px; color: var(--text-primary); overflow-wrap: anywhere; }
 /* the idea a bell button opened (ideaFocusApply) */
 .idea-card.idea-flash { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(226, 67, 80, .25); }
 .idea-desc { margin-top: 8px; font-size: 13px; color: var(--text-primary); white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.45; }
@@ -5031,6 +5041,12 @@ tr.top-new td.col-name { color: var(--text-hover); }
 #set-insa .form-check { margin-bottom: 6px; }
 #set-insa .set-insa-days { display: inline-block; width: 64px; padding: 1px 22px 1px 8px; margin: 0 4px; vertical-align: baseline; }
 #set-insa-off { margin-bottom: 8px; }
+
+/* ---- Settings → Phone notifications (js/settings.js; phones subscribe on swgtracker.com) ---- */
+#set-push .form-check { margin-bottom: 6px; }
+#set-push .set-push-devices { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: space-between; margin-bottom: 10px; }
+#set-push .set-push-devices > span { flex: 1 1 240px; }
+#set-push .set-push-devices > button { margin-left: auto; }
 
 /* ---- Price Guide (js/priceguide.js) + My Inventory market chip ---- */
 .pg-grid tr.pg-row { cursor: pointer; }

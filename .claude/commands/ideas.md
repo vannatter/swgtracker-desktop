@@ -25,7 +25,9 @@ or a word like `new` / `shipped`. With no argument, do a full triage.
    one line, rough size (small / medium / large), app vs website vs both, and
    why now (votes, a player asked, builds on something just shipped). Keep the
    rest as a one-line "later" list. Don't survey everything at length.
-5. **Ask before changing anything on the board.** Status changes are public.
+5. **Ask before changing anything on the board.** Status changes and labels are public.
+   The board list shows each idea's label in braces (`{Blocked}`) and, with `--full`,
+   its note; `--label-filter blocked` (or `none`) narrows the list.
 
 ## Keeping statuses in step
 
@@ -37,6 +39,21 @@ or a word like `new` / `shipped`. With no argument, do a full triage.
 - New roadmap items we come up with get posted as dev ideas
   (`--title … --category … --description … --dev`) once Dustin approves them.
   Categories: Crafting, Resources, Sales & Inventory, Beasts, Galaxy, App, Website, Other.
+
+## Labels
+
+Labels are the dev's public read on an idea, separate from its status, and they
+notify nobody: `will_do`, `researching`, `blocked`, `needs_info`, `cant_do` (or
+`none` to clear), with an optional short note (200 chars max) shown under the
+description. **Propose the label + note wording and ask Dustin before setting any.**
+
+- Can't be built yet (missing data, game limits) → `blocked` + why:
+  `venv/bin/python build/post_idea.py --label blocked --note "needs a collections data export from the game files" --id N`
+- Unclear what the player means → `needs_info` + the question to answer.
+- Agreed but not scheduled → `will_do`; looking into feasibility → `researching`.
+- Won't happen → `cant_do` + a short reason (often alongside `--status declined`).
+- `--label` and `--note` combine with `--status` in one command; `--note ""`
+  clears the note, `--label none` clears both. Check with `--dry-run` first.
 
 ## When shipping
 

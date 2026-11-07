@@ -6,7 +6,7 @@
   <title>SWG Tracker Desktop</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.1/css/all.min.css">
-  <link rel="stylesheet" href="css/app.css?v=20261106mys">
+  <link rel="stylesheet" href="css/app.css?v=20261106lbl">
   <link rel="stylesheet" href="css/share.css?v=20261022x">
   <link rel="stylesheet" href="css/quests.css?v=20261105qc">
 </head>
@@ -1383,6 +1383,7 @@
             <option value="progress">In progress</option><option value="shipped">Shipped</option><option value="declined">Declined</option>
           </select>
           <select id="ideas-category" class="form-select filter-select" title="Category"></select>
+          <select id="ideas-label" class="form-select filter-select" title="The developer's label on an idea — Will do, Blocked, …"></select>
           <select id="ideas-sort" class="form-select filter-select" title="Order">
             <option value="top">Top voted</option><option value="new">Newest</option>
           </select>
@@ -2429,6 +2430,46 @@
           </div>
         </div>
 
+        <!-- Phone notifications: which alerts swgtracker.com pushes to your phones, stored server-side (api/push.php; js/settings.js) -->
+        <div class="settings-section" id="set-push" hidden>
+          <h2>Phone notifications <span class="settings-sub">Alerts on your phone, sent by swgtracker.com — no desktop app needed. Shared with your Settings on swgtracker.com.</span></h2>
+          <div class="set-push-devices">
+            <span id="set-push-devices" class="settings-sub">No phones set up yet.</span>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="set-push-site"><i class="fa-solid fa-mobile-screen"></i> Set up a phone</button>
+          </div>
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="set-push-spawn" data-pushkind="spawn">
+            <label class="form-check-label" for="set-push-spawn">Spawn Alerts matches
+              <span class="settings-sub">— a new spawn matches one of your Spawn Alerts rules</span></label>
+          </div>
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="set-push-inventory" data-pushkind="inventory">
+            <label class="form-check-label" for="set-push-inventory">Restock reminders
+              <span class="settings-sub">— a My Inventory item drops to its restock threshold or oversells, once per drop</span></label>
+          </div>
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="set-push-sales" data-pushkind="sales">
+            <label class="form-check-label" for="set-push-sales">Sales Alerts
+              <span class="settings-sub">— the ones switched on above; each arrives once, on your phone or here in the bell</span></label>
+          </div>
+          <div class="form-check form-switch power-only">
+            <input class="form-check-input" type="checkbox" id="set-push-upkeep" data-pushkind="upkeep">
+            <label class="form-check-label" for="set-push-upkeep">Vendor Upkeep reminders
+              <span class="settings-sub">— maintenance running low, game warnings, visits due, with Remind me on in Vendor Upkeep; each arrives once, on your phone or here in the bell</span></label>
+          </div>
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="set-push-isd" data-pushkind="isd">
+            <label class="form-check-label" for="set-push-isd">Survey droid reports
+              <span class="settings-sub">— what your droid found on each planet, and when a name it left waiting for stats arrives</span></label>
+          </div>
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="set-push-factory" data-pushkind="factory">
+            <label class="form-check-label" for="set-push-factory">Factory runs done
+              <span class="settings-sub">— a run finishes, for factories with Notify ticked</span></label>
+          </div>
+          <div class="settings-sub">Shipped ideas follow the Ideas board switch above.</div>
+        </div>
+
         <div class="settings-section" id="set-pg">
           <h2>Price Guide <span class="settings-sub">Going rates built from everyone's tracked sales — anonymous, rounded, and only shown once 3+ different sellers back a price.</span></h2>
           <div class="form-check form-switch">
@@ -3220,6 +3261,24 @@
       <div class="inv-add-actions">
         <button id="idea-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
         <button id="idea-save" class="btn btn-sm btn-accent"><i class="fa-solid fa-lightbulb"></i> Post idea</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Ideas: admin label + public note (ideas.js ideaOpenLabel) -->
+  <div id="idea-label-modal" class="key-gate" hidden>
+    <div class="key-gate-card sp-card idea-card-dlg">
+      <h2 id="idea-label-title">Label idea</h2>
+      <div id="idea-label-idea" class="settings-hint idea-label-idea"></div>
+      <label class="sp-field-label">Label <span class="settings-sub">public — shown on the card; doesn't change its status or notify anyone</span></label>
+      <select id="idea-label-sel" class="form-select filter-select settings-input-wide"></select>
+      <label class="sp-field-label">Note <span class="settings-sub">optional — a short public reason</span></label>
+      <input id="idea-label-note" type="text" class="form-control filter-input settings-input-wide" maxlength="200"
+             placeholder="e.g. needs a collections data export from the game files" autocomplete="off">
+      <div id="idea-label-count" class="settings-hint idea-count"></div>
+      <div class="inv-add-actions">
+        <button id="idea-label-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
+        <button id="idea-label-save" class="btn btn-sm btn-accent"><i class="fa-solid fa-tag"></i> Save label</button>
       </div>
     </div>
   </div>
@@ -4218,7 +4277,7 @@
   <script src="js/factories-ready.js?v=20261103dh"></script>
   <script src="js/customers.js?v=20261022es"></script>
   <script src="js/characters.js?v=20261022es"></script>
-  <script src="js/settings.js?v=20261105bt"></script>
+  <script src="js/settings.js?v=20261106push"></script>
   <script src="js/insight-alerts.js?v=20261102al"></script>
   <script src="js/alerts.js?v=20261023ac"></script>
   <script src="js/lab.js?v=20261022es"></script>
@@ -4245,10 +4304,10 @@
   <script src="js/decor.js?v=20261027h4"></script>
   <script src="js/home.js?v=20261105var"></script>
   <script src="js/mailsetup.js?v=20261019a"></script>
-  <script src="js/ideas.js?v=20261105bt"></script>
+  <script src="js/ideas.js?v=20261106lbl"></script>
   <script src="js/priceguide.js?v=20261102pg"></script>
   <script src="js/vendor-upkeep.js?v=20261102vu"></script>
-  <script src="js/navbadges.js?v=20261105bt"></script>
-  <script src="js/app.js?v=20261105bt"></script>
+  <script src="js/navbadges.js?v=20261106lbl"></script>
+  <script src="js/app.js?v=20261106rn"></script>
 </body>
 </html>

@@ -2,12 +2,15 @@
    roadmap items (api/ideas.php; the website's /ideas.php mirrors this page).
    Authors edit/delete their own idea while it's Open; admins (role 99) set
    status, pin, post as Dev, and delete anything. Each idea has a comment
-   thread (shared entity_comments store, kind 'idea'); admin replies read as Dev. */
+   thread (shared entity_comments store, kind 'idea'); admin replies read as Dev.
+   Admins can also tag an idea with a label (Will do / Blocked / …) and a short
+   public note — separate from its status, and nobody is notified. */
 
 const IDEA_STATUS_LABELS = { open: 'Open', planned: 'Planned', progress: 'In progress', shipped: 'Shipped', declined: 'Declined' };
+const IDEA_LABELS = { will_do: 'Will do', researching: 'Researching', blocked: 'Blocked', needs_info: 'Needs info', cant_do: 'Can’t do' };
 const IDEA_CATEGORIES = ['Crafting', 'Resources', 'Sales & Inventory', 'Beasts', 'Galaxy', 'App', 'Website', 'Other'];
 
-const ideaState = { ideas: [], main: [], shipped: [], shippedOpen: false, me: { signed_in: false, admin: false }, editId: null, expanded: new Set(), loading: false,
+const ideaState = { ideas: [], main: [], shipped: [], shippedOpen: false, me: { signed_in: false, admin: false }, editId: null, labelId: null, expanded: new Set(), loading: false,
                     threadOpen: new Set(),   // idea ids with their comment thread showing
                     threads: new Map(),      // idea id -> { loading, comments, draft } — drafts survive repaints
                     focus: '', flash: '' };  // a bell button's idea to scroll to / briefly ring
@@ -85,6 +88,10 @@ function ideaStatusPill(st) {
   return `<span class="idea-status idea-st-${escapeHtml(st)}">${escapeHtml(IDEA_STATUS_LABELS[st] || st)}</span>`;
 }
 
+function ideaLabelPill(lb) {
+  return IDEA_LABELS[lb] ? `<span class="idea-label idea-lb-${lb}" title="The developer's label"><i class="fa-solid fa-tag"></i> ${escapeHtml(IDEA_LABELS[lb])}</span>` : '';
+}
+
 function ideaCardHtml(it) {
   const id = String(it.id);
   const desc = String(it.description || '');
@@ -103,6 +110,7 @@ function ideaCardHtml(it) {
       </div>
       <div class="idea-meta">
         ${ideaStatusPill(it.status)}
+        ${ideaLabelPill(it.label)}
         ${it.status === 'shipped' && it.shipped_version ? `<span class="idea-ver" title="The release it went out in">in ${escapeHtml(it.shipped_version)}</span>` : ''}
         <span class="idea-cat">${escapeHtml(it.category)}</span>
         <span class="idea-by">by ${escapeHtml(it.by)} · ${fmtAgoTip(it.created)}</span>
@@ -112,12 +120,14 @@ function ideaCardHtml(it) {
       </div>
       ${desc ? `<div class="idea-desc${long && !open ? ' idea-clamp' : ''}">${escapeHtml(desc)}</div>
         ${long ? `<button class="idea-more" data-imore="${id}">${open ? 'Show less' : 'Show more'}</button>` : ''}` : ''}
+      ${IDEA_LABELS[it.label] && it.label_note ? `<div class="idea-label-note">${escapeHtml(IDEA_LABELS[it.label])} — ${escapeHtml(it.label_note)}</div>` : ''}
       ${ideaState.threadOpen.has(id) ? ideaThreadHtml(id) : ''}
     </div>
     <div class="idea-actions">
       ${admin ? `<select class="form-select filter-select idea-st-sel" data-istatus="${id}" title="Set status">
           ${Object.entries(IDEA_STATUS_LABELS).map(([k, l]) => `<option value="${k}"${k === it.status ? ' selected' : ''}>${l}</option>`).join('')}
         </select>
+        <button class="btn btn-icon" data-ilabel="${id}" title="${it.label ? 'Change label' : 'Label it — Will do, Blocked, …'}"><i class="fa-solid fa-tag${it.label ? ' mys-alert-on' : ''}"></i></button>
         <button class="btn btn-icon" data-ipin="${id}" title="${it.pinned ? 'Unpin' : 'Pin to the top'}"><i class="fa-solid fa-thumbtack${it.pinned ? ' mys-alert-on' : ''}"></i></button>` : ''}
       ${it.can_edit ? `<button class="btn btn-icon" data-iedit="${id}" title="Edit"><i class="fa-solid fa-pen"></i></button>
         <button class="btn btn-icon" data-idel="${id}" title="Delete"><i class="fa-solid fa-trash-can"></i></button>` : ''}
@@ -136,7 +146,7 @@ function renderIdeas() {
       ${st.shippedOpen ? st.shipped.map(ideaCardHtml).join('') : ''}
     </div>` : '';
   if (!st.main.length) {
-    const filtered = $('#ideas-status').value !== 'active' || $('#ideas-category').value || $('#ideas-search').value.trim();
+    const filtered = $('#ideas-status').value !== 'active' || $('#ideas-category').value || $('#ideas-label').value || $('#ideas-search').value.trim();
     empty.textContent = filtered ? 'No ideas match these filters.' : (st.shipped.length ? 'Nothing open right now — everything here has shipped. Post the next one!' : 'No ideas yet — be the first to post one.');
     empty.hidden = false;
   } else {
@@ -153,6 +163,7 @@ async function loadIdeas() {
   const params = { sort: $('#ideas-sort').value };
   if ($('#ideas-status').value) params.status = $('#ideas-status').value;
   if ($('#ideas-category').value) params.category = $('#ideas-category').value;
+  if ($('#ideas-label').value) params.label = $('#ideas-label').value;
   const q = $('#ideas-search').value.trim();
   if (q) params.q = q;
   if ($('#ideas-mine').checked) params.mine = 1;
@@ -294,6 +305,39 @@ async function ideaSave() {
   loadIdeas();
 }
 
+// admin: the label dialog — label + optional public note, saved together
+function ideaOpenLabel(it) {
+  if (!it || !ideaState.me.admin) return;
+  ideaState.labelId = String(it.id);
+  $('#idea-label-title').textContent = `Label idea #${safeInt(it.id)}`;
+  $('#idea-label-idea').textContent = it.title;
+  $('#idea-label-sel').innerHTML = '<option value="none">No label</option>'
+    + Object.entries(IDEA_LABELS).map(([k, l]) => `<option value="${k}"${k === it.label ? ' selected' : ''}>${escapeHtml(l)}</option>`).join('');
+  $('#idea-label-note').value = it.label_note || '';
+  ideaLabelSync();
+  $('#idea-label-modal').hidden = false;
+  $('#idea-label-sel').focus();
+}
+// no label → no note (the API refuses a note on its own)
+function ideaLabelSync() {
+  const none = $('#idea-label-sel').value === 'none';
+  $('#idea-label-note').disabled = none;
+  $('#idea-label-count').textContent = none ? 'Pick a label to add a note' : `${$('#idea-label-note').value.length} / 200`;
+}
+async function ideaSaveLabel() {
+  const label = $('#idea-label-sel').value;
+  const data = { action: 'label', id: safeInt(ideaState.labelId), label, note: label === 'none' ? '' : $('#idea-label-note').value.trim() };
+  const btn = $('#idea-label-save');
+  btn.disabled = true;
+  let res;
+  try { res = await apiFetch('POST', 'api/ideas.php', { data }); } catch (e) { res = { ok: false, error: String(e) }; }
+  btn.disabled = false;
+  if (!res.ok) { toast(res.error || 'Couldn’t save the label', false); return; }
+  $('#idea-label-modal').hidden = true;
+  toast(label === 'none' ? 'Label cleared' : `Labelled ${IDEA_LABELS[label] || label}`);
+  loadIdeas();
+}
+
 async function ideaVote(id) {
   if (!ideaState.me.signed_in) { toast('Add your user key in Settings to vote', false); return; }
   const it = ideaState.ideas.find((i) => String(i.id) === id);
@@ -322,15 +366,18 @@ async function ideaAdmin(data, okMsg) {
 function initIdeas() {
   let t = null;
   $('#ideas-search').addEventListener('input', () => { clearTimeout(t); t = setTimeout(loadIdeas, 300); });
-  ['#ideas-sort', '#ideas-status', '#ideas-category', '#ideas-mine'].forEach((s) => $(s).addEventListener('change', loadIdeas));
+  ['#ideas-sort', '#ideas-status', '#ideas-category', '#ideas-label', '#ideas-mine'].forEach((s) => $(s).addEventListener('change', loadIdeas));
   $('#ideas-category').innerHTML = '<option value="">All categories</option>'
     + IDEA_CATEGORIES.map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+  $('#ideas-label').innerHTML = '<option value="">Any label</option>'
+    + Object.entries(IDEA_LABELS).map(([k, l]) => `<option value="${k}">${escapeHtml(l)}</option>`).join('')
+    + '<option value="none">No label</option>';
   $('[data-refresh="ideas"]').addEventListener('click', loadIdeas);
   $('#ideas-new').addEventListener('click', () => ideaOpenDialog());
 
   $('#ideas-list').addEventListener('click', async (e) => {
     if (e.target.closest('[data-ishipped]')) { ideaState.shippedOpen = !ideaState.shippedOpen; renderIdeas(); return; }
-    const b = e.target.closest('[data-ivote],[data-imore],[data-iedit],[data-idel],[data-ipin],[data-icmt],[data-icmtpost],[data-icmtdel]');
+    const b = e.target.closest('[data-ivote],[data-imore],[data-iedit],[data-idel],[data-ipin],[data-ilabel],[data-icmt],[data-icmtpost],[data-icmtdel]');
     if (!b) return;
     const it = (id) => ideaState.ideas.find((i) => String(i.id) === id);
     if (b.dataset.icmt) {
@@ -348,6 +395,7 @@ function initIdeas() {
       if (ideaState.expanded.has(id)) ideaState.expanded.delete(id); else ideaState.expanded.add(id);
       renderIdeas();
     } else if (b.dataset.iedit) ideaOpenDialog(it(b.dataset.iedit));
+    else if (b.dataset.ilabel) ideaOpenLabel(it(b.dataset.ilabel));
     else if (b.dataset.ipin) {
       const x = it(b.dataset.ipin);
       if (x) ideaAdmin({ action: 'pin', id: x.id, pinned: x.pinned ? 0 : 1 }, x.pinned ? 'Unpinned' : 'Pinned to the top');
@@ -379,4 +427,10 @@ function initIdeas() {
   $('#idea-save').addEventListener('click', ideaSave);
   $('#idea-title').addEventListener('keydown', (e) => { if (e.key === 'Enter') ideaSave(); });
   bindBackdropClose($('#idea-modal'), () => { $('#idea-modal').hidden = true; });
+  $('#idea-label-sel').addEventListener('change', ideaLabelSync);
+  $('#idea-label-note').addEventListener('input', ideaLabelSync);
+  $('#idea-label-note').addEventListener('keydown', (e) => { if (e.key === 'Enter') ideaSaveLabel(); });
+  $('#idea-label-cancel').addEventListener('click', () => { $('#idea-label-modal').hidden = true; });
+  $('#idea-label-save').addEventListener('click', ideaSaveLabel);
+  bindBackdropClose($('#idea-label-modal'), () => { $('#idea-label-modal').hidden = true; });
 }

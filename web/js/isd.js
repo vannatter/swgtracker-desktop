@@ -8,7 +8,7 @@
    Normal players never hit api/isd.php except one call when the Mail page opens. */
 
 // open/items survive the Mail page's 10s refresh, which redraws this panel (Danvar)
-const isdState = { lastUploaded: null, checking: false, open: new Set(), items: new Map() };
+const isdState = { lastUploaded: null, checking: false, open: new Set(), items: new Map(), limit: 8 };
 const ISD_RESULT_LABEL = {
   planet_added: 'planet added', confirmed: 'already listed', inactive: 'not in spawn on the site',
   added: 'new — added', pending: 'new — waiting for stats',
@@ -59,23 +59,32 @@ async function isdLoadPanel() {
   const panel = $('#isd-panel');
   if (!panel) return;
   let res;
-  try { res = await apiFetch('GET', 'api/isd.php', { params: { limit: 8 } }); } catch (_) { return; }
+  // every report still waiting for stats comes back on its own, however old,
+  // so a big batch can't push one off the panel (Izre)
+  try { res = await apiFetch('GET', 'api/isd.php', { params: { limit: isdState.limit, waiting: 1 } }); } catch (_) { return; }
   const d = res.ok && res.data;
   if (!d || !d.total) { panel.hidden = true; return; }
-  if (d.reports.length) isdSetLastId(Math.max(isdLastId(), ...d.reports.map((r) => r.id)));
-  panel.hidden = false;
-  panel.innerHTML = `
-    <div class="isd-head"><i class="fa-solid fa-satellite"></i> Survey droid reports
-      <span class="isd-count">${fmtNum(d.total)}</span>
-      <i class="fa-solid fa-circle-info info-tip" title="Interplanetary Survey Droid mails the monitor uploaded. Resources in spawn get this planet added; new names wait until they have stats."></i></div>
-    <div class="isd-list">${d.reports.map((r) => `
+  const waiting = d.waiting || [];
+  const all = waiting.concat(d.reports);
+  if (all.length) isdSetLastId(Math.max(isdLastId(), ...all.map((r) => r.id)));
+  const more = d.total - all.length;
+  const row = (r) => `
       <div class="isd-row" data-isd="${r.id}" role="button" tabindex="0">
         <span class="isd-what"><b>${escapeHtml(r.planet_name)}</b> · ${escapeHtml(r.res_class)}</span>
         <span class="isd-sum">${escapeHtml(isdSummary(r).replace(/^.*? — /, '') || `${r.found} found`)}</span>
         <span class="isd-when">${fmtAgo(r.created)}</span>
       </div>
-      <div class="isd-items" id="isd-items-${r.id}"${isdState.items.has(String(r.id)) && isdState.open.has(String(r.id)) ? '' : ' hidden'}>${isdState.items.get(String(r.id)) || ''}</div>`).join('')}
-    </div>`;
+      <div class="isd-items" id="isd-items-${r.id}"${isdState.items.has(String(r.id)) && isdState.open.has(String(r.id)) ? '' : ' hidden'}>${isdState.items.get(String(r.id)) || ''}</div>`;
+  panel.hidden = false;
+  panel.innerHTML = `
+    <div class="isd-head"><i class="fa-solid fa-satellite"></i> Survey droid reports
+      <span class="isd-count">${fmtNum(d.total)}</span>
+      <i class="fa-solid fa-circle-info info-tip" title="Interplanetary Survey Droid mails the monitor uploaded. Resources in spawn get this planet added; new names wait until they have stats."></i></div>
+    ${waiting.length ? `<div class="isd-sub isd-sub-waiting"><i class="fa-solid fa-hourglass-half"></i> Waiting for stats <span class="isd-count">${fmtNum(waiting.length)}</span></div>
+    <div class="isd-list">${waiting.map(row).join('')}</div>
+    ${d.reports.length ? '<div class="isd-sub">Latest</div>' : ''}` : ''}
+    <div class="isd-list">${d.reports.map(row).join('')}</div>
+    ${more > 0 ? `<button type="button" class="isd-more" data-isdmore>Show ${fmtNum(Math.min(20, more))} more <span class="isd-count">· ${fmtNum(more)} older</span></button>` : ''}`;
 }
 
 async function isdToggle(id) {
@@ -187,6 +196,7 @@ function initIsd() {
   document.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-isdstats]');
     if (btn) { isdOpenStats(btn.dataset.isdstats, safeInt(btn.dataset.isdrep)); return; }
+    if (e.target.closest('[data-isdmore]')) { isdState.limit = Math.min(200, isdState.limit + 20); isdLoadPanel(); return; }
     const row = e.target.closest('[data-isd]');
     if (row) isdToggle(row.dataset.isd);
   });

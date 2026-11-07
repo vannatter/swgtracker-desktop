@@ -5128,6 +5128,11 @@ body:not(.power-tools) .power-only { display: none !important; }
 .isd-row { display: flex; align-items: baseline; gap: 12px; padding: 8px 14px; cursor: pointer; border-top: 1px solid var(--border); }
 .isd-list .isd-row:first-child { border-top: 0; }
 .isd-row:hover { background: var(--bg-hover, rgba(255,255,255,.03)); }
+.isd-sub { padding: 8px 14px 4px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); border-top: 1px solid var(--border); }
+.isd-sub-waiting { color: var(--q-accept); border-top: 0; }
+.isd-sub-waiting .fa-hourglass-half { margin-right: 4px; }
+.isd-more { display: block; width: 100%; padding: 8px 14px; background: none; border: 0; border-top: 1px solid var(--border); color: var(--text-hover); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.isd-more:hover { color: var(--text-primary); background: var(--bg-hover, rgba(255,255,255,.03)); }
 .isd-what { white-space: nowrap; }
 .isd-sum { flex: 1; min-width: 0; color: var(--text-muted); }
 .isd-when { color: var(--text-muted); white-space: nowrap; font-size: 12px; }

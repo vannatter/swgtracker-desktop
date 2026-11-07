@@ -987,8 +987,14 @@ td.lab-dim { opacity: .45; }
 
 .mys-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
 .mysd-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
-.mys-using { cursor: pointer; color: var(--text-hover); text-decoration: underline dotted var(--text-muted); }
-.mys-using:hover { color: var(--q-good); }
+.mys-pick { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 3px 8px 3px 10px;
+  background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px;
+  color: var(--text-hover); font: inherit; cursor: pointer; vertical-align: middle; }
+.mys-pick:hover, .mys-pick:focus-visible { border-color: var(--accent-dark); color: var(--text-primary); outline: none; }
+.mys-pick .mys-using { color: inherit; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mys-pick-caret { font-size: 10px; color: var(--text-muted); }
+.mys-pick:hover .mys-pick-caret { color: var(--text-hover); }
+.mys-pick.empty { border-style: dashed; color: var(--text-muted); }
 .mysd-input { width: 220px; text-align: left; }
 
 /* Custom suggestion panel for the Using editor (datalist is unstylable and

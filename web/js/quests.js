@@ -546,7 +546,8 @@ async function qMapBuild(elId, pins, o) {
   if (!document.getElementById(elId)) return null;
   const planets = [];
   pins.forEach((p) => { if (!planets.includes(p.pm)) planets.push(p.pm); });
-  const map = L.map(elId, { crs: L.CRS.Simple, minZoom: -2, maxZoom: 2, zoomSnap: 0, zoomDelta: 0.5, attributionControl: false, scrollWheelZoom: false });
+  const map = L.map(elId, { crs: L.CRS.Simple, minZoom: -2, maxZoom: 2, zoomSnap: 0, zoomDelta: 0.5, maxBoundsViscosity: 1, attributionControl: false, scrollWheelZoom: false });
+  map.on('resize', () => qMapClamp(map, L));
   pmTrackpadManners(map);
   map.touchZoom.disable(); map.boxZoom.disable();
   const st = { map, L, planets, planet: null, image: null, layer: L.layerGroup().addTo(map), keyPin: {}, pins, o };
@@ -561,6 +562,12 @@ async function qMapBuild(elId, pins, o) {
   qMapSetPlanet(st, planets[0]);
   return st;
 }
+// the planet image always fills the box: no zooming out past it, no panning off its edge
+function qMapClamp(map, L) {
+  const b = L.latLngBounds([[0, 0], [PM_SIZE, PM_SIZE]]);
+  map.setMaxBounds(b);
+  map.setMinZoom(map.getBoundsZoom(b, true));
+}
 function qMapSetPlanet(st, pm, keepView) {
   if (!st) return;
   const { L, map, o } = st;
@@ -573,6 +580,7 @@ function qMapSetPlanet(st, pm, keepView) {
   if (st.image) map.removeLayer(st.image);
   st.image = L.imageOverlay(pmImg(pm), bounds).addTo(map);
   st.image.bringToBack();
+  qMapClamp(map, L);
   st.layer.clearLayers();
   st.keyPin = {};
   const groups = new Map();

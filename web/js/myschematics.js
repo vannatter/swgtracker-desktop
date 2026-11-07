@@ -583,6 +583,13 @@ async function loadMySchematics() {
 
 // ---- Detail page ----
 
+// the Using cell reads as a dropdown (border + caret) so it's plain it can be changed
+function mysdPickHtml(ingId, label, uq, empty = false) {
+  return `<button type="button" class="mys-pick${empty ? ' empty' : ''}" data-editing-ing="${escapeHtml(String(ingId))}"
+    title="${empty ? 'Choose' : 'Change'} the resource for this slot — pick from every spawn of its class">
+    <span class="mys-using">${label}</span>${uq}<i class="fa-solid fa-chevron-down mys-pick-caret"></i></button>`;
+}
+
 function mysdRowHtml(r) {
   const res = r.resource;
   let using;
@@ -590,13 +597,10 @@ function mysdRowHtml(r) {
     // same stockpile add/manage cell the Best Known column has (⌘/Ctrl-click
     // opens the amount/CPU dialog) — only when the name resolved to a real id
     using = `${res?.id ? mysdAddBadge(res.id, r.resource_name) : ''}
-      <span class="mys-using" data-editing-ing="${escapeHtml(String(r.id))}" title="Click to change">
-      ${escapeHtml(r.resource_name)}</span>
-      ${res?.in_spawn ? '<span class="mys-inspawn">in spawn</span>' : ''}
-      <span data-uq></span>`;
+      ${mysdPickHtml(r.id, escapeHtml(r.resource_name), '<span data-uq></span>')}
+      ${res?.in_spawn ? '<span class="mys-inspawn">in spawn</span>' : ''}`;
   } else {
-    using = `<span class="mys-using stat_off" data-editing-ing="${escapeHtml(String(r.id))}"
-      title="Click to choose a resource">none chosen — click to set</span><span hidden data-uq></span>`;
+    using = mysdPickHtml(r.id, 'Choose a resource', '<span hidden data-uq></span>', true);
   }
   return `<tr data-ing="${escapeHtml(String(r.id))}" data-code="${escapeHtml(r.resource_type || '')}">
     <td class="col-text"><span class="detail-slot">${escapeHtml(r.resource_label || '')}</span>

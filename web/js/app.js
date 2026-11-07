@@ -102,6 +102,7 @@ const PAGE_LOADERS = {
   schembuilder: () => loadSchemBuilder(),
   lab: () => loadLab(),
   monitor: () => { mmInvIndex = null; loadMail(); },   // fresh inventory names on each visit
+  isd: () => isdLoadPanel(),
   scanner: () => loadScanner(),
   settings: () => { loadSettings(); loadScanConfig(); }, // scan config renders into #set-scan-section
   ideas: () => loadIdeas(),
@@ -336,7 +337,7 @@ function showPage(key, opts = {}) {
   document.dispatchEvent(new CustomEvent('page:show', { detail: { key } }));
   // live-state pages reload on every visit, not just the first — mail uploads
   // and cron inventory depletion both move underneath a cached render
-  const ALWAYS_RELOAD = new Set(['monitor', 'inventory', 'characters', 'home', 'shop']); // shop: live stats each visit // home throttles itself (5 min)
+  const ALWAYS_RELOAD = new Set(['monitor', 'isd', 'inventory', 'characters', 'home', 'shop']); // shop: live stats each visit // home throttles itself (5 min)
   if (PAGE_LOADERS[key] && (!loadedPages.has(key) || ALWAYS_RELOAD.has(key))) {
     loadedPages.add(key);
     PAGE_LOADERS[key]();

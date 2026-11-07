@@ -1,14 +1,16 @@
 /* Interplanetary Survey Droid reports — the site reads an ISD mail when the
    monitor uploads it (includes/isd_reports.php): planets added to resources in
-   spawn, new names queued until they have stats. Two surfaces:
-   - Mail page: a "Survey droid reports" panel, only for players who have any
+   spawn, new names queued until they have stats. Surfaces:
+   - Survey Droid page (Tools): every report, waiting-for-stats ones first.
+     It used to sit above the mail list and squeezed it (Danvar)
+   - Mail page: one line with the counts, linking that page — only for players who have any
    - bell: after an upload, any new report becomes a local alert
    A "waiting for stats" name gets Enter stats: a dialog with just the stats
    its class has, capped per class; the site adds it in spawn (Canda).
-   Normal players never hit api/isd.php except one call when the Mail page opens. */
+   Normal players never hit api/isd.php except a call a minute while Mail is open. */
 
-// open/items survive the Mail page's 10s refresh, which redraws this panel (Danvar)
-const isdState = { lastUploaded: null, checking: false, open: new Set(), items: new Map(), limit: 8 };
+// open/items survive a redraw of the panel (Danvar)
+const isdState = { lastUploaded: null, checking: false, open: new Set(), items: new Map(), limit: 25, stripAt: 0 };
 const ISD_RESULT_LABEL = {
   planet_added: 'planet added', confirmed: 'already listed', inactive: 'not in spawn on the site',
   added: 'new — added', pending: 'new — waiting for stats',
@@ -40,7 +42,8 @@ async function isdCheckNew() {
     isdSetLastId(Math.max(...reports.map((r) => r.id)));
     if (!last) return; // first run sets the baseline — no backlog of alerts
     reports.slice().reverse().forEach((r) => appLocalAlert('Survey droid report', `${r.res_class}: ${isdSummary(r)}`));
-    if ($('#page-monitor')?.classList.contains('active')) isdLoadPanel();
+    if ($('#page-isd')?.classList.contains('active')) isdLoadPanel();
+    isdState.stripAt = 0; // fresh counts on the Mail line
   } finally {
     isdState.checking = false;
   }
@@ -63,6 +66,7 @@ async function isdLoadPanel() {
   // so a big batch can't push one off the panel (Izre)
   try { res = await apiFetch('GET', 'api/isd.php', { params: { limit: isdState.limit, waiting: 1 } }); } catch (_) { return; }
   const d = res.ok && res.data;
+  $('#isd-empty').hidden = !!(d && d.total);
   if (!d || !d.total) { panel.hidden = true; return; }
   const waiting = d.waiting || [];
   const all = waiting.concat(d.reports);
@@ -85,6 +89,23 @@ async function isdLoadPanel() {
     ${d.reports.length ? '<div class="isd-sub">Latest</div>' : ''}` : ''}
     <div class="isd-list">${d.reports.map(row).join('')}</div>
     ${more > 0 ? `<button type="button" class="isd-more" data-isdmore>Show ${fmtNum(Math.min(20, more))} more <span class="isd-count">· ${fmtNum(more)} older</span></button>` : ''}`;
+}
+
+// Mail page: one line — how many reports, how many wait for stats — linking the
+// Survey Droid page. Mail redraws every 10s; the counts re-read at most once a minute.
+async function isdLoadStrip() {
+  const strip = $('#isd-strip');
+  if (!strip || Date.now() - isdState.stripAt < 60000) return;
+  isdState.stripAt = Date.now();
+  let res;
+  try { res = await apiFetch('GET', 'api/isd.php', { params: { limit: 1, waiting: 1 } }); } catch (_) { return; }
+  const d = res.ok && res.data;
+  if (!d || !d.total) { strip.hidden = true; return; }
+  const w = (d.waiting || []).length;
+  strip.innerHTML = `<a role="button" data-nav="isd"><i class="fa-solid fa-satellite"></i> Survey droid reports
+    <span class="isd-count">${fmtNum(d.total)}</span>${w ? ` <span class="isd-strip-wait"><i class="fa-solid fa-hourglass-half"></i> ${fmtNum(w)} waiting for stats</span>` : ''}
+    <span class="isd-strip-go">Open <i class="fa-solid fa-chevron-right"></i></span></a>`;
+  strip.hidden = false;
 }
 
 async function isdToggle(id) {
@@ -196,6 +217,7 @@ function initIsd() {
   document.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-isdstats]');
     if (btn) { isdOpenStats(btn.dataset.isdstats, safeInt(btn.dataset.isdrep)); return; }
+    if (e.target.closest('#isd-strip [data-nav]')) { showPage('isd'); return; }
     if (e.target.closest('[data-isdmore]')) { isdState.limit = Math.min(200, isdState.limit + 20); isdLoadPanel(); return; }
     const row = e.target.closest('[data-isd]');
     if (row) isdToggle(row.dataset.isd);
@@ -204,6 +226,7 @@ function initIsd() {
     const row = e.key === 'Enter' && e.target.closest?.('[data-isd]');
     if (row) isdToggle(row.dataset.isd);
   });
+  $('[data-refresh="isd"]')?.addEventListener('click', () => isdLoadPanel());
   setInterval(isdWatch, 60000);
   setTimeout(isdWatch, 15000);
 }

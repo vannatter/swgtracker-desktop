@@ -6,7 +6,7 @@
   <title>SWG Tracker Desktop</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.1/css/all.min.css">
-  <link rel="stylesheet" href="css/app.css?v=20261107isd">
+  <link rel="stylesheet" href="css/app.css?v=20261107isdp">
   <link rel="stylesheet" href="css/share.css?v=20261022x">
   <link rel="stylesheet" href="css/quests.css?v=20261105qc">
 </head>
@@ -93,6 +93,7 @@
         <li class="nav-group-head" data-navgroup="tools"><i class="fa-solid fa-toolbox"></i> Tools <i class="fa-solid fa-caret-down nav-group-caret"></i><span class="nav-group-dot" hidden></span></li>
         <li class="nav-item nav-group-item" data-page="characters" data-group="tools"><i class="fa-solid fa-user-group"></i> Characters</li>
         <li class="nav-item nav-group-item" data-page="monitor" data-group="tools"><i class="fa-solid fa-envelope"></i> Mail</li>
+        <li class="nav-item nav-group-item" data-page="isd" data-group="tools"><i class="fa-solid fa-satellite"></i> Survey Droid</li>
         <li class="nav-item nav-group-item" data-page="notes" data-group="tools"><i class="fa-solid fa-note-sticky"></i> Notes</li>
         <li class="nav-item nav-group-item" data-page="macros" data-group="tools" title="Manage your in-game macros (macros.txt)"><i class="fa-solid fa-wand-magic-sparkles"></i> Macros</li>
         <li class="nav-item nav-group-item" data-page="aliases" data-group="tools" title="Manage your in-game aliases (aliases.txt)"><i class="fa-solid fa-terminal"></i> Aliases</li>
@@ -1234,7 +1235,7 @@
 
         <div class="mm-cards" id="mm-cards"></div>
 
-        <div id="isd-panel" class="isd-panel" hidden></div>
+        <div id="isd-strip" class="isd-strip" hidden></div>
 
         <div id="mm-massdel-slot" class="mm-massdel-row"></div>
 
@@ -1257,6 +1258,17 @@
             <button id="mm-next" class="btn btn-sm btn-outline-secondary" disabled>Next &rsaquo;</button>
           </div>
         </div>
+      </section>
+
+      <section id="page-isd" class="page">
+        <div class="page-head">
+          <h1>Survey Droid</h1>
+          <i class="fa-solid fa-circle-info info-tip"
+             title="Interplanetary Survey Droid reports the monitor uploaded from your mail. Resources in spawn get the surveyed planet added on the site; new names wait until they have stats — Enter stats adds them yourself. Reports still waiting for stats always list first (Danvar)."></i>
+          <button class="btn btn-icon head-right" data-refresh="isd" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
+        </div>
+        <div id="isd-panel" class="isd-panel"></div>
+        <div id="isd-empty" class="empty-state" hidden>No survey droid reports yet — send an Interplanetary Survey Droid in game; its report mail lands here once the monitor uploads it.</div>
       </section>
 
       <!-- The Laboratory — experiments live here before they graduate to real pages -->
@@ -4281,8 +4293,8 @@
   <script src="js/insight-alerts.js?v=20261102al"></script>
   <script src="js/alerts.js?v=20261023ac"></script>
   <script src="js/lab.js?v=20261022es"></script>
-  <script src="js/mail.js?v=20261105var"></script>
-  <script src="js/isd.js?v=20261107isd"></script>
+  <script src="js/mail.js?v=20261107isdp"></script>
+  <script src="js/isd.js?v=20261107isdp"></script>
   <script src="js/notes.js?v=20261022es"></script>
   <script src="js/macro_commands.js?v=20261012a"></script>
   <script src="js/macros.js?v=20261022es"></script>
@@ -4307,7 +4319,7 @@
   <script src="js/ideas.js?v=20261106lbl"></script>
   <script src="js/priceguide.js?v=20261102pg"></script>
   <script src="js/vendor-upkeep.js?v=20261102vu"></script>
-  <script src="js/navbadges.js?v=20261106lbl"></script>
-  <script src="js/app.js?v=20261106rn"></script>
+  <script src="js/navbadges.js?v=20261107isdp"></script>
+  <script src="js/app.js?v=20261107isdp"></script>
 </body>
 </html>

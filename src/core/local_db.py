@@ -61,6 +61,9 @@ def mail_category(subject: str, kind: str = "mail") -> str:
     if kind == "purchase":
         return "purchase"
     s = (subject or "").lower()
+    # Interplanetary Survey Droid reports (Danvar) — the site's isd_is_report subjects
+    if s.lstrip().startswith(("interplanetary survey:", "survey results:")):
+        return "isd"
     if "bank transfer" in s or "wire transfer" in s:
         return "banktip"
     if "out of ingredient" in s:
@@ -185,7 +188,8 @@ class LocalDB:
         # (from subject) for mails imported before these columns existed.
         # v3: 'purchase' category + upgrade old purchase rows' kind from 'mail'.
         # v4: 'banktip' category + parse tip in/out/fee from bank-transfer bodies.
-        MAIL_META_VER = "4"
+        # v5: 'isd' category — survey droid reports out of 'other'.
+        MAIL_META_VER = "5"
         row = self._conn.execute(
             "SELECT value FROM sync_meta WHERE key = 'mail_meta_ver'").fetchone()
         if (row["value"] if row else "") != MAIL_META_VER:

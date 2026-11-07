@@ -18,6 +18,7 @@ const PAGE_BADGES = {
   insights: { tag: 'updated', since: '2026-11-01' },
   inventory: { tag: 'updated', since: '2026-11-05' },
   monitor: { tag: 'updated', since: '2026-11-05' },
+  isd: { tag: 'new', since: '2026-11-07' },
   sales: { tag: 'updated', since: '2026-11-01' },
 };
 const NAV_BADGE_DAYS = 30;

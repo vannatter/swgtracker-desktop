@@ -28,15 +28,16 @@ const MM_CATS = {
   'factory-ingredients': 'Factory: no ingredients',
   structure: 'Structure',
   guild: 'Guild',
+  isd: 'Survey droid',
   other: 'Other',
   archived: 'Archived',   // pseudo-category: hidden-not-deleted mail (Veizyr)
 };
-const MM_CAT_ORDER = ['sale', 'purchase', 'banktip', 'factory', 'factory-ingredients', 'structure', 'guild', 'other', 'archived'];
+const MM_CAT_ORDER = ['sale', 'purchase', 'banktip', 'factory', 'factory-ingredients', 'structure', 'guild', 'isd', 'other', 'archived'];
 
 let mmInvIndex = null;   // { at, has(name) } — see loadMail
 
 async function loadMail() {
-  if (typeof isdLoadPanel === 'function') isdLoadPanel(); // survey droid reports (js/isd.js) — hidden unless you have any
+  if (typeof isdLoadStrip === 'function') isdLoadStrip(); // one line linking the Survey Droid page (js/isd.js) — hidden unless you have reports
   let state = null;
   try {
     const res = await api().monitor_state();

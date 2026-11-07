@@ -2479,6 +2479,11 @@
             <label class="form-check-label" for="set-push-factory">Factory runs done
               <span class="settings-sub">— a run finishes, for factories with Notify ticked</span></label>
           </div>
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="set-push-harvester" data-pushkind="harvester">
+            <label class="form-check-label" for="set-push-harvester">Harvesters
+              <span class="settings-sub">— hopper full (or at your alert %), out of power, maintenance empty, or the resource despawned, for harvesters with alerts ticked</span></label>
+          </div>
           <div class="settings-sub">Shipped ideas follow the Ideas board switch above.</div>
         </div>
 
@@ -3488,11 +3493,11 @@
       </div>
 
       <div class="inv-add-row">
-        <label class="pin-toggle harv-f-emailrow" title="Needs your swgtracker.com account email">
+        <label class="pin-toggle harv-f-emailrow" title="In the bell here, by email to your swgtracker.com account, and on your phone with Harvesters on under Settings → Phone notifications">
           <input type="checkbox" id="harv-f-email">
-          Email me when the hopper hits
+          Alert me when the hopper hits
           <input id="harv-f-alertpct" type="text" inputmode="numeric" class="form-control filter-input harv-f-pct"
-                 maxlength="3" title="Hopper %% full that triggers the email — remembered as the default for new harvesters">%,
+                 maxlength="3" title="Hopper %% full that triggers the alert — remembered as the default for new harvesters">%,
           power or maintenance runs out, or the resource despawns</label>
       </div>
 
@@ -4319,7 +4324,7 @@
   <script src="js/ideas.js?v=20261106lbl"></script>
   <script src="js/priceguide.js?v=20261102pg"></script>
   <script src="js/vendor-upkeep.js?v=20261102vu"></script>
-  <script src="js/navbadges.js?v=20261107isdp"></script>
+  <script src="js/navbadges.js?v=20261107harv"></script>
   <script src="js/app.js?v=20261107isdp"></script>
 </body>
 </html>

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 import logging
 from pathlib import Path
 from typing import Dict, Any
@@ -59,8 +60,12 @@ class ConfigManager:
 
     def save(self) -> bool:
         try:
-            with open(self.config_file, 'w') as f:
+            # write-then-rename: a process killed mid-save (the installer stops a
+            # running app) must never leave a half-written config.json behind
+            tmp = f"{self.config_file}.{os.getpid()}.{threading.get_ident()}.tmp"  # per writer: timer threads save too
+            with open(tmp, 'w') as f:
                 json.dump(self.config, f, indent=4)
+            os.replace(tmp, self.config_file)
             logger.info(f"Configuration saved to {self.config_file}")
             return True
         except Exception as e:

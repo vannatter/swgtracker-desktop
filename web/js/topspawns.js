@@ -321,7 +321,17 @@ function renderTopSpawns() {
 
 function initTopSpawns() {
   // the NEW chips last for one visit: leaving the page forgets them
-  document.addEventListener('page:show', (e) => { if (e.detail?.key !== 'topspawns' && topSeen.fresh.size) topSeen.fresh = new Set(); });
+  document.addEventListener('page:show', (e) => {
+    if (e.detail?.key !== 'topspawns') { if (topSeen.fresh.size) topSeen.fresh = new Set(); return; }
+    // the loader only runs on the first visit, so a later one clears the pill itself —
+    // it kept counting the same newcomers until a relaunch (Danvar). Newcomers the sweep
+    // found since the page loaded aren't in its rows yet: reload to show them with chips.
+    if (!topState.loaded || !topSeen.ids || !topSeen.fresh.size) return;
+    topSeen.fresh.forEach((id) => topSeen.ids.add(id));
+    topSeenSave();
+    topSetPill(0);
+    loadTopSpawns(true);
+  });
   let searchTimer = null;
   $('#top-search').addEventListener('input', () => {
     clearTimeout(searchTimer);

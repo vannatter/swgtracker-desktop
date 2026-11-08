@@ -147,7 +147,7 @@ from src.core.alert_poller import AlertPoller
 from src.core.bundle_manager import BundleManager
 from src.web_api import WebApi
 
-APP_VERSION = "0.15.4"  # keep in sync with pyproject.toml — bump with every change batch
+APP_VERSION = "0.15.5"  # keep in sync with pyproject.toml — bump with every change batch
 
 logging.basicConfig(
     level=logging.INFO,
@@ -260,6 +260,123 @@ def _ensure_single_instance():
     except Exception:  # noqa: BLE001 — a broken guard must never block launch
         logger.error("single-instance guard failed", exc_info=True)
         return None
+
+
+GEOM_KEY = "window_geom"  # {x, y, w, h, max} — the normal (un-maximized) frame
+
+
+def _saved_geometry(config) -> dict:
+    """create_window kwargs for the size/position the window last had (Danvar:
+    every launch came back at 1200×800 in the default spot). The position only
+    applies while some monitor still shows the window's title-bar area — an
+    unplugged second screen must not open it off-screen."""
+    g = config.get(GEOM_KEY) or {}
+    try:
+        w, h = int(g["w"]), int(g["h"])
+    except (KeyError, TypeError, ValueError):
+        return {}
+    if w < 960 or h < 650:
+        return {}
+    out = {"width": w, "height": h, "maximized": bool(g.get("max"))}
+    if "x" in g and "y" in g:
+        try:
+            x, y = int(g["x"]), int(g["y"])
+            if _title_bar_visible(x, y, w):
+                out.update(x=x, y=y)
+        except Exception:  # noqa: BLE001 — unknown monitors just centre it, as before
+            logger.debug("saved position check failed", exc_info=True)
+    return out
+
+
+def _mac_top_left(frame) -> tuple[int, int]:
+    """A Cocoa frame (bottom-left origin, global) as pywebview's x/y: left edge,
+    and top edge measured down from the top of the main screen — what its
+    create_window/move place the window by. (Its own moved event measures y
+    against the window's current screen, which drifts on a second monitor.)"""
+    import AppKit
+    main = AppKit.NSScreen.screens()[0].frame()
+    top = main.origin.y + main.size.height
+    return int(frame.origin.x), int(top - (frame.origin.y + frame.size.height))
+
+
+def _title_bar_visible(x: int, y: int, w: int) -> bool:
+    """Does any connected monitor show the strip a window at x/y would put its
+    title bar in?"""
+    if sys.platform == "win32":
+        import ctypes
+        from ctypes import wintypes
+        rect = wintypes.RECT(x, y, x + w, y + 40)
+        return bool(ctypes.windll.user32.MonitorFromRect(ctypes.byref(rect), 0))  # 0 = MONITOR_DEFAULTTONULL
+    if sys.platform == "darwin":
+        import AppKit
+        for scr in AppKit.NSScreen.screens():
+            sx, sy = _mac_top_left(scr.frame())
+            sw, sh = scr.frame().size.width, scr.frame().size.height
+            if x < sx + sw and x + w > sx and y < sy + sh and y + 40 > sy:
+                return True
+        return False
+    return False
+
+
+def _track_geometry(window, config):
+    """Remember the window's normal frame as it moves/resizes, saved a moment
+    after the last change. Minimized/maximized frames aren't kept — Windows parks
+    a minimized window at -32000 and a maximized one fills the screen — only the
+    maximized flag is, so the next launch reopens maximized over the right frame."""
+    import threading
+    g = dict(config.get(GEOM_KEY) or {})
+    st = {"timer": None, "max": bool(g.get("max")), "min": False}
+
+    def _save_soon():
+        if st["timer"]:
+            st["timer"].cancel()
+
+        def _save():
+            g["max"] = st["max"]
+            config.set(GEOM_KEY, dict(g))
+            config.save()
+        st["timer"] = threading.Timer(2.0, _save)
+        st["timer"].daemon = True
+        st["timer"].start()
+
+    def _resized(width, height):
+        if st["max"] or st["min"] or width < 960 or height < 650:
+            return
+        g.update(w=int(width), h=int(height))
+        _save_soon()
+
+    def _moved(x, y):
+        if st["max"] or st["min"] or x <= -10000 or y <= -10000:
+            return
+        if sys.platform == "darwin" and getattr(window, "native", None) is not None:
+            try:
+                x, y = _mac_top_left(window.native.frame())
+            except Exception:  # noqa: BLE001 — keep pywebview's numbers
+                pass
+        g.update(x=int(x), y=int(y))
+        _save_soon()
+
+    def _maximized():
+        st["max"], st["min"] = True, False
+        _save_soon()
+
+    def _minimized():
+        st["min"] = True
+
+    def _restored():
+        # restore covers un-maximize and un-minimize; a restore from minimized
+        # back to a maximized window comes through as maximized again
+        if st["min"]:
+            st["min"] = False
+            return
+        st["max"] = False
+        _save_soon()
+
+    window.events.resized += _resized
+    window.events.moved += _moved
+    window.events.maximized += _maximized
+    window.events.minimized += _minimized
+    window.events.restored += _restored
 
 
 def _setup_tray(window, config):
@@ -397,15 +514,19 @@ def main():
     relaunch_state = os.environ.pop(RELAUNCH_STATE_ENV, "")
     if relaunch_state:
         logger.info("relaunch restores window state: %s", relaunch_state)
+    geom = _saved_geometry(config)
     window = webview.create_window(
         "SWG Tracker Desktop",
         url=str(index),
         js_api=bridge,
-        width=1200,
-        height=800,
+        width=geom.get("width", 1200),
+        height=geom.get("height", 800),
+        x=geom.get("x"),
+        y=geom.get("y"),
         min_size=(960, 650),
         background_color="#14161d",
-        maximized="--maximized" in sys.argv or relaunch_state == "maximized",
+        maximized="--maximized" in sys.argv or relaunch_state == "maximized"
+                  or (geom.get("maximized", False) and not relaunch_state),
         minimized=relaunch_state == "minimized",
         hidden=relaunch_state == "tray",
     )
@@ -446,6 +567,7 @@ def main():
             logger.error("bundle apply failed", exc_info=True)
     bridge.reload_ui = _reload_ui
 
+    _track_geometry(window, config)
     tray_icon = _setup_tray(window, config)
     state["tray"] = tray_icon
 

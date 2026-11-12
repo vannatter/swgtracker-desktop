@@ -1371,6 +1371,7 @@ async function boot() {
   initWishlist();
   initMySchematics();
   initSales();
+  initPgCheck();
   initInsights();
   initPurchases();
   initCharactersPage();

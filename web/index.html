@@ -6,7 +6,7 @@
   <title>SWG Tracker Desktop</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.1/css/all.min.css">
-  <link rel="stylesheet" href="css/app.css?v=20261112vpg">
+  <link rel="stylesheet" href="css/app.css?v=20261112pgc">
   <link rel="stylesheet" href="css/share.css?v=20261022x">
   <link rel="stylesheet" href="css/quests.css?v=20261105qc">
 </head>
@@ -781,11 +781,20 @@
             <input id="sales-search" type="text" class="form-control filter-input" placeholder="Search item, buyer, vendor...">
             <button id="sales-search-clear" type="button" title="Clear filter" hidden><i class="fa-solid fa-xmark"></i></button>
           </span>
+          <button id="pgc-open" class="btn btn-sm btn-outline-secondary" hidden
+                  title="Tell the Price Guide what the number on your listings means — a crate of 10, or one item with 10 uses"><i class="fa-solid fa-scale-balanced"></i> Price Guide check<span id="pgc-count" class="al-tab-count" hidden></span></button>
           <button id="sales-customers" class="btn btn-sm btn-outline-secondary" title="Everyone who has bought from you — copy the list for an in-game mailing"><i class="fa-solid fa-users"></i> Customers</button>
           <button class="btn btn-icon" data-refresh="sales" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
         </div>
 
         <div id="sales-fnote" class="sales-fnote" hidden></div>
+        <!-- Price Guide check prompt (js/pgcheck.js): the sale mail can't tell a crate from charges -->
+        <div id="pgc-prompt" class="pgc-prompt" hidden>
+          <i class="fa-solid fa-scale-balanced"></i>
+          <span><b id="pgc-prompt-text"></b><span class="settings-sub"> — the game's sale mail reads the same for a crate of 10 and one item with 10 uses.</span></span>
+          <button id="pgc-prompt-later" class="btn btn-sm btn-outline-secondary">Not now</button>
+          <button id="pgc-prompt-go" class="btn btn-sm btn-accent">Answer now</button>
+        </div>
         <div class="summary-cards" id="sales-cards"></div>
 
         <div class="table-wrap">
@@ -2845,6 +2854,15 @@
 
   <!-- My Components: add / edit -->
   <!-- Vendor Upkeep dialogs (js/vendor-upkeep.js) -->
+  <div id="pgc-modal" class="key-gate" hidden>
+    <div class="key-gate-card sp-card pgc-card">
+      <h2>Price Guide check</h2>
+      <div id="pgc-body" class="pgc-body"></div>
+      <div class="inv-add-actions">
+        <button id="pgc-close" class="btn btn-sm btn-outline-secondary">Done</button>
+      </div>
+    </div>
+  </div>
   <div id="vu-modal" class="key-gate" hidden>
     <div class="key-gate-card sp-card inv-add-card">
       <h2 id="vu-modal-title">Add Vendor</h2>
@@ -4288,6 +4306,7 @@
   <script src="js/components-power.js?v=20261103fr"></script>
   <script src="js/invlog.js?v=20261031b"></script>
   <script src="js/sales.js?v=20261105var"></script>
+  <script src="js/pgcheck.js?v=20261112pgd"></script>
   <script src="js/insights.js?v=20261101cmp"></script>
   <script src="js/insights-compare.js?v=20261101cmp"></script>
   <script src="js/insights-momentum.js?v=20261101mom"></script>
@@ -4329,7 +4348,7 @@
   <script src="js/ideas.js?v=20261106lbl"></script>
   <script src="js/priceguide.js?v=20261102pg"></script>
   <script src="js/vendor-upkeep.js?v=20261112vpg"></script>
-  <script src="js/navbadges.js?v=20261112upd"></script>
-  <script src="js/app.js?v=20261112str2"></script>
+  <script src="js/navbadges.js?v=20261112pgc"></script>
+  <script src="js/app.js?v=20261112pgc"></script>
 </body>
 </html>

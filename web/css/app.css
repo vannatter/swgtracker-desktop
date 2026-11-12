@@ -1737,6 +1737,20 @@ body.dev-mode .dev-pill { display: inline-flex; }
 
 /* Add-inventory dialog */
 .inv-add-card { max-width: 460px; text-align: left; }
+.pgc-card { max-width: 720px; width: calc(100vw - 80px); text-align: left; }
+.pgc-card h2 { font-size: 16px; margin: 0 0 8px; }
+.pgc-body { max-height: 60vh; overflow-y: auto; }
+.pgc-h { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); margin: 14px 0 2px; }
+.pgc-hint { margin: 0 0 6px; }
+.pgc-row { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.pgc-what { flex: 1; min-width: 0; }
+.pgc-item { font-weight: 600; color: var(--text-hover); white-space: pre-wrap; overflow-wrap: anywhere; }
+.pgc-btns { display: flex; gap: 6px; flex-shrink: 0; align-items: center; }
+.pgc-prompt { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; padding: 10px 14px; border-radius: 8px;
+  background: var(--bg-input); font-size: 13px; }
+.pgc-prompt[hidden] { display: none; }
+.pgc-prompt > i { color: var(--accent); }
+.pgc-prompt > span { flex: 1; min-width: 0; }
 .inv-add-card h2 { font-size: 16px; text-align: left; margin: 0 0 12px; }
 .inv-add-row { display: flex; gap: 12px; margin-top: 12px; }
 .inv-add-field { flex: 1 1 0; display: flex; flex-direction: column; }

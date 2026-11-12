@@ -8,7 +8,8 @@
 // minutes the app asks for what's newly due and drops it in the bell.
 
 const VU_POLL_MS = 30 * 60 * 1000;
-const vuState = { vendors: [], prefs: { remind: false, warn_days: 3 }, deleted: null, filter: '', q: '', editId: 0, topupId: 0, loaded: false };
+const vuState = { vendors: [], prefs: { remind: false, warn_days: 3 }, deleted: null, filter: '', q: '', editId: 0, topupId: 0, loaded: false,
+  checked: new Set(), lastSel: 0, shiftSel: false };   // multi-select: mark a whole route visited at once
 
 const vuAgo = (ts) => (ts ? fmtAgo(new Date(ts * 1000).toISOString()) : '');
 const vuNum = (v) => { const s = String(v ?? '').replace(/[,\s]/g, '').toLowerCase(); if (s === '') return null;
@@ -56,13 +57,35 @@ function vuMaintCell(v) {
     </div>`;
 }
 
-function renderVendorUpkeep() {
+function vuVisibleRows() {
   const q = vuState.q.trim().toLowerCase();
-  const rows = vuState.vendors.filter((v) => {
+  return vuState.vendors.filter((v) => {
     if (vuState.filter === 'hidden' ? !v.hidden : v.hidden) return false;
     if (vuState.filter === 'attention' && v.status === 'ok') return false;
     return !q || `${v.name} ${v.planet} ${v.notes}`.toLowerCase().includes(q);
   }).sort((a, b) => ({ bad: 0, warn: 1, ok: 2 }[a.status] - { bad: 0, warn: 1, ok: 2 }[b.status]) || a.name.localeCompare(b.name));
+}
+
+// the selection bar and the header box follow the checked set; vendors that left the
+// view (a filter, a refresh) drop out of it so a bulk action never reaches unseen rows
+function vuSyncSel() {
+  const vis = vuVisibleRows().map((v) => v.id);
+  for (const id of [...vuState.checked]) if (!vis.includes(id)) vuState.checked.delete(id);
+  const n = vuState.checked.size;
+  const all = $('#vu-selall');
+  all.checked = vis.length > 0 && n === vis.length;
+  all.indeterminate = n > 0 && n < vis.length;
+  $('#vu-selbar').hidden = !n;
+  if (n) $('#vu-selbar-n').textContent = `${n} selected`;
+  $('#vu-sel-every').hidden = n === vis.length;
+  const hidden = vuState.filter === 'hidden';
+  $('#vu-bulk-hide').innerHTML = `<i class="fa-solid ${hidden ? 'fa-eye' : 'fa-eye-slash'}"></i> ${hidden ? 'Show' : 'Hide'}`;
+  // manual vendors are removed, not hidden — the bar only hides the ones the app found
+  $('#vu-bulk-hide').disabled = ![...vuState.checked].some((id) => (vuState.vendors.find((v) => v.id === id) || {}).source !== 'manual');
+}
+
+function renderVendorUpkeep() {
+  const rows = vuVisibleRows();
 
   const need = vuState.vendors.filter((v) => !v.hidden && v.status !== 'ok').length;
   $('#vu-status').textContent = `${fmtNum(vuState.vendors.filter((v) => !v.hidden).length)} vendors`
@@ -82,6 +105,7 @@ function renderVendorUpkeep() {
       ? `<button class="btn btn-icon btn-sm" data-vudel="${v.id}" title="Remove this vendor"><i class="fa-solid fa-trash-can"></i></button>`
       : `<button class="btn btn-icon btn-sm" data-vuhide="${v.id}" title="${v.hidden ? 'Show it again' : "Hide it — e.g. a vendor you've packed up"}"><i class="fa-solid ${v.hidden ? 'fa-eye' : 'fa-eye-slash'}"></i></button>`;
     return `<tr class="vu-row ${v.status}">
+      <td class="pin-cell"><input type="checkbox" class="vu-sel" data-vusel="${v.id}"${vuState.checked.has(v.id) ? ' checked' : ''}></td>
       <td class="vu-name"><b>${escapeHtml(v.name)}</b> ${src}${v.planet ? `<div class="settings-sub">${escapeHtml(v.planet)}</div>` : ''}${v.notes ? `<div class="settings-sub vu-notes">${escapeHtml(v.notes)}</div>` : ''}</td>
       <td class="vu-warn">${warn}</td>
       <td>${vuMaintCell(v)}</td>
@@ -101,6 +125,17 @@ function renderVendorUpkeep() {
       : vuState.filter === 'attention' ? 'Nothing needs attention — every vendor looks fine.'
       : 'No vendors yet — they show up here from your vendor sales, or use Add Vendor.';
   }
+  vuSyncSel();
+}
+
+// one request per vendor — the API takes one id at a time, and a route is a handful
+async function vuBulk(action, extra = {}) {
+  const ids = [...vuState.checked];
+  const res = await Promise.all(ids.map((id) => vuPost({ action, id, ...extra })));
+  const ok = res.filter(Boolean).length;
+  vuState.checked.clear();
+  loadVendorUpkeep(true);
+  return ok;
 }
 
 async function vuPost(data) {
@@ -199,6 +234,41 @@ function initVendorUpkeep() {
   $('#vu-add-open').addEventListener('click', () => vuOpenEdit(0));
   $('[data-refresh="upkeep"]').addEventListener('click', () => loadVendorUpkeep(true));
   $('#vu-remind-open').addEventListener('click', vuOpenRemind);
+  $('#vu-body').addEventListener('change', (e) => {
+    const cb = e.target.closest('.vu-sel');
+    if (!cb) return;
+    const id = Number(cb.dataset.vusel);
+    const set = (x, on) => { if (on) vuState.checked.add(x); else vuState.checked.delete(x); };
+    // shift-click ticks (or clears) the whole run between this box and the last one
+    if (vuState.shiftSel && vuState.lastSel && vuState.lastSel !== id) {
+      const vis = vuVisibleRows().map((v) => v.id);
+      const a = vis.indexOf(vuState.lastSel), z = vis.indexOf(id);
+      if (a >= 0 && z >= 0) vis.slice(Math.min(a, z), Math.max(a, z) + 1).forEach((x) => set(x, cb.checked));
+    }
+    set(id, cb.checked);
+    vuState.lastSel = id;
+    document.querySelectorAll('#vu-body .vu-sel').forEach((x) => { x.checked = vuState.checked.has(Number(x.dataset.vusel)); });
+    vuSyncSel();
+  });
+  // change events carry no shiftKey — catch it on the click that precedes them
+  $('#vu-body').addEventListener('click', (e) => { if (e.target.closest('.vu-sel')) vuState.shiftSel = e.shiftKey; }, true);
+  $('#vu-selall').addEventListener('change', (e) => {
+    vuState.checked = new Set(e.target.checked ? vuVisibleRows().map((v) => v.id) : []);
+    renderVendorUpkeep();
+  });
+  $('#vu-sel-clear').addEventListener('click', () => { vuState.checked.clear(); renderVendorUpkeep(); });
+  $('#vu-sel-every').addEventListener('click', () => { vuState.checked = new Set(vuVisibleRows().map((v) => v.id)); renderVendorUpkeep(); });
+  $('#vu-bulk-visit').addEventListener('click', async () => {
+    const n = await vuBulk('visit');
+    if (n) toast(`Marked ${n} vendor${n === 1 ? '' : 's'} as visited`);
+  });
+  $('#vu-bulk-hide').addEventListener('click', async () => {
+    const show = vuState.filter === 'hidden';
+    // manual vendors have no hide (they're removed instead) — leave them out
+    vuState.checked = new Set([...vuState.checked].filter((id) => (vuState.vendors.find((v) => v.id === id) || {}).source !== 'manual'));
+    const n = await vuBulk('hide', { hidden: show ? 0 : 1 });
+    if (n) toast(show ? `${n} vendor${n === 1 ? '' : 's'} back` : `${n} vendor${n === 1 ? '' : 's'} hidden`);
+  });
   $('#vu-body').addEventListener('click', async (e) => {
     const b = e.target.closest('button');
     if (!b) return;

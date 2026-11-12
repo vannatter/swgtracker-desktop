@@ -14,6 +14,7 @@ can mark an idea as a dev idea (--dev) or pin it (--pinned).
         labels: will_do|researching|blocked|needs_info|cant_do|none — public, separate from status, notifies nobody;
         --label alone keeps the note, --note alone keeps the label, --note "" clears it, --label none clears both;
         combine with --status to set both in one go
+    venv/bin/python build/post_idea.py --edit --id 40 --title "..." --category Resources --description "..."   # rewrite (all three replaced)
     venv/bin/python build/post_idea.py --delete --id 29   # admin: remove an idea for good (votes and comments too)
     venv/bin/python build/post_idea.py ... --dry-run     # show what would be sent, send nothing
 """
@@ -66,6 +67,7 @@ def main() -> None:
     ap.add_argument("--status", choices=["open", "planned", "progress", "shipped", "declined"], help="set an idea's status (admin key only; needs --id)")
     ap.add_argument("--label", choices=LABELS + ["none"], help="set an idea's public label (admin key only; needs --id; none clears it and its note)")
     ap.add_argument("--note", help="with --id: the label's short public reason (max 200 chars; \"\" clears it)")
+    ap.add_argument("--edit", action="store_true", help="rewrite an idea: --title, --description and --category replace the old ones (admin key, or the author while Open; needs --id)")
     ap.add_argument("--delete", action="store_true", help="delete an idea for good, with its votes and comments (admin key, or the author while Open; needs --id)")
     ap.add_argument("--id", type=int)
     ap.add_argument("--version", help="with --status shipped: the release it went out in (e.g. 0.15.4 or 2026.11.05.1)")
@@ -89,6 +91,12 @@ def main() -> None:
                 print("    " + str(i["description"]).replace("\n", "\n    "))
             if a.full and lb and i.get("label_note"):
                 print(f"    [{names.get(lb, lb)} — {i['label_note']}]")
+        return
+    if a.edit:
+        if not a.id or not a.title:
+            ap.error("--edit needs --id and --title (plus --description / --category — all three are replaced)")
+        p = {"action": "edit", "id": a.id, "title": a.title, "description": a.description, "category": a.category}
+        print(json.dumps(p, indent=2, ensure_ascii=False) if a.dry_run else json.dumps(call("POST", p), ensure_ascii=False))
         return
     if a.delete:
         if not a.id or a.status or a.label or a.note is not None:

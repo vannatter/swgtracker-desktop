@@ -8,7 +8,7 @@
        every dialog showed at once on launch (Oogie) -->
   <link href="vendor/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="vendor/fontawesome/css/all.min.css">
-  <link rel="stylesheet" href="css/app.css?v=20261112rate">
+  <link rel="stylesheet" href="css/app.css?v=20261112sel">
   <link rel="stylesheet" href="css/share.css?v=20261022x">
   <link rel="stylesheet" href="css/quests.css?v=20261105qc">
 </head>
@@ -1439,9 +1439,16 @@
           <button class="btn btn-icon" data-refresh="upkeep" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
           <button id="vu-add-open" class="btn btn-sm btn-accent"><i class="fa-solid fa-plus"></i> Add Vendor</button>
         </div>
+        <div id="vu-selbar" class="inv-selbar" hidden>
+          <span id="vu-selbar-n" class="inv-selbar-count"></span>
+          <button id="vu-sel-every" class="btn btn-sm btn-outline-secondary" title="Select every vendor shown">Select all</button>
+          <button id="vu-bulk-hide" class="btn btn-sm btn-outline-secondary" title="Hide the selected vendors — e.g. ones you've packed up"><i class="fa-solid fa-eye-slash"></i> Hide</button>
+          <button id="vu-bulk-visit" class="btn btn-sm btn-accent" title="I just visited every selected vendor"><i class="fa-solid fa-location-dot"></i> Mark visited</button>
+          <button id="vu-sel-clear" class="btn btn-icon" title="Clear selection"><i class="fa-solid fa-xmark"></i></button>
+        </div>
         <div class="table-wrap">
           <table class="data-grid" id="vu-grid">
-            <thead><tr><th>Vendor</th><th>Status</th><th>Maintenance</th><th>Last visit</th><th>Last sale</th><th class="col-actions"></th></tr></thead>
+            <thead><tr><th class="pin-cell"><input type="checkbox" id="vu-selall" title="Select every vendor shown"></th><th>Vendor</th><th>Status</th><th>Maintenance</th><th>Last visit</th><th>Last sale</th><th class="col-actions"></th></tr></thead>
             <tbody id="vu-body"></tbody>
           </table>
           <div id="vu-loading" class="grid-loading" hidden><span class="spinner"></span> Loading…</div>
@@ -4349,7 +4356,7 @@
   <script src="js/mailsetup.js?v=20261019a"></script>
   <script src="js/ideas.js?v=20261112blk"></script>
   <script src="js/priceguide.js?v=20261102pg"></script>
-  <script src="js/vendor-upkeep.js?v=20261112vpg"></script>
+  <script src="js/vendor-upkeep.js?v=20261112sel"></script>
   <script src="js/navbadges.js?v=20261112rate"></script>
   <script src="js/app.js?v=20261112pgc"></script>
 </body>

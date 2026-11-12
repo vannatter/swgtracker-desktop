@@ -5098,7 +5098,7 @@ tr.top-new td.col-name { color: var(--text-hover); }
 /* ---- Vendor Upkeep (js/vendor-upkeep.js) — Advanced tools ---- */
 /* gated by the Advanced-tools rule (.power-only) in the Components power block below */
 #vu-grid td { vertical-align: top; }
-#vu-grid td.vu-name, #vu-grid td.vu-warn, #vu-grid th:nth-child(-n+2) { text-align: left; }
+#vu-grid td.vu-name, #vu-grid td.vu-warn, #vu-grid th:nth-child(-n+3) { text-align: left; }
 #vu-grid .vu-name b { font-weight: 600; }
 #vu-grid .vu-notes { max-width: 260px; white-space: normal; }
 #vu-grid .vu-src { font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: var(--text-muted);

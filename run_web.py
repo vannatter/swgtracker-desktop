@@ -147,7 +147,7 @@ from src.core.alert_poller import AlertPoller
 from src.core.bundle_manager import BundleManager
 from src.web_api import WebApi
 
-APP_VERSION = "0.15.6"  # keep in sync with pyproject.toml — bump with every change batch
+APP_VERSION = "0.15.7"  # keep in sync with pyproject.toml — bump with every change batch
 
 logging.basicConfig(
     level=logging.INFO,
@@ -271,12 +271,17 @@ def _saved_geometry(config) -> dict:
     applies while some monitor still shows the window's title-bar area — an
     unplugged second screen must not open it off-screen."""
     g = config.get(GEOM_KEY) or {}
+    # maximized stands on its own: a window maximized straight from the default size
+    # never saved a normal frame (resizes while maximized aren't kept), and dropping
+    # the flag with the missing size reopened it small (Dustin: the Maximize button
+    # wasn't remembered, dragging it full size was)
+    maxed = {"maximized": True} if g.get("max") else {}
     try:
         w, h = int(g["w"]), int(g["h"])
     except (KeyError, TypeError, ValueError):
-        return {}
+        return maxed
     if w < 960 or h < 650:
-        return {}
+        return maxed
     out = {"width": w, "height": h, "maximized": bool(g.get("max"))}
     if "x" in g and "y" in g:
         try:

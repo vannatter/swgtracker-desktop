@@ -39,8 +39,16 @@ async function sbLoadMeta() {
   if (!sbState.classNodes.length && typeof fetchCategoryNodes === 'function') {
     const nodes = await fetchCategoryNodes(true);
     if (nodes) {
-      sbState.classNodes = nodes;
-      nodes.forEach((n) => sbState.classByDesc.set(n.desc.toLowerCase(), n));
+      // the parent's name rides along: "Fruit" and "Fruits" look alike in a
+      // filtered list, and a community recipe got saved with the wrong one (Okoto)
+      const stack = [];
+      sbState.classNodes = nodes.map((n) => {
+        stack.length = n.depth;
+        const parent = n.depth ? (stack[n.depth - 1] || '') : '';
+        stack[n.depth] = n.desc;
+        return { ...n, parent };
+      });
+      sbState.classNodes.forEach((n) => sbState.classByDesc.set(n.desc.toLowerCase(), n));
     }
   }
 }
@@ -277,11 +285,15 @@ function sbRenderResources() {
 
 function sbRenderClassOpts(box, query = '') {
   const q = query.trim().toLowerCase();
+  // filtered: exact name first, then starts-with, then the rest — Enter picks the top row
+  const rank = (n) => { const d = n.desc.toLowerCase(); return d === q ? 0 : d.startsWith(q) ? 1 : 2; };
   const rows = q
-    ? sbState.classNodes.filter((n) => n.desc.toLowerCase().includes(q)).slice(0, 200)
+    ? sbState.classNodes.filter((n) => n.desc.toLowerCase().includes(q))
+        .map((n, i) => ({ n, i, r: rank(n) })).sort((a, b) => a.r - b.r || a.i - b.i)
+        .map((x) => x.n).slice(0, 200)
     : sbState.classNodes;
   box.innerHTML = rows.map((n) =>
-    `<div class="mysd-opt sb-classopt" data-code="${escapeHtml(n.code)}" data-desc="${escapeHtml(n.desc)}">${q ? '' : '&nbsp; '.repeat(n.depth)}${escapeHtml(n.desc)}</div>`
+    `<div class="mysd-opt sb-classopt" data-code="${escapeHtml(n.code)}" data-desc="${escapeHtml(n.desc)}">${q ? '' : '&nbsp; '.repeat(n.depth)}${escapeHtml(n.desc)}${q && n.parent ? `<span class="sb-classpar">in ${escapeHtml(n.parent)}</span>` : ''}</div>`
   ).join('') || '<div class="mysd-opt-none">No classes match.</div>';
 }
 
@@ -670,10 +682,39 @@ async function sbSubmit() {
 // schematics.js calls this after rendering a detail payload; community
 // schematics get the unverified/verified badge and the Confirm button.
 
+// a correction waiting for confirmations — on game AND verified community
+// schematics alike (game patches change recipes; they get revised over time)
+function sbPendingFixBar(bar, pf) {
+  bar.innerHTML = `<div class="sb-vb-info">
+      <div class="sb-vb-title"><i class="fa-solid fa-wrench"></i> Community correction under review
+        <span class="sb-vb-chip">${pf.votes} of ${pf.needed}</span></div>
+      <div class="sb-vb-sub">${escapeHtml(pf.by)} submitted a fix for this schematic — review it against the game and confirm if it's right</div>
+    </div>
+    <div class="sb-vb-actions">
+      <button class="btn btn-sm btn-outline-secondary" data-openfix="${pf.id}"
+        data-fixname="${escapeHtml(pf.name)}"><i class="fa-solid fa-arrow-right"></i> Review the fix</button>
+    </div>`;
+  bar.className = 'sb-verifybar scd-community-full';
+  bar.hidden = false;
+}
+
+// "Suggest a correction" from any settled schematic's page (game, community
+// approved, already corrected): a fresh draft prefilled from the current
+// recipe — change what the game changed, attach new proof, submit
+async function sbStartCorrection(schematicId, name) {
+  await sbLoadMeta();
+  await sbOpenDraft(0);
+  await sbPrefillFromFix(schematicId, name || '');
+  showPage('schembuilder');
+  toast('Prefilled from the current recipe — change what the game changed, attach a screenshot of the in-game schematic, then Submit');
+}
+
 async function sbRenderVerifyBar(schematicId, isCommunity) {
   const bar = $('#scd-community');
   if (!bar) return;
   bar.hidden = true;
+  const correct = $('#scd-correct');
+  if (correct) correct.hidden = true;
   let res;
   try {
     res = await apiFetch('GET', 'api/user_schematics.php',
@@ -682,21 +723,15 @@ async function sbRenderVerifyBar(schematicId, isCommunity) {
   const st = res.ok && res.data;
   if (!st) return;
   bar.dataset.sid = String(schematicId);
+  // settled schematics take corrections; an unverified one is flagged/fixed in its own bar,
+  // and while a correction is under review the bar sends people to review that one
+  // (pre-CU schematics carry no recipe data to prefill, so they don't offer it)
+  if (correct) correct.hidden = (st.community && !st.verified) || !!st.pending_fix || !scdState.schematic?.schematicCategory;
   if (!st.community) {
     // not a community submission — but a CORRECTION may be under review for
     // it, or a verified one may have already taken it over
     if (st.pending_fix) {
-      bar.innerHTML = `<div class="sb-vb-info">
-          <div class="sb-vb-title"><i class="fa-solid fa-wrench"></i> Community correction under review
-            <span class="sb-vb-chip">${st.pending_fix.votes} of ${st.pending_fix.needed}</span></div>
-          <div class="sb-vb-sub">${escapeHtml(st.pending_fix.by)} submitted a fix for this schematic — review it against the game and confirm if it's right</div>
-        </div>
-        <div class="sb-vb-actions">
-          <button class="btn btn-sm btn-outline-secondary" data-openfix="${st.pending_fix.id}"
-            data-fixname="${escapeHtml(st.pending_fix.name)}"><i class="fa-solid fa-arrow-right"></i> Review the fix</button>
-        </div>`;
-      bar.className = 'sb-verifybar scd-community-full';
-      bar.hidden = false;
+      sbPendingFixBar(bar, st.pending_fix);
     } else if (st.community_fixed) {
       bar.innerHTML = `<div class="sb-vb-info">
           <div class="sb-vb-title"><i class="fa-solid fa-wrench"></i> Community-corrected
@@ -708,7 +743,9 @@ async function sbRenderVerifyBar(schematicId, isCommunity) {
     }
     return;
   }
-  if (st.verified) {
+  if (st.verified && st.pending_fix) {
+    sbPendingFixBar(bar, st.pending_fix);
+  } else if (st.verified) {
     // one quiet line: a green shield, the word, and the credit (the boxed two-liner read as a banner — Dustin)
     bar.innerHTML = `<i class="fa-solid fa-shield-halved"></i><span class="sb-slim-title">Community approved</span>${st.submitter
       ? `<span class="sb-slim-credit">· ${st.inherited_from ? `originally by ${escapeHtml(st.inherited_from)}, corrected by ${escapeHtml(st.submitter)}` : `submitted by ${escapeHtml(st.submitter)}`}</span>` : ''}`;
@@ -783,6 +820,10 @@ async function loadSchemBuilder() {
 
 function initSchemBuilder() {
   $('#schem-builder-btn').addEventListener('click', () => showPage('schembuilder'));
+  $('#scd-correct').addEventListener('click', () => {
+    const sid = safeInt($('#scd-community').dataset.sid);
+    if (sid) sbStartCorrection(sid, (scdState.schematic && scdState.schematic.schematicName) || '');
+  });
 
   // Confirm-accurate vote on the schematic detail page (+ proof viewer + retract)
   $('#scd-community').addEventListener('click', async (e) => {

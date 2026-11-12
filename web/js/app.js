@@ -837,10 +837,22 @@ function showFund(f) {
   _fundUrl = String(f.url || '');
   const money = (v) => '$' + (Number.isInteger(v) ? v.toLocaleString() : Number(v).toFixed(2));
   $('#fund-year').textContent = safeInt(f.year);
-  $('#fund-fill').style.width = `${Math.min(100, safeInt(f.pct))}%`;
-  $('#fund-sub').textContent = safeInt(f.pct) >= 100 ? 'Fully funded — thank you!'
-    : `${money(Number(f.raised) || 0)} of ${money(Number(f.goal) || 0)} · Donate`;
-  card.title = `SWG Tracker runs on donations — this covers the server and app for ${safeInt(f.year)}. Opens PayPal in your browser.`;
+  // the goal is the bare minimum: once it's met the bar heads for the stretch
+  // goal (the $50/month server), with a tick where the goal was (Dustin)
+  const raised = Number(f.raised) || 0, goal = Number(f.goal) || 0;
+  const stretch = raised >= goal ? (Number(f.stretch) || 0) : 0;
+  const target = stretch || goal;
+  $('#fund-fill').style.width = `${target > 0 ? Math.min(100, Math.floor(raised / target * 100)) : 0}%`;
+  const mark = $('#fund-mark');
+  mark.hidden = !stretch;
+  if (stretch) mark.style.left = `${(goal / stretch) * 100}%`;
+  $('#fund-sub').textContent = stretch
+    ? (raised >= stretch ? `Stretch goal met · ${money(raised)} — thank you!` : `Stretch goal: ${money(raised)} of ${money(stretch)}`)
+    : raised >= goal && goal > 0
+      ? `${Math.floor(raised / goal * 100)}% funded · ${money(raised)} of ${money(goal)}`
+      : `${money(raised)} of ${money(goal)} · Donate`;
+  card.title = `SWG Tracker runs on donations — this covers the server and app for ${safeInt(f.year)}`
+    + `${stretch ? ', and the stretch goal covers the $50/month server bill' : ''}. Opens PayPal in your browser.`;
   card.hidden = false;
 }
 

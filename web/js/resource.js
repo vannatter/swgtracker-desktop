@@ -2,6 +2,8 @@
    Data via WebApi.get_resource -> {resource, top_uses, used_ins}. */
 
 const RD_STATS = ['oq', 'cr', 'cd', 'dr', 'hr', 'ma', 'sr', 'ut', 'fl', 'pe'];
+// the stat cards also show entangle resistance — gemstones only, stored since 2026-11 (Danvar)
+const RD_CARD_STATS = ['oq', 'cr', 'cd', 'dr', 'er', 'hr', 'ma', 'sr', 'ut', 'fl', 'pe'];
 const rdState = { id: null, name: null, data: null };
 // PLANET_FULL lives in shared.js
 
@@ -152,7 +154,7 @@ function renderResourcePage(data) {
     </div>
     <div class="rd-label">eCPU</div>
   </div>`);
-  RD_STATS.forEach((f) => {
+  RD_CARD_STATS.forEach((f) => {
     const v = safeInt(r[f]);
     if (v <= 0) return;
     const max = safeInt(r[`${f}_max`]) || 1000;

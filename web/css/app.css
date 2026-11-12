@@ -229,9 +229,11 @@ body.offline .app-body { height: calc(100vh - 76px); }
 .fund-card:hover { background: #3a3e52; }
 .fund-head { display: block; font-weight: 600; color: var(--text-hover); }
 .fund-head i { color: var(--accent); font-size: 11px; }
-.fund-bar { display: block; height: 6px; margin: 6px 0 4px; border-radius: 3px; background: rgba(0, 0, 0, .35); overflow: hidden; }
+.fund-bar { position: relative; display: block; height: 6px; margin: 6px 0 4px; border-radius: 3px; background: rgba(0, 0, 0, .35); overflow: hidden; }
 .fund-bar > span { display: block; height: 100%; border-radius: 3px; background: var(--accent); min-width: 2px; }
 .fund-sub { display: block; font-size: 11px; color: var(--text-muted); }
+.fund-mark { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--text-primary); opacity: .75; }
+.fund-mark[hidden] { display: none; }
 .app-sidebar.collapsed .fund-card { display: none; }
 .pulse-panel { padding: 12px 18px; border-top: 1px solid var(--border); }
 .pulse-heading { font-size: 9px; font-weight: 700; letter-spacing: .08em; color: var(--text-muted); margin-bottom: 6px; }
@@ -1276,6 +1278,7 @@ tr.harv-dragging td, tr.fac-dragging td, tr.mys-dragging td, tr.inv-dragging td 
 .stk-note-tagslabel { display: block; margin: 12px 0 4px; }
 .stk-note-tagsin { max-width: none; width: 100%; }
 .stk-note-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.vu-f-pgrow { display: flex; align-items: center; gap: 8px; margin: 10px 0 0; font-size: 13px; color: var(--text-primary); }
 .harv-f-emailrow { font-size: 13px; color: var(--text-primary);
                    display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .harv-f-pct { width: 54px; max-width: 54px; text-align: center; }
@@ -2943,6 +2946,7 @@ tr.row-detail > td { background: var(--bg-tertiary); padding: 0; }
 .sb-classsel { flex: 1; min-width: 0; }
 .sb-classsel .cselect-btn { width: 100%; }
 .sb-classopts { max-height: 260px; overflow-y: auto; }
+.sb-classpar { margin-left: 8px; font-size: 11px; color: var(--text-muted); }
 /* builder: readiness bar + collapsible sections + a real description box */
 .sb-progress { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
 .sb-progtrack { flex: 1; height: 6px; background: var(--bg-input); border-radius: 3px; overflow: hidden; }

@@ -37,6 +37,7 @@ async function loadVendorUpkeep(force = false) {
   vuState.vendors = res.data.vendors;
   vuState.prefs = res.data.prefs || vuState.prefs;
   vuState.deleted = res.data.deleted_notice || null;
+  vuState.pgOptout = !!res.data.pg_optout;
   vuState.loaded = true;
   renderVendorUpkeep();
 }
@@ -72,7 +73,8 @@ function renderVendorUpkeep() {
   $('#vu-body').innerHTML = rows.map((v) => {
     const warn = v.warnings.map((w) => `<span class="vu-chip ${w.level}">${escapeHtml(w.text)}</span>`).join('')
       || '<span class="vu-chip ok"><i class="fa-solid fa-check"></i> OK</span>';
-    const src = v.source === 'manual' ? '' : `<span class="vu-src" title="${v.source === 'sales' ? 'Found from your vendor sales' : "Found from the game's vendor mail"}">${v.source === 'sales' ? 'from sales' : 'from mail'}</span>`;
+    const src = (v.source === 'manual' ? '' : `<span class="vu-src" title="${v.source === 'sales' ? 'Found from your vendor sales' : "Found from the game's vendor mail"}">${v.source === 'sales' ? 'from sales' : 'from mail'}</span>`)
+      + (v.pg_share === false && !vuState.pgOptout ? ' <span class="vu-src" title="This vendor\'s sales stay out of the Price Guide — change it under Edit">not in Price Guide</span>' : '');
     const visit = v.visited_at ? vuAgo(v.visited_at) : '<span class="text-muted">never</span>';
     const every = v.visit_every ? `<div class="settings-sub">every ${v.visit_every} d</div>` : '';
     const sale = v.last_sale_at ? `${vuAgo(v.last_sale_at)}${v.sales_30d ? `<div class="settings-sub">${fmtNum(v.sales_30d)} in 30 d</div>` : ''}` : '<span class="text-muted">—</span>';
@@ -121,6 +123,10 @@ function vuOpenEdit(id) {
   $('#vu-f-pool').value = '';
   $('#vu-f-every').value = v && v.visit_every ? v.visit_every : '';
   $('#vu-f-notes').value = v ? v.notes : '';
+  // per-vendor Price Guide sharing (idea #24, Canda) — moot while the account-wide switch is off
+  $('#vu-f-pg').checked = !v || v.pg_share !== false;
+  $('#vu-f-pg').disabled = !!vuState.pgOptout;
+  $('#vu-f-pg-off').hidden = !vuState.pgOptout;
   $('#vu-modal').hidden = false;
   (v ? $('#vu-f-rate') : $('#vu-f-name')).focus();
 }
@@ -130,6 +136,7 @@ async function vuSaveEdit() {
   if ([rate, pool, every].some((n) => Number.isNaN(n))) { toast('Numbers only — e.g. 120, 15k or 1.5m', false); return; }
   const data = { planet: $('#vu-f-planet').value.trim(), notes: $('#vu-f-notes').value.trim(), maint_rate: rate, visit_every: every };
   if (!$('#vu-f-name').disabled) data.name = $('#vu-f-name').value.trim();
+  if (!$('#vu-f-pg').disabled) data.pg_share = $('#vu-f-pg').checked ? 1 : 0;
   if (!vuState.editId && !data.name) { toast('Give the vendor a name', false); return; }
   const out = vuState.editId ? await vuPost({ action: 'update', id: vuState.editId, ...data })
     : await vuPost({ action: 'add', ...data, maint_pool: pool });

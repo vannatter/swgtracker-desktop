@@ -7,6 +7,9 @@
  *   - Components are costed recursively; each component's recipe defaults to one of
  *     YOUR saved schematics when available, with a picker to switch (prefer-your-own).
  *   - A "# of runs" multiplier scales the grand totals.
+ *   - Price per resource used (idea #26, Artho): one rate for every schematic — "10 cr
+ *     per resource unit" — turns the units a recipe uses (components included) into
+ *     a suggested sell price, with its margin over your cost.
  *
  * Data comes from api().get_schematic(id) — same payload the website calc uses, with
  * `cpu` already eCPU-clamped on each best-list resource. Overrides/runs persist in
@@ -37,6 +40,26 @@ function scStockMap() {
   }
   return m;
 }
+// the per-resource-unit sell rate is one number for every schematic: localStorage is
+// the instant copy, config the durable one (the webview has dropped localStorage)
+const SC_RATE_KEY = 'calc_unit_rate';
+function scRateGet() {
+  try { const v = JSON.parse(localStorage.getItem(SC_RATE_KEY)); if (v > 0) return Number(v); } catch (_) { /* none yet */ }
+  return 0;
+}
+function scRateSet(v) {
+  try { localStorage.setItem(SC_RATE_KEY, JSON.stringify(v || 0)); } catch (_) { /* config still has it */ }
+  try { api().set_config(SC_RATE_KEY, v || 0); } catch (_) { /* this session keeps it */ }
+}
+async function scRateRestore() {
+  if (scRateGet()) return;
+  try {
+    const res = await api().get_config();
+    const v = res && res.ok && res.data ? Number(res.data[SC_RATE_KEY]) : 0;
+    if (v > 0) try { localStorage.setItem(SC_RATE_KEY, JSON.stringify(v)); } catch (_) { /* used this render only */ }
+  } catch (_) { /* no rate */ }
+}
+
 const scMkt = (choice) => { const v = choice ? safeInt(choice.cpu) : 0; return v > 0 ? v : 1; }; // market eCPU, floored at 1
 
 // ---- resource blocks (best lists keyed by the slot's type) ----
@@ -159,12 +182,12 @@ async function schemCalcRender(host, item) {
     }
   }
   function craftCostCached(id, depth, seen) {
-    if (depth > SC_MAXDEPTH || seen.includes(String(id))) return { my: 0, mkt: 0 };
+    if (depth > SC_MAXDEPTH || seen.includes(String(id))) return { my: 0, mkt: 0, units: 0 };
     const s = scCached(id, '');
-    if (!s) return { my: 0, mkt: 0, partial: true };
+    if (!s) return { my: 0, mkt: 0, units: 0, partial: true };
     const seen2 = seen.concat([String(id)]);
     const idx = scIndexBlocks(s);
-    let my = 0, mkt = 0;
+    let my = 0, mkt = 0, units = 0;
     (s.resourcesNeeded || []).forEach((rn) => {
       const choices = scAllResources(scBlockFor(idx, rn)).map((r) => scChoiceFromDto(r, stk));
       const c0 = choices[0];
@@ -172,6 +195,7 @@ async function schemCalcRender(host, item) {
       const uy = (c0 && c0.my != null) ? c0.my : um;
       mkt += safeInt(rn.units) * um;
       my += safeInt(rn.units) * uy;
+      units += safeInt(rn.units);
     });
     (s.componentTypes || []).filter((x) => x.optional !== 'yes').forEach((x) => {
       if (x.type === 'item') return;
@@ -179,8 +203,9 @@ async function schemCalcRender(host, item) {
       const sub = craftCostCached(cid, depth + 1, seen2);
       mkt += safeInt(x.number) * sub.mkt;
       my += safeInt(x.number) * sub.my;
+      units += safeInt(x.number) * (sub.units || 0);
     });
-    return { my, mkt };
+    return { my, mkt, units };
   }
 
   // ---- build the model ----
@@ -203,7 +228,7 @@ async function schemCalcRender(host, item) {
         categoryItems: c.categoryItems || [],
         override: (store.cprice[id] != null && store.cprice[id] !== '') ? safeInt(store.cprice[id]) : null,
         included: c.optional === 'yes' ? !!store.opt[id] : true,
-        expanded: false, cost: { my: 0, mkt: 0 },
+        expanded: false, cost: { my: 0, mkt: 0, units: 0 },
       };
     });
     const runs = Math.min(100000, Math.max(1, safeInt(store.runs) || 1));
@@ -218,10 +243,23 @@ async function schemCalcRender(host, item) {
   }
   const compSub = (c) => { if (!c.included) return { my: 0, mkt: 0 }; const u = compUnit(c); return { my: c.number * u.my, mkt: c.number * u.mkt }; };
   function totals() {
-    let my = 0, mkt = 0;
-    model.resources.forEach((r) => { my += resMy(r); mkt += resMkt(r); });
-    model.components.forEach((c) => { const s = compSub(c); my += s.my; mkt += s.mkt; });
-    return { my, mkt };
+    let my = 0, mkt = 0, units = 0;
+    model.resources.forEach((r) => { my += resMy(r); mkt += resMkt(r); units += r.units; });
+    // a crafted component's resources count as used even when you price it yourself;
+    // a looted one has none
+    model.components.forEach((c) => {
+      const s = compSub(c); my += s.my; mkt += s.mkt;
+      if (c.included && c.craftable) units += c.number * (c.cost.units || 0);
+    });
+    return { my, mkt, units };
+  }
+  // the suggested price at your per-unit rate, and what it clears over your cost
+  function priceHtml(t) {
+    const rate = scRateGet();
+    const price = Math.round(t.units * rate);
+    const margin = price - Math.round(t.my);
+    return `<span><b class="sc-price">${rate ? fmtNum(price) : '—'}</b> cr <span class="sc-muted sc-margin">${rate
+      ? `${margin >= 0 ? '+' : '−'}${fmtNum(Math.abs(margin))} over your cost` : 'set a rate to see it'}</span></span>`;
   }
 
   // ---- render ----
@@ -293,6 +331,7 @@ async function schemCalcRender(host, item) {
       + '</tbody></table>'
       + `<div class="sc-summary">
           <div class="sc-sum-row"><span>Cost per item</span><span><b class="sc-total-my">${fmtNum(t.my)}</b> cr <span class="sc-muted">your stockpile</span> · <b class="sc-total-mkt">${fmtNum(t.mkt)}</b> cr <span class="sc-muted">market</span></span></div>
+          <div class="sc-sum-row" title="Price your crafts by the resources they use — one rate for every schematic. Components you craft count their resources too."><span>Price at <input type="number" min="0" step="1" class="sc-rate" value="${scRateGet() || ''}" placeholder="0"> cr per resource unit <span class="sc-muted">· ${fmtNum(t.units)} unit${t.units === 1 ? '' : 's'} per item</span></span><span class="sc-pricewrap">${priceHtml(t)}</span></div>
           <div class="sc-sum-row sc-sum-total"><span># of items <input type="number" min="1" max="100000" class="sc-runs" value="${model.runs}">${crate > 1 ? ` <span class="sc-muted">crate size ${fmtNum(crate)}</span>` : ''}</span><span>Total <b class="sc-run-my">${fmtNum(t.my * model.runs)}</b> cr <span class="sc-muted">yours</span> · <b class="sc-run-mkt">${fmtNum(t.mkt * model.runs)}</b> cr <span class="sc-muted">market</span></span></div>
         </div>`;
   }
@@ -312,6 +351,7 @@ async function schemCalcRender(host, item) {
     const set = (sel, v) => { const n = host.querySelector(sel); if (n) n.textContent = fmtNum(v); };
     set('.sc-total-my', t.my); set('.sc-total-mkt', t.mkt);
     set('.sc-run-my', t.my * model.runs); set('.sc-run-mkt', t.mkt * model.runs);
+    const pw = host.querySelector('.sc-pricewrap'); if (pw) pw.innerHTML = priceHtml(t);
   }
 
   // Open the full class-pool picker (search · best in stock / spawn / all-time) for a
@@ -364,6 +404,8 @@ async function schemCalcRender(host, item) {
         if (e.target.value === '') { c.override = null; delete store.cprice[c.id]; }
         else { c.override = safeInt(e.target.value); store.cprice[c.id] = c.override; }
         save(); refresh();
+      } else if (e.target.classList.contains('sc-rate')) {
+        scRateSet(Math.max(0, Number(e.target.value) || 0)); refresh();
       } else if (e.target.classList.contains('sc-runs')) {
         model.runs = Math.min(100000, Math.max(1, safeInt(e.target.value) || 1));
         store.runs = model.runs; save();
@@ -374,6 +416,7 @@ async function schemCalcRender(host, item) {
     });
   }
 
+  await scRateRestore();
   model = await buildModel();
   // resolve every component's recursive cost before first paint
   for (const c of model.components) {

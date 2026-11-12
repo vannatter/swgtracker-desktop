@@ -4023,6 +4023,8 @@ tr.gx-rowlink:hover .gx-detail-link { color: var(--text-hover); } /* hover brigh
 .sc-summary { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 12px; }
 .sc-sum-row { display: flex; align-items: center; justify-content: space-between; padding: 5px 0; font-size: 14px; }
 .sc-sum-row b { color: var(--text-hover); }
+.sc-rate { width: 64px; text-align: right; background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--border); border-radius: 5px; padding: 3px 6px; font-size: 13px; margin: 0 4px; }
+.sc-price { color: var(--accent) !important; }
 .sc-runs { width: 64px; text-align: right; background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--border); border-radius: 5px; padding: 3px 6px; font-size: 13px; margin-left: 6px; }
 
 /* ---- Home (start page) ----------------------------------------------------- */

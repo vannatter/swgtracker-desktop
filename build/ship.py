@@ -28,7 +28,7 @@ import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SHELL_PATHS = ("src/", "run_web.py")
+SHELL_PATHS = ("src/", "run_web.py", "build/installer.iss")  # the installer only reaches players in a v* release
 UI_PATHS = ("web/",)
 CO_AUTHOR = "\n\nCo-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 SECRETS = ROOT / "build" / "ship_secrets.json"

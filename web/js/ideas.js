@@ -10,7 +10,7 @@ const IDEA_STATUS_LABELS = { open: 'Open', planned: 'Planned', progress: 'In pro
 const IDEA_LABELS = { will_do: 'Will do', researching: 'Researching', blocked: 'Blocked', needs_info: 'Needs info', cant_do: 'Can’t do' };
 const IDEA_CATEGORIES = ['Crafting', 'Resources', 'Sales & Inventory', 'Beasts', 'Galaxy', 'App', 'Website', 'Other'];
 
-const ideaState = { ideas: [], main: [], shipped: [], shippedOpen: false, me: { signed_in: false, admin: false }, editId: null, labelId: null, expanded: new Set(), loading: false,
+const ideaState = { ideas: [], main: [], shipped: [], shippedOpen: false, blockedOpen: true, me: { signed_in: false, admin: false }, editId: null, labelId: null, expanded: new Set(), loading: false,
                     threadOpen: new Set(),   // idea ids with their comment thread showing
                     threads: new Map(),      // idea id -> { loading, comments, draft } — drafts survive repaints
                     focus: '', flash: '' };  // a bell button's idea to scroll to / briefly ring
@@ -145,6 +145,17 @@ function renderIdeas() {
         <i class="fa-solid fa-chevron-${st.shippedOpen ? 'down' : 'right'}"></i> Shipped this week <span class="ideas-shipped-n">${fmtNum(st.shipped.length)}</span></button>
       ${st.shippedOpen ? st.shipped.map(ideaCardHtml).join('') : ''}
     </div>` : '';
+  // Blocked ideas (waiting on something outside the app — game data, …) get their own
+  // section under the rest, so the list leads with what can actually be built (Dustin).
+  // Filtering to the Blocked label shows them as a plain list.
+  const split = $('#ideas-label').value !== 'blocked';
+  const ahead = split ? st.main.filter((i) => i.label !== 'blocked') : st.main;
+  const held = split ? st.main.filter((i) => i.label === 'blocked') : [];
+  const blocked = held.length ? `<div class="ideas-shipped${st.blockedOpen ? ' open' : ''}">
+      <button type="button" class="ideas-shipped-head" data-iblocked aria-expanded="${st.blockedOpen}" title="Ideas waiting on something outside the app — still open for votes">
+        <i class="fa-solid fa-chevron-${st.blockedOpen ? 'down' : 'right'}"></i> Blocked <span class="ideas-shipped-n">${fmtNum(held.length)}</span></button>
+      ${st.blockedOpen ? held.map(ideaCardHtml).join('') : ''}
+    </div>` : '';
   if (!st.main.length) {
     const filtered = $('#ideas-status').value !== 'active' || $('#ideas-category').value || $('#ideas-label').value || $('#ideas-search').value.trim();
     empty.textContent = filtered ? 'No ideas match these filters.' : (st.shipped.length ? 'Nothing open right now — everything here has shipped. Post the next one!' : 'No ideas yet — be the first to post one.');
@@ -152,7 +163,7 @@ function renderIdeas() {
   } else {
     empty.hidden = true;
   }
-  list.innerHTML = st.main.map(ideaCardHtml).join('') + shipped;
+  list.innerHTML = ahead.map(ideaCardHtml).join('') + blocked + shipped;
   $('#ideas-status-line').textContent = st.main.length
     ? `${fmtNum(st.main.length)} idea${st.main.length === 1 ? '' : 's'}` : '';
 }
@@ -221,6 +232,7 @@ function ideaFocus(id) {
 function ideaFocusApply() {
   const id = ideaState.focus;
   if (ideaState.shipped.some((i) => String(i.id) === id) && !ideaState.shippedOpen) ideaState.shippedOpen = true;
+  if (ideaState.main.some((i) => String(i.id) === id && i.label === 'blocked')) ideaState.blockedOpen = true;
   if (!ideaState.ideas.some((i) => String(i.id) === id)) {
     if ($('#ideas-status').value !== '') { $('#ideas-status').value = ''; loadIdeas(); return; }
     ideaState.focus = '';
@@ -377,6 +389,7 @@ function initIdeas() {
 
   $('#ideas-list').addEventListener('click', async (e) => {
     if (e.target.closest('[data-ishipped]')) { ideaState.shippedOpen = !ideaState.shippedOpen; renderIdeas(); return; }
+    if (e.target.closest('[data-iblocked]')) { ideaState.blockedOpen = !ideaState.blockedOpen; renderIdeas(); return; }
     const b = e.target.closest('[data-ivote],[data-imore],[data-iedit],[data-idel],[data-ipin],[data-ilabel],[data-icmt],[data-icmtpost],[data-icmtdel]');
     if (!b) return;
     const it = (id) => ideaState.ideas.find((i) => String(i.id) === id);

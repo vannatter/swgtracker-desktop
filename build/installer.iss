@@ -37,6 +37,8 @@ VersionInfoCompany=swgtracker.com
 ; PrepareToInstall below stops it outright instead
 CloseApplications=no
 RestartApplications=no
+; %TEMP%\Setup Log <date>.txt — so an install that still trips can be diagnosed
+SetupLogging=yes
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a &desktop icon"; Flags: unchecked
@@ -55,19 +57,46 @@ Filename: "{app}\{#MyAppName}.exe"; Description: "Launch {#MyAppName}"; Flags: n
 // The running app (often tucked in the tray) holds its own files open. A close
 // request only re-hides it, so end it — config.json writes are atomic and the
 // local DB is SQLite, so a hard stop loses nothing. [Run] relaunches it after.
-procedure StopRunningApp();
+// One kill wasn't always enough (Oogie, after v0.15.5): keep at it until taskkill
+// reports nothing left (exit 128). An app started "as administrator" can't be
+// ended by a per-user setup at all — False then, and setup says how to quit it
+// instead of finishing with locked files and a restart prompt.
+function StopRunningApp(): Boolean;
 var
-  ResultCode: Integer;
+  ResultCode, I: Integer;
+  Killed: Boolean;
 begin
-  if Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /T /IM "{#MyAppName}.exe"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode)
-     and (ResultCode = 0) then
-    Sleep(1500);  // WebView2's helper processes let go of the profile a beat later
+  Killed := False;
+  for I := 1 to 10 do
+  begin
+    if not Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /T /IM "{#MyAppName}.exe"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+    begin
+      Log('taskkill could not run — continuing as before');
+      Result := True;
+      Exit;
+    end;
+    Log(Format('taskkill pass %d: exit %d', [I, ResultCode]));
+    if ResultCode = 128 then
+    begin
+      if Killed then
+        Sleep(1500);  // WebView2's helper processes let go of the profile a beat later
+      Result := True;
+      Exit;
+    end;
+    if ResultCode = 0 then
+      Killed := True;
+    Sleep(500);
+  end;
+  Result := False;
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
-  StopRunningApp();
-  Result := '';
+  if StopRunningApp() then
+    Result := ''
+  else
+    Result := 'SWG Tracker Desktop is still running and Setup could not close it (it may have been started as administrator).' + #13#10#13#10 +
+              'Right-click its icon in the system tray and choose Quit, then run Setup again.';
 end;
 
 function InitializeUninstall(): Boolean;

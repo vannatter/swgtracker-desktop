@@ -21,6 +21,7 @@ const PAGE_BADGES = {
   monitor: { tag: 'updated', since: '2026-11-05' },
   isd: { tag: 'new', since: '2026-11-07' },
   sales: { tag: 'updated', since: '2026-11-12' },
+  myschematics: { tag: 'updated', since: '2026-11-12' },
 };
 const NAV_BADGE_DAYS = 30;
 const NAV_BADGE_KEY = 'nav-badges-seen';

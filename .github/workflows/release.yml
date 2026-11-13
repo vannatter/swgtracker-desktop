@@ -93,11 +93,66 @@ jobs:
           --hidden-import src.core.win_overlay
           --hidden-import pystray._win32
           run_web.py
+      # Code signing (Azure Artifact Signing, formerly Trusted Signing). Dormant
+      # until the repo variable SIGNING_ACCOUNT is set — without it releases
+      # build unsigned, exactly as before. Setup (IDs only, never in chat/commits):
+      #   repo variables: AZURE_TENANT_ID, AZURE_CLIENT_ID, SIGNING_ENDPOINT
+      #                   (e.g. https://eus.codesigning.azure.net/), SIGNING_ACCOUNT,
+      #                   SIGNING_PROFILE
+      #   repo secret:    AZURE_CLIENT_SECRET (app registration secret)
+      - name: Sign app exe
+        if: ${{ vars.SIGNING_ACCOUNT != '' }}
+        uses: azure/artifact-signing-action@v2.0.0
+        with:
+          azure-tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          azure-client-id: ${{ vars.AZURE_CLIENT_ID }}
+          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          endpoint: ${{ vars.SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.SIGNING_PROFILE }}
+          files-folder: dist/SWG Tracker Desktop
+          files-folder-filter: exe
+          files-folder-recurse: false
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+          description: SWG Tracker Desktop
+          description-url: https://swgtracker.com/download.php
       - name: Build installer (zip-extracted DLLs hit Mark-of-the-Web; installed files don't)
         shell: pwsh
         run: |
           $ver = $env:RELEASE_TAG -replace '^v',''
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /DAppVersion=$ver build\installer.iss
+      - name: Sign installer
+        if: ${{ vars.SIGNING_ACCOUNT != '' }}
+        uses: azure/artifact-signing-action@v2.0.0
+        with:
+          azure-tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          azure-client-id: ${{ vars.AZURE_CLIENT_ID }}
+          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          endpoint: ${{ vars.SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.SIGNING_PROFILE }}
+          files-folder: dist
+          files-folder-filter: exe
+          files-folder-recurse: false
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+          description: SWG Tracker Desktop Setup
+          description-url: https://swgtracker.com/download.php
+      - name: Check signatures
+        if: ${{ vars.SIGNING_ACCOUNT != '' }}
+        shell: pwsh
+        run: |
+          $files = @(Get-Item "dist/SWG Tracker Desktop/SWG Tracker Desktop.exe") + @(Get-ChildItem dist/*-windows-setup.exe)
+          $bad = 0
+          foreach ($f in $files) {
+            $sig = Get-AuthenticodeSignature $f.FullName
+            "{0}: {1} ({2})" -f $f.Name, $sig.Status, $sig.SignerCertificate.Subject
+            if ($sig.Status -ne 'Valid') { $bad++ }
+          }
+          if ($bad) { throw "$bad file(s) not validly signed" }
       - uses: actions/upload-artifact@v4
         with: { name: windows, path: dist/*-windows-setup.exe }
 

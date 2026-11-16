@@ -696,6 +696,7 @@ async function openSchematicPage(id, name) {
 
   const s = res.ok && res.data ? (res.data.schematic || res.data) : null;
   if (!s || !s.schematicName) {
+    const bar = $('#scd-community'); if (bar) bar.hidden = true; // no stale banner from the last schematic
     $('#scd-name').textContent = 'Failed to load schematic';
     $('#scd-desc').textContent = res.error || 'Unexpected response from the server.';
     return;

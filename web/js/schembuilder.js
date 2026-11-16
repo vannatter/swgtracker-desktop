@@ -723,6 +723,10 @@ async function sbRenderVerifyBar(schematicId, isCommunity) {
   const st = res.ok && res.data;
   if (!st) return;
   bar.dataset.sid = String(schematicId);
+  // a correction, once verified, is folded into the schematic it fixes and goes away —
+  // remember where to land (approve / the last confirmation)
+  bar.dataset.fixes = st.fixes ? String(st.fixes.id) : '';
+  bar.dataset.fixname = st.fixes ? st.fixes.name : '';
   // settled schematics take corrections; an unverified one is flagged/fixed in its own bar,
   // and while a correction is under review the bar sends people to review that one
   // (pre-CU schematics carry no recipe data to prefill, so they don't offer it)
@@ -812,6 +816,21 @@ async function sbRenderVerifyBar(schematicId, isCommunity) {
 
 // ---- wiring ----
 
+// verified: a plain community schematic reloads in place (badge, Add to My Schematics,
+// community tabs); a correction has just replaced the schematic it fixes and no longer
+// exists on its own, so open that one instead of a "Schematic not found" page
+function sbAfterVerified(sid, what) {
+  const bar = $('#scd-community');
+  const fixes = safeInt(bar && bar.dataset.fixes);
+  if (fixes) {
+    toast(`${what} — the correction is now part of ${bar.dataset.fixname || 'the schematic'}`);
+    openSchematicPage(fixes, bar.dataset.fixname);
+  } else {
+    toast(`${what} — schematic verified`);
+    openSchematicPage(sid);
+  }
+}
+
 async function loadSchemBuilder() {
   await sbLoadMeta();
   await sbLoadDrafts();
@@ -855,8 +874,7 @@ function initSchemBuilder() {
       try { res = await apiFetch('POST', 'api/user_schematics.php', { data: { action: 'approve', schematic_id: sid } }); }
       catch (err) { res = { ok: false, error: String(err) }; }
       if (!res.ok) { toast(res.error || 'Approve failed', false); return; }
-      toast('Approved — schematic verified');
-      openSchematicPage(sid); // the whole page flips: badge, Add to My Schematics, community tabs
+      sbAfterVerified(sid, 'Approved');
       return;
     }
     if (e.target.closest('#scd-unconfirm')) {
@@ -894,9 +912,8 @@ function initSchemBuilder() {
     try { res = await apiFetch('POST', 'api/user_schematics.php', { data: { action: 'vote', schematic_id: sid } }); }
     catch (err) { res = { ok: false, error: String(err) }; }
     if (!res.ok) { toast(res.error || 'Confirming failed', false); return; }
-    toast(res.data.verified
-      ? 'That was the last confirmation — schematic verified!'
-      : `Confirmed — ${res.data.votes} of ${res.data.needed}`);
+    if (res.data.verified) { sbAfterVerified(sid, 'That was the last confirmation'); return; }
+    toast(`Confirmed — ${res.data.votes} of ${res.data.needed}`);
     sbRenderVerifyBar(sid, true);
   });
   $('#scd-community').addEventListener('keydown', (e) => {

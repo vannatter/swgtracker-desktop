@@ -5183,6 +5183,7 @@ body:not(.power-tools) .power-only { display: none !important; }
 .isd-res-planet_added, .isd-res-added { color: var(--success, #4caf7a); }
 .isd-res-pending { color: var(--warning, #e0a040); }
 .isd-res-entered { color: var(--success, #4caf7a); }
+.isd-res-despawned, .isd-res-planet_removed { color: var(--text-muted, #9aa3ad); font-style: italic; }
 .isd-item { align-items: baseline; }
 .isd-enter { padding: 0 8px; font-size: 12px; line-height: 20px; }
 .isd-stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 10px 12px; margin-top: 12px; }
@@ -5376,3 +5377,16 @@ body:not(.power-tools) .power-only { display: none !important; }
 .pg-ch-key { display: flex; align-items: center; gap: 6px; justify-content: flex-end; font-size: 11.5px; color: var(--text-muted); margin-top: 4px; }
 .pg-ch-key-line { display: inline-block; width: 14px; height: 2px; background: var(--text-primary); }
 .pg-ch-key-band { display: inline-block; width: 14px; height: 8px; background: rgba(226, 67, 80, .25); margin-left: 10px; }
+
+/* ---- nested inventory folders (Canda, #25) ----
+   a subfolder's header indents under its parent behind a ↳, its rows carry a thin
+   rail on the first cell; dropping a folder on the lower part of a header nests it */
+.grp-indent { display: inline-block; flex: none; }
+.grp-sub-ico { flex: none; color: var(--text-muted); font-size: 12px; margin-right: -2px; }
+.stk-group.grp-sub .stk-group-name { font-size: 14px; }
+.data-grid tbody tr.stk-group.grp-sub td { padding-top: 8px; padding-bottom: 8px; background: color-mix(in srgb, var(--bg-secondary) 70%, var(--bg-card)); }
+.stk-group.grp-sub td:first-child { box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent-dark) 55%, transparent); }
+.stk-group.grp-nest-over > td { background: color-mix(in srgb, var(--accent) 18%, var(--bg-secondary)) !important; }
+.stk-group.grp-nest-over > td:first-child { box-shadow: inset 3px 0 0 var(--accent) !important; }
+.stk-group td.col-actions .grp-subadd { margin-right: 2px; }
+tr[data-gdepth] > td:first-child { box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent-dark) 35%, transparent); }

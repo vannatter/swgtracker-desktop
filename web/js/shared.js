@@ -1455,12 +1455,19 @@ function mergeTags(existing, typed) {
 //     onReorder(ids) -> Promise (optional; default groups-API reorder)
 //     persistRename(g, name) -> Promise (optional; default groups-API rename)
 //     unfiledKey    (optional; default 'un')
+//     onSubgroup(key)        (optional, nested pages: the header's New subgroup button)
+//     onNest(key, parentKey) -> Promise<bool> (optional, nested pages: move a folder
+//                            under another, '' = top level; enables drop-into)
 //   }
 function grpWireGroups(listSel, o) {
   const unfiled = o.unfiledKey || 'un';
   let dragKey = null;
-  const clearHover = () => $(listSel).querySelectorAll('.stk-reorder-over')
-    .forEach((el) => el.classList.remove('stk-reorder-over'));
+  const clearHover = () => $(listSel).querySelectorAll('.stk-reorder-over, .grp-nest-over')
+    .forEach((el) => el.classList.remove('stk-reorder-over', 'grp-nest-over'));
+  // nested pages (o.onNest): the top third of a header drops BEFORE it (beside it, same
+  // parent); the rest drops INTO it (a subfolder). Unfiled / non-folders take before only.
+  const nestable = (hd) => o.onNest && /^\d+$/.test(hd.dataset.grpkey);
+  const intoZone = (hd, e) => nestable(hd) && e.clientY > hd.getBoundingClientRect().top + hd.getBoundingClientRect().height / 3;
 
   async function reorder(from, target) {
     if (String(from) === String(target)) return;
@@ -1472,6 +1479,12 @@ function grpWireGroups(listSel, o) {
     let to = String(target) === unfiled ? list.length
       : list.findIndex((g) => String(g.id) === String(target));
     if (to < 0) to = list.length;
+    // nested: dropping beside a folder makes it that folder's sibling
+    if (o.onNest) {
+      const tgt = list[to];
+      const pid = tgt ? grpPid(tgt) : '';
+      if (pid !== grpPid(moved) && !(await o.onNest(String(moved.id), pid))) { o.render(); return; }
+    }
     list.splice(to, 0, moved);
     list.forEach((g, k) => { g.sort_order = k; });
     o.render();
@@ -1491,6 +1504,8 @@ function grpWireGroups(listSel, o) {
         o.render, o.persistRename);
       return;
     }
+    const sub = e.target.closest('[data-grpsub]');
+    if (sub && o.onSubgroup) { o.onSubgroup(sub.dataset.grpsub); return; }
     const del = e.target.closest('[data-grpdel]');
     if (del) {
       if (!confirmArmLabeled(del, 'Delete group?')) return;
@@ -1527,7 +1542,7 @@ function grpWireGroups(listSel, o) {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     clearHover();
-    hd.classList.add('stk-reorder-over');
+    hd.classList.add(intoZone(hd, e) ? 'grp-nest-over' : 'stk-reorder-over');
   }, true);
   $(listSel).addEventListener('drop', (e) => {
     if (!dragKey) return;
@@ -1536,7 +1551,8 @@ function grpWireGroups(listSel, o) {
     clearHover();
     if (hd) {
       e.preventDefault();
-      reorder(dragKey, hd.dataset.grpkey);
+      if (intoZone(hd, e)) o.onNest(dragKey, hd.dataset.grpkey).then((ok) => { if (ok) o.render(); });
+      else reorder(dragKey, hd.dataset.grpkey);
     }
     dragKey = null;
   }, true);
@@ -1554,7 +1570,10 @@ function grpWireGroups(listSel, o) {
 // identical structure and classes to My Stockpile's stk-group rows, with the
 // generic data-grp* hooks the shared handlers use. Trash sits in a trailing
 // pin-cell so it lines up with each grid's per-row action column.
-function grpTableHeaderHtml(key, name, count, collapsed, deletable, colTotal, actionsCls = 'pin-cell', draggable = false, selectable = false) {
+// nest (optional, nested folders): { depth, total, canSub } — depth indents the
+// name under its parent, total counts the subfolders' items too, canSub adds the
+// New subgroup button beside the trash
+function grpTableHeaderHtml(key, name, count, collapsed, deletable, colTotal, actionsCls = 'pin-cell', draggable = false, selectable = false, nest = null) {
   const nameHtml = deletable
     ? `<span class="stk-group-name" data-grprename="${key}" title="Click to rename">${escapeHtml(name)}</span>`
     : `<span class="stk-group-name stk-group-unfiled">${escapeHtml(name)}</span>`;
@@ -1564,16 +1583,22 @@ function grpTableHeaderHtml(key, name, count, collapsed, deletable, colTotal, ac
   // col-actions column the delete is a standard 28px btn-icon and the cell
   // right-aligns, so it sits exactly over the per-row trash icons.
   const btnCls = actionsCls === 'col-actions' ? 'btn btn-icon stk-bucket-del' : 'stk-bucket-del';
+  const depth = nest ? safeInt(nest.depth) : 0;
+  const subBtn = nest && nest.canSub
+    ? `<button class="${btnCls} grp-subadd" data-grpsub="${key}" title="New subgroup inside ${escapeHtml(name)}"><i class="fa-solid fa-folder-plus"></i></button>` : '';
   const delCell = deletable
-    ? `<td class="${actionsCls}"><button class="${btnCls}" data-grpdel="${key}" title="Delete group (its items become Unfiled)"><i class="fa-solid fa-trash-can"></i></button></td>`
+    ? `<td class="${actionsCls}">${subBtn}<button class="${btnCls}" data-grpdel="${key}" title="Delete group (its items ${depth ? 'move up to the folder above' : 'become Unfiled'})"><i class="fa-solid fa-trash-can"></i></button></td>`
     : `<td class="${actionsCls}"></td>`;
-  return `<tr class="stk-group${draggable ? ' stk-group-draggable' : ''}" data-grpkey="${key}"${draggable ? ' draggable="true"' : ''}>
+  const total = nest && nest.total != null ? safeInt(nest.total) : count;
+  const countTip = total > count ? ` title="${count} here, ${total - count} in subgroups"` : '';
+  return `<tr class="stk-group${draggable ? ' stk-group-draggable' : ''}${depth ? ' grp-sub' : ''}" data-grpkey="${key}"${draggable ? ' draggable="true"' : ''}>
     <td colspan="${colTotal - 1}">
       <div class="stk-group-main">
         <span class="stk-group-left">
           ${selectable ? `<input type="checkbox" class="grp-selall" data-grpselect="${key}" title="Select everything in this group">` : ''}
+          ${depth ? `<span class="grp-indent" style="width:${(depth - 1) * 22}px"></span><i class="fa-solid fa-turn-up fa-rotate-90 grp-sub-ico"></i>` : ''}
           ${nameHtml}
-          <span class="stk-group-count">${count} item${count === 1 ? '' : 's'}</span>
+          <span class="stk-group-count"${countTip}>${total} item${total === 1 ? '' : 's'}</span>
           <i class="fa-solid ${collapsed ? 'fa-caret-right' : 'fa-caret-down'} stk-caret stk-caret-trail" data-grptoggle="${key}"></i>
         </span>
       </div>
@@ -1586,14 +1611,84 @@ function grpTableHeaderHtml(key, name, count, collapsed, deletable, colTotal, ac
 // last. Ungrouped also swallows members whose group vanished. getGid reads the
 // member's group id. The 'un' section only appears when it has members or is
 // the only section.
-function grpSections(groups, items, getGid) {
-  const ordered = [...groups].sort((a, b) => (a.sort_order - b.sort_order) || a.name.localeCompare(b.name));
+// nested = folders inside folders (parent_id): sections come depth-first, each with
+// depth, parent (key, '' = top) and total (its items plus every subfolder's).
+function grpSections(groups, items, getGid, nested = false) {
+  const ordered = nested ? grpTree(groups).map((t) => t.g)
+    : [...groups].sort((a, b) => (a.sort_order - b.sort_order) || a.name.localeCompare(b.name));
   const live = new Set(ordered.map((g) => String(g.id)));
   const sections = ordered.map((g) => ({ key: String(g.id), g, name: g.name,
     items: items.filter((it) => String(getGid(it) || '') === String(g.id)) }));
+  if (nested) {
+    const depth = new Map(grpTree(groups).map((t) => [String(t.g.id), t.depth]));
+    const byKey = new Map(sections.map((sec) => [sec.key, sec]));
+    sections.forEach((sec) => {
+      sec.depth = depth.get(sec.key) || 0;
+      sec.parent = live.has(grpPid(sec.g)) ? grpPid(sec.g) : '';
+      sec.total = sec.items.length;
+    });
+    // deepest first, so a total already holds its subfolders' when it's added up
+    [...sections].sort((a, b) => b.depth - a.depth).forEach((sec) => {
+      if (sec.parent) byKey.get(sec.parent).total += sec.total;
+    });
+  }
   const unfiled = items.filter((it) => !getGid(it) || !live.has(String(getGid(it))));
   if (unfiled.length || !sections.length) sections.push({ key: 'un', g: null, name: 'Unfiled', items: unfiled });
   return sections;
+}
+
+// ---- nested folders (My Inventory — Canda, #25: Deeds → Harvesters) ----------
+// api/groups.php keeps parent_id (null = top level) and refuses more than
+// GRP_MAX_DEPTH levels; pages that don't nest never set one.
+const GRP_MAX_DEPTH = 3;
+const grpPid = (g) => (g && g.parent_id ? String(g.parent_id) : '');
+const grpCmp = (a, b) => (a.sort_order - b.sort_order) || String(a.name).localeCompare(String(b.name));
+
+// depth-first: [{ g, depth }] (top level = 0). A folder whose parent is gone sits at the top.
+function grpTree(groups) {
+  const ids = new Set(groups.map((g) => String(g.id)));
+  const kids = new Map();
+  groups.forEach((g) => {
+    const p = ids.has(grpPid(g)) ? grpPid(g) : '';
+    if (!kids.has(p)) kids.set(p, []);
+    kids.get(p).push(g);
+  });
+  const out = [], seen = new Set();
+  const walk = (p, depth) => (kids.get(p) || []).sort(grpCmp).forEach((g) => {
+    const k = String(g.id);
+    if (seen.has(k)) return;
+    seen.add(k);
+    out.push({ g, depth });
+    walk(k, depth + 1);
+  });
+  walk('', 0);
+  groups.forEach((g) => { if (!seen.has(String(g.id))) out.push({ g, depth: 0 }); });   // a loop in bad data: still listed
+  return out;
+}
+// a folder and everything inside it: Set of keys
+function grpSubtree(groups, key) {
+  const out = new Set([String(key)]);
+  let grew = true;
+  while (grew) {
+    grew = false;
+    groups.forEach((g) => { if (out.has(grpPid(g)) && !out.has(String(g.id))) { out.add(String(g.id)); grew = true; } });
+  }
+  return out;
+}
+// levels from the top (a top-level folder is 1) and levels in a subtree (no subfolders = 1)
+function grpLevel(groups, key) {
+  let d = 0;
+  for (let g = groups.find((x) => String(x.id) === String(key)); g && d < 10; g = groups.find((x) => String(x.id) === grpPid(g))) d++;
+  return d;
+}
+function grpHeight(groups, key) {
+  const kids = groups.filter((g) => grpPid(g) === String(key));
+  return 1 + (kids.length ? Math.max(...kids.map((g) => grpHeight(groups, g.id))) : 0);
+}
+// <option>s for a folder picker, indented by depth
+function grpOptionsHtml(groups) {
+  return grpTree(groups).map(({ g, depth }) =>
+    `<option value="${safeInt(g.id)}">${'\u00a0\u00a0\u00a0'.repeat(depth)}${depth ? '↳ ' : ''}${escapeHtml(g.name || 'Group')}</option>`).join('');
 }
 
 // Relative "time ago" from a unix timestamp or "YYYY-MM-DD HH:MM:SS" string.

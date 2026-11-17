@@ -241,13 +241,32 @@ function invSyncSelAll() {
   if (n) $('#inv-selbar-n').textContent = `${n} selected`;
   // group-header checkboxes mirror their members (dash = partial)
   document.querySelectorAll('#inv-body [data-grpselect]').forEach((cb) => {
-    const key = cb.dataset.grpselect;
-    const members = invState.items.filter((i) =>
-      (i.group_id != null && String(i.group_id) !== '0' ? String(i.group_id) : 'un') === key);
+    const members = invGroupMembers(cb.dataset.grpselect);
     const on = members.filter((i) => invState.checked.has(String(i.id))).length;
     cb.checked = members.length > 0 && on === members.length;
     cb.indeterminate = on > 0 && on < members.length;
   });
+}
+
+// New Group (top level) or a header's New subgroup: the folder appears, named inline
+async function invNewGroup(parentKey) {
+  const parent = parentKey ? safeInt(parentKey) : 0;
+  const res = await grpApi({ action: 'create', kind: 'inventory', ...(parent ? { parent_id: parent, name: 'New subgroup' } : {}) });
+  if (!res.ok || !res.data) { toast(res.error || 'Could not create group — site update pending?', false); return; }
+  if (parent && !res.data.parent_id) {   // a site from before nesting made it at the top level
+    toast('Subgroups need a site update — it was added as a top-level group', false);
+  }
+  const g = { id: res.data.id, name: res.data.name, sort_order: res.data.sort_order, parent_id: res.data.parent_id || null };
+  invState.groups.push(g);
+  if (parent) invState.grpCollapsed.delete(String(parent));   // open the parent so the new one shows
+  renderInvRows();
+  grpBeginRename('#inv-body', String(g.id), g, renderInvRows);
+}
+
+// a folder's items, its subfolders' included ('un' = Unfiled alone)
+function invGroupMembers(key) {
+  const keys = key === 'un' ? new Set(['un']) : grpSubtree(invState.groups, key);
+  return invState.items.filter((i) => keys.has(i.group_id != null && String(i.group_id) !== '0' ? String(i.group_id) : 'un'));
 }
 
 // page-head "Email all" checkbox mirrors the per-row envelopes: checked when
@@ -483,7 +502,11 @@ function renderInvRows() {
   // restocking one lifts it back up on the reload
   const soldOut = $('#inv-filter').value === 'one_off' ? pairs.filter(([i]) => safeInt(i.stocked) <= 0) : [];
   if (soldOut.length) pairs = pairs.filter(([i]) => safeInt(i.stocked) > 0);
-  const sections = grpSections(invState.groups, pairs, ([i]) => i.group_id);
+  // folders nest (Canda, #25): depth-first, and a folded folder hides everything inside it
+  let sections = grpSections(invState.groups, pairs, ([i]) => i.group_id, true);
+  const secParent = new Map(sections.map((x) => [x.key, x.parent || '']));
+  const underFolded = (key) => { for (let p = secParent.get(key); p; p = secParent.get(p)) if (invState.grpCollapsed.has(p)) return true; return false; };
+  sections = sections.filter((x) => !underFolded(x.key));
   if (soldOut.length) {
     if (!pairs.length && !invState.groups.length) sections.length = 0; // no empty Unfiled above it
     sections.push({ key: 'soldout', g: null, name: 'Sold out', items: soldOut });
@@ -496,12 +519,15 @@ function renderInvRows() {
   pi.out.forEach(({ sec, items }) => {
     const collapsed = invState.grpCollapsed.has(sec.key);
     if (sec.key !== 'un' || sections.some((s) => s.key !== 'un' && s.key !== 'soldout')) {   // Sold out alone doesn't need an Unfiled header
-      if (parts.length) parts.push(spacer);
+      if (parts.length && !sec.depth) parts.push(spacer);   // a subfolder sits right under its parent
       parts.push(sec.key === 'soldout'   // not a folder: no rename / delete / drag / select-all
         ? grpTableHeaderHtml(sec.key, sec.name, sec.items.length, collapsed, false, invColCount(), 'col-actions')
-        : grpTableHeaderHtml(sec.key, sec.name, sec.items.length, collapsed, sec.key !== 'un', invColCount(), 'col-actions', sec.key !== 'un', true));
+        : grpTableHeaderHtml(sec.key, sec.name, sec.items.length, collapsed, sec.key !== 'un', invColCount(), 'col-actions', sec.key !== 'un', true,
+          sec.g ? { depth: sec.depth, total: sec.total, canSub: sec.depth + 1 < GRP_MAX_DEPTH } : null));
     }
-    if (!collapsed) parts.push(...items.map(([item, idx]) => invRowsHtml(item, idx, pace)));
+    // a subfolder's rows carry its depth: an indent rail on the first cell ties them to it
+    const dAttr = sec.depth ? `<tr data-gdepth="${Math.min(sec.depth, 2)}" ` : '';
+    if (!collapsed) parts.push(...items.map(([item, idx]) => (dAttr ? invRowsHtml(item, idx, pace).replace(/<tr /g, dAttr) : invRowsHtml(item, idx, pace))));
   });
   $('#inv-body').innerHTML = parts.join('');
   invRenderPager();
@@ -988,9 +1014,8 @@ function openInvDialog(item = null, clone = false, preset = null) {
   const modal = $('#inv-add-modal');
   // Group picker (Danvar): edit and clone start in the row's folder
   const gid = item ? safeInt(item.group_id) : 0;
-  const groups = invState.groups.slice().sort((a, b) => safeInt(a.sort_order) - safeInt(b.sort_order));
-  $('#inv-new-group').innerHTML = '<option value="0">Unfiled</option>'
-    + groups.map((g) => `<option value="${safeInt(g.id)}">${escapeHtml(g.name || 'Group')}</option>`).join('');
+  const groups = invState.groups;
+  $('#inv-new-group').innerHTML = '<option value="0">Unfiled</option>' + grpOptionsHtml(groups);
   $('#inv-new-group').value = String(groups.some((g) => safeInt(g.id) === gid) ? gid : 0);
   modal.dataset.groupWas = String(item && !clone ? gid : 0);
   const nameInput = $('#inv-new-name');
@@ -1312,9 +1337,7 @@ function initInventory() {
   $('#inv-body').addEventListener('change', (e) => {
     const cb = e.target.closest('[data-grpselect]');
     if (!cb) return;
-    const key = cb.dataset.grpselect;
-    invState.items.filter((i) =>
-      (i.group_id != null && String(i.group_id) !== '0' ? String(i.group_id) : 'un') === key)
+    invGroupMembers(cb.dataset.grpselect)
       .forEach((i) => { if (cb.checked) invState.checked.add(String(i.id)); else invState.checked.delete(String(i.id)); });
     renderInvRows();
     invSyncSelAll();
@@ -1411,14 +1434,7 @@ function initInventory() {
   });
 
   // folders: create, collapse, rename, delete, drag rows in
-  $('#inv-newgroup').addEventListener('click', async () => {
-    const res = await grpApi({ action: 'create', kind: 'inventory' });
-    if (!res.ok || !res.data) { toast(res.error || 'Could not create group — site update pending?', false); return; }
-    invState.groups.push({ id: res.data.id, name: res.data.name, sort_order: res.data.sort_order });
-    renderInvRows();
-    grpBeginRename('#inv-body', String(res.data.id),
-      invState.groups[invState.groups.length - 1], renderInvRows);
-  });
+  $('#inv-newgroup').addEventListener('click', () => invNewGroup(null));
   $('#inv-tagbar').addEventListener('click', (e) => {
     const pen = e.target.closest('[data-invtagedit]');
     if (pen) { invOpenTagDialog(pen.dataset.invtagedit); return; }
@@ -1472,10 +1488,29 @@ function initInventory() {
       const gid = safeInt(key);
       grpApi({ action: 'remove', id: gid }).then((res) => {
         if (!res.ok) return;
+        // its items and subfolders move up to its parent (top level: items unfiled)
+        const up = (invState.groups.find((g) => g.id === gid) || {}).parent_id || null;
         invState.groups = invState.groups.filter((g) => g.id !== gid);
-        invState.items.forEach((i) => { if (Number(i.group_id) === gid) i.group_id = null; });
+        invState.groups.forEach((g) => { if (Number(g.parent_id) === gid) g.parent_id = up; });
+        invState.items.forEach((i) => { if (Number(i.group_id) === gid) i.group_id = up; });
         renderInvRows();
       });
+    },
+    onSubgroup: (key) => invNewGroup(key),
+    // drop a folder into another (or beside one at another level)
+    onNest: async (key, parentKey) => {
+      const g = invState.groups.find((x) => String(x.id) === String(key));
+      if (!g || String(key) === String(parentKey)) return false;
+      if (parentKey && grpSubtree(invState.groups, key).has(String(parentKey))) { toast('A folder can’t go inside its own subfolder', false); return false; }
+      if ((parentKey ? grpLevel(invState.groups, parentKey) : 0) + grpHeight(invState.groups, key) > GRP_MAX_DEPTH) {
+        toast(`Folders go ${GRP_MAX_DEPTH} levels deep at most`, false);
+        return false;
+      }
+      const res = await grpApi({ action: 'move', id: safeInt(key), parent_id: parentKey ? safeInt(parentKey) : null });
+      if (!res.ok) { toast(res.error || 'Could not move the folder — site update pending?', false); return false; }
+      g.parent_id = parentKey ? safeInt(parentKey) : null;
+      if (parentKey) invState.grpCollapsed.delete(String(parentKey));
+      return true;
     },
   });
   // drag a row onto (or under) a folder row to file it — if the dragged row is

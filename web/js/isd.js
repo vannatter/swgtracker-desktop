@@ -15,6 +15,7 @@ const ISD_RESULT_LABEL = {
   planet_added: 'planet added', confirmed: 'already listed', inactive: 'not in spawn on the site',
   added: 'new — added', pending: 'new — waiting for stats',
   entered: 'added — you entered the stats', arrived: 'new — now on the site',
+  despawned: 'gone — marked despawned', planet_removed: 'gone from this planet',
 };
 
 function isdSummary(r) {
@@ -24,6 +25,7 @@ function isdSummary(r) {
   if (r.pending) bits.push(`${r.pending} new waiting for stats`);
   if (r.confirmed) bits.push(`${r.confirmed} already listed`);
   if (r.inactive) bits.push(`${r.inactive} not in spawn here`);
+  if (r.gone) bits.push(`${r.gone} gone (not listed by the droid)`);
   return `${r.found} resource${r.found === 1 ? '' : 's'} on ${r.planet_name}${bits.length ? ' — ' + bits.join(', ') : ''}`;
 }
 
@@ -83,7 +85,7 @@ async function isdLoadPanel() {
   panel.innerHTML = `
     <div class="isd-head"><i class="fa-solid fa-satellite"></i> Survey droid reports
       <span class="isd-count">${fmtNum(d.total)}</span>
-      <i class="fa-solid fa-circle-info info-tip" title="Interplanetary Survey Droid mails the monitor uploaded. Resources in spawn get this planet added; new names wait until they have stats."></i></div>
+      <i class="fa-solid fa-circle-info info-tip" title="Interplanetary Survey Droid mails the monitor uploaded. Resources in spawn get this planet added; new names wait until they have stats; ones the site had here that the droid didn&#39;t list come off this planet, or out of spawn."></i></div>
     ${waiting.length ? `<div class="isd-sub isd-sub-waiting"><i class="fa-solid fa-hourglass-half"></i> Waiting for stats <span class="isd-count">${fmtNum(waiting.length)}</span></div>
     <div class="isd-list">${waiting.map(row).join('')}</div>
     ${d.reports.length ? '<div class="isd-sub">Latest</div>' : ''}` : ''}

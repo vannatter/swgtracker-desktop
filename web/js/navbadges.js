@@ -19,10 +19,9 @@ const PAGE_BADGES = {
   harvesters: { tag: 'updated', since: '2026-11-17' },
   upkeep: { tag: 'updated', since: '2026-11-12' },
   schematics: { tag: 'updated', since: '2026-11-16' },
-  insights: { tag: 'updated', since: '2026-11-01' },
-  inventory: { tag: 'updated', since: '2026-11-05' },
+  inventory: { tag: 'updated', since: '2026-11-17' },
   monitor: { tag: 'updated', since: '2026-11-05' },
-  isd: { tag: 'new', since: '2026-11-07' },
+  isd: { tag: 'updated', since: '2026-11-17' },
   sales: { tag: 'updated', since: '2026-11-12' },
   myschematics: { tag: 'updated', since: '2026-11-12' },
 };

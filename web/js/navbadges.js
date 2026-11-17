@@ -14,6 +14,7 @@ const PAGE_BADGES = {
   quests: { tag: 'updated', since: '2026-11-05' },
   settings: { tag: 'updated', since: '2026-11-07' },
   prices: { tag: 'updated', since: '2026-11-16' },
+  lab: { tag: 'updated', since: '2026-11-16' },
   upkeep: { tag: 'updated', since: '2026-11-12' },
   schematics: { tag: 'updated', since: '2026-11-16' },
   insights: { tag: 'updated', since: '2026-11-01' },

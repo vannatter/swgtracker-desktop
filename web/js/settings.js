@@ -158,12 +158,33 @@ async function loadSettings() {
     if ($('#set-power')) $('#set-power').checked = !!Number(p.power_tools);
     const u = $('#set-username');
     if (u) { u.value = p.name || ''; u.dataset.orig = p.name || ''; }
+    renderRep(p.rep);
   });
   if (typeof insaLoadPrefs === 'function') insaLoadPrefs();   // Sales Alerts (server-side)
   if (typeof ideaShipLoadPrefs === 'function') ideaShipLoadPrefs();   // Ideas I backed ship (server-side)
   pushLoadPrefs();   // Phone notifications (server-side)
 
   refreshDatasetStatus();
+}
+
+// ---- Reputation (read-only, api/prefs.php) ----
+// every 1000 rep is a level; the bar is progress through the CURRENT level —
+// same maths as the website's Account page (portal/index.php). Hidden until the
+// site answers with it (older deploy, or no key yet).
+function renderRep(rep) {
+  const box = $('#set-rep');
+  if (!box) return;
+  if (rep === undefined || rep === null) { box.hidden = true; return; }
+  const total = Math.max(0, Number(rep) || 0);
+  const level = Math.floor(total / 1000) + 1;
+  const inLevel = total - (level - 1) * 1000;
+  const pct = Math.min(100, Math.floor(inLevel / 10));
+  $('#set-rep-level').textContent = `Level ${fmtNum(level)}`;
+  $('#set-rep-pct').textContent = `${pct}%`;
+  $('#set-rep-fill').style.width = `${pct}%`;
+  $('#set-rep-track').title = `${inLevel.toFixed(1)} / 1000 within Level ${level}`;
+  $('#set-rep-hint').textContent = `${total.toLocaleString(undefined, { maximumFractionDigits: 1 })} rep · ${(1000 - inLevel).toLocaleString(undefined, { maximumFractionDigits: 1 })} to Level ${level + 1}`;
+  box.hidden = false;
 }
 
 // ---- Phone notifications (api/push.php) ----

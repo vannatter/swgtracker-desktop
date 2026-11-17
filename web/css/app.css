@@ -5227,3 +5227,20 @@ body:not(.power-tools) .power-only { display: none !important; }
 #cmp-link-multi .filter-input, #fac-ready-search, #fac-plan-sel { width: 100%; max-width: none; }
 #inv-own-give { color: var(--text-hover); text-decoration: underline; text-underline-offset: 2px; }
 #inv-own-give:hover { color: var(--text-primary); }
+
+/* Settings → Reputation (mirrors the website's Account card) */
+.set-rep-row { display: flex; align-items: baseline; justify-content: space-between; margin: 4px 0 8px; }
+.set-rep-level { font-size: 22px; font-weight: 700; color: var(--accent); }
+.set-rep-pct { font-size: 13px; color: var(--text-hover); font-weight: 600; }
+.set-rep-track { height: 8px; background: var(--bg-input); border-radius: 4px; overflow: hidden; }
+.set-rep-fill { height: 100%; background: var(--accent); border-radius: 4px; max-width: 100%; }
+/* Home → Your Reputation tile: thin level bar under the numbers */
+.hm-tile[data-hmrep] { cursor: pointer; }
+.hm-rep-track { height: 6px; margin-top: 8px; background: var(--bg-input); border-radius: 3px; overflow: hidden; width: 100%; }
+.hm-rep-fill { height: 100%; background: var(--accent); border-radius: 3px; }
+
+/* Laboratory experiment folders (#56): sections stack, cards grid inside each */
+.lab-exps.lab-exps-grouped { display: flex; flex-direction: column; gap: 10px; }
+.lab-grp-cards { grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); }
+.lab-exp-card[draggable="true"] { cursor: grab; }
+.lab-dragging { opacity: .45; }

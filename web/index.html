@@ -8,7 +8,7 @@
        every dialog showed at once on launch (Oogie) -->
   <link href="vendor/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="vendor/fontawesome/css/all.min.css">
-  <link rel="stylesheet" href="css/app.css?v=20261112sel">
+  <link rel="stylesheet" href="css/app.css?v=20261116grp">
   <link rel="stylesheet" href="css/share.css?v=20261022x">
   <link rel="stylesheet" href="css/quests.css?v=20261105qc">
 </head>
@@ -1299,6 +1299,7 @@
                 placeholder="Search experiments…" autocomplete="off">
               <button id="lab-home-clear" type="button" title="Clear filter" hidden><i class="fa-solid fa-xmark"></i></button>
             </span>
+            <button id="lab-newgroup" class="btn btn-sm btn-outline-secondary" title="Add a folder — drag experiments into it"><i class="fa-solid fa-folder-plus"></i> New Group</button>
             <button id="lab-new" class="btn btn-sm btn-accent"><i class="fa-solid fa-plus"></i> New Experiment</button>
             <button id="lab-viewtoggle" class="btn btn-icon" title="Switch to grid view"><i class="fa-solid fa-table-cells-large"></i></button>
             <button id="lab-home-refresh" class="btn btn-icon" title="Reload experiments"><i class="fa-solid fa-rotate-right"></i></button>
@@ -2378,6 +2379,17 @@
             <span>Username <span class="settings-sub">on your notes and the Home greeting</span></span>
             <input id="set-username" type="text" class="form-control filter-input set-username" maxlength="40" placeholder="loads with your key" autocomplete="off" spellcheck="false">
           </div>
+        </div>
+
+        <!-- Reputation: read-only, from api/prefs.php (the website's Account page has the same card — Canda) -->
+        <div class="settings-section" id="set-rep" hidden>
+          <h2>Reputation <span class="settings-sub">earned by reporting and editing community data — every 1,000 rep is a level</span></h2>
+          <div class="set-rep-row">
+            <div id="set-rep-level" class="set-rep-level">Level 1</div>
+            <div id="set-rep-pct" class="set-rep-pct">0%</div>
+          </div>
+          <div class="set-rep-track" id="set-rep-track"><div id="set-rep-fill" class="set-rep-fill"></div></div>
+          <div id="set-rep-hint" class="settings-hint"></div>
         </div>
 
         <div class="settings-section">
@@ -4327,10 +4339,10 @@
   <script src="js/factories-ready.js?v=20261103dh"></script>
   <script src="js/customers.js?v=20261022es"></script>
   <script src="js/characters.js?v=20261022es"></script>
-  <script src="js/settings.js?v=20261106push"></script>
+  <script src="js/settings.js?v=20261116rep"></script>
   <script src="js/insight-alerts.js?v=20261102al"></script>
   <script src="js/alerts.js?v=20261023ac"></script>
-  <script src="js/lab.js?v=20261022es"></script>
+  <script src="js/lab.js?v=20261116grp"></script>
   <script src="js/mail.js?v=20261107isdp"></script>
   <script src="js/isd.js?v=20261107isdp"></script>
   <script src="js/notes.js?v=20261022es"></script>
@@ -4352,12 +4364,12 @@
   <script src="js/quests.js?v=20261106map"></script>
   <script src="js/beastcalc.js?v=20261016a"></script>
   <script src="js/decor.js?v=20261027h4"></script>
-  <script src="js/home.js?v=20261105var"></script>
+  <script src="js/home.js?v=20261116rep"></script>
   <script src="js/mailsetup.js?v=20261019a"></script>
   <script src="js/ideas.js?v=20261112blk"></script>
   <script src="js/priceguide.js?v=20261102pg"></script>
   <script src="js/vendor-upkeep.js?v=20261112sel"></script>
-  <script src="js/navbadges.js?v=20261116ai"></script>
+  <script src="js/navbadges.js?v=20261116grp"></script>
   <script src="js/app.js?v=20261112pgc"></script>
 </body>
 </html>

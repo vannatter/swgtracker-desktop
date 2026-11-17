@@ -15,6 +15,7 @@ const HOME_SECTIONS = [
 ];
 // the built-in At a Glance tiles (hide any you don't care about)
 const HOME_GLANCE = [
+  { key: 'reputation', name: 'Your Reputation' },   // yours, not the site's (api/prefs.php rep — Canda's #53)
   { key: 'hottest_resource', name: 'Hottest Resource' },
   { key: 'hottest_schematic', name: 'Hottest Schematic' },
   { key: 'top_rated', name: 'Top Scored Active' },
@@ -405,7 +406,7 @@ function homeCardsWrap(view, gridCls, cardsHtml) {
 const HM_TILE_ICONS = {
   'hottest resource': 'fa-fire', 'hottest schematic': 'fa-scroll', 'top scored active': 'fa-trophy',
   'biggest city mover': 'fa-city', 'biggest guild mover': 'fa-shield-halved', 'gcw tracker': 'fa-scale-balanced',
-  'active resources': 'fa-gem', 'today’s pulse': 'fa-heart-pulse',
+  'active resources': 'fa-gem', 'today’s pulse': 'fa-heart-pulse', 'your reputation': 'fa-star',
 };
 const hmPlain = (html) => String(html || '').replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').trim();
 function homeTile(label, value, sub, badge, extra = '', attrs = '') {
@@ -421,6 +422,21 @@ function homeTile(label, value, sub, badge, extra = '', attrs = '') {
     </div>`;
 }
 const homeResLink = (name) => name ? `<span class="res-name" data-resname="${escapeHtml(name)}">${escapeHtml(name)}</span>` : '<span class="stat_off">—</span>';
+
+// Your Reputation — same maths as Settings → Reputation (renderRep) and the website's
+// Account page: every 1000 rep is a level, the bar is progress through the current one.
+// Click → Settings. Empty until the site sends rep (older deploy).
+function homeRepTile() {
+  if (appPrefs.rep === undefined || appPrefs.rep === null) return '';
+  const total = Math.max(0, Number(appPrefs.rep) || 0);
+  const level = Math.floor(total / 1000) + 1;
+  const inLevel = total - (level - 1) * 1000;
+  const pct = Math.min(100, Math.floor(inLevel / 10));
+  const toNext = (1000 - inLevel).toLocaleString(undefined, { maximumFractionDigits: 0 });
+  return homeTile('Your Reputation', `Level ${fmtNum(level)}`, `${pct}% · ${toNext} rep to Level ${level + 1}`, '',
+    `<div class="hm-rep-track"><div class="hm-rep-fill" style="width:${pct}%"></div></div>`,
+    `data-hmrep role="button" title="${fmtNum(Math.round(total))} rep — earned by reporting and editing community data. Click for Settings."`);
+}
 
 // At a Glance: the website dashboard tiles you haven't hidden, then your widgets
 function homeGlanceHtml() {
@@ -454,6 +470,7 @@ function homeGlanceHtml() {
             : '<div class="settings-sub">no GCW history yet</div>'}</div>`, '', '',
           last ? `<div class="hm-gcw-now"><span class="hm-imp">${fmtNum(last.imperial)} Imp</span><span class="hm-reb">${fmtNum(last.rebel)} Reb</span></div>` : ''),
         active_count: () => homeTile('Active Resources', fmtNum(safeInt(d.active_count)), 'currently in spawn', ''),
+        reputation: () => homeRepTile(),
         pulse: () => homeTile('Today’s Pulse', `<div class="hm-mini">${(pulse.history || []).length > 1
             ? gxSpark(pulse.history, { w: 240, h: 48, color: 'var(--accent)', fill: true })
             : '<div class="settings-sub">no pulse samples yet today</div>'}</div>`, '', '',
@@ -1071,6 +1088,7 @@ function initHome() {
       renderResTree($('#home-spawn-tree'), homeState.spawns || [], { force: true });
       return;
     }
+    if (e.target.closest('[data-hmrep]')) { showPage('settings'); return; }
     const schem = e.target.closest('[data-hmschem]');
     if (schem) { openSchematicPage(safeInt(schem.dataset.hmschem), schem.dataset.hmschemname); return; }
     const guild = e.target.closest('[data-hmguild]');

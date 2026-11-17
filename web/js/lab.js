@@ -22,6 +22,8 @@ const labState = {
   homeQuery: '',       // free-text filter on the experiments home page
   homeView: 'cards',   // 'cards' | 'grid' — sticky via lab_settings.homeView
   banned: new Set(),   // resource ids hidden from pools/auto-picks ("no vendor supply")
+  groups: [],          // experiment folders [{id, name, sort_order}] — ui key lab_groups (Murt_88, #56)
+  grpCollapsed: new Set(),
 };
 
 const labIsBanned = (r) => labState.banned.has(String(r.id));
@@ -806,7 +808,9 @@ async function labLoadSchematic(id, name) {
 // Laboratory reads and writes the same two), with the local config as the offline
 // copy. The account copy wins on load; an app that had experiments before the
 // account knew any pushes them up once, so nothing is lost in the move.
-const LAB_KEYS = ['lab_experiments', 'lab_settings'];
+// lab_groups is the app's own key: the website's Laboratory rewrites lab_settings whole,
+// so folders live apart from it (experiments carry their folder as e.group)
+const LAB_KEYS = ['lab_experiments', 'lab_settings', 'lab_groups'];
 async function labCloudGet() {
   try {
     const r = await apiFetch('GET', 'api/prefs.php');
@@ -826,7 +830,7 @@ async function labLoadConfig() {
   const res = await api().get_config();
   const local = (res.ok && res.data) || {};
   const cloud = await labCloudGet();
-  const out = { lab_experiments: local.lab_experiments, lab_settings: local.lab_settings };
+  const out = { lab_experiments: local.lab_experiments, lab_settings: local.lab_settings, lab_groups: local.lab_groups };
   if (cloud) {
     for (const k of LAB_KEYS) {
       if (cloud[k] != null) {
@@ -838,6 +842,12 @@ async function labLoadConfig() {
     }
   }
   return out;
+}
+
+async function labPersistGroups() {
+  try {
+    await labSave('lab_groups', { groups: labState.groups, collapsed: [...labState.grpCollapsed] });
+  } catch (_) { toast('Couldn’t save experiment groups', false); }
 }
 
 async function labPersistExperiments() {
@@ -909,7 +919,28 @@ function labFilterExperiments() {
 
 // grid view: one row per experiment; the same data-* actions the cards use
 function labHomeGridHtml(list) {
-  const rows = list.map((e) => `<tr>
+  const row = (e) => labGridRowHtml(e);
+  const secs = labSections(list);
+  const body = secs
+    ? secs.map((sec) => grpTableHeaderHtml(sec.key, sec.name, sec.items.length, labState.grpCollapsed.has(sec.key), sec.key !== 'un', 7, 'col-actions', sec.key !== 'un')
+        + (labState.grpCollapsed.has(sec.key) ? '' : sec.items.map(row).join(''))).join('')
+    : list.map(row).join('');
+  return `<div class="table-wrap"><table class="data-grid"><thead><tr>
+      <th class="col-name">Name</th><th class="col-text">Schematic</th><th class="col-text">Picks</th>
+      <th class="col-text">Result</th><th class="col-num">Cost</th><th class="col-text">Saved</th><th class="col-actions"></th>
+    </tr></thead><tbody>${body}</tbody></table></div>`;
+}
+
+// folders, in order, with Unfiled last — null when there are no folders (flat list).
+// While filtering, folders with no matches drop out so the results stay tight.
+function labSections(list) {
+  if (!labState.groups.length) return null;
+  const secs = grpSections(labState.groups, list, (e) => e.group);
+  return (labState.homeQuery || '').trim() ? secs.filter((s) => s.items.length) : secs;
+}
+
+function labGridRowHtml(e) {
+  return [e].map((e) => `<tr data-eid="${e.id}"${labState.groups.length ? ' draggable="true"' : ''}>
     <td class="col-name"><span class="lab-exp-name" data-rename="${e.id}" title="Click to rename">${escapeHtml(e.name)}</span></td>
     <td class="col-text">${escapeHtml(e.schematic_name)}</td>
     <td class="col-text lab-picks-cell">${(e.picks || []).slice(0, 4).map((p) =>
@@ -924,10 +955,6 @@ function labHomeGridHtml(list) {
       <button class="btn btn-icon" data-delexp="${e.id}" title="Delete"><i class="fa-solid fa-trash-can"></i></button>
     </td>
   </tr>`).join('');
-  return `<div class="table-wrap"><table class="data-grid"><thead><tr>
-      <th class="col-name">Name</th><th class="col-text">Schematic</th><th class="col-text">Picks</th>
-      <th class="col-text">Result</th><th class="col-num">Cost</th><th class="col-text">Saved</th><th class="col-actions"></th>
-    </tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 function labPaintViewToggle() {
@@ -958,8 +985,22 @@ function labRenderHome() {
     wrap.innerHTML = labHomeGridHtml(list);
     return;
   }
-  wrap.innerHTML = list.map((e) => `
-    <div class="lab-exp-card" data-eid="${e.id}">
+  const secs = labSections(list);
+  wrap.classList.toggle('lab-exps-grouped', !!secs);
+  if (secs) {
+    wrap.innerHTML = secs.map((sec) => {
+      const collapsed = labState.grpCollapsed.has(sec.key);
+      return `<div class="grp-sec">${grpHeaderHtml(sec.key, sec.name, sec.items.length, collapsed, 'experiments')}
+        <div class="grp-cards lab-grp-cards" data-lgroup="${sec.key}"${collapsed ? ' hidden' : ''}>${sec.items.map(labCardHtml).join('')}</div></div>`;
+    }).join('');
+    return;
+  }
+  wrap.innerHTML = list.map(labCardHtml).join('');
+}
+
+function labCardHtml(e) {
+  return [e].map((e) => `
+    <div class="lab-exp-card" data-eid="${e.id}"${labState.groups.length ? ' draggable="true"' : ''}>
       <div class="lab-exp-hd">
         <div class="lab-exp-top">
           <span class="lab-exp-name" data-rename="${e.id}" title="Click to rename">${escapeHtml(e.name)}
@@ -984,6 +1025,90 @@ function labRenderHome() {
         <span class="lab-exp-when">${fmtNum(e.cost)} cr · ${fmtAgoTip(e.created)} · ${escapeHtml(e.schematic_name)}</span>
       </div>
     </div>`).join('');
+}
+
+// ---- experiment folders (#56) ----
+// Same look and handling as Harvesters / Factories: New group names itself inline,
+// click a header to fold it, drag headers to reorder, drag a card (or grid row) onto
+// a folder to file it. Stored in the account (lab_groups), so the website keeps them.
+function labNewGroup() {
+  const g = { id: 'g' + Date.now().toString(36), name: 'New group',
+    sort_order: labState.groups.reduce((m, x) => Math.max(m, safeInt(x.sort_order) + 1), 0) };
+  labState.groups.push(g);
+  labRenderHome();
+  labPersistGroups();
+  grpBeginRename('#lab-exps', g.id, g, labRenderHome, async () => { await labPersistGroups(); return { ok: true }; });
+}
+
+function labFileExperiment(eid, key) {
+  const e = labState.experiments.find((x) => String(x.id) === String(eid));
+  if (!e) return;
+  const want = key === 'un' ? undefined : key;
+  if (e.group === want) return;
+  e.group = want;
+  labRenderHome();
+  labPersistExperiments();
+}
+
+function initLabGroups() {
+  grpWireGroups('#lab-exps', {
+    groups: () => labState.groups,
+    collapsed: () => labState.grpCollapsed,
+    render: () => { labRenderHome(); labPersistGroups(); },
+    onReorder: async () => { await labPersistGroups(); return { ok: true }; },
+    persistRename: async () => { await labPersistGroups(); return { ok: true }; },
+    onDelete: (key) => {
+      labState.groups = labState.groups.filter((g) => String(g.id) !== String(key));
+      labState.experiments.forEach((e) => { if (String(e.group) === String(key)) e.group = undefined; });
+      labState.grpCollapsed.delete(String(key));
+      labRenderHome();
+      labPersistGroups();
+      labPersistExperiments();
+    },
+  });
+  // cards / grid rows → a folder (its header or its body)
+  let dragEid = null;
+  const wrap = $('#lab-exps');
+  wrap.addEventListener('dragstart', (e) => {
+    const el = e.target.closest('.lab-exp-card[draggable="true"], tr[data-eid][draggable="true"]');
+    if (!el) return;
+    dragEid = el.dataset.eid;
+    el.classList.add('lab-dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', 'exp:' + dragEid);
+  });
+  const target = (e) => {
+    const hd = e.target.closest('[data-grpkey]');
+    if (hd) return hd.dataset.grpkey;
+    const body = e.target.closest('[data-lgroup]');
+    if (body) return body.dataset.lgroup;
+    const row = e.target.closest('tr[data-eid]');   // grid: a row files into its section
+    if (row) {
+      let prev = row.previousElementSibling;
+      while (prev && !prev.dataset.grpkey) prev = prev.previousElementSibling;
+      return prev ? prev.dataset.grpkey : null;
+    }
+    return null;
+  };
+  wrap.addEventListener('dragover', (e) => {
+    if (!dragEid) return;
+    const key = target(e);
+    wrap.querySelectorAll('.stk-reorder-over').forEach((el) => el.classList.remove('stk-reorder-over'));
+    if (key == null) return;
+    e.preventDefault();
+    const hd = wrap.querySelector(`[data-grpkey="${key}"]`);
+    if (hd) hd.classList.add('stk-reorder-over');
+  });
+  wrap.addEventListener('drop', (e) => {
+    if (!dragEid) return;
+    const key = target(e);
+    if (key != null) { e.preventDefault(); labFileExperiment(dragEid, key); }
+  });
+  wrap.addEventListener('dragend', () => {
+    wrap.querySelectorAll('.lab-dragging, .stk-reorder-over').forEach((el) => el.classList.remove('lab-dragging', 'stk-reorder-over'));
+    dragEid = null;
+  });
+  $('#lab-newgroup').addEventListener('click', labNewGroup);
 }
 
 // promote an experiment to a My Schematics entry: same schematic + tracked
@@ -1076,6 +1201,7 @@ async function labSaveExperiment() {
     capped, cost: Math.round(cost),
     notes: existing ? existing.notes : labState.draftNotes,
     created: existing ? existing.created : Math.floor(Date.now() / 1000),
+    group: existing ? existing.group : undefined,   // re-saving keeps its folder
   };
   if (existing) labState.experiments[labState.experiments.indexOf(existing)] = entry;
   else labState.experiments.push(entry);
@@ -1146,6 +1272,9 @@ async function loadLab() {
     const cfg = await labLoadConfig();
     {
       labState.experiments = cfg.lab_experiments || [];
+      const lg = cfg.lab_groups || {};
+      labState.groups = Array.isArray(lg.groups) ? lg.groups.filter((g) => g && g.id && g.name) : [];
+      labState.grpCollapsed = new Set((lg.collapsed || []).map(String));
       const ls = cfg.lab_settings || {};
       if (ls.threshold) { labState.threshold = safeInt(ls.threshold); $('#lab-threshold').value = labState.threshold; }
       for (const saved of ls.boosts || []) {
@@ -1203,6 +1332,7 @@ async function labRefreshSchemList() {
 }
 
 function initLab() {
+  initLabGroups();
   // "How this is calculated" folds under its header (remembered)
   $('#lab-debug')?.addEventListener('click', (e) => {
     const h = e.target.closest('[data-labdbgtoggle]'); if (!h) return;

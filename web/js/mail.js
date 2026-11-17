@@ -269,7 +269,7 @@ async function mmOpenTrash() {
 
 async function mmRestore(mailIds) {
   try {
-    const res = await apiFetch('POST', 'api/mail.php', { data: { mail_ids: mailIds }, params: { action: 'restore' } });
+    const res = await apiFetch('POST', 'api/mail.php?action=restore', { data: { mail_ids: mailIds } });   // the shell drops params on POST
     if (res.ok && res.data) {
       toast(`Restored ${fmtNum(safeInt(res.data.restored))} mail${safeInt(res.data.restored) === 1 ? '' : 's'}`);
       mmOpenTrash(); // repaint the remaining trash
@@ -298,6 +298,14 @@ function initMail() {
   $('#mm-next').addEventListener('click', () => { mmState.page++; loadMail(); });
   // start/stop lives in the header (Start Mail Monitor) — no duplicate here
   $('#mm-raw-close').addEventListener('click', () => { $('#mm-raw-modal').hidden = true; });
+  // #58 (Canda): mail text selects like any document; Copy takes your selection
+  // inside the mail if there is one, else the whole mail
+  $('#mm-raw-copy').addEventListener('click', () => {
+    const body = $('#mm-raw-body');
+    const sel = window.getSelection();
+    const part = sel && !sel.isCollapsed && body.contains(sel.anchorNode) ? sel.toString() : '';
+    copyTextToClipboard(part || body.textContent, part ? 'Copied the selected text' : 'Mail copied');
+  });
   bindBackdropClose($('#mm-raw-modal'), () => { $('#mm-raw-modal').hidden = true; });
   $('#mm-mktest')?.addEventListener('click', async () => {
     try {

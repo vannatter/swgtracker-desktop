@@ -8,7 +8,7 @@
        every dialog showed at once on launch (Oogie) -->
   <link href="vendor/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="vendor/fontawesome/css/all.min.css">
-  <link rel="stylesheet" href="css/app.css?v=20261116grp">
+  <link rel="stylesheet" href="css/app.css?v=20261117nav">
   <link rel="stylesheet" href="css/share.css?v=20261022x">
   <link rel="stylesheet" href="css/quests.css?v=20261105qc">
 </head>
@@ -1049,6 +1049,7 @@
 
         <div id="harv-suggest" class="harv-suggest"></div>
 
+        <div id="harv-summary" class="harv-summary" hidden></div>
         <div id="harv-tagbar" class="fac-tagbar" hidden></div>
         <div id="harv-selbar" class="inv-selbar" hidden
              title="Comma-separated — added to each selected harvester's existing tags, never replacing them">
@@ -1379,12 +1380,13 @@
           </select>
           <button class="btn btn-icon" data-refresh="prices" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
         </div>
+        <div id="pg-glance" class="pg-glance" hidden></div>
         <div class="table-wrap">
           <table class="data-grid pg-grid">
             <thead><tr>
               <th class="col-name">Item</th><th class="col-num" title="The middle price — half sell for less, half for more (per unit)">Going rate</th>
               <th class="col-num" title="The middle half of prices (per unit)">Typical range</th><th class="col-num" title="The stack size it usually sells in">Sold as</th>
-              <th class="col-num">Sales · 90 days</th><th class="col-num" title="Last 30 days against the 60 before">Trend</th>
+              <th class="col-num">Sales · 90 days</th><th class="col-num" title="Going rate over the last 12 weeks, and the last 30 days against the 60 before">Trend</th>
             </tr></thead>
             <tbody id="pg-body"></tbody>
           </table>
@@ -4118,7 +4120,10 @@
     <div class="key-gate-card sp-card mm-raw-card">
       <div class="mm-raw-head">
         <h2 id="mm-raw-title">Mail</h2>
-        <button id="mm-raw-close" class="btn btn-icon" title="Close"><i class="fa-solid fa-xmark"></i></button>
+        <span class="mm-raw-tools">
+          <button id="mm-raw-copy" class="btn btn-sm btn-outline-secondary" title="Copy the whole mail — or select part of it and copy that"><i class="fa-regular fa-copy"></i> Copy</button>
+          <button id="mm-raw-close" class="btn btn-icon" title="Close"><i class="fa-solid fa-xmark"></i></button>
+        </span>
       </div>
       <pre id="mm-raw-body" class="mm-raw-body"></pre>
     </div>
@@ -4328,13 +4333,14 @@
   <script src="js/invlog.js?v=20261031b"></script>
   <script src="js/sales.js?v=20261105var"></script>
   <script src="js/pgcheck.js?v=20261112pgd"></script>
-  <script src="js/insights.js?v=20261101cmp"></script>
+  <script src="js/insights.js?v=20261117out"></script>
   <script src="js/insights-compare.js?v=20261101cmp"></script>
   <script src="js/insights-momentum.js?v=20261101mom"></script>
   <script src="js/insights-lost.js?v=20261101lost"></script>
+  <script src="js/insights-outlook.js?v=20261117ux3"></script>
   <script src="js/insights-profit.js?v=20261101prof"></script>
   <script src="js/purchases.js?v=20261031b"></script>
-  <script src="js/harvesters.js?v=20261027br"></script>
+  <script src="js/harvesters.js?v=20261117ux2"></script>
   <script src="js/factories.js?v=20261103lk"></script>
   <script src="js/factories-ready.js?v=20261103dh"></script>
   <script src="js/customers.js?v=20261022es"></script>
@@ -4343,7 +4349,7 @@
   <script src="js/insight-alerts.js?v=20261102al"></script>
   <script src="js/alerts.js?v=20261023ac"></script>
   <script src="js/lab.js?v=20261116grp"></script>
-  <script src="js/mail.js?v=20261107isdp"></script>
+  <script src="js/mail.js?v=20261117ux2"></script>
   <script src="js/isd.js?v=20261107isdp"></script>
   <script src="js/notes.js?v=20261022es"></script>
   <script src="js/macro_commands.js?v=20261012a"></script>
@@ -4367,9 +4373,9 @@
   <script src="js/home.js?v=20261116rep"></script>
   <script src="js/mailsetup.js?v=20261019a"></script>
   <script src="js/ideas.js?v=20261112blk"></script>
-  <script src="js/priceguide.js?v=20261102pg"></script>
+  <script src="js/priceguide.js?v=20261117ux3"></script>
   <script src="js/vendor-upkeep.js?v=20261112sel"></script>
-  <script src="js/navbadges.js?v=20261116grp"></script>
+  <script src="js/navbadges.js?v=20261117out"></script>
   <script src="js/app.js?v=20261112pgc"></script>
 </body>
 </html>

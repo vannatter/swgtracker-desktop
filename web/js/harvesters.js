@@ -604,9 +604,115 @@ function harvSyncSel() {
   });
 }
 
+// ---- "What you're pulling" summary (#57, Murt_88) ----
+// One row per resource across the harvesters in view: how many are on it, what's
+// sitting in their hoppers now, the combined rate, and when it's likely to
+// despawn. SWG doesn't publish despawn times, so the window is from history:
+// 80% of resources despawn 7–20 days after they spawn (3,165 despawns, Oct–Nov 2026).
+const HARV_LIFE_MIN = 7, HARV_LIFE_MAX = 20, HARV_LIFE_MID = 11;
+
+function harvSummaryRows(items) {
+  const by = new Map();
+  for (const h of items) {
+    if (!h.resource_name) continue;
+    const key = String(h.resource_name).toLowerCase();
+    const r = by.get(key) || { name: h.resource_name, n: 0, units: 0, rate: 0, running: 0 };
+    const hop = harvHopper(h);
+    r.n++;
+    if (hop) {
+      r.units += hop.units;
+      if (!hop.stalled && !hop.frozen && hop.units < hop.size) { r.rate += Number(h.extraction_rate) || 0; r.running++; }
+    }
+    by.set(key, r);
+  }
+  const now = harvNow();
+  return [...by.entries()].map(([key, r]) => {
+    const st = harvState.resStatus ? harvState.resStatus[key] : null;
+    r.gone = !!(st && st.gone);
+    r.spawned = st && st.ts ? st.ts : 0;
+    r.age = r.spawned ? (now - r.spawned) / 86400 : null;
+    r.from = r.spawned ? r.spawned + HARV_LIFE_MIN * 86400 : 0;
+    r.to = r.spawned ? r.spawned + HARV_LIFE_MAX * 86400 : 0;
+    // sort: despawned first (go move them), then soonest likely end, unknowns last
+    r.sort = r.gone ? -1 : (r.spawned ? r.spawned + HARV_LIFE_MID * 86400 : Infinity);
+    return r;
+  }).sort((a, b) => a.sort - b.sort || b.units - a.units);
+}
+
+function harvDay(ts) {
+  const d = new Date(ts * 1000);
+  const o = { month: 'short', day: 'numeric' };
+  if (appTimeZone) o.timeZone = appTimeZone;
+  return d.toLocaleDateString(appDateFmt === 'intl' ? 'en-GB' : 'en-US', o);
+}
+
+function harvDespawnCell(r) {
+  if (r.gone) return '<span class="harv-gone-tag" title="Its harvesters have stopped — move them to a live spawn">despawned</span>';
+  if (r.age === null) return '<span class="stat_off">—</span>';
+  const now = harvNow();
+  if (now >= r.to) return `<span class="harv-sum-late" title="In spawn ${Math.floor(r.age)} days — longer than most resources last">any time now</span>`;
+  if (now >= r.from) return `<span class="harv-sum-soon" title="Most resources despawn ${HARV_LIFE_MIN}–${HARV_LIFE_MAX} days after spawning">likely by ${harvDay(r.to)}</span>`;
+  return `<span title="Most resources despawn ${HARV_LIFE_MIN}–${HARV_LIFE_MAX} days after spawning">${harvDay(r.from)} – ${harvDay(r.to)}</span>`;
+}
+
+function renderHarvSummary(items) {
+  const box = $('#harv-summary');
+  if (!box) return;
+  const rows = harvSummaryRows(items);
+  if (!rows.length) { box.hidden = true; return; }
+  let open = true;
+  try { open = localStorage.getItem('harv_summary_open') !== '0'; } catch (_) {}
+  const totUnits = rows.reduce((t, r) => t + r.units, 0);
+  const totRate = rows.reduce((t, r) => t + r.rate, 0);
+  box.hidden = false;
+  // shared scales: hopper bars against the fullest resource; lifelines on one
+  // 0–24 day track (stretched if something has outlived it)
+  const maxUnits = Math.max(1, ...rows.map((r) => r.units));
+  const span = Math.max(24, ...rows.filter((r) => !r.gone && r.age !== null).map((r) => Math.ceil(r.age) + 1));
+  const pct = (d) => `${Math.min(100, (d / span) * 100).toFixed(2)}%`;
+  const ticks = [0, HARV_LIFE_MIN, HARV_LIFE_MAX].map((d) =>
+    `<span class="harv-life-tick" style="left:${pct(d)}">${d}d</span>`).join('');
+  box.innerHTML = `<div class="harv-sum-hd" data-harvsum role="button" title="${open ? 'Hide' : 'Show'} the summary">
+      <i class="fa-solid ${open ? 'fa-caret-down' : 'fa-caret-right'} grp-caret"></i>
+      <span class="harv-sum-title">What you're pulling</span>
+      <span class="harv-sum-tot">${rows.length} resource${rows.length === 1 ? '' : 's'} · ${fmtNum(Math.floor(totUnits))} units in hoppers · ${fmtNum(Math.round(totRate))}/hr</span>
+      ${open ? `<span class="harv-sum-key"><span class="harv-sum-key-hop"></span> in hoppers
+        <span class="harv-sum-key-win"></span> usual despawn (${HARV_LIFE_MIN}–${HARV_LIFE_MAX} days in spawn)</span>` : ''}
+    </div>
+    ${open ? `<div class="harv-sum-body">
+      ${rows.map((r) => {
+        const state = r.gone ? 'gone' : r.age === null ? 'unknown'
+          : harvNow() >= r.to ? 'late' : harvNow() >= r.from ? 'soon' : 'fresh';
+        const lifeTip = r.gone ? `${r.name} has despawned — its harvesters have stopped`
+          : r.age === null ? 'Spawn date not known yet'
+          : `In spawn ${Math.floor(r.age)} days (spawned ${harvDay(r.spawned)}). Most resources despawn ${HARV_LIFE_MIN}–${HARV_LIFE_MAX} days in: ${harvDay(r.from)} – ${harvDay(r.to)}.`;
+        return `<div class="harv-sum-row">
+          <span class="harv-sum-name">
+            <b class="harv-reslink" data-res="${escapeHtml(r.name)}" title="${escapeHtml(harvResTip(r.name))}">${escapeHtml(r.name)}</b>
+            <span class="harv-sum-sub">${r.n} harvester${r.n === 1 ? '' : 's'}${r.rate ? ` · ${fmtNum(Math.round(r.rate))}/hr` : r.n ? ' · stopped' : ''}</span>
+          </span>
+          <span class="harv-hop" title="${fmtNum(Math.floor(r.units))} units waiting in ${r.n === 1 ? 'its hopper' : `${r.n} hoppers`}${r.running < r.n ? ` — ${r.n - r.running} stopped (full, out of power or despawned)` : ''}">
+            <span class="harv-hop-track">${r.units >= 1 ? `<span class="harv-hop-fill" style="width:${((r.units / maxUnits) * 100).toFixed(1)}%"></span>` : ''}</span>
+            <span class="harv-hop-val">${fmtNum(Math.floor(r.units))}</span>
+          </span>
+          <span class="harv-life" title="${escapeHtml(lifeTip)}">
+            <span class="harv-life-track${r.gone ? ' is-gone' : ''}">
+              <span class="harv-life-window" style="left:${pct(HARV_LIFE_MIN)};width:calc(${pct(HARV_LIFE_MAX)} - ${pct(HARV_LIFE_MIN)})"></span>
+              ${r.age !== null && !r.gone ? `<span class="harv-life-fill" style="width:${pct(r.age)}"></span>
+              <span class="harv-life-now is-${state}" style="left:${pct(r.age)}"></span>` : ''}
+            </span>
+            <span class="harv-life-text">${harvDespawnCell(r)}</span>
+          </span>
+        </div>`;
+      }).join('')}
+      <div class="harv-sum-row harv-sum-axis"><span></span><span></span><span class="harv-life-axis">${ticks}</span></div>
+    </div>` : ''}`;
+}
+
 function renderHarvesters() {
   const wrap = $('#harv-list');
   const items = harvFilteredItems();
+  renderHarvSummary(items);
 
   $('#harv-empty').hidden = items.length > 0;
   wrap.classList.toggle('harv-list-grid', harvState.view === 'grid');
@@ -1368,7 +1474,7 @@ async function harvSubmitForm() {
   if (editing) {
     res = await apiFetch('PUT', 'api/harvesters.php', { data: { id: editing, ...fields } });
     if (res.ok && resSwapped) {
-      apiFetch('POST', 'api/harvesters.php', { params: { action: 'event' }, data: {
+      apiFetch('POST', 'api/harvesters.php?action=event', { data: {   // the shell drops params on POST
         harvester_id: editing, kind: 'note',
         detail: `Resource changed: ${harvState.editOrigRes || '—'} → ${fields.resource_name}`,
       } }).catch(() => {});
@@ -1823,6 +1929,14 @@ function initHarvesters() {
   });
   $('#harv-list').addEventListener('pointerleave', harvClearBarPreview);
 
+  $('#harv-summary').addEventListener('click', (e) => {
+    const resLink = e.target.closest('.harv-reslink');
+    if (resLink) { openResourcePage(resLink.dataset.res); return; }
+    if (!e.target.closest('[data-harvsum]')) return;
+    let open = true;
+    try { open = localStorage.getItem('harv_summary_open') !== '0'; localStorage.setItem('harv_summary_open', open ? '0' : '1'); } catch (_) {}
+    renderHarvSummary(harvFilteredItems());
+  });
   $('#harv-list').addEventListener('click', async (e) => {
     if (e.target.closest('.grp-hd')) return; // folder headers belong to the shared wiring
     const resLink = e.target.closest('.harv-reslink');

@@ -62,6 +62,7 @@ async function loadInsights() {
   renderInsVendorPerf();
   insFillPriceItems();
   if (insState.tab === 'pricing') loadInsPrices();
+  if (typeof insOutLoad === 'function') insOutLoad();   // insights-outlook.js — next week + the weekly AI note
   insMomLoad();   // insights-momentum.js — its own fetch, fixed windows
   insProfitLoad();   // insights-profit.js — profit by item + same item across vendors
 }

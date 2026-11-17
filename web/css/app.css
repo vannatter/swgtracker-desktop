@@ -5390,3 +5390,142 @@ body:not(.power-tools) .power-only { display: none !important; }
 .stk-group.grp-nest-over > td:first-child { box-shadow: inset 3px 0 0 var(--accent) !important; }
 .stk-group td.col-actions .grp-subadd { margin-right: 2px; }
 tr[data-gdepth] > td:first-child { box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent-dark) 35%, transparent); }
+
+/* My Stockpile: unset My CPU hints the site's eCPU, muted and italic so it never reads as yours */
+.stk-cpu-hint { color: var(--text-muted); font-style: italic; font-weight: 400; }
+
+/* ---- customer follow-ups (#15) ---- */
+.myc-follow { color: var(--text-muted); white-space: nowrap; }
+.myc-follow i { font-size: 11px; margin-right: 3px; }
+.myc-follow.is-due { color: var(--warning, #e0a040); font-weight: 600; }
+.custd-follow { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin-top: 8px; font-size: 13px; color: var(--text-muted); }
+.custd-follow > i { font-size: 12px; }
+.custd-follow-when { color: var(--text-hover); font-weight: 600; }
+.custd-follow.is-due > i, .custd-follow.is-due .custd-follow-when { color: var(--warning, #e0a040); }
+.custd-follow-note { color: var(--text-primary, inherit); }
+.custd-follow-note::before { content: '— '; color: var(--text-muted); }
+.custd-follow a[data-custfollow] { cursor: pointer; }
+.cust-follow-card { width: min(520px, calc(100vw - 32px)); }
+.cust-follow-card .form-label { display: block; margin: 12px 0 6px; }
+.cust-follow-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.cust-follow-row input[type="date"] { width: 170px; color-scheme: dark; }
+.cust-follow-quick { display: flex; flex-wrap: wrap; gap: 6px; }
+.cust-follow-card .stk-note-actions { margin-top: 16px; }
+.cust-follow-card #cust-follow-note { width: 100%; max-width: none; }
+
+/* My Inventory dialog: Group + Tags side by side (Danvar) */
+.inv-org-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.inv-org-row .settings-input-wide, .inv-org-row #inv-new-tags { width: 100%; max-width: none; }
+.inv-org-hint { margin: 4px 0 6px; }
+.inv-bulk-group { width: 170px; }
+/* drag-to-folder target (rows no longer move while dragging) */
+#inv-body tr.stk-group.inv-drop-target > td { background: color-mix(in srgb, var(--accent) 18%, var(--bg-secondary)) !important; }
+#inv-body tr.stk-group.inv-drop-target > td:first-child { box-shadow: inset 3px 0 0 var(--accent) !important; }
+/* the group picker made the bar longer: inputs flex down (and the bar wraps when narrow) */
+#inv-selbar { flex-wrap: wrap; row-gap: 6px; }
+#inv-selbar .inv-bulk-vendor { width: auto; flex: 1 1 130px; min-width: 110px; max-width: 200px; }
+#inv-selbar .inv-bulk-num { width: 95px; }
+#inv-selbar .inv-bulk-group { flex: 0 1 170px; min-width: 130px; }
+/* My Inventory pointer drag (rows → folders) */
+.inv-pdrag-ghost { position: fixed; left: 0; top: 0; z-index: 10000; pointer-events: none; will-change: transform;
+  background: var(--accent); color: #fff; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 6px;
+  box-shadow: 0 4px 14px rgba(0,0,0,.4); white-space: nowrap; max-width: 320px; overflow: hidden; text-overflow: ellipsis; }
+.inv-pdrag-ghost.inv-pdrag-none { background: var(--bg-card); color: var(--text-muted); border: 1px solid var(--border); }
+body.inv-pdragging, body.inv-pdragging * { cursor: grabbing !important; user-select: none !important; -webkit-user-select: none !important; }
+
+/* ---- Home: server fund drive block (js/home-fund.js; Nov 1 – Dec 31 only) ---- */
+/* a banner, not a section card: accent-tinted, glowing edge, so it reads as an ask */
+#home-fund { position: relative; margin-bottom: 22px; border-radius: 12px; overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 22%, var(--bg-card)) 0%, var(--bg-card) 55%);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent), 0 8px 28px color-mix(in srgb, var(--accent) 16%, transparent); }
+.hm-fund-head { display: flex; align-items: center; gap: 14px; padding: 14px 18px 10px; cursor: pointer; }
+.hm-fund-badge { flex: none; width: 42px; height: 42px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  background: var(--accent); color: #fff; font-size: 18px; box-shadow: 0 0 18px color-mix(in srgb, var(--accent) 60%, transparent);
+  animation: hm-fund-beat 2.4s ease-in-out infinite; }
+@keyframes hm-fund-beat { 0%, 70%, 100% { transform: scale(1); } 80% { transform: scale(1.12); } 90% { transform: scale(.98); } }
+@media (prefers-reduced-motion: reduce) { .hm-fund-badge { animation: none; } }
+.hm-fund-titles { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.hm-fund-kicker { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent-hover); }
+.hm-fund-h { font-size: 19px; font-weight: 700; color: var(--text-primary); line-height: 1.25; }
+.hm-fund-headtotal { flex: 0 0 260px; display: flex; flex-direction: column; gap: 6px; }
+.hm-fund-headline { font-size: 13px; color: color-mix(in srgb, var(--text-primary) 75%, transparent); text-align: right; white-space: nowrap; }
+.hm-fund-headline b { font-size: 16px; color: var(--text-primary); }
+.hm-fund-headbar { position: relative; display: block; height: 8px; border-radius: 4px; background: rgba(255, 255, 255, .14); overflow: hidden; }
+.hm-fund-headbar > span { display: block; height: 100%; min-width: 3px; border-radius: 4px; background: var(--accent); }
+.hm-fund-headbar > i { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--text-primary); opacity: .55; }
+@media (max-width: 768px) { .hm-fund-headtotal { flex-basis: 100%; order: 5; } .hm-fund-head { flex-wrap: wrap; } .hm-fund-headline { text-align: left; } }
+.hm-fund-caret { flex: none; color: var(--text-muted); transition: transform .15s; }
+#home-fund.collapsed .hm-fund-caret { transform: rotate(-90deg); }
+#home-fund:not(.collapsed) .hm-fund-headtotal { display: none; }
+.hm-fund-why p { margin: 0 0 8px; font-size: 14px; line-height: 1.5; color: color-mix(in srgb, var(--text-primary) 88%, transparent); }
+.hm-fund-why p:last-child { margin-bottom: 0; }
+.hm-fund-alt { display: flex; gap: 10px; align-items: flex-start; margin-top: 10px !important; padding: 8px 12px; border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent); border: 1px dashed color-mix(in srgb, var(--accent) 45%, transparent); }
+.hm-fund-alt > i { flex: none; margin-top: 3px; color: var(--accent-hover, var(--accent)); font-size: 16px; }
+.hm-fund-alt a { color: var(--accent-hover, var(--accent)); }
+.hm-fund-why p.hm-fund-quote { font-style: italic; color: var(--text-primary); padding-left: 12px; border-left: 3px solid var(--accent); }
+.hm-fund-quote span { font-style: normal; font-weight: 700; color: var(--accent-hover, var(--accent)); white-space: nowrap; }
+.hm-fund-why b { color: var(--text-primary); }
+.hm-fund-side { padding: 14px; border-radius: 10px; background: color-mix(in srgb, var(--bg-primary) 55%, transparent); }
+.hm-fund-total { font-size: 28px; font-weight: 800; color: var(--text-primary); line-height: 1.1; margin-bottom: 8px; }
+.hm-fund-total span { font-size: 12px; font-weight: 400; color: color-mix(in srgb, var(--text-primary) 68%, transparent); }
+.hm-fund-all { position: relative; height: 10px; border-radius: 5px; background: var(--bg-secondary); overflow: hidden; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06); }
+.hm-fund-all > span { display: block; height: 100%; min-width: 3px; border-radius: 5px; background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 75%, #fff 0%), var(--accent)); }
+.hm-fund-all-tick { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--text-primary); opacity: .55; }
+.hm-fund-alllbl { display: flex; justify-content: space-between; gap: 8px; margin: 4px 0 8px; font-size: 12px; color: color-mix(in srgb, var(--text-primary) 75%, transparent); }
+.hm-fund-ok { color: #6fd19b; font-weight: 600; }
+.hm-fund-segk { display: flex; justify-content: space-between; gap: 8px; margin: 0 0 5px; font-size: 12px; white-space: nowrap; color: color-mix(in srgb, var(--text-primary) 75%, transparent); }
+.hm-fund-segk b { color: var(--text-primary); }
+.hm-fund-seg { display: grid; grid-template-columns: repeat(12, 1fr); gap: 3px; }
+.hm-fund-s { position: relative; height: 14px; border-radius: 3px; overflow: hidden;
+  background: var(--bg-secondary); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08); }
+.hm-fund-s i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); }
+.hm-fund-s.part { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 70%, transparent); }
+.hm-fund-seglbl { display: grid; grid-template-columns: repeat(12, 1fr); gap: 3px; margin-top: 3px; }
+.hm-fund-seglbl span { text-align: center; font-size: 10px; font-weight: 600; color: color-mix(in srgb, var(--text-primary) 68%, transparent); }
+.hm-fund-sub b { color: var(--text-primary); }
+.hm-fund-sub { margin-top: 6px; font-size: 12px; color: color-mix(in srgb, var(--text-primary) 82%, transparent); }
+.hm-fund-btns { display: flex; gap: 8px; margin-top: 10px; }
+#home-fund .hm-fund-btns .btn { height: 40px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
+#home-fund .hm-fund-notebtn { flex: 0 0 auto; padding: 0 14px; font-size: 13px; }
+#home-fund .hm-fund-donate { flex: 1 1 auto; font-size: 16px; font-weight: 700; letter-spacing: .02em;
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--accent) 45%, transparent); }
+#home-fund .hm-fund-donate:hover { transform: translateY(-1px); }
+.hm-fund-notes-label { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: color-mix(in srgb, var(--text-primary) 68%, transparent); }
+.hm-fund-notes { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.hm-fund-note { margin: 0; padding: 8px 12px; border-radius: 8px; background: color-mix(in srgb, var(--bg-primary) 55%, transparent); border-left: 3px solid var(--accent); }
+.hm-fund-note blockquote { margin: 0 0 4px; font-size: 13px; line-height: 1.45; color: var(--text-primary); overflow-wrap: anywhere; }
+.hm-fund-note figcaption { font-size: 12px; color: color-mix(in srgb, var(--text-primary) 68%, transparent); }
+.hm-fund-note figcaption span { opacity: .75; margin-left: 4px; }
+/* layout: header + text on the left, the stats panel the full height on the right */
+#home-fund { display: grid; grid-template-columns: minmax(0, 1fr) 300px; grid-template-rows: auto auto auto 1fr; column-gap: 20px; }
+#home-fund .hm-fund-body, #home-fund .hm-fund-main { display: contents; }
+#home-fund .hm-fund-head { grid-column: 1; grid-row: 1; }
+#home-fund .hm-fund-why { grid-column: 1; grid-row: 2; padding: 0 0 12px 18px; }
+#home-fund .hm-fund-side { grid-column: 2; grid-row: 1 / -1; margin: 14px 14px 14px 0; align-self: start; }
+#home-fund .hm-fund-notes-label { grid-column: 1; grid-row: 3; margin: 2px 0 6px 18px; }
+#home-fund .hm-fund-notes { grid-column: 1; grid-row: 4; align-self: start; margin: 0 0 14px 18px; }
+#home-fund.collapsed .hm-fund-head { grid-column: 1 / -1; }
+#home-fund.collapsed .hm-fund-why, #home-fund.collapsed .hm-fund-side, #home-fund.collapsed .hm-fund-notes-label, #home-fund.collapsed .hm-fund-notes { display: none; }
+@media (max-width: 768px) {
+  #home-fund { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; }
+  #home-fund .hm-fund-head, #home-fund .hm-fund-why, #home-fund .hm-fund-side, #home-fund .hm-fund-notes-label, #home-fund .hm-fund-notes { grid-column: 1; grid-row: auto; }
+  #home-fund .hm-fund-head { padding: 14px; gap: 12px; }
+  #home-fund .hm-fund-badge { width: 36px; height: 36px; font-size: 15px; }
+  #home-fund .hm-fund-why { padding: 0 14px 12px; }
+  #home-fund .hm-fund-side { margin: 0 14px 14px; }
+  #home-fund .hm-fund-notes-label { margin: 0 14px 8px; }
+  #home-fund .hm-fund-notes { margin: 0 14px 14px; }
+  #home-fund .hm-fund-h { font-size: 16px; }
+}
+.hm-fund-card { max-width: 480px; }
+.hm-fund-label { display: block; margin: 10px 0 4px; font-size: 12px; font-weight: 600; }
+.hm-fund-card .filter-input { width: 100%; max-width: none; }
+.hm-fund-card textarea.filter-input { height: auto; min-height: 76px; resize: vertical; padding-top: 8px; }
+.hm-fund-count { text-align: right; margin-top: 2px; font-size: 11px; }
+.hm-fund-card { text-align: left; }
+.hm-fund-card h2 { justify-content: flex-start; text-align: left; }
+.hm-fund-card .hm-fund-label .settings-sub { display: inline; }
+.hm-fund-dlgsub { margin: 4px 0 6px; text-align: left; }
+.key-gate-card.hm-fund-card .hm-dlg-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }

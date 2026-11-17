@@ -239,6 +239,18 @@ function invSyncSelAll() {
   const n = invState.checked.size;
   $('#inv-selbar').hidden = !n;
   if (n) $('#inv-selbar-n').textContent = `${n} selected`;
+  // group picker (Danvar): refilled when the folders change, keeping a pick in progress
+  const gsel = $('#inv-bulk-group');
+  if (gsel) {
+    gsel.hidden = !invState.groups.length;
+    const sig = invState.groups.map((g) => `${g.id}:${g.parent_id || ''}:${g.sort_order}:${g.name}`).join('|');
+    if (gsel.dataset.sig !== sig) {
+      const keep = gsel.value;
+      gsel.innerHTML = '<option value="">Move to group…</option><option value="un">Unfiled</option>' + grpOptionsHtml(invState.groups);
+      gsel.dataset.sig = sig;
+      gsel.value = [...gsel.options].some((o) => o.value === keep) ? keep : '';
+    }
+  }
   // group-header checkboxes mirror their members (dash = partial)
   document.querySelectorAll('#inv-body [data-grpselect]').forEach((cb) => {
     const members = invGroupMembers(cb.dataset.grpselect);
@@ -376,7 +388,7 @@ function invRowHtml(item, idx, pace = invPace()) {
   const notePreview = labNotesText(item.notes);   // rich notes -> plain text for the tooltip
   const hasNotes = !!notePreview;
   const tagged = invTags(item).length > 0;
-  return `<tr class="${invState.selected.has(iid) ? 'inv-picked' : ''}" data-idx="${idx}" data-iid="${iid}"${invState.groups.length ? ' draggable="true"' : ''}>
+  return `<tr class="${invState.selected.has(iid) ? 'inv-picked' : ''}" data-idx="${idx}" data-iid="${iid}">
     <td class="pin-cell inv-sel-cell"><input type="checkbox" class="inv-sel" data-selid="${iid}"${invState.checked.has(iid) ? ' checked' : ''}></td>
     ${vars ? `<td class="stat ${stockCls}" data-vtotal="${idx}" title="Total across ${item.variants.length} variant${item.variants.length === 1 ? '' : 's'}${safeInt(item.own_stocked) ? ` and ${fmtNum(safeInt(item.own_stocked))} unassigned` : ''} — open the arrow to edit each">${invTotalHtml(item)}</td>`
       : `<td class="stat inv-edit ${stockCls}" data-edit="stocked" data-idx="${idx}" title="${invState.editMode ? '' : 'Click to edit'}">${invState.editMode
@@ -526,8 +538,9 @@ function renderInvRows() {
           sec.g ? { depth: sec.depth, total: sec.total, canSub: sec.depth + 1 < GRP_MAX_DEPTH } : null));
     }
     // a subfolder's rows carry its depth: an indent rail on the first cell ties them to it
-    const dAttr = sec.depth ? `<tr data-gdepth="${Math.min(sec.depth, 2)}" ` : '';
-    if (!collapsed) parts.push(...items.map(([item, idx]) => (dAttr ? invRowsHtml(item, idx, pace).replace(/<tr /g, dAttr) : invRowsHtml(item, idx, pace))));
+    // every row carries its section key, so a drag knows its target folder without moving rows
+    const dAttr = `<tr data-gkey="${sec.key}" ${sec.depth ? `data-gdepth="${Math.min(sec.depth, 2)}" ` : ''}`;
+    if (!collapsed) parts.push(...items.map(([item, idx]) => invRowsHtml(item, idx, pace).replace(/<tr /g, dAttr)));
   });
   $('#inv-body').innerHTML = parts.join('');
   invRenderPager();
@@ -924,6 +937,8 @@ async function addInvItem() {
   const editId = $('#inv-add-modal').dataset.editId || '';
   const group = safeInt($('#inv-new-group').value);
   const oneOff = $('#inv-new-oneoff').checked;
+  const tags = mergeTags('', $('#inv-new-tags').value);   // tidy: trimmed, de-duplicated
+  const tagsChanged = tags !== ($('#inv-add-modal').dataset.tagsWas || '');
   let res;
   try {
     // gateway (not the shell bridge): it carries the vendor field. POST for a
@@ -940,6 +955,7 @@ async function addInvItem() {
         one_off: oneOff ? 1 : 0,
         // only when it moved — filing is metadata the row may not carry
         ...(group !== safeInt($('#inv-add-modal').dataset.groupWas) ? { group_id: group || null } : {}),
+        ...(tagsChanged ? { tags } : {}),
       } });
     } else {
       res = await apiFetch('POST', 'api/inventory.php', { data: {
@@ -950,11 +966,11 @@ async function addInvItem() {
         ...(oneOff ? {} : { threshold: safeInt($('#inv-new-threshold').value) }),
         one_off: oneOff ? 1 : 0,
       } });
-      // POST has no group field — file the new row with a follow-up PUT (Danvar)
+      // POST has no group / tags fields — set them with a follow-up PUT (Danvar)
       const newId = res.ok && res.data ? safeInt(res.data.inventory_id) : 0;
-      if (newId && group) {
-        const g = await apiFetch('PUT', 'api/inventory.php', { data: { inventory_id: newId, group_id: group } });
-        if (!g.ok) toast(`Added, but couldn't file it in the group: ${g.error || 'server error'}`, false);
+      if (newId && (group || tags)) {
+        const g = await apiFetch('PUT', 'api/inventory.php', { data: { inventory_id: newId, ...(group ? { group_id: group } : {}), ...(tags ? { tags } : {}) } });
+        if (!g.ok) toast(`Added, but couldn't set its group or tags: ${g.error || 'server error'}`, false);
       }
     }
   } catch (e) { res = { ok: false, error: String(e) }; }
@@ -1005,6 +1021,21 @@ async function addInvItem() {
   }
 }
 
+// file items in a folder (gid null = Unfiled): optimistic, one PUT per item that moves.
+// Returns how many moved. Used by drag-to-folder and the bulk bar's group picker.
+async function invFileItems(ids, gid) {
+  const want = new Set(ids.map(String));
+  const movers = invState.items.filter((i) => want.has(String(i.id)) && (safeInt(i.group_id) || null) !== gid);
+  movers.forEach((i) => { i.group_id = gid; });
+  renderInvRows();
+  const results = await Promise.all(movers.map((i) =>
+    apiFetch('PUT', 'api/inventory.php', { data: { inventory_id: safeInt(i.id), group_id: gid } })
+      .catch((e) => ({ ok: false, error: String(e) }))));
+  const failed = results.filter((r) => !r.ok).length;
+  if (failed) { toast(`${failed} item${failed > 1 ? 's' : ''} could not move — site update pending?`, false); loadInventory(); }
+  return movers.length - failed;
+}
+
 // open the shared dialog: no item = add mode, item = edit mode (name locked,
 // since a rename would orphan the sales that match on it), item + clone =
 // add mode prefilled from the row — name selected for a quick "Style 2" tweak;
@@ -1018,6 +1049,9 @@ function openInvDialog(item = null, clone = false, preset = null) {
   $('#inv-new-group').innerHTML = '<option value="0">Unfiled</option>' + grpOptionsHtml(groups);
   $('#inv-new-group').value = String(groups.some((g) => safeInt(g.id) === gid) ? gid : 0);
   modal.dataset.groupWas = String(item && !clone ? gid : 0);
+  // Tags (Danvar): edit and clone carry the row's tags
+  $('#inv-new-tags').value = item ? invTags(item).join(', ') : '';
+  modal.dataset.tagsWas = item && !clone ? invTags(item).join(', ') : '';
   const nameInput = $('#inv-new-name');
   nameInput.readOnly = false;
   if (item && !clone) {
@@ -1379,6 +1413,7 @@ function initInventory() {
   // stays lit while you alt-tab to the game and read your vendor (Veizyr).
   // Clicks on anything interactive (edit cells, buttons, checkbox, folder rows) don't count.
   $('#inv-body').addEventListener('click', (e) => {
+    if (invDragSwallowClick) return;   // that click ended a drag
     if (e.target.closest('button, a, input, [data-edit], [data-sales], [data-invalert], [data-invtaghover], [data-invvar], .inv-sel-cell, .stk-group')) return;
     const tr = e.target.closest('tr[data-iid]');
     if (!tr) return;
@@ -1513,59 +1548,108 @@ function initInventory() {
       return true;
     },
   });
-  // drag a row onto (or under) a folder row to file it — if the dragged row is
-  // CHECKED, the whole checked selection files together (Veizyr)
-  $('#inv-body').addEventListener('dragstart', (e) => {
-    const el = e.target.closest('tr[data-iid]');
-    if (!el) return;
-    if (e.target.closest('.inv-sel-cell') || el.classList.contains('inv-var-row')) { e.preventDefault(); return; } // checkbox stays clickable
-    el.classList.add('inv-dragging');
-    const multi = invState.checked.has(el.dataset.iid) && invState.checked.size > 1;
-    if (multi) {
-      const ghost = document.createElement('div');
-      ghost.className = 'stk-drag-ghost';
-      ghost.textContent = `${invState.checked.size} items`;
-      document.body.appendChild(ghost);
-      e.dataTransfer.setDragImage(ghost, -12, -8);
-      setTimeout(() => ghost.remove(), 0);
+  // drag a row onto a folder (its header or any row in it) to file it — if the dragged
+  // row is CHECKED, the whole checked selection files together (Veizyr, Danvar).
+  // Pointer events, not HTML5 drag-and-drop: native DnD in the app's WebKit view is
+  // laggy and never scrolls the list, so a folder off-screen was unreachable. Here a
+  // light ghost follows the cursor (transform only, once per frame), the target
+  // folder's header lights up, and the list scrolls when you hold near its edge.
+  let invDrag = null;   // { el, item, x, y, started, multi, ghost, target, px, py, raf, scroller }
+  let invDragSwallowClick = false;
+  const INV_DRAG_START = 6, INV_EDGE = 60, INV_SCROLL_MAX = 22;
+  const invScroller = (el) => {
+    for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+      const oy = getComputedStyle(p).overflowY;
+      if ((oy === 'auto' || oy === 'scroll') && p.scrollHeight > p.clientHeight) return p;
     }
-  });
-  $('#inv-body').addEventListener('dragover', (e) => {
-    const dragging = document.querySelector('#inv-body tr.inv-dragging');
-    if (!dragging) return;
+    return document.scrollingElement;
+  };
+  const invSetDrop = (key) => {
+    if (invDrag.target === key) return;
+    invDrag.target = key;
+    const was = $('#inv-body').querySelector('tr.inv-drop-target');
+    if (was) was.classList.remove('inv-drop-target');
+    const hd = key ? $('#inv-body').querySelector(`tr.stk-group[data-grpkey="${key}"]`) : null;
+    if (hd) hd.classList.add('inv-drop-target');
+  };
+  const invDragFrame = () => {
+    const d = invDrag;
+    if (!d || !d.started) return;
+    d.ghost.style.transform = `translate(${d.px + 14}px, ${d.py + 10}px)`;
+    // target under the cursor (the ghost has pointer-events: none)
+    const under = document.elementFromPoint(d.px, d.py);
+    const tr = under && under.closest('#inv-body tr[data-grpkey], #inv-body tr[data-gkey]');
+    const key = tr ? (tr.dataset.grpkey || tr.dataset.gkey) : null;
+    invSetDrop(key && key !== 'soldout' ? key : null);   // Sold out isn't a folder
+    d.ghost.classList.toggle('inv-pdrag-none', !d.target);
+    // edge auto-scroll, faster the closer to the edge
+    const sc = d.scroller;
+    const r = sc === document.scrollingElement ? { top: 0, bottom: window.innerHeight } : sc.getBoundingClientRect();
+    let dy = 0;
+    if (d.py < r.top + INV_EDGE) dy = -Math.ceil(INV_SCROLL_MAX * (1 - Math.max(0, d.py - r.top) / INV_EDGE));
+    else if (d.py > r.bottom - INV_EDGE) dy = Math.ceil(INV_SCROLL_MAX * (1 - Math.max(0, r.bottom - d.py) / INV_EDGE));
+    if (dy) sc.scrollTop += dy;
+    d.raf = dy ? requestAnimationFrame(invDragFrame) : 0;   // keep scrolling while held at the edge
+  };
+  const invDragEnd = async (commit) => {
+    const d = invDrag;
+    invDrag = null;
+    document.removeEventListener('pointermove', invDragMove);
+    document.removeEventListener('pointerup', invDragUp);
+    document.removeEventListener('pointercancel', invDragCancel);
+    document.removeEventListener('keydown', invDragKey, true);
+    if (!d || !d.started) return;
+    if (d.raf) cancelAnimationFrame(d.raf);
+    d.ghost.remove();
+    document.body.classList.remove('inv-pdragging');
+    $('#inv-body').querySelectorAll('.inv-dragging, .inv-drop-target').forEach((r) => r.classList.remove('inv-dragging', 'inv-drop-target'));
+    invDragSwallowClick = true;   // the pointerup's click must not toggle the row highlight
+    setTimeout(() => { invDragSwallowClick = false; }, 0);
+    if (!commit || !d.target) return;
+    const gid = d.target === 'un' ? null : safeInt(d.target);
+    const ids = d.multi ? [...invState.checked] : [String(d.item.id)];
+    const n = await invFileItems(ids, gid);
+    const name = d.target === 'un' ? 'Unfiled' : ((invState.groups.find((g) => String(g.id) === d.target) || {}).name || 'the folder');
+    if (n) toast(n > 1 ? `Filed ${n} items in ${name}` : `Filed in ${name}`);
+  };
+  function invDragMove(e) {
+    const d = invDrag;
+    if (!d) return;
+    d.px = e.clientX; d.py = e.clientY;
+    if (!d.started) {
+      if (Math.abs(d.px - d.x) + Math.abs(d.py - d.y) < INV_DRAG_START) return;
+      d.started = true;
+      d.multi = invState.checked.has(String(d.item.id)) && invState.checked.size > 1;
+      const n = d.multi ? invState.checked.size : 1;
+      d.ghost = document.createElement('div');
+      d.ghost.className = 'inv-pdrag-ghost';
+      d.ghost.innerHTML = `<i class="fa-solid fa-folder-open"></i> ${n > 1 ? `${n} items` : escapeHtml(d.item.item_name || 'item')}`;
+      document.body.appendChild(d.ghost);
+      document.body.classList.add('inv-pdragging');
+      try { window.getSelection().removeAllRanges(); } catch (_) { /* nothing selected */ }
+      if (d.multi) $('#inv-body').querySelectorAll('tr[data-iid]').forEach((r) => { if (invState.checked.has(r.dataset.iid)) r.classList.add('inv-dragging'); });
+      else d.el.classList.add('inv-dragging');
+      d.scroller = invScroller($('#inv-body'));
+    }
     e.preventDefault();
-    const hd = e.target.closest('tr[data-grpkey]');
-    if (hd) { hd.parentNode.insertBefore(dragging, hd.nextSibling); return; }
-    const over = e.target.closest('tr[data-iid]');
-    if (over && over !== dragging) {
-      const rect = over.getBoundingClientRect();
-      over.parentNode.insertBefore(dragging, e.clientY < rect.top + rect.height / 2 ? over : over.nextSibling);
-    }
-  });
-  $('#inv-body').addEventListener('dragend', async () => {
-    const dragging = document.querySelector('#inv-body tr.inv-dragging');
-    if (!dragging) return;
-    dragging.classList.remove('inv-dragging');
-    const item = invState.items[safeInt(dragging.dataset.idx)];
-    let p = dragging.previousElementSibling;         // section = nearest divider above
-    while (p && !p.hasAttribute('data-grpkey')) p = p.previousElementSibling;
-    const key = p ? p.dataset.grpkey : 'un';
-    if (item && key !== 'soldout') {   // Sold out isn't a folder — dropping there files nothing
-      const gid = key === 'un' ? null : safeInt(key);
-      // the dragged row being checked pulls the whole checked set with it
-      const ids = invState.checked.has(String(item.id)) && invState.checked.size > 1
-        ? [...invState.checked] : [String(item.id)];
-      const movers = invState.items.filter((i) =>
-        ids.includes(String(i.id)) && (i.group_id || null) !== gid);
-      movers.forEach((i) => { i.group_id = gid; }); // optimistic
-      const results = await Promise.all(movers.map((i) =>
-        apiFetch('PUT', 'api/inventory.php', { data: { inventory_id: safeInt(i.id), group_id: gid } })
-          .catch((e) => ({ ok: false, error: String(e) }))));
-      const failed = results.filter((r) => !r.ok).length;
-      if (failed) toast(`${failed} item${failed > 1 ? 's' : ''} could not move — site update pending?`, false);
-      else if (movers.length > 1) toast(`Filed ${movers.length} items`);
-    }
-    renderInvRows();
+    if (!d.raf) d.raf = requestAnimationFrame(() => { d.raf = 0; invDragFrame(); });
+  }
+  function invDragUp() { invDragEnd(true); }
+  function invDragCancel() { invDragEnd(false); }
+  function invDragKey(e) { if (e.key === 'Escape' && invDrag && invDrag.started) { e.preventDefault(); e.stopPropagation(); invDragEnd(false); } }
+  $('#inv-body').addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 || !invState.groups.length || invDrag) return;
+    const el = e.target.closest('tr[data-iid]');
+    if (!el || el.classList.contains('inv-var-row')) return;   // variants file with their item
+    // interactive bits keep their jobs (checkbox, edit cells, buttons, notes …)
+    if (e.target.closest('button, a, input, select, textarea, [contenteditable], [data-edit], [data-sales], [data-invalert], [data-invtaghover], [data-invvar], .inv-sel-cell')) return;
+    const item = invState.items[safeInt(el.dataset.idx)];
+    if (!item) return;
+    invDrag = { el, item, x: e.clientX, y: e.clientY, px: e.clientX, py: e.clientY, started: false, target: null, raf: 0 };
+    document.addEventListener('pointermove', invDragMove);
+    document.addEventListener('pointerup', invDragUp);
+    document.addEventListener('pointercancel', invDragCancel);
+    document.addEventListener('keydown', invDragKey, true);
   });
 
   // Mass edit — whichever fields are filled apply to every checked row;
@@ -1579,7 +1663,8 @@ function initInventory() {
     if ($('#inv-bulk-threshold').value.trim() !== '') set.threshold = safeInt($('#inv-bulk-threshold').value);
     if ($('#inv-bulk-vendor').value.trim() !== '') set.vendor = $('#inv-bulk-vendor').value.trim();
     const addTags = $('#inv-bulk-tags').value.trim();
-    if (!Object.keys(set).length && !addTags) { toast('Fill in Stocked, Threshold, Vendor and/or tags first', false); return; }
+    const groupTo = $('#inv-bulk-group').value;   // '' = keep, 'un' = Unfiled, else a folder id
+    if (!Object.keys(set).length && !addTags && !groupTo) { toast('Fill in Stocked, Threshold, Vendor, a group and/or tags first', false); return; }
     let changed = 0;
     if (Object.keys(set).length) {
       const res = await apiFetch('PUT', 'api/inventory.php',
@@ -1599,9 +1684,10 @@ function initInventory() {
       if (failed) { toast(`${failed} tag update${failed > 1 ? 's' : ''} failed — site update pending?`, false); return; }
       changed = Math.max(changed, rows.length);
     }
+    if (groupTo) changed = Math.max(changed, await invFileItems(ids, groupTo === 'un' ? null : safeInt(groupTo)));
     toast(`Updated ${fmtNum(changed)} item${changed === 1 ? '' : 's'}`);
     invState.checked.clear(); // the job's done — the bar folds away
-    ['#inv-bulk-stocked', '#inv-bulk-threshold', '#inv-bulk-vendor', '#inv-bulk-tags'].forEach((s) => { $(s).value = ''; });
+    ['#inv-bulk-stocked', '#inv-bulk-threshold', '#inv-bulk-vendor', '#inv-bulk-tags', '#inv-bulk-group'].forEach((s) => { $(s).value = ''; });
     loadInventory();
   });
   // Restock to suggested: each checked row's Stocked goes up by its own

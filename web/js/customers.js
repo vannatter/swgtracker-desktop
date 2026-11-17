@@ -16,8 +16,9 @@ const MYC_COLUMNS = [
   ['Avg sale', 'avg', 'col-num'],
   ['Items', 'distinct_items', 'stat'],
   ['Last purchase', 'last_ts', 'col-text'],
+  ['Follow up', 'follow_at', 'col-text', 'A reminder you set on the customer’s card — the sidebar counts the due ones'],
 ];
-const MYC_NUMERIC = new Set(['score', 'purchases', 'total', 'avg', 'distinct_items', 'last_ts']);
+const MYC_NUMERIC = new Set(['score', 'purchases', 'total', 'avg', 'distinct_items', 'last_ts', 'follow_at']);
 const mycColCount = () => MYC_COLUMNS.length + 2; // select + trailing pin-cell
 
 const mycTags = (c) => String(c.tags || '').split(',').map((t) => t.trim()).filter(Boolean);
@@ -53,8 +54,12 @@ function mycVisibleItems() {
   const q = $('#cust-search').value.trim().toLowerCase();
   let items = mycState.items;
   if (mycState.tagFilter) items = items.filter((c) => mycTags(c).includes(mycState.tagFilter));
-  // activity filter: positive = bought within N days, negative = quiet for N+
-  const act = Number($('#cust-activity').value || 0);
+  // activity filter: positive = bought within N days, negative = quiet for N+;
+  // 'due' / 'follow' = follow-ups due now / any follow-up set
+  const actV = $('#cust-activity').value;
+  if (actV === 'due') items = items.filter((c) => mycFollowDue(c));
+  else if (actV === 'follow') items = items.filter((c) => safeInt(c.follow_at) > 0);
+  const act = Number(actV) || 0;
   if (act) {
     const cutoff = Math.floor(Date.now() / 1000) - Math.abs(act) * 86400;
     items = items.filter((c) => (act > 0 ? safeInt(c.last_ts) >= cutoff : safeInt(c.last_ts) < cutoff));
@@ -65,6 +70,8 @@ function mycVisibleItems() {
   const { sortField, sortOrder } = mycState;
   const dir = sortOrder === 'DESC' ? -1 : 1;
   return [...items].sort((a, b) => {
+    // no follow-up sorts last either way round
+    if (sortField === 'follow_at' && (!safeInt(a.follow_at) || !safeInt(b.follow_at))) return (safeInt(a.follow_at) ? -1 : 0) + (safeInt(b.follow_at) ? 1 : 0);
     if (MYC_NUMERIC.has(sortField)) return dir * (safeInt(a[sortField]) - safeInt(b[sortField]));
     return dir * String(a[sortField] ?? '').toLowerCase().localeCompare(String(b[sortField] ?? '').toLowerCase());
   });
@@ -82,8 +89,112 @@ function mycRowHtml(c) {
     <td class="col-num">${fmtNum(c.avg)} cr</td>
     <td class="stat">${fmtNum(c.distinct_items)}</td>
     <td class="col-text">${fmtAgoTip(c.last_ts)}</td>
+    <td class="col-text">${mycFollowChip(c)}</td>
     <td class="pin-cell"></td>
   </tr>`;
+}
+
+// ---- follow-up reminders (#15) ---------------------------------------------
+// One date + a short note per customer (api/customers.php follow_at / follow_note).
+// Due = the day has come. The sidebar pill counts the due ones; each raises one alert.
+const mycFollowDue = (c) => safeInt(c.follow_at) > 0 && safeInt(c.follow_at) <= Math.floor(Date.now() / 1000);
+function mycFollowWhen(ts) {
+  const day = (t) => { const d = new Date(t * 1000); d.setHours(0, 0, 0, 0); return d.getTime(); };
+  const n = Math.round((day(ts) - day(Date.now() / 1000)) / 86400000);
+  if (n < -1) return `${-n} days overdue`;
+  if (n === -1) return 'since yesterday';
+  if (n === 0) return 'today';
+  if (n === 1) return 'tomorrow';
+  if (n < 7) return new Date(ts * 1000).toLocaleDateString(undefined, { weekday: 'long' });
+  return new Date(ts * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+function mycFollowChip(c) {
+  const ts = safeInt(c.follow_at);
+  if (!ts) return '';
+  const due = mycFollowDue(c);
+  const tip = `${due ? 'Follow up due' : 'Follow up'} ${mycFollowWhen(ts)}${c.follow_note ? ` — ${c.follow_note}` : ''}`;
+  return `<span class="myc-follow${due ? ' is-due' : ''}" title="${escapeHtml(tip)}"><i class="fa-solid ${due ? 'fa-bell' : 'fa-clock'}"></i> ${escapeHtml(mycFollowWhen(ts))}</span>`;
+}
+
+// card line under the notes: the reminder with Done / Change, or "Set a follow-up"
+function mycdRenderFollow() {
+  document.querySelectorAll('#custd-follow').forEach((el) => el.remove());
+  const host = $('#custd-notes-inline');
+  if (!host) return;
+  const m = mycState.cardMeta || {};
+  const ts = safeInt(m.follow_at);
+  const due = ts && ts <= Math.floor(Date.now() / 1000);
+  host.insertAdjacentHTML('afterend', `<div id="custd-follow" class="custd-follow${due ? ' is-due' : ''}">${ts
+    ? `<i class="fa-solid ${due ? 'fa-bell' : 'fa-clock'}"></i>
+       <span class="custd-follow-when">Follow up ${escapeHtml(mycFollowWhen(ts))}</span>${m.follow_note ? `<span class="custd-follow-note">${escapeHtml(m.follow_note)}</span>` : ''}
+       <a role="button" data-custfollow="edit">Change</a><a role="button" data-custfollow="done" title="Clear the reminder">Done</a>`
+    : '<a role="button" class="mysd-notes-add" data-custfollow="edit"><i class="fa-regular fa-clock"></i> Set a follow-up</a>'}</div>`);
+}
+
+function mycFollowOpen() {
+  const m = mycState.cardMeta || {};
+  const ts = safeInt(m.follow_at);
+  const pad = (n) => String(n).padStart(2, '0');
+  const iso = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const start = ts ? new Date(ts * 1000) : new Date(Date.now() + 7 * 86400000);
+  $('#cust-follow-title').textContent = `Follow up with ${mycState.card}`;
+  $('#cust-follow-date').value = iso(start);
+  $('#cust-follow-date').min = iso(new Date());
+  $('#cust-follow-note').value = m.follow_note || '';
+  $('#cust-follow-clear').hidden = !ts;
+  $('#cust-follow-modal').hidden = false;
+  $('#cust-follow-note').focus();
+}
+
+async function mycFollowSave(clear) {
+  const name = mycState.card;
+  if (!name) return;
+  let at = null, note = '';
+  if (!clear) {
+    const v = $('#cust-follow-date').value;
+    if (!v) { toast('Pick a day', false); return; }
+    const [y, mo, d] = v.split('-').map(Number);
+    at = Math.floor(new Date(y, mo - 1, d, 0, 0, 0).getTime() / 1000);   // due from the start of that day
+    note = $('#cust-follow-note').value.trim().slice(0, 200);
+  }
+  $('#cust-follow-modal').hidden = true;
+  const res = await apiFetch('PUT', 'api/customers.php', { data: { customer_name: name, follow_at: at || 0, follow_note: note } });
+  if (!res.ok) { toast(res.error || 'Could not save the follow-up — site update pending?', false); return; }
+  mycState.cardMeta = { ...(mycState.cardMeta || {}), follow_at: at, follow_note: at ? note : null };
+  const c = mycState.items.find((x) => x.name === name);
+  if (c) { c.follow_at = at; c.follow_note = at ? note : null; }
+  mycdRenderFollow();
+  mycFollowSweep(true);
+  toast(at ? `Follow-up set — ${mycFollowWhen(at)}` : 'Follow-up cleared');
+}
+
+// sidebar pill + one alert per due reminder. Rides navAttnSweep (every minute),
+// fetching at most every 10 minutes unless forced after an edit.
+let mycFollowAt = 0;
+async function mycFollowSweep(force = false) {
+  if (!force && Date.now() - mycFollowAt < 10 * 60 * 1000) return;
+  mycFollowAt = Date.now();
+  let res;
+  try { res = await apiFetch('GET', 'api/customers.php', { params: { followups: 1 } }); } catch (_) { return; }
+  if (!res.ok || !res.data || !Array.isArray(res.data.followups)) return;   // older site: no pill, no alerts
+  const now = Math.floor(Date.now() / 1000);
+  const due = res.data.followups.filter((f) => safeInt(f.follow_at) <= now);
+  const pill = $('#nav-cust-pill');
+  if (pill) {
+    pill.textContent = due.length;
+    pill.hidden = !due.length;
+    pill.title = `${due.length} customer follow-up${due.length === 1 ? '' : 's'} due`;
+  }
+  let seen = [];
+  try { seen = JSON.parse(localStorage.getItem('custFollowAlerted') || '[]'); } catch (_) { seen = []; }
+  const keys = due.map((f) => `${f.name}@${f.follow_at}`);
+  keys.forEach((k, i) => {
+    if (seen.includes(k)) return;
+    const f = due[i];
+    appLocalAlert(`Follow up with ${f.name}`, f.follow_note || 'Your reminder on their customer card is due', { page: 'customers' });
+  });
+  try { localStorage.setItem('custFollowAlerted', JSON.stringify(keys)); } catch (_) { /* no storage: may alert again next launch */ }
+  if (typeof syncNavTips === 'function') syncNavTips();
 }
 
 function mycSyncSel() {
@@ -191,6 +302,7 @@ async function openMycCard(name) {
     if (mycState.card !== name) return;
     mycState.cardMeta = (res.ok && res.data && res.data.meta) || {};
     mycdRenderNotes();
+    mycdRenderFollow();
   } catch (_) { /* notes just stay hidden */ }
 }
 
@@ -524,6 +636,23 @@ function initMyCustomers() {
     if (!res.ok) toast(res.error || 'Failed to save notes — site update pending?', false);
   });
   $('#cust-note-cancel').addEventListener('click', () => { $('#cust-note-modal').hidden = true; });
+  // follow-up reminder (#15): card line → dialog
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest('[data-custfollow]');
+    if (!a || !mycState.card) return;
+    if (a.dataset.custfollow === 'done') mycFollowSave(true); else mycFollowOpen();
+  });
+  $('#cust-follow-quick').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-days]');
+    if (!b) return;
+    const d = new Date(Date.now() + safeInt(b.dataset.days) * 86400000);
+    $('#cust-follow-date').value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  });
+  $('#cust-follow-save').addEventListener('click', () => mycFollowSave(false));
+  $('#cust-follow-clear').addEventListener('click', () => mycFollowSave(true));
+  $('#cust-follow-cancel').addEventListener('click', () => { $('#cust-follow-modal').hidden = true; });
+  $('#cust-follow-note').addEventListener('keydown', (e) => { if (e.key === 'Enter') mycFollowSave(false); });
+  bindBackdropClose($('#cust-follow-modal'), () => { $('#cust-follow-modal').hidden = true; });
   wireRichToolbar($('#cust-note-modal'));
   bindBackdropClose($('#cust-note-modal'), () => { $('#cust-note-modal').hidden = true; });
 }

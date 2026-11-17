@@ -100,7 +100,9 @@ function stkRowHtml(item, idx) {
     if (field === 'date_added') return `<td class="col-text">${fmtAgoTip(item.date_added)}</td>`;
     if (field === 'my_cpu') {
       const has = item.my_cpu !== null && item.my_cpu !== undefined && item.my_cpu !== '';
-      return `<td class="stat stk-stock" data-mycpu="${idx}" title="Your cost per unit — what you paid (0 = mined it yourself)">${has ? Number(item.my_cpu) : '—'}</td>`;
+      if (has) return `<td class="stat stk-stock" data-mycpu="${idx}" title="Your cost per unit — what you paid (0 = mined it yourself)">${Number(item.my_cpu)}</td>`;
+      const e = stkEcpu(item);
+      return `<td class="stat stk-stock" data-mycpu="${idx}" title="${e ? `Not set — the site's eCPU for this resource is ${e} cr, which the Lab uses until you set yours. Click to set what you paid` : 'Your cost per unit — what you paid (0 = mined it yourself)'}">${stkMyCpuEmpty(item)}</td>`;
     }
     if (field === 'score') {
       const v = safeInt(item.score); // 0–100, already a percent
@@ -444,6 +446,10 @@ function openStockEditor(cell) {
   input.addEventListener('blur', () => finish(true));
 }
 
+// the site's eCPU for a stockpiled resource (0 = no votes yet) — hinted, muted, where My CPU is unset
+const stkEcpu = (item) => ecpuClamp(item.cpu, safeInt(item.status) === 1, safeInt(item.planet_mustafar) === 1);
+const stkMyCpuEmpty = (item) => (stkEcpu(item) ? `<span class="stk-cpu-hint">~${stkEcpu(item)}</span>` : '—');
+
 function openMyCpuEditor(cell) {
   if (cell.querySelector('input')) return;
   const idx = safeInt(cell.dataset.mycpu);
@@ -451,7 +457,8 @@ function openMyCpuEditor(cell) {
   if (!item) return;
   const has = item.my_cpu !== null && item.my_cpu !== undefined && item.my_cpu !== '';
   const current = has ? Number(item.my_cpu) : '';
-  cell.innerHTML = `<input type="text" inputmode="decimal" class="stock-input" value="${current}"
+  const e = stkEcpu(item);
+  cell.innerHTML = `<input type="text" inputmode="decimal" class="stock-input" value="${current}"${!has && e ? ` placeholder="~${e}"` : ''}
     title="Cost per unit — 0 = self-mined, blank clears">`;
   const input = cell.querySelector('input');
   input.focus();
@@ -464,13 +471,13 @@ function openMyCpuEditor(cell) {
     const raw = input.value.trim();
     const value = raw === '' ? null : Number(raw);
     const bad = save && raw !== '' && (Number.isNaN(value) || value < 0);
-    if (!save || bad) {
-      cell.textContent = has ? current : '—';
+    if (!save || bad || (!has && raw === '')) {   // clicking an unset one and leaving it empty changes nothing
+      if (has) cell.textContent = current; else cell.innerHTML = stkMyCpuEmpty(item);
       if (bad) toast(`"${input.value}" isn't a cost — use a number like 2 or 4.5`, false);
       return;
     }
     item.my_cpu = value; // optimistic
-    cell.textContent = value === null ? '—' : value;
+    if (value === null) cell.innerHTML = stkMyCpuEmpty(item); else cell.textContent = value;
     try {
       const res = await api().update_stockpile(item.stockpile_id, null, value);
       $('#stk-status').textContent = res.ok

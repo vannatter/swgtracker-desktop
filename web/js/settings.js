@@ -163,6 +163,7 @@ async function loadSettings() {
   if (typeof insaLoadPrefs === 'function') insaLoadPrefs();   // Sales Alerts (server-side)
   if (typeof ideaShipLoadPrefs === 'function') ideaShipLoadPrefs();   // Ideas I backed ship (server-side)
   pushLoadPrefs();   // Phone notifications (server-side)
+  digestLoadPref();   // Weekly sales digest email (server-side ui pref)
 
   refreshDatasetStatus();
 }
@@ -194,6 +195,28 @@ function renderRep(rep) {
 // it's just the switches and how many devices are on. Hidden until the site
 // answers; a kind the site doesn't know yet (older deploy) keeps its row hidden.
 let pushPrefs = null;
+
+// ---- Weekly sales digest by email (#11): ui pref sales_digest_email, off until turned on;
+// the site's admin/cron_digest.php sends it Mondays. Its push twin is a Phone notifications kind.
+let digestEmailWas = null;
+async function digestLoadPref() {
+  const box = $('#set-digest');
+  if (!box) return;
+  let res;
+  try { res = await apiFetch('GET', 'api/prefs.php'); } catch (_) { res = null; }
+  const ui = res && res.ok && res.data && res.data.ui;
+  if (!ui) { digestEmailWas = null; $('#set-digest-email').disabled = true; return; }
+  digestEmailWas = !!ui.sales_digest_email;
+  $('#set-digest-email').disabled = false;
+  $('#set-digest-email').checked = digestEmailWas;
+}
+async function digestSavePref() {
+  const el = $('#set-digest-email');
+  if (!el || digestEmailWas === null || el.checked === digestEmailWas) return;
+  const res = await apiFetch('PUT', 'api/prefs.php', { data: { ui: { sales_digest_email: el.checked } } });
+  if (!res.ok) throw new Error(res.error || 'Could not save the weekly digest email — site update pending?');
+  digestEmailWas = el.checked;
+}
 
 async function pushLoadPrefs() {
   const box = $('#set-push');
@@ -343,6 +366,7 @@ async function saveSettings() {
     if (typeof insaSavePrefs === 'function') await insaSavePrefs();
     if (typeof ideaShipSavePrefs === 'function') await ideaShipSavePrefs();   // Ideas I backed ship (js/ideas.js)
     await pushSavePrefs();   // Phone notifications (api/push.php)
+    await digestSavePref();   // Weekly sales digest email (ui pref)
     // a changed date format must invalidate every already-rendered page —
     // cached pages would keep showing dates in the old style until relaunch
     const fmtChanged = ($('#set-datefmt').value === 'intl') !== (appDateFmt === 'intl')

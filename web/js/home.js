@@ -275,6 +275,7 @@ async function loadHome(force = false) {
   const l = homeLayout();
   const want = (k) => !l.hidden.has(k);
   const jobs = [loadPrefs()];            // the greeting needs the account name
+  if (typeof homeFundLoad === 'function') jobs.push(homeFundLoad());   // server fund drive block (js/home-fund.js)
   if (want('quick')) jobs.push(homeQuickLoad());
   if (homeState.booting) jobs.push(new Promise((r) => setTimeout(r, 500)));
   if (want('hot') || want('glance')) {

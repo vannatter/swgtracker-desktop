@@ -832,27 +832,26 @@ async function fetchPulse() {
 // donations, totalled by IPN). The total rides the pulse; the card opens PayPal.
 let _fundUrl = '';
 function showFund(f) {
+  window.appFund = f || null;   // Home's drive block falls back to this (js/home-fund.js)
+  if (typeof homeFund !== 'undefined' && !homeFund.noteApi && homeFund.loaded) { homeFund.data = f ? { fund: f, notes: [], limits: {} } : null; homeFundRender(); }
   const card = $('#fund-card');
   if (!f || !f.active) { card.hidden = true; return; }
   _fundUrl = String(f.url || '');
   const money = (v) => '$' + (Number.isInteger(v) ? v.toLocaleString() : Number(v).toFixed(2));
   $('#fund-year').textContent = safeInt(f.year);
-  // the goal is the bare minimum: once it's met the bar heads for the stretch
-  // goal (the $50/month server), with a tick where the goal was (Dustin)
+  // past the base, the bar shows the new year's server bill month by month
+  // ($month each — DoS pays it out of pocket); before it, progress to the base
   const raised = Number(f.raised) || 0, goal = Number(f.goal) || 0;
-  const stretch = raised >= goal ? (Number(f.stretch) || 0) : 0;
-  const target = stretch || goal;
-  $('#fund-fill').style.width = `${target > 0 ? Math.min(100, Math.floor(raised / target * 100)) : 0}%`;
-  const mark = $('#fund-mark');
-  mark.hidden = !stretch;
-  if (stretch) mark.style.left = `${(goal / stretch) * 100}%`;
-  $('#fund-sub').textContent = stretch
-    ? (raised >= stretch ? `Stretch goal met · ${money(raised)} — thank you!` : `Stretch goal: ${money(raised)} of ${money(stretch)}`)
-    : raised >= goal && goal > 0
-      ? `${Math.floor(raised / goal * 100)}% funded · ${money(raised)} of ${money(goal)}`
-      : `${money(raised)} of ${money(goal)} · Donate`;
-  card.title = `SWG Tracker runs on donations — this covers the server and app for ${safeInt(f.year)}`
-    + `${stretch ? ', and the stretch goal covers the $50/month server bill' : ''}. Opens PayPal in your browser.`;
+  const month = f.month != null ? Number(f.month) : 50;
+  const months = f.months != null ? Number(f.months) : (month > 0 ? Math.min(12, Math.max(0, (raised - goal) / month)) : 0);
+  const onMonths = raised >= goal && month > 0;
+  $('#fund-fill').style.width = `${onMonths ? Math.floor(months / 12 * 100) : (goal > 0 ? Math.min(100, Math.floor(raised / goal * 100)) : 0)}%`;
+  $('#fund-mark').hidden = true;
+  $('#fund-sub').textContent = !onMonths ? `${money(raised)} of ${money(goal)} · Donate`
+    : months >= 12 ? 'Whole year covered — thank you!'
+    : months < 1 ? `Base covered · January ${Math.floor(months * 100)}%`
+    : `${Math.floor(months)} of 12 months covered · ${money(raised)}`;
+  card.title = `SWG Tracker runs on donations — DoS pays the ${money(month)}/month server bill out of pocket. Past the ${money(goal)} base, every ${money(month)} covers a month of ${safeInt(f.year)}. Opens PayPal in your browser.`;
   card.hidden = false;
 }
 
@@ -1352,6 +1351,7 @@ async function navAttnSweep() {
     p.title = tip;
   };
   if (typeof topSpawnsSweep === 'function') topSpawnsSweep(); // "new since you looked" pill on Top Spawns
+  if (typeof mycFollowSweep === 'function') mycFollowSweep(); // customer follow-ups due (#15) — throttles itself
   syncNavTips(); // collapsed-sidebar tooltips carry the count — "Factories (1)"
   set('#nav-harv-pill', harvFull,
     `${harvFull} full hopper${harvFull === 1 ? '' : 's'} — extraction is stopped until emptied`);

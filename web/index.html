@@ -8,7 +8,7 @@
        every dialog showed at once on launch (Oogie) -->
   <link href="vendor/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="vendor/fontawesome/css/all.min.css">
-  <link rel="stylesheet" href="css/app.css?v=20261117nest">
+  <link rel="stylesheet" href="css/app.css?v=20261117fund14">
   <link rel="stylesheet" href="css/share.css?v=20261022x">
   <link rel="stylesheet" href="css/quests.css?v=20261105qc">
 </head>
@@ -82,7 +82,8 @@
         <li class="nav-group-head" data-navgroup="vendors"><i class="fa-solid fa-tags"></i> Sales <i class="fa-solid fa-caret-down nav-group-caret"></i><span class="nav-group-dot" hidden></span></li>
         <li class="nav-item nav-group-item" data-page="sales" data-group="vendors"><i class="fa-solid fa-tags"></i> My Sales</li>
         <li class="nav-item nav-group-item" data-page="insights" data-group="vendors"><i class="fa-solid fa-chart-line"></i> Sales Insights</li>
-        <li class="nav-item nav-group-item" data-page="customers" data-group="vendors"><i class="fa-solid fa-users"></i> My Customers</li>
+        <li class="nav-item nav-group-item" data-page="customers" data-group="vendors"><i class="fa-solid fa-users"></i> My Customers
+          <span id="nav-cust-pill" class="nav-pill" title="Customer follow-ups due" hidden></span></li>
         <li class="nav-item nav-group-item" data-page="purchases" data-group="vendors"><i class="fa-solid fa-cart-shopping"></i> My Purchases</li>
         <li class="nav-item nav-group-item" data-page="inventory" data-group="vendors"><i class="fa-solid fa-warehouse"></i> My Inventory</li>
         <li class="nav-item nav-group-item power-only" data-page="upkeep" data-group="vendors"><i class="fa-solid fa-store"></i> Vendor Upkeep</li>
@@ -172,6 +173,8 @@
           </div>
         </div>
         <div class="table-wrap hm-scroll">
+          <!-- server fund drive (js/home-fund.js) — only while the drive runs, Nov 1 – Dec 31 -->
+          <section id="home-fund" class="hm-fund" hidden></section>
           <div id="home-sections" class="hm-sections"></div>
           <div class="hm-foot"><span id="home-updated" class="settings-sub"></span></div>
         </div>
@@ -733,6 +736,8 @@
             <option value="60">Active 60d</option>
             <option value="90">Active 90d</option>
             <option value="-90">Inactive 90d+</option>
+            <option value="due">Follow-ups due</option>
+            <option value="follow">With a follow-up</option>
           </select>
           <input id="cust-search" type="text" class="form-control filter-input head-search" placeholder="Search customers...">
           <button id="cust-copy-names" class="btn btn-sm btn-outline-secondary" title="Copy names — the selected customers, or everyone in view — one per line, ready for in-game mail"><i class="fa-solid fa-copy"></i> Names</button>
@@ -1204,6 +1209,8 @@
                  title="Leave blank to keep each item's current vendor — handy after renaming a vendor">
           <input id="inv-bulk-tags" type="text" class="form-control filter-input inv-bulk-vendor" placeholder="Add tags" autocomplete="off"
                  title="Comma-separated — added to each selected item's existing tags, never replacing them">
+          <select id="inv-bulk-group" class="form-select filter-select inv-bulk-group" hidden
+                  title="File every selected item in this group on Apply — or drag any checked row onto a folder"></select>
           <button id="inv-bulk-suggest" class="btn btn-sm btn-outline-secondary" title="Add each selected item's Suggest number to its Stocked"><i class="fa-solid fa-boxes-stacked"></i> Restock to suggested</button>
           <button id="inv-bulk-apply" class="btn btn-sm btn-accent">Apply</button>
           <span class="inv-selbar-sep"></span>
@@ -2465,6 +2472,16 @@
           </div>
         </div>
 
+        <!-- Weekly sales digest (#11): email switch here (ui pref); the push version is under Phone notifications -->
+        <div class="settings-section" id="set-digest">
+          <h2>Weekly sales digest <span class="settings-sub">Every Monday: last week against the week before, next week's forecast, what's running low and your AI note's top tip. Shared with your Settings on swgtracker.com.</span></h2>
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="set-digest-email">
+            <label class="form-check-label" for="set-digest-email">Email it to me
+              <span class="settings-sub">— one email a week, to your account's email address. For your phone, turn on Weekly sales digest under Phone notifications.</span></label>
+          </div>
+        </div>
+
         <!-- Ideas board: the "an idea you backed shipped" switch, stored server-side (js/ideas.js) -->
         <div class="settings-section" id="set-ideas">
           <h2>Ideas board <span class="settings-sub">Hear back when the ideas you vote for ship. Shared with your Settings on swgtracker.com, where phone notifications follow it too.</span></h2>
@@ -2517,6 +2534,11 @@
             <input class="form-check-input" type="checkbox" id="set-push-harvester" data-pushkind="harvester">
             <label class="form-check-label" for="set-push-harvester">Harvesters
               <span class="settings-sub">— hopper full (or at your alert %), out of power, maintenance empty, or the resource despawned, for harvesters with alerts ticked</span></label>
+          </div>
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="set-push-digest" data-pushkind="digest">
+            <label class="form-check-label" for="set-push-digest">Weekly sales digest
+              <span class="settings-sub">— Monday: your week's sales against the week before, next week's forecast and what's running low</span></label>
           </div>
           <div class="settings-sub">Shipped ideas follow the Ideas board switch above.</div>
         </div>
@@ -2849,6 +2871,29 @@
       <div class="stk-note-actions">
         <button id="cust-note-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
         <button id="cust-note-save" class="btn btn-sm btn-accent">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="cust-follow-modal" class="key-gate" hidden>
+    <div class="key-gate-card sp-card cust-follow-card">
+      <h2 id="cust-follow-title">Follow up</h2>
+      <label class="form-label" for="cust-follow-date">When</label>
+      <div class="cust-follow-row">
+        <input id="cust-follow-date" type="date" class="form-control filter-input">
+        <span id="cust-follow-quick" class="cust-follow-quick">
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-days="1">Tomorrow</button>
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-days="3">3 days</button>
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-days="7">1 week</button>
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-days="14">2 weeks</button>
+        </span>
+      </div>
+      <label class="form-label" for="cust-follow-note">What about <span class="muted">(optional)</span></label>
+      <input id="cust-follow-note" type="text" class="form-control filter-input" maxlength="200" placeholder="e.g. tell them the new armor's in" autocomplete="off">
+      <div class="stk-note-actions">
+        <button id="cust-follow-clear" class="btn btn-sm btn-outline-secondary" hidden>Clear reminder</button>
+        <button id="cust-follow-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
+        <button id="cust-follow-save" class="btn btn-sm btn-accent">Save</button>
       </div>
     </div>
   </div>
@@ -3395,8 +3440,17 @@
       </div>
       <label class="pin-toggle inv-oneoff-toggle" title="One-offs live under the One-offs filter, never warn, and sink into Sold out at 0 — restock one and it comes back up">
         <input id="inv-new-oneoff" type="checkbox"> One-off <span class="settings-sub">loot you won’t restock — no low-stock warning</span></label>
-      <label class="sp-field-label">Group <span class="settings-sub">optional — the folder it files under in My Inventory</span></label>
-      <select id="inv-new-group" class="form-select filter-select settings-input-wide"></select>
+      <div class="inv-org-row">
+        <div>
+          <label class="sp-field-label" for="inv-new-group">Group <span class="settings-sub">optional — the one folder it files under</span></label>
+          <select id="inv-new-group" class="form-select filter-select settings-input-wide"></select>
+        </div>
+        <div>
+          <label class="sp-field-label" for="inv-new-tags">Tags <span class="settings-sub">optional — any number, comma-separated</span></label>
+          <input id="inv-new-tags" type="text" class="form-control filter-input" placeholder="e.g. furniture, gifts" autocomplete="off" maxlength="255">
+        </div>
+      </div>
+      <div class="settings-sub inv-org-hint">An item sits in one group (a folder in the list) but can carry many tags — click a tag above the list to show only items with it.</div>
       <div class="inv-add-actions">
         <button id="inv-add-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
         <button id="inv-add" class="btn btn-sm btn-accent"><i class="fa-solid fa-plus"></i> Add Item</button>
@@ -3702,6 +3756,23 @@
   <div id="planet-pop" class="stk-schem-pop planet-pop" hidden></div>
 
   <!-- Home customize dialog: which sections show, and in what order -->
+  <!-- Server fund: leave a note (js/home-fund.js → api/fund_notes.php); shown on Home once approved -->
+  <div id="home-fund-modal" class="key-gate" hidden>
+    <div class="key-gate-card hm-dlg-card hm-fund-card" role="dialog" aria-modal="true" aria-labelledby="home-fund-title">
+      <h2 id="home-fund-title"><i class="fa-regular fa-comment"></i> Leave a note</h2>
+      <p id="home-fund-dlgsub" class="settings-sub hm-fund-dlgsub">Donated, or just want to say thanks? Leave a few words for the server fund. Notes appear on Home, here and on swgtracker.com, once they’ve been read.</p>
+      <label class="hm-fund-label" for="home-fund-name">Name <span class="settings-sub">optional — leave blank to stay anonymous</span></label>
+      <input id="home-fund-name" type="text" class="form-control filter-input" maxlength="40" autocomplete="off" placeholder="Anonymous">
+      <label class="hm-fund-label" for="home-fund-msg">Note</label>
+      <textarea id="home-fund-msg" class="form-control filter-input" rows="3" maxlength="280" placeholder="Thanks for keeping this running!"></textarea>
+      <div class="hm-fund-count settings-sub"><span id="home-fund-left">280</span> characters left</div>
+      <div class="hm-dlg-actions">
+        <button id="home-fund-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
+        <button id="home-fund-send" class="btn btn-sm btn-accent"><i class="fa-solid fa-paper-plane"></i> Send note</button>
+      </div>
+    </div>
+  </div>
+
   <div id="home-cfg-modal" class="key-gate" hidden>
     <div class="key-gate-card sp-card stk-note-card hm-cfg-card">
       <h2><i class="fa-solid fa-sliders"></i> Customize Home</h2>
@@ -4322,11 +4393,11 @@
   <script src="js/share-wizard.js?v=20261022es"></script>
   <script src="js/resource.js?v=20261112er"></script>
   <script src="js/schematics.js?v=20261116fix"></script>
-  <script src="js/stockpile.js?v=20261022es"></script>
+  <script src="js/stockpile.js?v=20261117cpu"></script>
   <script src="js/wishlist.js?v=20261022es"></script>
   <script src="js/myschematics.js?v=20261106mys"></script>
   <script src="js/schemcalc.js?v=20261112rate"></script>
-  <script src="js/inventory.js?v=20261117nest"></script>
+  <script src="js/inventory.js?v=20261117org"></script>
   <script src="js/components.js?v=20261105var"></script>
   <script src="js/components-plan.js?v=20261105bt"></script>
   <script src="js/components-power.js?v=20261103fr"></script>
@@ -4343,9 +4414,9 @@
   <script src="js/harvesters.js?v=20261117ux2"></script>
   <script src="js/factories.js?v=20261103lk"></script>
   <script src="js/factories-ready.js?v=20261103dh"></script>
-  <script src="js/customers.js?v=20261022es"></script>
+  <script src="js/customers.js?v=20261117follow"></script>
   <script src="js/characters.js?v=20261022es"></script>
-  <script src="js/settings.js?v=20261116rep"></script>
+  <script src="js/settings.js?v=20261117digest"></script>
   <script src="js/insight-alerts.js?v=20261102al"></script>
   <script src="js/alerts.js?v=20261023ac"></script>
   <script src="js/lab.js?v=20261116grp"></script>
@@ -4370,12 +4441,13 @@
   <script src="js/quests.js?v=20261106map"></script>
   <script src="js/beastcalc.js?v=20261016a"></script>
   <script src="js/decor.js?v=20261027h4"></script>
-  <script src="js/home.js?v=20261116rep"></script>
+  <script src="js/home.js?v=20261117fund"></script>
+  <script src="js/home-fund.js?v=20261117fund13"></script>
   <script src="js/mailsetup.js?v=20261019a"></script>
   <script src="js/ideas.js?v=20261112blk"></script>
   <script src="js/priceguide.js?v=20261117ux3"></script>
   <script src="js/vendor-upkeep.js?v=20261112sel"></script>
   <script src="js/navbadges.js?v=20261117nest"></script>
-  <script src="js/app.js?v=20261112pgc"></script>
+  <script src="js/app.js?v=20261117fund2"></script>
 </body>
 </html>

@@ -229,6 +229,7 @@ async function loadAlerts() {
   renderAlertFeed();
   renderAlCommunity();
   renderAlAnnouncements();
+  if (typeof rwLoad === 'function') rwLoad();
 }
 
 // ---- Editor ----
@@ -446,7 +447,8 @@ async function alertsPoll() {
   }
   if (!fresh.length) return;
   for (const h of fresh.slice(0, 3)) {
-    api().notify(`Spawn alert: ${h.resource_name}`, h.detail || h.rule_name || 'matching spawn');
+    if (h.rule_feed === 'gone') api().notify(`Despawned: ${h.resource_name}`, 'A resource you were watching has left spawn');
+    else api().notify(`Spawn alert: ${h.resource_name}`, h.detail || h.rule_name || 'matching spawn');
   }
   if (fresh.length > 3) {
     api().notify('Spawn alerts', `${fresh.length - 3} more matching spawns — open Spawn Alerts`);

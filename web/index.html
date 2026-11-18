@@ -8,7 +8,7 @@
        every dialog showed at once on launch (Oogie) -->
   <link href="vendor/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="vendor/fontawesome/css/all.min.css">
-  <link rel="stylesheet" href="css/app.css?v=20261117fund14">
+  <link rel="stylesheet" href="css/app.css?v=20261118donut">
   <link rel="stylesheet" href="css/share.css?v=20261022x">
   <link rel="stylesheet" href="css/quests.css?v=20261105qc">
 </head>
@@ -295,6 +295,7 @@
                     title="Disable a bad/bogus resource — hides it for everyone (recoverable, nothing is deleted)"><i class="fa-solid fa-ban"></i> Disable</button>
             <button id="rd-wish" class="btn btn-sm btn-outline-secondary" hidden><i class="fa-regular fa-heart"></i> Wishlist</button>
             <button id="rd-shop" class="btn btn-sm btn-outline-secondary rd-shop" hidden title="Shortlist it to compare with others of its class"><i class="fa-solid fa-scale-balanced"></i> Shortlist</button>
+            <button id="rd-watch" class="btn btn-sm btn-outline-secondary rd-watch" hidden><i class="fa-regular fa-bell"></i> Despawn alert</button>
             <button id="rd-share" class="btn btn-sm btn-outline-secondary" hidden title="Make a WTS / WTB card for Discord"><i class="fa-solid fa-share-nodes"></i> Share</button>
             <button id="rd-add" class="btn btn-sm btn-accent" hidden><i class="fa-solid fa-plus"></i> Add to Stockpile</button>
             <button id="rd-refresh" class="btn btn-icon" title="Refresh this resource"><i class="fa-solid fa-rotate-right"></i></button>
@@ -509,6 +510,8 @@
           <button class="btn btn-icon" data-refresh="stockpile" title="Sync with server"><i class="fa-solid fa-rotate-right"></i></button>
         </div>
 
+        <div id="stk-summary" class="stk-summary" hidden></div>
+
         <div id="stk-tagbar" class="fac-tagbar" hidden></div>
 
         <div id="stk-selbar" class="inv-selbar" hidden
@@ -667,6 +670,11 @@
         <div id="al-pane-rules" class="al-pane">
         <div id="al-rules" class="al-rules"></div>
         <div id="al-rules-empty" class="al-empty" hidden></div>
+        <div id="al-watches" class="al-watches" hidden>
+          <div class="al-watch-head"><i class="fa-solid fa-bell"></i> <b>Despawn alerts</b> <span id="al-watch-count" class="al-tab-count"></span>
+            <span class="al-comm-sub">resources you're watching — you're told when each one leaves spawn</span></div>
+          <div id="al-watch-list"></div>
+        </div>
         </div>
 
         <div id="al-pane-matches" class="al-pane" hidden>
@@ -3757,6 +3765,20 @@
 
   <!-- Home customize dialog: which sections show, and in what order -->
   <!-- Server fund: leave a note (js/home-fund.js → api/fund_notes.php); shown on Home once approved -->
+  <div id="rw-modal" class="key-gate" hidden>
+    <div class="key-gate-card hm-dlg-card rw-card" role="dialog" aria-modal="true" aria-labelledby="rw-title">
+      <h2 id="rw-title"><i class="fa-regular fa-bell"></i> Despawn alert</h2>
+      <p class="settings-sub rw-sub">Tell me when <b id="rw-title-name"></b> leaves spawn, by:</p>
+      <label class="rw-opt"><input type="checkbox" id="rw-notice"> <span><b>Notice</b><br><span class="settings-sub">a desktop notification here, a match in Spawn Alerts on the app and website, and a phone push if you have Spawn Alerts push on</span></span></label>
+      <label class="rw-opt"><input type="checkbox" id="rw-email"> <span><b>Email</b><br><span class="settings-sub">to your swgtracker.com email</span></span></label>
+      <div class="hm-dlg-actions rw-actions">
+        <button id="rw-remove" class="btn btn-sm btn-outline-secondary rw-remove" hidden><i class="fa-solid fa-bell-slash"></i> Stop watching</button>
+        <button id="rw-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
+        <button id="rw-save" class="btn btn-sm btn-accent"><i class="fa-solid fa-bell"></i> Watch</button>
+      </div>
+    </div>
+  </div>
+
   <div id="home-fund-modal" class="key-gate" hidden>
     <div class="key-gate-card hm-dlg-card hm-fund-card" role="dialog" aria-modal="true" aria-labelledby="home-fund-title">
       <h2 id="home-fund-title"><i class="fa-regular fa-comment"></i> Leave a note</h2>
@@ -4391,9 +4413,10 @@
   <script src="js/resources.js?v=20261026sp"></script>
   <script src="js/share-card.js?v=20261022y"></script>
   <script src="js/share-wizard.js?v=20261022es"></script>
-  <script src="js/resource.js?v=20261112er"></script>
+  <script src="js/resource.js?v=20261118watch"></script>
   <script src="js/schematics.js?v=20261116fix"></script>
-  <script src="js/stockpile.js?v=20261117cpu"></script>
+  <script src="js/stockpile.js?v=20261118donut"></script>
+  <script src="js/stockpile-summary.js?v=20261118muted"></script>
   <script src="js/wishlist.js?v=20261022es"></script>
   <script src="js/myschematics.js?v=20261106mys"></script>
   <script src="js/schemcalc.js?v=20261112rate"></script>
@@ -4418,7 +4441,7 @@
   <script src="js/characters.js?v=20261022es"></script>
   <script src="js/settings.js?v=20261117digest"></script>
   <script src="js/insight-alerts.js?v=20261102al"></script>
-  <script src="js/alerts.js?v=20261023ac"></script>
+  <script src="js/alerts.js?v=20261118watch"></script>
   <script src="js/lab.js?v=20261116grp"></script>
   <script src="js/mail.js?v=20261117ux2"></script>
   <script src="js/isd.js?v=20261117nest"></script>
@@ -4443,6 +4466,7 @@
   <script src="js/decor.js?v=20261027h4"></script>
   <script src="js/home.js?v=20261117fund"></script>
   <script src="js/home-fund.js?v=20261117fund13"></script>
+  <script src="js/rwatch.js?v=20261118watch"></script>
   <script src="js/mailsetup.js?v=20261019a"></script>
   <script src="js/ideas.js?v=20261112blk"></script>
   <script src="js/priceguide.js?v=20261117ux3"></script>

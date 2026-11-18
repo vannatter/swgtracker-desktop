@@ -186,6 +186,7 @@ function renderResourcePage(data) {
 
   // Bottom tabs: Top Uses / Other <type> / Related (>800) / Used In
   rdState.data = data;
+  if (typeof rwSyncRdButton === 'function') rwSyncRdButton();
   // land on the first tab that actually has rows (tab order: top, other, related, used)
   rdTabState.tab = (data.top_uses || []).length ? 'top'
     : (data.similar || []).length ? 'other'
@@ -782,6 +783,7 @@ async function openResourcePage(name) {
   $('#rd-edit').hidden = true;
   $('#rd-disable').hidden = true;
   $('#rd-share').hidden = true;
+  if ($('#rd-watch')) $('#rd-watch').hidden = true;
   $('#rd-scoreline').textContent = '';
   // the whole hero hides while loading — a stale gauge + a placeholder card
   // half-rendered looked broken; it reappears complete with the data

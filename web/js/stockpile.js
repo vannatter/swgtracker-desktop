@@ -49,9 +49,15 @@ async function stkLoadTreeOrder() {
     const flat = (res.ok && res.data && res.data.resource_tree_flat) || [];
     if (flat.length) {
       const m = {};
-      flat.forEach((t, i) => { m[t.code] = i; });
+      const paths = {}; // type_code -> its ancestors' names, for the Summary's class/type rollups
+      flat.forEach((t, i) => {
+        m[t.code] = i;
+        paths[t.code] = [1, 2, 3, 4, 5, 6].map((n) => t[`level${n}_description`]).filter(Boolean);
+      });
       stkState.treeOrder = m;
+      stkState.treePath = paths;
       if (stkState.sortField === 'type_name') renderStockpile();
+      else if (typeof renderStkSummary === 'function') renderStkSummary();
     }
   } catch (_) { /* alphabetical fallback offline */ }
 }
@@ -254,10 +260,12 @@ function stkSyncGroupSelects() {
   });
 }
 
-function stkVisibleItems() {
+function stkVisibleItems(opts = {}) {
   const q = $('#stk-search').value.trim().toLowerCase();
   let items = stkState.items;
   if (stkState.tagFilter) items = items.filter((i) => stkTags(i).includes(stkState.tagFilter));
+  // a class / type picked on the Summary donuts (js/stockpile-summary.js)
+  if (stkState.catFilter && !opts.ignoreCat && typeof stkSumMatches === 'function') items = items.filter((i) => stkSumMatches(i, stkState.catFilter));
   if (q) {
     items = items.filter((i) =>
       String(i.name || '').toLowerCase().includes(q) ||
@@ -314,6 +322,7 @@ function renderStockpile(statusMsg) {
     rowsHtml = parts.join('');
   }
   $('#stk-body').innerHTML = rowsHtml;
+  if (typeof renderStkSummary === 'function') renderStkSummary();
   stkSyncGroupSelects();
   stkSyncSelBar();
   // fill any open detail panels with their linked schematics (cached after first load)

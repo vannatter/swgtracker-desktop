@@ -488,6 +488,7 @@ async function alertsPoll() {
   if (!fresh.length) return;
   for (const h of fresh.slice(0, 3)) {
     if (h.rule_feed === 'gone') api().notify(`Despawned: ${h.resource_name}`, 'A resource you were watching has left spawn');
+    else if (h.rule_feed === 'upgrade') api().notify(`Upgrade spawned: ${h.resource_name}`, h.detail || 'A spawn beats what you have for one of your schematics');
     else if (h.rule_feed === 'soon') api().notify(`Despawning soon: ${h.resource_name}`, 'It has been in spawn a while — most resources despawn 7–20 days after spawning');
     else api().notify(`Spawn alert: ${h.resource_name}`, h.detail || h.rule_name || 'matching spawn');
   }

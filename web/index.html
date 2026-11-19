@@ -8,7 +8,7 @@
        every dialog showed at once on launch (Oogie) -->
   <link href="vendor/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="vendor/fontawesome/css/all.min.css">
-  <link rel="stylesheet" href="css/app.css?v=20261118stk">
+  <link rel="stylesheet" href="css/app.css?v=20261119rpt">
   <link rel="stylesheet" href="css/share.css?v=20261022x">
   <link rel="stylesheet" href="css/quests.css?v=20261105qc">
 </head>
@@ -156,6 +156,12 @@
         <span id="ann-nagtext" class="ann-nagtext"></span>
         <span class="ann-naggo">View them <i class="fa-solid fa-arrow-right"></i></span>
         <button class="btn btn-icon" id="ann-naghide" title="Hide until new matches arrive"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <!-- data freshness (Ideas #52): spawn data running behind — api/status.php, js/freshness.js -->
+      <div id="fresh-bar" class="ann-nagbar fresh-bar" hidden>
+        <i class="fa-solid fa-clock-rotate-left"></i>
+        <span id="fresh-text" class="ann-nagtext"></span>
+        <button class="btn btn-icon" id="fresh-hide" title="Hide until it updates"><i class="fa-solid fa-xmark"></i></button>
       </div>
       <!-- Home page: the start page — Hot Resources / At a Glance (the website's
            landing page), Recent Spawns and Announcements, each toggleable + reorderable -->
@@ -549,6 +555,7 @@
              title="Your crafting list — each schematic tracks which resource you're using for every ingredient."></i>
           <span class="mys-badge" id="mys-total-badge" hidden></span>
           <input id="mys-search" type="text" class="form-control filter-input head-search" placeholder="Search schematics...">
+          <button id="mys-shop" class="btn btn-sm btn-outline-secondary" title="What you'd need to craft these — every resource they take, against what's in My Stockpile, with the best current spawns for anything short. Check schematics first to plan just those"><i class="fa-solid fa-cart-shopping"></i> Shopping list</button>
           <button id="mys-newgroup" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-folder-plus"></i> New Group</button>
           <button class="btn btn-icon" data-refresh="myschematics" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
         </div>
@@ -1388,13 +1395,14 @@
         <div class="page-head">
           <h1>Price Guide</h1>
           <i class="fa-solid fa-circle-info info-tip"
-             title="Going rates from everyone who tracks sales, over the last 90 days, updated nightly. Prices are per unit. An item only shows once at least 3 different sellers have sold it and no one seller makes up most of its sales, and prices are rounded — so no one's own prices can be picked out. Click a row for more."></i>
+             title="Going rates from everyone who tracks sales, over the last 90 days, updated nightly. Prices are per unit. An item only shows once at least 3 different sellers have sold it and no one seller makes up most of its sales, and prices are rounded — so no one's own prices can be picked out. Weapons are split by combat level, armor by protection and looted items by quality, since each tier sells at a different price. Click a row for more."></i>
           <input id="pg-search" type="text" class="form-control filter-input head-search head-filter" placeholder="Search items...">
           <select id="pg-sort" class="form-select filter-select" title="Order">
             <option value="sales">Most sold</option><option value="name">Name</option><option value="price">Highest price</option>
           </select>
           <button class="btn btn-icon" data-refresh="prices" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
         </div>
+        <div id="pg-fresh" class="settings-hint pg-fresh" hidden></div>
         <div id="pg-glance" class="pg-glance" hidden></div>
         <div class="table-wrap">
           <table class="data-grid pg-grid">
@@ -1488,7 +1496,10 @@
                   <div class="settings-sub">The swgtracker.com companion app</div>
                 </div>
               </div>
-              <button id="about-check" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-rotate"></i> Check for updates</button>
+              <span class="about-head-btns">
+                <button class="btn btn-sm btn-outline-secondary" data-report-problem title="Send a bug report — your note, a screenshot and the app's recent logs"><i class="fa-solid fa-bug"></i> Report a problem</button>
+                <button id="about-check" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-rotate"></i> Check for updates</button>
+              </span>
             </div>
             <div class="about-vers">
               <div class="set-ds-line"><span class="set-ds-label">App</span><span id="about-shell">—</span></div>
@@ -2692,8 +2703,9 @@
         </div>
 
         <div class="settings-section">
-          <h2>Troubleshooting <span class="settings-sub">Live log of every request the app makes to swgtracker.com — open it, reproduce your issue, and copy the failing entry into a bug report</span></h2>
+          <h2>Troubleshooting <span class="settings-sub">Something not working? Report it from here — your note, a screenshot and the app's recent logs go in one go. The network log shows every request the app makes to swgtracker.com</span></h2>
           <div class="settings-row">
+            <button class="btn btn-sm btn-outline-secondary" data-report-problem><i class="fa-solid fa-bug"></i> Report a problem</button>
             <button id="set-netlog-btn" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-network-wired"></i> Open network log</button>
           </div>
         </div>
@@ -3367,7 +3379,7 @@
       <label class="sp-field-label">Category</label>
       <select id="idea-cat" class="form-select filter-select settings-input-wide"></select>
       <label class="sp-field-label">Details <span class="settings-sub">what you'd use it for helps most</span></label>
-      <textarea id="idea-desc" class="form-control settings-input-wide idea-desc-input" maxlength="2000" rows="6"
+      <textarea id="idea-desc" class="form-control filter-input settings-input-wide idea-desc-input" maxlength="2000" rows="6"
                 placeholder="What should it do, and what problem does it solve for you?"></textarea>
       <div id="idea-desc-count" class="settings-hint idea-count"></div>
       <div id="idea-admin-row" class="idea-admin-row" hidden>
@@ -3791,6 +3803,35 @@
         <button id="rw-remove" class="btn btn-sm btn-outline-secondary rw-remove" hidden><i class="fa-solid fa-bell-slash"></i> Stop watching</button>
         <button id="rw-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
         <button id="rw-save" class="btn btn-sm btn-accent"><i class="fa-solid fa-bell"></i> Watch</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="rpt-modal" class="key-gate" hidden>
+    <div class="key-gate-card hm-dlg-card rpt-card" role="dialog" aria-modal="true" aria-labelledby="rpt-title">
+      <h2 id="rpt-title"><i class="fa-solid fa-bug"></i> Report a problem</h2>
+      <textarea id="rpt-note" class="form-control filter-input" rows="4" maxlength="4000" placeholder="What went wrong, and what were you doing when it happened?"></textarea>
+      <div id="rpt-shot" class="rpt-shot"></div>
+      <input type="file" id="rpt-shot-file" accept="image/*" hidden>
+      <div class="rpt-logs"><label><input type="checkbox" id="rpt-logs-on" checked> Include the app's recent logs <span class="settings-sub">(<span id="rpt-logs-count">…</span> · keys and emails masked)</span></label>
+        <a role="button" id="rpt-logs-show">See what's sent</a></div>
+      <textarea id="rpt-logs-view" class="form-control filter-input rpt-logs-view" rows="8" readonly hidden></textarea>
+      <div class="hm-dlg-actions rw-actions">
+        <button id="rpt-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
+        <button id="rpt-send" class="btn btn-sm btn-accent"><i class="fa-solid fa-paper-plane"></i> Send report</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="mysal-modal" class="key-gate" hidden>
+    <div class="key-gate-card hm-dlg-card rw-card" role="dialog" aria-modal="true" aria-labelledby="mysal-title">
+      <h2 id="mysal-title"><i class="fa-regular fa-bell"></i> Upgrade alerts</h2>
+      <p class="settings-sub rw-sub">When a spawn beats what you have for a slot on <b id="mysal-name"></b> — the resource you picked, or your best stack in My Stockpile — tell me by:</p>
+      <label class="rw-opt"><input type="checkbox" id="mysal-notice"> <span><b>Notice</b><br><span class="settings-sub">a desktop notification here, a match in Spawn Alerts on the app and website, and a phone push if you have Spawn Alerts push on</span></span></label>
+      <label class="rw-opt"><input type="checkbox" id="mysal-email"> <span><b>Email</b><br><span class="settings-sub">to your swgtracker.com email, once an hour at most</span></span></label>
+      <div class="hm-dlg-actions rw-actions">
+        <button id="mysal-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
+        <button id="mysal-save" class="btn btn-sm btn-accent"><i class="fa-solid fa-check"></i> Save</button>
       </div>
     </div>
   </div>
@@ -4424,6 +4465,7 @@
   <!-- Classic scripts sharing one top-level scope; app.js boots last. -->
   <script src="js/class_caps.js?v=20261012a"></script>
   <script src="js/shared.js?v=20261118fold"></script>
+  <script src="js/report.js?v=20261119"></script>
   <script src="js/shop.js?v=20261017b"></script>
   <script src="js/help.js?v=20261012a"></script>
   <script src="js/resources.js?v=20261026sp"></script>
@@ -4434,11 +4476,11 @@
   <script src="js/stockpile.js?v=20261118fold"></script>
   <script src="js/stockpile-summary.js?v=20261118muted"></script>
   <script src="js/wishlist.js?v=20261022es"></script>
-  <script src="js/myschematics.js?v=20261106mys"></script>
+  <script src="js/myschematics.js?v=20261119up"></script>
   <script src="js/schemcalc.js?v=20261112rate"></script>
   <script src="js/inventory.js?v=20261118compact"></script>
   <script src="js/components.js?v=20261105var"></script>
-  <script src="js/components-plan.js?v=20261105bt"></script>
+  <script src="js/components-plan.js?v=20261119shop"></script>
   <script src="js/components-power.js?v=20261103fr"></script>
   <script src="js/invlog.js?v=20261031b"></script>
   <script src="js/sales.js?v=20261105var"></script>
@@ -4454,11 +4496,12 @@
   <script src="js/factories.js?v=20261118stk"></script>
   <script src="js/factories-ready.js?v=20261103dh"></script>
   <script src="js/factories-stock.js?v=20261118stk"></script>
+  <script src="js/freshness.js?v=20261119"></script>
   <script src="js/customers.js?v=20261117follow"></script>
   <script src="js/characters.js?v=20261022es"></script>
   <script src="js/settings.js?v=20261117digest"></script>
   <script src="js/insight-alerts.js?v=20261102al"></script>
-  <script src="js/alerts.js?v=20261118type"></script>
+  <script src="js/alerts.js?v=20261119up"></script>
   <script src="js/lab.js?v=20261116grp"></script>
   <script src="js/mail.js?v=20261117ux2"></script>
   <script src="js/isd.js?v=20261117nest"></script>
@@ -4488,7 +4531,7 @@
   <script src="js/ideas.js?v=20261112blk"></script>
   <script src="js/priceguide.js?v=20261117ux3"></script>
   <script src="js/vendor-upkeep.js?v=20261112sel"></script>
-  <script src="js/navbadges.js?v=20261118pills"></script>
+  <script src="js/navbadges.js?v=20261119pills"></script>
   <script src="js/app.js?v=20261118fundsb"></script>
 </body>
 </html>

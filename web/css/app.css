@@ -419,7 +419,8 @@ td.col-actions .btn-icon.open { color: var(--accent); }
   border-radius: 6px; /* match .btn-sm + .btn-icon */
 }
 .filter-input { max-width: 220px; }
-.filter-input:focus, .filter-select:focus {
+.filter-input:focus, .filter-select:focus,
+.form-control:focus, .form-select:focus { /* Bootstrap's own focus went white (Post an idea's Details) */
   background: var(--bg-input); color: var(--text-hover);
   border-color: var(--accent-dark); box-shadow: none;
 }
@@ -4936,7 +4937,7 @@ tr.top-new td.col-name { color: var(--text-hover); }
 .idea-actions { flex: none; display: flex; align-items: center; gap: 2px; }
 .idea-actions .idea-st-sel { width: auto; min-width: 0; padding-top: 2px; padding-bottom: 2px; font-size: 12px; }
 .idea-card-dlg { width: min(560px, 94vw); }
-.idea-desc-input { min-height: 120px; resize: vertical; font-size: 13px; }
+.idea-desc-input { height: auto; min-height: 120px; resize: vertical; font-size: 13px; padding-top: 8px; }
 .idea-count { text-align: right; }
 .idea-admin-row { display: flex; gap: 18px; margin-top: 10px; font-size: 13px; }
 .idea-admin-row label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
@@ -5671,3 +5672,28 @@ body.inv-pdragging, body.inv-pdragging * { cursor: grabbing !important; user-sel
 
 /* sidebar fund card: the line under the bar never wraps */
 #fund-sub { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* data freshness bar (Ideas #52, js/freshness.js) — info, not a click-through */
+.fresh-bar { cursor: default; }
+.fresh-bar i.fa-clock-rotate-left { color: var(--q-accept); }
+.fresh-bar .ann-nagtext { white-space: normal; }
+.fresh-bar #fresh-hide { margin-left: auto; }
+.pg-fresh { margin: 0 0 10px; }
+.pg-fresh i { color: var(--q-accept); margin-right: 6px; }
+
+/* Report a problem (Ideas #50, js/report.js) */
+.about-head-btns { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.key-gate .rpt-card { width: min(560px, calc(100vw - 32px)); text-align: left; }
+.rpt-card textarea.filter-input { display: block; width: 100%; max-width: none; height: auto; resize: vertical; padding-top: 8px; }
+.rpt-card textarea.filter-input[readonly] { background: var(--bg-input); color: var(--text-muted); }
+.key-gate-card.rpt-card .rw-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.rpt-card textarea#rpt-note { min-height: 96px; margin-bottom: 10px; }
+.rpt-shot { position: relative; display: flex; align-items: center; justify-content: center; min-height: 54px; padding: 8px;
+  border: 1px dashed var(--border); border-radius: 8px; margin-bottom: 10px; }
+.rpt-shot img { max-width: 100%; max-height: 220px; border-radius: 6px; display: block; }
+.rpt-shot .rpt-shot-x { position: absolute; top: 6px; right: 6px; background: var(--bg-card); }
+.rpt-logs { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; font-size: 13px; margin-bottom: 8px; }
+.rpt-logs label { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; cursor: pointer; }
+.rpt-logs input { accent-color: var(--accent); }
+.rpt-logs a { margin-left: auto; cursor: pointer; }
+.rpt-logs-view { min-height: 160px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11px; margin-bottom: 10px; white-space: pre; }

@@ -220,8 +220,11 @@ function cmpPlanResHtml(T) {
   }).join('');
 }
 
+// preset: {sid, name, qty} adds one schematic to the open plan; {targets: [{sid, name, qty}], view}
+// starts a new, unsaved plan from those (My Schematics → Shopping list, Ideas #31)
 async function openCmpPlan(preset = null) {
   try { if (!cmpState.loaded) await cmpFetch(); } catch (_) {}
+  if (preset && preset.view) cmpPlan.view = preset.view === 'res' ? 'res' : 'parts';
   $('#cmp-plan-search').value = '';
   $('#cmp-plan-sug').hidden = true;
   $('#cmp-plan-modal').hidden = false;
@@ -235,7 +238,12 @@ async function openCmpPlan(preset = null) {
   const cur = cmpPlan.plans.find((p) => safeInt(p.id) === cmpPlan.id) || (cmpPlan.id ? null : cmpPlan.plans[0]);
   if (cur && !cmpPlan.dirty) cmpPlanUse(cur, false);
   else if (!cur && !cmpPlan.dirty) cmpPlanUse(null, false);
-  if (preset && preset.sid) await cmpPlanAdd(preset.sid, preset.name, preset.qty);
+  if (preset && preset.targets && preset.targets.length) {
+    cmpPlanUse(null, false);
+    preset.targets.slice(0, CMP_PLAN_MAX).forEach((t) => cmpPlan.targets.push({ sid: String(t.sid), name: t.name || 'Schematic', qty: Math.max(1, safeInt(t.qty) || 1) }));
+    cmpPlan.dirty = true;
+    await cmpPlanRefresh();
+  } else if (preset && preset.sid) await cmpPlanAdd(preset.sid, preset.name, preset.qty);
   else await cmpPlanRefresh();
   cmpPlanFillSel();
 }

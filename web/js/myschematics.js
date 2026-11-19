@@ -103,9 +103,8 @@ function renderMysList() {
       <td class="col-text">${mysFormulaCell(s)}</td>
       <td class="stat">${(s.resources || []).length}</td>
       <td class="col-text" data-rowstatus>${mysListStatusHtml(s)}</td>
-      <td class="pin-cell" data-mysalert="${idx}"
-          title="${Number(s.notify_email) ? 'Emailing you when an upgrade spawns for this schematic — click to stop' : 'Email me when a better resource spawns for one of this schematic’s slots'}"><i
-          class="fa-${Number(s.notify_email) ? 'solid' : 'regular'} fa-envelope${Number(s.notify_email) ? ' mys-alert-on' : ''}"></i></td>
+      <td class="pin-cell" data-mysalert="${idx}" title="${escapeHtml(mysAlertTip(s))}"><i
+          class="fa-${mysAlertOn(s) ? 'solid' : 'regular'} fa-bell${mysAlertOn(s) ? ' mys-alert-on' : ''}"></i></td>
       <td class="pin-cell note-cell" data-mysnote="${idx}"
           title="${labNotesText(s.notes) ? escapeHtml(labNotesText(s.notes)) : 'Add notes / tags'}"><i
           class="fa-${labNotesText(s.notes) ? 'solid' : 'regular'} fa-note-sticky${labNotesText(s.notes) ? ' has-notes' : ''}"></i></td>
@@ -1670,17 +1669,7 @@ function initMySchematics() {
     const al = e.target.closest('[data-mysalert]');
     if (al) {
       const item = mysState.items[safeInt(al.dataset.mysalert)];
-      if (!item) return;
-      item.notify_email = Number(item.notify_email) ? 0 : 1; // optimistic
-      renderMysList();
-      apiFetch('PUT', 'api/my_schematics.php', {
-        data: { user_schematic_id: safeInt(item.user_schematic_id), notify_email: item.notify_email },
-      }).then((res) => {
-        if (!res.ok) toast(res.error || 'Could not save the alert toggle — site update pending?', false);
-        else toast(item.notify_email
-          ? `Upgrade-spawn emails ON — ${item.custom_name || item.name}`
-          : `Upgrade-spawn emails off — ${item.custom_name || item.name}`);
-      }).catch((err) => toast(String(err), false));
+      if (item) mysOpenAlertDialog(item);
       return;
     }
     const note = e.target.closest('[data-mysnote]');
@@ -1805,3 +1794,66 @@ function initMySchematics() {
     if (addBadge) { handleAddCellClick(addBadge, e); return; }
   });
 }
+
+// ---- upgrade alerts (Ideas #41): a notice and/or an email when a spawn beats
+// what you have for a slot — the pick, or your best My Stockpile stack of that
+// class (admin/cron_myschem.php). The bell on each row opens this dialog.
+const mysAlertOn = (s) => Number(s.notify_email) === 1 || Number(s.notify_notice) === 1;
+function mysAlertTip(s) {
+  const how = [Number(s.notify_notice) ? 'notice' : '', Number(s.notify_email) ? 'email' : ''].filter(Boolean).join(' + ');
+  return how ? `Upgrade alerts on (${how}) — click to change`
+    : 'Get a notice and/or an email when a spawn beats what you have for one of this schematic’s slots';
+}
+let mysAlertItem = null;
+function mysOpenAlertDialog(item) {
+  mysAlertItem = item;
+  $('#mysal-name').textContent = item.custom_name ? `${item.name} · ${item.custom_name}` : item.name;
+  const on = mysAlertOn(item);
+  $('#mysal-notice').checked = on ? Number(item.notify_notice) === 1 : true;
+  $('#mysal-email').checked = on ? Number(item.notify_email) === 1 : false;
+  $('#mysal-modal').hidden = false;
+}
+async function mysSaveAlert() {
+  const item = mysAlertItem;
+  if (!item) return;
+  const notice = $('#mysal-notice').checked ? 1 : 0;
+  const email = $('#mysal-email').checked ? 1 : 0;
+  const btn = $('#mysal-save');
+  btn.disabled = true;
+  let res;
+  try {
+    res = await apiFetch('PUT', 'api/my_schematics.php', {
+      data: { user_schematic_id: safeInt(item.user_schematic_id), notify_email: email, notify_notice: notice },
+    });
+  } catch (e) { res = { ok: false, error: String(e) }; }
+  btn.disabled = false;
+  if (!res.ok) { toast(res.error || 'Couldn’t save the upgrade alert', false); return; }
+  item.notify_email = email;
+  item.notify_notice = notice;
+  $('#mysal-modal').hidden = true;
+  renderMysList();
+  const name = item.custom_name || item.name;
+  toast(notice || email ? `Upgrade alerts on for ${name} — ${[notice ? 'notice' : '', email ? 'email' : ''].filter(Boolean).join(' + ')}`
+    : `Upgrade alerts off for ${name}`);
+}
+document.addEventListener('DOMContentLoaded', () => {
+  const close = () => { $('#mysal-modal').hidden = true; mysAlertItem = null; };
+  $('#mysal-cancel').addEventListener('click', close);
+  $('#mysal-save').addEventListener('click', mysSaveAlert);
+  bindBackdropClose($('#mysal-modal'), close);
+});
+
+// ---- Shopping list (Ideas #31): the checked schematics (or a fresh plan) in the
+// craft planner's Resources view — units needed against My Stockpile, plus the
+// best spawns going for anything short (js/components-plan.js)
+function mysOpenShopping() {
+  if (typeof openCmpPlan !== 'function') return;
+  const picked = mysState.items.filter((s) => mysState.checked.has(String(s.user_schematic_id)));
+  const seen = new Set();
+  const targets = picked.filter((s) => !seen.has(String(s.schematic_id)) && seen.add(String(s.schematic_id)))
+    .map((s) => ({ sid: s.schematic_id, name: s.name, qty: 1 }));
+  openCmpPlan(targets.length ? { targets, view: 'res' } : { view: 'res' });
+}
+document.addEventListener('DOMContentLoaded', () => {
+  $('#mys-shop').addEventListener('click', mysOpenShopping);
+});

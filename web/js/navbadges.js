@@ -23,7 +23,7 @@ const PAGE_BADGES = {
   monitor: { tag: 'updated', since: '2026-11-05' },
   isd: { tag: 'updated', since: '2026-11-17' },
   sales: { tag: 'updated', since: '2026-11-12' },
-  myschematics: { tag: 'updated', since: '2026-11-12' },
+  myschematics: { tag: 'updated', since: '2026-11-19' },
   resources: { tag: 'updated', since: '2026-11-18' },
   alerts: { tag: 'updated', since: '2026-11-18' },
   stockpile: { tag: 'updated', since: '2026-11-18' },

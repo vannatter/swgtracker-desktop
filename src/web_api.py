@@ -199,6 +199,26 @@ class WebApi:
         logger.log(logging.ERROR if level == "error" else logging.INFO, "JS %s: %s", level, message)
         return _ok(True)
 
+    def log_tail(self, lines=300):
+        """The last lines of the app's log file, for Report a problem (Ideas #50).
+        Long key-like tokens and email addresses are masked before they leave
+        this process; the server masks them again on save."""
+        try:
+            import re
+            from collections import deque
+            path = next((h.baseFilename for h in logging.getLogger().handlers
+                         if isinstance(h, logging.FileHandler)), None)
+            if not path:
+                return _ok("")
+            n = max(20, min(int(lines or 300), 1000))
+            with open(path, "r", encoding="utf-8", errors="replace") as f:
+                tail = "".join(deque(f, maxlen=n))
+            tail = re.sub(r"[A-Za-z0-9_\-]{24,}", "[masked]", tail)
+            tail = re.sub(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}", "[email]", tail)
+            return _ok(tail[-150000:])
+        except Exception as e:
+            return _err(e)
+
     # --- Server pulse ---
 
     def get_pulse(self):

@@ -22,6 +22,7 @@ async function rwLoad() {
 }
 
 const rwHow = (w) => [w.notice ? 'notice' : '', w.email ? 'email' : ''].filter(Boolean).join(' + ');
+const rwSoonTail = (w) => (w.soon ? ', with a heads-up once it has been out 7 days' : '');
 
 // ---- resource page button ----
 function rwSyncRdButton() {
@@ -38,7 +39,7 @@ function rwSyncRdButton() {
     ? (w.despawned_at ? '<i class="fa-solid fa-bell-slash"></i> Despawned' : '<i class="fa-solid fa-bell"></i> Despawn alert on')
     : '<i class="fa-regular fa-bell"></i> Despawn alert';
   btn.title = w
-    ? (w.despawned_at ? `Left spawn ${fmtAgo(w.despawned_at)} — you were told by ${rwHow(w)}` : `You'll get a ${rwHow(w)} when ${rdState.name} leaves spawn — click to change`)
+    ? (w.despawned_at ? `Left spawn ${fmtAgo(w.despawned_at)} — you were told by ${rwHow(w)}` : `You'll get a ${rwHow(w)} when ${rdState.name} leaves spawn${rwSoonTail(w)} — click to change`)
     : `Get a notice and/or an email when ${rdState.name || 'this resource'} leaves spawn`;
 }
 
@@ -50,6 +51,7 @@ function rwOpen(id, name) {
   $('#rw-title-name').textContent = rwState.editName;
   $('#rw-notice').checked = w ? !!w.notice : true;
   $('#rw-email').checked = w ? !!w.email : false;
+  $('#rw-soon').checked = w ? !!w.soon : true;
   $('#rw-remove').hidden = !w;
   $('#rw-save').innerHTML = w ? '<i class="fa-solid fa-check"></i> Save' : '<i class="fa-solid fa-bell"></i> Watch';
   $('#rw-modal').hidden = false;
@@ -58,11 +60,12 @@ function rwOpen(id, name) {
 async function rwSave() {
   const notice = $('#rw-notice').checked;
   const email = $('#rw-email').checked;
+  const soon = $('#rw-soon').checked;
   if (!notice && !email) { toast('Pick a notice, an email or both', false); return; }
   const btn = $('#rw-save');
   btn.disabled = true;
   let r;
-  try { r = await apiFetch('POST', 'api/resource_watch.php', { data: { resource_id: rwState.editId, notice, email } }); }
+  try { r = await apiFetch('POST', 'api/resource_watch.php', { data: { resource_id: rwState.editId, notice, email, soon } }); }
   catch (e) { r = { ok: false, error: String(e) }; }
   btn.disabled = false;
   if (!r.ok || !r.data || !r.data.watch) {
@@ -73,7 +76,7 @@ async function rwSave() {
   }
   rwState.byId.set(String(rwState.editId), r.data.watch);
   $('#rw-modal').hidden = true;
-  toast(`Watching ${rwState.editName} — you'll get a ${rwHow(r.data.watch)} when it leaves spawn`);
+  toast(`Watching ${rwState.editName} — you'll get a ${rwHow(r.data.watch)} when it leaves spawn${rwSoonTail(r.data.watch)}`);
   rwRender(); rwSyncRdButton();
 }
 
@@ -104,8 +107,8 @@ function rwRender() {
         <a href="#" class="al-watch-name" data-rwopen="${escapeHtml(w.resource_name)}">${escapeHtml(w.resource_name)}</a>
         <span class="al-watch-type">${escapeHtml(w.type_name || '')}</span>
       </span>
-      <span class="al-watch-state">${w.despawned_at ? `Despawned ${escapeHtml(fmtAgo(w.despawned_at))}` : `In spawn · watching since ${new Date(w.created * 1000).toLocaleDateString([], { month: 'short', day: 'numeric' })}`}</span>
-      <span class="al-watch-how">${escapeHtml(rwHow(w))}</span>
+      <span class="al-watch-state">${w.despawned_at ? `Despawned ${escapeHtml(fmtAgo(w.despawned_at))}` : `In spawn · watching since ${new Date(w.created * 1000).toLocaleDateString([], { month: 'short', day: 'numeric' })}${w.soon_at ? ' · heads-up sent' : ''}`}</span>
+      <span class="al-watch-how">${escapeHtml(rwHow(w))}${w.soon ? ' <i class="fa-solid fa-hourglass-half" title="Heads-up at 7 days in spawn"></i>' : ''}</span>
       ${w.despawned_at ? '' : `<button type="button" class="btn btn-icon btn-sm" data-rwedit="${w.resource_id}" title="Change how you're told"><i class="fa-solid fa-pen"></i></button>`}
       <button type="button" class="btn btn-icon btn-sm" data-rwdel="${w.resource_id}" title="${w.despawned_at ? 'Clear it from the list' : 'Stop watching'}"><i class="fa-solid fa-xmark"></i></button>
     </div>`).join('')

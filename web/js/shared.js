@@ -1573,7 +1573,7 @@ function grpWireGroups(listSel, o) {
 // nest (optional, nested folders): { depth, total, canSub } — depth indents the
 // name under its parent, total counts the subfolders' items too, canSub adds the
 // New subgroup button beside the trash
-function grpTableHeaderHtml(key, name, count, collapsed, deletable, colTotal, actionsCls = 'pin-cell', draggable = false, selectable = false, nest = null) {
+function grpTableHeaderHtml(key, name, count, collapsed, deletable, colTotal, actionsCls = 'pin-cell', draggable = false, selectable = false, nest = null, metaHtml = '') {
   const nameHtml = deletable
     ? `<span class="stk-group-name" data-grprename="${key}" title="Click to rename">${escapeHtml(name)}</span>`
     : `<span class="stk-group-name stk-group-unfiled">${escapeHtml(name)}</span>`;
@@ -1598,7 +1598,7 @@ function grpTableHeaderHtml(key, name, count, collapsed, deletable, colTotal, ac
           ${selectable ? `<input type="checkbox" class="grp-selall" data-grpselect="${key}" title="Select everything in this group">` : ''}
           ${depth ? `<span class="grp-indent" style="width:${(depth - 1) * 22}px"></span><i class="fa-solid fa-turn-up fa-rotate-90 grp-sub-ico"></i>` : ''}
           ${nameHtml}
-          <span class="stk-group-count"${countTip}>${total} item${total === 1 ? '' : 's'}</span>
+          <span class="stk-group-count"${countTip}>${total} item${total === 1 ? '' : 's'}</span>${metaHtml}
           <i class="fa-solid ${collapsed ? 'fa-caret-right' : 'fa-caret-down'} stk-caret stk-caret-trail" data-grptoggle="${key}"></i>
         </span>
       </div>

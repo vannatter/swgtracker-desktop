@@ -19,11 +19,15 @@ const PAGE_BADGES = {
   harvesters: { tag: 'updated', since: '2026-11-17' },
   upkeep: { tag: 'updated', since: '2026-11-12' },
   schematics: { tag: 'updated', since: '2026-11-16' },
-  inventory: { tag: 'updated', since: '2026-11-17' },
+  inventory: { tag: 'updated', since: '2026-11-18' },
   monitor: { tag: 'updated', since: '2026-11-05' },
   isd: { tag: 'updated', since: '2026-11-17' },
   sales: { tag: 'updated', since: '2026-11-12' },
   myschematics: { tag: 'updated', since: '2026-11-12' },
+  resources: { tag: 'updated', since: '2026-11-18' },
+  alerts: { tag: 'updated', since: '2026-11-18' },
+  stockpile: { tag: 'updated', since: '2026-11-18' },
+  factories: { tag: 'updated', since: '2026-11-18' },
 };
 const NAV_BADGE_DAYS = 30;
 const NAV_BADGE_KEY = 'nav-badges-seen';

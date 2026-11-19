@@ -185,11 +185,51 @@ function renderAlAnnouncements() {
   }
 }
 
-function renderAlertFeed() {
+// My Alerts' Type column (Devi): the site sends type_name with each hit; where it doesn't
+// (an older site), look the resource up once — a resource's type never changes, so the
+// answer is cached on this computer for good
+const AL_TYPE_KEY = 'al-res-types';
+let alTypeBusy = false;
+function alTypeCache() {
+  try { return JSON.parse(localStorage.getItem(AL_TYPE_KEY) || '{}') || {}; } catch (_) { return {}; }
+}
+function alApplyTypeCache() {
+  const cache = alTypeCache();
+  alState.hits.forEach((h) => { if (!h.type_name) h.type_name = cache[String(h.resource_name || '').toLowerCase()] || ''; });
+}
+async function alFillTypes() {
+  if (alTypeBusy) return;
+  const cache = alTypeCache();
+  const names = [...new Set(alState.hits.filter((h) => !h.type_name && h.resource_name).map((h) => String(h.resource_name)))].slice(0, 100);
+  if (!names.length) return;
+  alTypeBusy = true;
+  try {
+    // a few at a time — big bursts of js_api calls drop responses in WKWebView
+    for (let i = 0; i < names.length; i += 4) {
+      await Promise.all(names.slice(i, i + 4).map(async (name) => {
+        try {
+          const res = await api().search_resources({ search: name, status: 'all', page: 1 });
+          const hit = ((res.ok && res.data && res.data.results) || []).find((r) => String(r.name).toLowerCase() === name.toLowerCase());
+          if (hit && hit.type_name) cache[name.toLowerCase()] = hit.type_name;
+        } catch (_) { /* stays blank */ }
+      }));
+    }
+    const keys = Object.keys(cache);
+    if (keys.length > 2000) keys.slice(0, keys.length - 2000).forEach((k) => delete cache[k]);
+    try { localStorage.setItem(AL_TYPE_KEY, JSON.stringify(cache)); } catch (_) { /* lookups just repeat */ }
+  } finally { alTypeBusy = false; }
+  alState.hits.forEach((h) => { if (!h.type_name) h.type_name = cache[String(h.resource_name || '').toLowerCase()] || ''; });
+  renderAlertFeed(true);
+}
+
+function renderAlertFeed(typesDone = false) {
+  alApplyTypeCache();
+  if (!typesDone && alState.hits.some((h) => !h.type_name)) alFillTypes();
   const rows = alState.hits.map((h) => `
     <tr class="${String(h.seen) === '1' ? '' : 'al-unseen'}">
       <td class="col-text ac-when">${fmtAgoTip(h.created)}${String(h.is_backfill) === '1' ? ' <span class="scd-age">(backfill)</span>' : ''}</td>
       <td class="col-name res-name ac-res" data-res="${escapeHtml(h.resource_name)}">${escapeHtml(h.resource_name)}</td>
+      <td class="col-text res-type ac-type">${escapeHtml(h.type_name || '')}</td>
       <td class="col-text ac-what">${annWhatHtml(h.detail)}</td>
       <td class="col-text res-type ac-sub">${escapeHtml(h.rule_name || '')}</td>
     </tr>`).join('');
@@ -448,6 +488,7 @@ async function alertsPoll() {
   if (!fresh.length) return;
   for (const h of fresh.slice(0, 3)) {
     if (h.rule_feed === 'gone') api().notify(`Despawned: ${h.resource_name}`, 'A resource you were watching has left spawn');
+    else if (h.rule_feed === 'soon') api().notify(`Despawning soon: ${h.resource_name}`, 'It has been in spawn a while — most resources despawn 7–20 days after spawning');
     else api().notify(`Spawn alert: ${h.resource_name}`, h.detail || h.rule_name || 'matching spawn');
   }
   if (fresh.length > 3) {

@@ -121,6 +121,7 @@ function facCardHtml(f, embed = false) {
                  inputmode="numeric" ${f.started_at ? 'disabled' : ''}></label>
       </div>
       ${typeof facReadyCardHtml === 'function' ? facReadyCardHtml(f) : ''}
+      ${typeof facStkCardHtml === 'function' ? facStkCardHtml(f) : ''}
       ${open ? `<div class="fac-grid fac-meta">
         <label class="fac-field"><span class="fac-label">Group</span>
           <select class="form-select filter-select" data-facfield="group_id">

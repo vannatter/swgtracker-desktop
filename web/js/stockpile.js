@@ -241,11 +241,24 @@ async function stkSaveNoteDialog() {
   } catch (e) { $('#stk-status').textContent = `Save failed: ${e}`; }
 }
 
-function stkGroupHeaderHtml(key, name, count, deletable) {
+// a folder's units + value at eCPU (Ideas #43 "per folder"), shown beside its item count
+function stkGroupMetaHtml(list) {
+  let units = 0, value = 0;
+  for (const it of list || []) {
+    const u = Math.max(0, Number(it.stock) || 0);
+    units += u;
+    value += u * ecpuClamp(it.cpu, safeInt(it.status) === 1, safeInt(it.planet_mustafar) === 1);
+  }
+  if (!units) return '';
+  return `<span class="stk-group-meta" title="${fmtNum(units)} units · ${fmtNum(value)} cr at the site's eCPU">`
+    + `${fmtShort(units)} units${value ? ` · ~${fmtShort(value)} cr` : ''}</span>`;
+}
+
+function stkGroupHeaderHtml(key, name, count, deletable, list) {
   // the shared gold-standard header row (see grpTableHeaderHtml/grpWireGroups);
   // bucket keys are unchanged, persistence adapts to the bucket API in initStockpile
   return grpTableHeaderHtml(key, name, count, stkState.collapsed.has(key),
-    deletable, stkColCount(), 'pin-cell', deletable, true);
+    deletable, stkColCount(), 'pin-cell', deletable, true, null, stkGroupMetaHtml(list));
 }
 
 // group-header checkboxes reflect their members' selection (dash = partial)
@@ -312,12 +325,12 @@ function renderStockpile(statusMsg) {
       const key = String(b.id);
       const list = byGroup.get(key) || [];
       if (parts.length) parts.push(spacer); // slight gap between folders
-      parts.push(stkGroupHeaderHtml(key, b.name, list.length, true));
+      parts.push(stkGroupHeaderHtml(key, b.name, list.length, true, list));
       if (!stkState.collapsed.has(key)) parts.push(...list.map((item) => stkRowsHtml(item, idxOf(item))));
     });
     const unfiled = byGroup.get(UNFILED) || [];
     if (parts.length) parts.push(spacer);
-    parts.push(stkGroupHeaderHtml(UNFILED, 'Unfiled', unfiled.length, false));
+    parts.push(stkGroupHeaderHtml(UNFILED, 'Unfiled', unfiled.length, false, unfiled));
     if (!stkState.collapsed.has(UNFILED)) parts.push(...unfiled.map((item) => stkRowsHtml(item, idxOf(item))));
     rowsHtml = parts.join('');
   }

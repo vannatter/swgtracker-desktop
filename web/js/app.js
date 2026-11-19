@@ -850,7 +850,7 @@ function showFund(f) {
   $('#fund-sub').textContent = !onMonths ? `${money(raised)} of ${money(goal)} · Donate`
     : months >= 12 ? 'Whole year covered — thank you!'
     : months < 1 ? `Base covered · January ${Math.floor(months * 100)}%`
-    : `${Math.floor(months)} of 12 months covered · ${money(raised)}`;
+    : `${Math.floor(months)}/12 months · $${Math.floor(raised).toLocaleString()}`;   // short — the sidebar card is narrow
   card.title = `SWG Tracker runs on donations — DoS pays the ${money(month)}/month server bill out of pocket. Past the ${money(goal)} base, every ${money(month)} covers a month of ${safeInt(f.year)}. Opens PayPal in your browser.`;
   card.hidden = false;
 }

@@ -1088,11 +1088,43 @@ function openInvDialog(item = null, clone = false, preset = null) {
   invDlgSetMatch(invState.dlg.match);
   invDlgRenderExtra();
   invDlgPreview(true);
+  invPriceHint(true);
   modal.hidden = false;
   // preset arrives with name+vendor filled — the stock count is what's left to set
   ((item && !clone) ? $('#inv-new-vendor') : preset ? $('#inv-new-stocked') : nameInput).focus();
   if (clone) nameInput.select();
   if (preset) $('#inv-new-stocked').select();
+}
+
+// Suggested price (Ideas #12): the Price Guide's going rate for the name being typed,
+// filed the way the guide files sales (api/price_guide.php ?price_for= → pg_item_key),
+// so a pasted listing like "… 7000/5000/6000 [SENA]" still finds its market.
+const invPriceCache = new Map();
+let invPriceTimer = 0;
+let invPriceSeq = 0;
+function invPriceHint(now = false) {
+  clearTimeout(invPriceTimer);
+  const box = $('#inv-price-hint');
+  const name = $('#inv-new-name').value.trim();
+  if (name.length < 3) { box.hidden = true; return; }
+  invPriceTimer = setTimeout(async () => {
+    const seq = ++invPriceSeq;
+    let item = invPriceCache.get(name.toLowerCase());
+    if (item === undefined) {
+      let res;
+      try { res = await apiFetch('GET', 'api/price_guide.php', { params: { price_for: name } }); } catch (_) { res = { ok: false }; }
+      // an older site ignores price_for and answers with a list — treat as "no price"
+      item = res.ok && res.data && res.data.item && res.data.item.median ? res.data.item : null;
+      invPriceCache.set(name.toLowerCase(), item);
+    }
+    if (seq !== invPriceSeq) return;
+    if (!item) { box.hidden = true; return; }
+    const range = item.p25 && item.p75 && item.p25 !== item.p75 ? ` · most ${fmtShort(item.p25)}–${fmtShort(item.p75)}` : '';
+    const stack = item.qty > 1 ? ` · stacks of ${fmtNum(item.qty)}` : '';
+    box.innerHTML = `<i class="fa-solid fa-tags"></i> <span>Going rate <b>~${fmtShort(item.median)} cr</b> each${range}${stack}</span>`;
+    box.title = `${item.name} in the Price Guide: median ${fmtNum(item.median)} cr per unit; the middle half of sales went for ${fmtNum(item.p25)}–${fmtNum(item.p75)} cr (${fmtNum(item.sales)} sales by ${fmtNum(item.sellers)} sellers)`;
+    box.hidden = false;
+  }, now ? 0 : 400);
 }
 
 // one-offs have no threshold — the field steps aside while the box is ticked
@@ -1125,8 +1157,9 @@ function invDlgRenderVars() {
         </div>`).join('')
     : '';
   $('#inv-var-hint').textContent = vars.length
-    ? 'The list shows the item as one row with the total — open its arrow to see each variant. A sale named exactly like a variant counts against that variant.'
-    : 'Sells under several names — “Metal Chair - Blue”, “Metal Chair - Fancy”…? Add each as a variant to track its own stock, all in one row.';
+    ? 'one row with the total; a sale named like a variant counts there'
+    : 'names it sells under, each with its own stock';
+  $('#inv-var-hint').title = 'Sells under several names — “Metal Chair - Blue”, “Metal Chair - Fancy”…? Add each as a variant to track its own stock, all in one row. The list shows the item as one row with the total — open its arrow to see each variant.';
   $('#inv-var-fromextra').hidden = !invState.dlg.extra.length;
   invDlgSyncOwn();
 }
@@ -1153,14 +1186,17 @@ function invDlgSetMatch(mode) {
   invState.dlg.match = mode === 'words' ? 'words' : 'exact';
   document.querySelectorAll('#inv-new-match [data-invmatch]').forEach((b) => b.classList.toggle('active', b.dataset.invmatch === invState.dlg.match));
   $('#inv-match-hint').textContent = invState.dlg.match === 'words'
-    ? 'A bucket: every word of the name must appear in the sale’s name, whole and in the same order — “CL54 Elite Carbine” counts CL54 "Dog" Elite Carbine and CL54 "Cat" Elite Carbine. An item with the exact name still wins.'
-    : 'The sale’s name must be exactly this (spacing and capitals don’t matter).';
+    ? 'every word, in order — “CL54 Elite Carbine” counts CL54 "Dog" Elite Carbine'
+    : 'the sale’s name, ignoring spacing and capitals';
+  $('#inv-match-hint').title = invState.dlg.match === 'words'
+    ? 'A bucket: every word of the name must appear in the sale’s name, whole and in the same order. An item with the exact name still wins.'
+    : 'The sale’s name must be exactly this (spacing and capitals don’t matter). Sales parsed from your mail deplete the matching item’s stock.';
 }
 function invDlgRenderExtra() {
   const list = invState.dlg.extra;
   $('#inv-extra-chips').innerHTML = list.length
     ? list.map((n, i) => `<span class="fac-tag inv-extra-chip" title="${escapeHtml(n)}">${escapeHtml(n)}<i class="fa-solid fa-xmark" data-invextrarm="${i}" title="Remove"></i></span>`).join('')
-    : '<span class="stat_off">None</span>';
+    : '';
 }
 let invPreviewTimer = null, invPreviewSeq = 0;
 function invDlgPreview(now = false) {
@@ -1745,6 +1781,7 @@ function initInventory() {
     invDlgPreview();
   });
   ['#inv-new-name', '#inv-new-vendor'].forEach((sel) => $(sel).addEventListener('input', () => invDlgPreview()));
+  $('#inv-new-name').addEventListener('input', () => invPriceHint());
   const invAddExtra = () => {
     const v = $('#inv-extra-input').value.replace(/\s+/g, ' ').trim();
     if (!v) return;

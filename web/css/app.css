@@ -2103,6 +2103,8 @@ tr.row-detail > td { background: var(--bg-tertiary); padding: 0; }
 .stk-group-name:not(.stk-group-unfiled):hover { color: var(--accent); text-decoration: underline; }
 .stk-group-unfiled { color: var(--text-muted); cursor: default; }
 .stk-group-count { font-size: 11px; color: var(--text-muted); font-weight: 400; line-height: 1; }
+.stk-group-meta { font-size: 11px; color: var(--text-primary); opacity: .8; font-weight: 500; line-height: 1; font-variant-numeric: tabular-nums; }
+.stk-group-meta::before { content: '·'; margin-right: 6px; color: var(--text-muted); }
 .stk-group-grip { color: var(--text-muted); margin-right: 8px; font-size: 12px; cursor: grab; }
 .stk-group-draggable td, .grp-hd.stk-group-draggable { cursor: grab; }
 /* leads the header; the negative margin pulls it from the cell's 12px padding
@@ -4058,7 +4060,11 @@ tr.gx-rowlink:hover .gx-detail-link { color: var(--text-hover); } /* hover brigh
 .hm-chip-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--chip); }
 .hm-chip-n { font-size: 10px; opacity: .7; }
 .hm-hot-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
-.hm-hot-card { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; background: var(--bg-secondary); }
+.hm-hot-card { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px;
+                /* same surface as the At a Glance tiles (.hm-tile) */
+                background: linear-gradient(180deg, rgba(120, 145, 190, .10) 0%, rgba(120, 145, 190, 0) 55%), var(--bg-secondary);
+                transition: border-color .15s; }
+.hm-hot-card:not(.is-new):hover { border-color: rgba(150, 170, 210, .35); }
 .hm-hot-card.is-new { border-color: rgba(226, 67, 80, .45); }
 .hm-hot-top { display: flex; align-items: center; gap: 6px; }
 .hm-new { font-size: 9px; font-weight: 800; letter-spacing: .06em; padding: 1px 5px; border-radius: 4px; background: var(--accent); color: #fff; }
@@ -4815,7 +4821,7 @@ tr.top-new td.col-name { color: var(--text-hover); }
 	.ann-cards, .ann-cards > tbody { display: block; width: 100%; }
 	.ann-cards > thead { display: none; }
 	.ann-cards > tbody > tr {
-		display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "res when" "sub sub" "what what";
+		display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "res when" "type type" "sub sub" "what what";
 		gap: 3px 10px; padding: 10px 12px; border-bottom: 1px solid var(--border);
 	}
 	.ann-cards > tbody > tr > td { display: block; padding: 0 !important; border: 0 !important; height: auto; min-width: 0; white-space: normal; text-align: left; }
@@ -4823,6 +4829,8 @@ tr.top-new td.col-name { color: var(--text-hover); }
 	.ann-cards .ac-when { grid-area: when; font-size: 12px; color: var(--text-muted); text-align: right; white-space: nowrap; }
 	.ann-cards .ac-sub { grid-area: sub; font-size: 12px; color: var(--text-muted); overflow-wrap: anywhere; }
 	.ann-cards .ac-sub:empty { display: none; }
+	.ann-cards .ac-type { grid-area: type; font-size: 12px; color: var(--text-muted); overflow-wrap: anywhere; }
+	.ann-cards .ac-type:empty { display: none; }
 	.ann-cards .ac-what { grid-area: what; margin-top: 3px; }
 	.ann-cards .ann-what { display: flex; flex-wrap: wrap; align-items: center; max-width: none; white-space: normal; row-gap: 3px; }
 	.ann-cards .ann-name { overflow: visible; overflow-wrap: anywhere; }
@@ -5468,8 +5476,8 @@ body.inv-pdragging, body.inv-pdragging * { cursor: grabbing !important; user-sel
 .hm-fund-quote span { font-style: normal; font-weight: 700; color: var(--accent-hover, var(--accent)); white-space: nowrap; }
 .hm-fund-why b { color: var(--text-primary); }
 .hm-fund-side { padding: 14px; border-radius: 10px; background: color-mix(in srgb, var(--bg-primary) 55%, transparent); }
-.hm-fund-total { font-size: 28px; font-weight: 800; color: var(--text-primary); line-height: 1.1; margin-bottom: 8px; }
-.hm-fund-total span { font-size: 12px; font-weight: 400; color: color-mix(in srgb, var(--text-primary) 68%, transparent); }
+.hm-fund-total { font-size: 28px; font-weight: 800; color: var(--text-primary); line-height: 1.1; margin-bottom: 8px; display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; row-gap: 2px; }
+.hm-fund-total span { font-size: 12px; font-weight: 400; color: color-mix(in srgb, var(--text-primary) 68%, transparent); white-space: nowrap; }
 .hm-fund-all { position: relative; height: 10px; border-radius: 5px; background: var(--bg-secondary); overflow: hidden; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06); }
 .hm-fund-all > span { display: block; height: 100%; min-width: 3px; border-radius: 5px; background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 75%, #fff 0%), var(--accent)); }
 .hm-fund-all-tick { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--text-primary); opacity: .55; }
@@ -5552,6 +5560,7 @@ body.inv-pdragging, body.inv-pdragging * { cursor: grabbing !important; user-sel
 .rw-sub { margin-bottom: 10px; }
 .rw-opt { display: flex; gap: 10px; align-items: flex-start; padding: 9px 10px; margin-bottom: 8px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; line-height: 1.4; }
 .rw-opt input { margin-top: 4px; accent-color: var(--accent); }
+.rw-opt-soon { margin-top: 14px; border-style: dashed; }
 .key-gate-card.rw-card .rw-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .rw-actions .rw-remove { margin-right: auto; }
 
@@ -5624,3 +5633,41 @@ body.inv-pdragging, body.inv-pdragging * { cursor: grabbing !important; user-sel
 .stk-sum-chip button { border: 0; background: transparent; color: var(--text-muted); cursor: pointer; width: 20px; height: 20px; border-radius: 50%; }
 .stk-sum-chip button:hover { color: var(--text-primary); background: color-mix(in srgb, var(--text-primary) 10%, transparent); }
 @media (max-width: 760px) { .stk-sum-donutrow { flex-direction: column; align-items: stretch; } .stk-sum-donut { align-self: center; } }
+
+/* My Inventory → Add dialog: the Price Guide's going rate (Ideas #12) */
+.inv-price-hint { display: inline-flex; gap: 7px; align-items: baseline; margin-top: 6px; padding: 3px 10px; border-radius: 999px; background: rgba(226, 67, 80, .1); font-size: 12px; line-height: 1.5; cursor: help; }
+.inv-price-hint[hidden] { display: none; }
+/* Add/Edit dialog, compact: label · control · hint on one line where they fit */
+.inv-add-card .sp-field-label { margin: 10px 0 4px; }
+.inv-add-card .settings-hint { margin-top: 4px; font-size: 11.5px; }
+.inv-dlg-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+.inv-dlg-line > .sp-field-label { margin: 0; }
+.inv-dlg-line > .settings-hint { margin: 0; flex: 1 1 160px; min-width: 0; cursor: help; }
+.inv-var-head > .btn { margin-left: auto; }
+.inv-add-card .inv-extra-chips:empty { display: none; }
+.inv-add-card .inv-match-preview { margin-top: 6px; min-height: 0; }
+.inv-add-card .inv-add-row { margin-top: 0; }
+.inv-add-card .inv-oneoff-toggle { margin-top: 10px; }
+.inv-add-card .inv-var-actions:not(:has(> :not([hidden]))) { display: none; }
+.inv-price-hint > i { color: var(--accent); }
+.inv-add-card .inv-extra-add input { max-width: none; }
+
+/* Factories → Use resources from stockpile (factories-stock.js) */
+.fac-stk { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 12px; color: var(--text-muted); }
+.fac-stk a { cursor: pointer; color: var(--text-muted); }
+.fac-stk a:hover { color: var(--text-hover); }
+.fac-stk.is-drawn { color: var(--text-primary); }
+.fac-stk.is-drawn > span { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fac-stk > i, .fac-stk a > i { color: var(--accent); margin-right: 2px; }
+.fstk-card { max-width: 640px; text-align: left; }
+.fstk-card h2 { font-size: 16px; text-align: left; margin: 0 0 6px; }
+.fstk-sub { margin: 0 0 12px; }
+.fstk-body { display: flex; flex-direction: column; gap: 8px; }
+.fstk-row { display: grid; grid-template-columns: minmax(140px, 1fr) minmax(180px, 1.4fr) 110px 70px; gap: 8px; align-items: center; }
+.fstk-slot { display: flex; flex-direction: column; line-height: 1.3; font-size: 13px; }
+.fstk-row .form-select, .fstk-row .form-control { width: 100%; max-width: none; }
+.fstk-short { font-size: 11px; color: #e0a040; white-space: nowrap; }
+@media (max-width: 720px) { .fstk-row { grid-template-columns: 1fr 1fr; } }
+
+/* sidebar fund card: the line under the bar never wraps */
+#fund-sub { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

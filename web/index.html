@@ -8,7 +8,7 @@
        every dialog showed at once on launch (Oogie) -->
   <link href="vendor/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="vendor/fontawesome/css/all.min.css">
-  <link rel="stylesheet" href="css/app.css?v=20261118donut">
+  <link rel="stylesheet" href="css/app.css?v=20261118stk">
   <link rel="stylesheet" href="css/share.css?v=20261022x">
   <link rel="stylesheet" href="css/quests.css?v=20261105qc">
 </head>
@@ -686,7 +686,7 @@
           <table class="data-grid ann-cards">
             <thead><tr>
               <th class="col-text">When</th><th class="col-name">Resource</th>
-              <th class="col-text">Match</th><th class="col-text">Rule</th>
+              <th class="col-text">Type</th><th class="col-text">Match</th><th class="col-text">Rule</th>
             </tr></thead>
             <tbody id="al-feed"></tbody>
           </table>
@@ -3399,28 +3399,42 @@
     </div>
   </div>
 
+  <!-- Factories: take a run's resources out of My Stockpile (factories-stock.js) — only when asked -->
+  <div id="fstk-modal" class="key-gate" hidden>
+    <div class="key-gate-card sp-card fstk-card">
+      <h2><i class="fa-solid fa-cubes"></i> Use resources from stockpile</h2>
+      <p class="settings-sub fstk-sub">For <b id="fstk-title-run"></b>. Pick what this run uses and how much — your My Stockpile amounts only change when you press Take.</p>
+      <div id="fstk-body" class="fstk-body"></div>
+      <div class="inv-add-actions">
+        <button id="fstk-cancel" type="button" class="btn btn-sm btn-outline-secondary">Cancel</button>
+        <button id="fstk-take" type="button" class="btn btn-sm btn-accent"><i class="fa-solid fa-minus"></i> Take from stockpile</button>
+      </div>
+    </div>
+  </div>
+
   <div id="inv-add-modal" class="key-gate" hidden>
     <div class="key-gate-card sp-card inv-add-card">
       <h2 id="inv-modal-title">Add Inventory Item</h2>
       <label class="sp-field-label">Item name</label>
       <input id="inv-new-name" type="text" class="form-control filter-input settings-input-wide"
              placeholder="e.g. UL Composite Armor Helmet 7000/5000/6000 [SENA]" autocomplete="off">
-      <div class="settings-hint">Use the exact in-game name — sales parsed from your mail
-        automatically deplete the matching item's stock.</div>
-      <label class="sp-field-label">Match <span class="settings-sub">how a sale finds this item</span></label>
-      <div class="inv-match-seg" id="inv-new-match" role="group" aria-label="Match">
-        <button type="button" class="seg-btn active" data-invmatch="exact">Exact name</button>
-        <button type="button" class="seg-btn" data-invmatch="words">Words in order</button>
+      <div id="inv-price-hint" class="inv-price-hint" hidden></div>
+      <div class="inv-dlg-line">
+        <span class="sp-field-label">Match</span>
+        <div class="inv-match-seg" id="inv-new-match" role="group" aria-label="Match">
+          <button type="button" class="seg-btn active" data-invmatch="exact">Exact name</button>
+          <button type="button" class="seg-btn" data-invmatch="words">Words in order</button>
+        </div>
+        <span id="inv-match-hint" class="settings-hint"></span>
       </div>
-      <div id="inv-match-hint" class="settings-hint"></div>
-      <label class="sp-field-label">Extra names <span class="settings-sub">optional — other exact names that count here too</span></label>
+      <label class="sp-field-label">Extra names <span class="settings-sub">optional — other names that count here too</span></label>
       <div id="inv-extra-chips" class="inv-extra-chips"></div>
       <div class="inv-extra-add">
         <input id="inv-extra-input" type="text" class="form-control filter-input" placeholder="Paste a sale's exact name" autocomplete="off">
         <button id="inv-extra-addbtn" type="button" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-plus"></i> Add</button>
       </div>
       <div id="inv-match-preview" class="settings-hint inv-match-preview"></div>
-      <label class="sp-field-label">Vendor <span class="settings-sub">optional — which vendor sells it, so you know where to restock</span></label>
+      <label class="sp-field-label">Vendor <span class="settings-sub">optional — where you restock it</span></label>
       <div class="inv-vendor-wrap">
         <input id="inv-new-vendor" type="text" class="form-control filter-input settings-input-wide"
                placeholder="e.g. Sena's Armor Shack — Mos Eisley" autocomplete="off">
@@ -3438,11 +3452,13 @@
       </div>
       <div id="inv-own-hint" class="settings-hint" hidden></div>
       <!-- Variants (Danvar | Berrillin): names it sells under, each with its own stock -->
-      <label class="sp-field-label">Variants <span class="settings-sub">optional — names it sells under, each with its own stock</span></label>
-      <div id="inv-var-hint" class="settings-hint"></div>
+      <div class="inv-dlg-line inv-var-head">
+        <span class="sp-field-label">Variants <span class="settings-sub">optional</span></span>
+        <span id="inv-var-hint" class="settings-hint"></span>
+        <button id="inv-var-add" type="button" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-plus"></i> Add variant</button>
+      </div>
       <div id="inv-var-list" class="inv-var-list"></div>
       <div class="inv-var-actions">
-        <button id="inv-var-add" type="button" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-plus"></i> Add variant</button>
         <button id="inv-var-fromextra" type="button" class="btn btn-sm btn-outline-secondary" hidden
                 title="Each extra name becomes a variant with its own stock — its sales count there from now on"><i class="fa-solid fa-arrow-down-short-wide"></i> Make extra names variants</button>
       </div>
@@ -3450,15 +3466,14 @@
         <input id="inv-new-oneoff" type="checkbox"> One-off <span class="settings-sub">loot you won’t restock — no low-stock warning</span></label>
       <div class="inv-org-row">
         <div>
-          <label class="sp-field-label" for="inv-new-group">Group <span class="settings-sub">optional — the one folder it files under</span></label>
+          <label class="sp-field-label" for="inv-new-group">Group <span class="settings-sub">one folder</span></label>
           <select id="inv-new-group" class="form-select filter-select settings-input-wide"></select>
         </div>
         <div>
-          <label class="sp-field-label" for="inv-new-tags">Tags <span class="settings-sub">optional — any number, comma-separated</span></label>
+          <label class="sp-field-label" for="inv-new-tags" title="An item sits in one group (a folder in the list) but can carry many tags — click a tag above the list to show only items with it">Tags <span class="settings-sub">any number, comma-separated</span></label>
           <input id="inv-new-tags" type="text" class="form-control filter-input" placeholder="e.g. furniture, gifts" autocomplete="off" maxlength="255">
         </div>
       </div>
-      <div class="settings-sub inv-org-hint">An item sits in one group (a folder in the list) but can carry many tags — click a tag above the list to show only items with it.</div>
       <div class="inv-add-actions">
         <button id="inv-add-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
         <button id="inv-add" class="btn btn-sm btn-accent"><i class="fa-solid fa-plus"></i> Add Item</button>
@@ -3771,6 +3786,7 @@
       <p class="settings-sub rw-sub">Tell me when <b id="rw-title-name"></b> leaves spawn, by:</p>
       <label class="rw-opt"><input type="checkbox" id="rw-notice"> <span><b>Notice</b><br><span class="settings-sub">a desktop notification here, a match in Spawn Alerts on the app and website, and a phone push if you have Spawn Alerts push on</span></span></label>
       <label class="rw-opt"><input type="checkbox" id="rw-email"> <span><b>Email</b><br><span class="settings-sub">to your swgtracker.com email</span></span></label>
+      <label class="rw-opt rw-opt-soon"><input type="checkbox" id="rw-soon"> <span><b>Heads-up before it goes</b><br><span class="settings-sub">once it's been in spawn 7 days — most resources despawn 7–20 days after spawning — told the same way</span></span></label>
       <div class="hm-dlg-actions rw-actions">
         <button id="rw-remove" class="btn btn-sm btn-outline-secondary rw-remove" hidden><i class="fa-solid fa-bell-slash"></i> Stop watching</button>
         <button id="rw-cancel" class="btn btn-sm btn-outline-secondary">Cancel</button>
@@ -4407,7 +4423,7 @@
 
   <!-- Classic scripts sharing one top-level scope; app.js boots last. -->
   <script src="js/class_caps.js?v=20261012a"></script>
-  <script src="js/shared.js?v=20261117nest"></script>
+  <script src="js/shared.js?v=20261118fold"></script>
   <script src="js/shop.js?v=20261017b"></script>
   <script src="js/help.js?v=20261012a"></script>
   <script src="js/resources.js?v=20261026sp"></script>
@@ -4415,12 +4431,12 @@
   <script src="js/share-wizard.js?v=20261022es"></script>
   <script src="js/resource.js?v=20261118watch"></script>
   <script src="js/schematics.js?v=20261116fix"></script>
-  <script src="js/stockpile.js?v=20261118donut"></script>
+  <script src="js/stockpile.js?v=20261118fold"></script>
   <script src="js/stockpile-summary.js?v=20261118muted"></script>
   <script src="js/wishlist.js?v=20261022es"></script>
   <script src="js/myschematics.js?v=20261106mys"></script>
   <script src="js/schemcalc.js?v=20261112rate"></script>
-  <script src="js/inventory.js?v=20261117org"></script>
+  <script src="js/inventory.js?v=20261118compact"></script>
   <script src="js/components.js?v=20261105var"></script>
   <script src="js/components-plan.js?v=20261105bt"></script>
   <script src="js/components-power.js?v=20261103fr"></script>
@@ -4435,13 +4451,14 @@
   <script src="js/insights-profit.js?v=20261101prof"></script>
   <script src="js/purchases.js?v=20261031b"></script>
   <script src="js/harvesters.js?v=20261117ux2"></script>
-  <script src="js/factories.js?v=20261103lk"></script>
+  <script src="js/factories.js?v=20261118stk"></script>
   <script src="js/factories-ready.js?v=20261103dh"></script>
+  <script src="js/factories-stock.js?v=20261118stk"></script>
   <script src="js/customers.js?v=20261117follow"></script>
   <script src="js/characters.js?v=20261022es"></script>
   <script src="js/settings.js?v=20261117digest"></script>
   <script src="js/insight-alerts.js?v=20261102al"></script>
-  <script src="js/alerts.js?v=20261118watch"></script>
+  <script src="js/alerts.js?v=20261118type"></script>
   <script src="js/lab.js?v=20261116grp"></script>
   <script src="js/mail.js?v=20261117ux2"></script>
   <script src="js/isd.js?v=20261117nest"></script>
@@ -4466,12 +4483,12 @@
   <script src="js/decor.js?v=20261027h4"></script>
   <script src="js/home.js?v=20261117fund"></script>
   <script src="js/home-fund.js?v=20261117fund13"></script>
-  <script src="js/rwatch.js?v=20261118watch"></script>
+  <script src="js/rwatch.js?v=20261118soon"></script>
   <script src="js/mailsetup.js?v=20261019a"></script>
   <script src="js/ideas.js?v=20261112blk"></script>
   <script src="js/priceguide.js?v=20261117ux3"></script>
   <script src="js/vendor-upkeep.js?v=20261112sel"></script>
-  <script src="js/navbadges.js?v=20261117nest"></script>
-  <script src="js/app.js?v=20261117fund2"></script>
+  <script src="js/navbadges.js?v=20261118pills"></script>
+  <script src="js/app.js?v=20261118fundsb"></script>
 </body>
 </html>

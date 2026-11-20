@@ -158,8 +158,9 @@ function labLineValue(weights, picked) {
     if (den > 0) { total += w * (num / den); wsum += w; } else dropped = true;
   }
   if (!wsum) return 0;
-  // literal percents over 100 when every stat found a slot, like the site
-  return Math.min(1000, total / (dropped ? wsum : 100));
+  // over the weights' own sum — a 66/33 line is 2/3 + 1/3, not 99% (Asenious: his
+  // crafts came out at 99.38% and 95.34%, matching ÷99, where ÷100 showed 98.37 / 94.38)
+  return Math.min(1000, total / wsum);
 }
 
 function labCheckedWeights() {

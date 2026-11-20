@@ -613,8 +613,9 @@ function parseFormulaWeights(label) {
 //    at 1000 (most parent classes do). caps == null falls back to raw.
 //  - a stat the resource doesn't have (value 0, or slot cap 0) is dropped and
 //    its weight redistributes across the present stats
-//  - when EVERY weighted stat is present, the printed percents apply literally
-//    over 100 — so "CD=33 OQ=33 SR=33" really loses 1% (Σ=99), like in game
+//  - the weights are shares of their own sum: "CD=66 OQ=33" is 2/3 + 1/3, so a
+//    line that sums to 99 still reaches 100% (Asenious checked it against his
+//    crafts — 99.38% and 95.34%, both ÷99; ÷100 had them 1% low)
 function weightedQuality(rec, weightsList, caps = null) {
   if (!rec || !weightsList || !weightsList.length) return null;
   const per = weightsList.map((w) => {
@@ -627,7 +628,7 @@ function weightedQuality(rec, weightsList, caps = null) {
       wsum += pct;
     }
     if (!wsum) return 0;
-    return Math.min(1000, q / (missing ? wsum : 100));
+    return Math.min(1000, q / wsum);
   });
   return per.reduce((a, b) => a + b, 0) / per.length;
 }

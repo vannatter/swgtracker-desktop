@@ -56,6 +56,14 @@ function initNavBadges() {
     pill.className = `nav-pill nav-flag${upd ? ' nav-flag-upd' : ''}`;
     pill.textContent = upd ? 'Updated' : 'New';
     pill.title = upd ? 'Recently updated — open it to see what changed' : 'New page';
+    // the name goes in a span so a long one trims with … instead of shoving the flag off the edge
+    const txt = [...item.childNodes].find((n) => n.nodeType === 3 && n.textContent.trim());
+    if (txt && !item.querySelector('.nav-label')) {
+      const lbl = document.createElement('span');
+      lbl.className = 'nav-label';
+      lbl.textContent = txt.textContent.trim();
+      txt.replaceWith(lbl);
+    }
     item.appendChild(pill);
   });
   if (typeof syncNavGroupDots === 'function') syncNavGroupDots();

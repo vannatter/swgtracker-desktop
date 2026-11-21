@@ -4675,7 +4675,7 @@ tr.gx-rowlink:hover .gx-detail-link { color: var(--text-hover); } /* hover brigh
    UPDATED) overflowed and its pill stuck out past the others (Dustin). */
 .nav-item { position: relative; }
 .nav-item .nav-pill { margin-left: auto; }
-.nav-item .nav-pill ~ .nav-pill { margin-left: 6px; }
+.nav-item .nav-pill:not([hidden]) ~ .nav-pill { margin-left: 6px; } /* a hidden count pill (hoppers, runs, upgrades) mustn't pull a flag off the right edge */
 .nav-item:has(.nav-pill) .nav-key { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); margin: 0; }
 .nav-item:has(.nav-pill):has(.nav-key):hover .nav-pill { visibility: hidden; }
 .app-sidebar.collapsed .nav-key { display: none; }
@@ -5007,6 +5007,9 @@ tr.top-new td.col-name { color: var(--text-hover); }
    The collapsed rail shrinks it to a dot on the icon. */
 .nav-pill.nav-flag { font-size: 8.5px; letter-spacing: .03em; text-transform: uppercase; padding: 1px 4px; line-height: 12px; border-radius: 6px; flex: 0 0 auto; transition: opacity .6s ease, transform .6s ease; }
 .app-sidebar .nav-item:has(> .nav-flag) { white-space: nowrap; } /* a flag never pushes the label onto two lines */
+.app-sidebar .nav-item:has(> .nav-flag) > i { flex: 0 0 auto; } /* a long name never squeezes the icon */
+.nav-item .nav-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; } /* ...it trims with … so the flag keeps the right edge */
+.app-sidebar.collapsed .nav-item .nav-label { display: none; }
 .nav-pill.nav-flag-upd { background: var(--bg-input); color: var(--text-muted); }
 .nav-pill.nav-flag.nav-flag-out { opacity: 0; transform: scale(.85); }
 .app-sidebar.collapsed .nav-item .nav-pill.nav-flag { font-size: 0; min-width: 0; width: 7px; height: 7px; padding: 0; top: 5px; right: 12px; border-radius: 50%; }

@@ -1127,6 +1127,18 @@ function showWpPopover(anchor, resId) {
     pop.className = 'res-wp-pop';
     document.body.appendChild(pop);
     pop.addEventListener('click', (e) => {
+      if (e.target.closest('[data-wpadd]')) {
+        const rid = pop.dataset.rid;
+        const td = document.querySelector(`#res-body .res-name[data-resid="${CSS.escape(rid)}"]`);
+        const row = (resState.lastRows || []).find((x) => String(x.id) === rid);
+        const name = (row && row.name) || (td && td.dataset.resname) || '';
+        hideWpPopover();
+        openWaypointAddDialog({ resourceId: safeInt(rid), resourceName: name, onDone: () => {
+          resState.wpAt = 0;
+          resWpCounts().then(resAnnotateWaypoints);
+        } });
+        return;
+      }
       const line = e.target.closest('[data-wpcopy]');
       if (line) { try { navigator.clipboard.writeText(line.dataset.wpcopy); toast('Waypoint copied'); } catch (_) { /* ignore */ } }
     });
@@ -1138,7 +1150,9 @@ function showWpPopover(anchor, resId) {
         <i class="fa-solid fa-location-dot"></i>
         <span class="res-wp-pop-wp">${escapeHtml(w.waypoint || '')}</span>
         ${w.concentration ? `<span class="res-wp-pop-conc">${safeInt(w.concentration)}%</span>` : ''}
-      </div>`).join('');
+      </div>`).join('')
+    + '<div class="res-wp-pop-row res-wp-pop-add" data-wpadd><i class="fa-solid fa-plus"></i> <span>Add a waypoint</span></div>';
+  pop.dataset.rid = String(resId);
   const r = anchor.getBoundingClientRect();
   pop.hidden = false;
   // place below the badge, clamped to the viewport

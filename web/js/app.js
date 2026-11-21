@@ -1368,6 +1368,7 @@ async function boot() {
   initResources();
   initSchematics();
   initStockpile();
+  initStkMinimums();
   initWishlist();
   initMySchematics();
   initSales();

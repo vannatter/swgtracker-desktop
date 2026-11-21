@@ -48,6 +48,7 @@ function rdIsActive(r) {
 }
 
 // community-shared waypoints for this resource — chips you can click to copy
+let rdWpFor = null; // the resource the chips were drawn for (the + Add chip's target)
 async function rdRenderWaypoints(r) {
   const host = document.getElementById('rd-waypoints');
   if (!host) return;
@@ -56,12 +57,27 @@ async function rdRenderWaypoints(r) {
   let res;
   try { res = await apiFetch('GET', 'api/waypoints.php'); } catch (_) { return; }
   const mine = (((res.ok && res.data && res.data.results) || [])).filter((w) => String(w.resource_id) === String(r.id));
-  if (!mine.length) return;
+  rdWpFor = r;
+  // always offer "+ Add" beside the chips (Canda, #69) — before this the only way
+  // in was the Locations tab or the planet map
+  const add = `<span class="rd-wp-chip rd-wp-add" data-wpadd title="Share where you found it"><i class="fa-solid fa-plus"></i> Add${mine.length ? '' : ' a waypoint'}</span>`;
   host.innerHTML = '<span class="rd-planets-label"><i class="fa-solid fa-location-dot"></i> Waypoints:</span> '
-    + mine.map((w) => `<span class="rd-wp-chip" data-wpcopy="${escapeHtml(waypointCopyText(w, r.name))}" title="Click to copy">${escapeHtml(w.waypoint || '')}${w.concentration ? ` <span class="rd-wp-conc">${safeInt(w.concentration)}%</span>` : ''}</span>`).join('');
+    + mine.map((w) => `<span class="rd-wp-chip" data-wpcopy="${escapeHtml(waypointCopyText(w, r.name))}" title="Click to copy">${escapeHtml(w.waypoint || '')}${w.concentration ? ` <span class="rd-wp-conc">${safeInt(w.concentration)}%</span>` : ''}</span>`).join('')
+    + add;
   if (!host.dataset.wired) {
     host.dataset.wired = '1';
     host.addEventListener('click', (e) => {
+      if (e.target.closest('[data-wpadd]')) {
+        const cur = rdWpFor;
+        if (!cur) return;
+        const planet = (typeof rdLoc !== 'undefined' && rdLoc.codes && rdLoc.codes[0]) || undefined;
+        openWaypointAddDialog({ planet, resourceId: cur.id, resourceName: cur.name, onDone: () => {
+          rdRenderWaypoints(cur);
+          if (typeof rdLoc !== 'undefined' && rdLoc.map) rdLoc.map.refresh();
+          if (typeof resState !== 'undefined') resState.wpAt = 0; // list badges refetch
+        } });
+        return;
+      }
       const chip = e.target.closest('[data-wpcopy]');
       if (chip) { try { navigator.clipboard.writeText(chip.dataset.wpcopy); toast('Waypoint copied'); } catch (_) { /* ignore */ } }
     });

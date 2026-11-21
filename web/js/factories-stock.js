@@ -147,6 +147,7 @@ async function facStkTake() {
     const next = safeInt(item.stock) - units;
     let res;
     try { res = await api().update_stockpile(item.stockpile_id, next); } catch (e) { res = { ok: false }; }
+    if (res.ok && typeof stkMinSoon === 'function') stkMinSoon();
     if (!res.ok) { failed++; continue; }
     item.stock = next;
     takes.push({ sid: String(item.stockpile_id), name: item.name, units });
@@ -177,6 +178,7 @@ async function facStkPutBack(fid) {
     const next = safeInt(item.stock) + t.units;
     let res;
     try { res = await api().update_stockpile(item.stockpile_id, next); } catch (e) { res = { ok: false }; }
+    if (res.ok && typeof stkMinSoon === 'function') stkMinSoon();
     if (res.ok) item.stock = next; else failed++;
   }
   delete map[String(fid)];

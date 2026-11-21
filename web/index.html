@@ -8,7 +8,7 @@
        every dialog showed at once on launch (Oogie) -->
   <link href="vendor/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="vendor/fontawesome/css/all.min.css">
-  <link rel="stylesheet" href="css/app.css?v=20261119rpt">
+  <link rel="stylesheet" href="css/app.css?v=20261120min">
   <link rel="stylesheet" href="css/share.css?v=20261022x">
   <link rel="stylesheet" href="css/quests.css?v=20261105qc">
 </head>
@@ -512,9 +512,12 @@
           <i class="fa-solid fa-circle-info info-tip"
              title="Click a stock number to edit it. Changes push to swgtracker.com immediately."></i>
           <input id="stk-search" type="text" class="form-control filter-input head-search" placeholder="Search stockpile...">
+          <button id="stk-min-btn" class="btn btn-sm btn-outline-secondary" title="Get told when your stockpile of a class drops below the least you want to keep"><i class="fa-regular fa-bell"></i> Alerts <span id="stk-min-pill" class="stk-min-pill" hidden></span></button>
           <button id="stk-new-bucket" class="btn btn-sm btn-outline-secondary" title="Create a group — then drag resources into it to organize your stockpile"><i class="fa-solid fa-folder-plus"></i> New Group</button>
           <button class="btn btn-icon" data-refresh="stockpile" title="Sync with server"><i class="fa-solid fa-rotate-right"></i></button>
         </div>
+
+        <div id="stk-min-strip" class="stk-min-strip" hidden title="Change your stockpile alerts"></div>
 
         <div id="stk-summary" class="stk-summary" hidden></div>
 
@@ -2527,7 +2530,7 @@
           <div class="form-check form-switch">
             <input class="form-check-input" type="checkbox" id="set-push-inventory" data-pushkind="inventory">
             <label class="form-check-label" for="set-push-inventory">Restock reminders
-              <span class="settings-sub">— a My Inventory item drops to its restock threshold or oversells, once per drop</span></label>
+              <span class="settings-sub">— a My Inventory item drops to its restock threshold or oversells, or a My Stockpile total drops below a minimum you set — once per drop</span></label>
           </div>
           <div class="form-check form-switch">
             <input class="form-check-input" type="checkbox" id="set-push-sales" data-pushkind="sales">
@@ -3940,6 +3943,46 @@
     </div>
   </div>
 
+  <!-- My Stockpile → Alerts (Ideas #67): a minimum per class, told when the total drops below it -->
+  <div id="stk-min-modal" class="key-gate" hidden>
+    <div class="key-gate-card sp-card stk-min-card">
+      <h2>Stockpile alerts</h2>
+      <p class="settings-sub stk-min-lead">Keep a minimum for any class — Mineral, Steel, down to an exact type — and get told when what you hold drops below it. Once per drop; it re-arms when you're back above.</p>
+      <div id="stk-min-list" class="stk-min-list"></div>
+      <div class="stk-min-form">
+        <div class="stk-min-field stk-min-field-grow">
+          <label class="sp-field-label">Class</label>
+          <div class="cselect" id="stk-min-class-combo">
+            <button type="button" class="cselect-btn" id="stk-min-class-btn">
+              <span id="stk-min-class-current">Pick a class…</span><i class="fa-solid fa-caret-down"></i>
+            </button>
+            <div class="cselect-menu" id="stk-min-class-menu" hidden>
+              <div class="cselect-search">
+                <input id="stk-min-class-filter" type="text" class="form-control filter-input"
+                       placeholder="Type to filter — e.g. steel" autocomplete="off">
+              </div>
+              <div id="stk-min-class-opts" class="stk-min-class-opts"></div>
+            </div>
+          </div>
+        </div>
+        <div class="stk-min-field">
+          <label class="sp-field-label" for="stk-min-units">Alert below</label>
+          <input id="stk-min-units" type="text" class="form-control filter-input" placeholder="e.g. 2m or 500k" autocomplete="off" spellcheck="false">
+        </div>
+      </div>
+      <div class="stk-min-tell">
+        <span class="sp-field-label">Tell me by</span>
+        <label class="pin-toggle"><input id="stk-min-notice" type="checkbox" checked> <i class="fa-regular fa-bell"></i> Notice <span class="settings-sub">desktop + phone push</span></label>
+        <label class="pin-toggle"><input id="stk-min-email" type="checkbox"> <i class="fa-regular fa-envelope"></i> Email</label>
+      </div>
+      <div class="stk-note-actions">
+        <span id="stk-min-status" class="settings-sub stk-min-status"></span>
+        <button id="stk-min-close" class="btn btn-sm btn-outline-secondary">Close</button>
+        <button id="stk-min-save" class="btn btn-sm btn-accent"><i class="fa-solid fa-plus"></i> Add alert</button>
+      </div>
+    </div>
+  </div>
+
   <div id="stk-note-modal" class="key-gate" hidden>
     <div class="key-gate-card sp-card stk-note-card">
       <h2 id="stk-note-title">Notes</h2>
@@ -4468,13 +4511,14 @@
   <script src="js/report.js?v=20261119"></script>
   <script src="js/shop.js?v=20261017b"></script>
   <script src="js/help.js?v=20261012a"></script>
-  <script src="js/resources.js?v=20261026sp"></script>
+  <script src="js/resources.js?v=20261120wp"></script>
   <script src="js/share-card.js?v=20261022y"></script>
   <script src="js/share-wizard.js?v=20261022es"></script>
-  <script src="js/resource.js?v=20261118watch"></script>
+  <script src="js/resource.js?v=20261120wp"></script>
   <script src="js/schematics.js?v=20261116fix"></script>
-  <script src="js/stockpile.js?v=20261118fold"></script>
+  <script src="js/stockpile.js?v=20261120min"></script>
   <script src="js/stockpile-summary.js?v=20261118muted"></script>
+  <script src="js/stockpile-min.js?v=20261120min"></script>
   <script src="js/wishlist.js?v=20261022es"></script>
   <script src="js/myschematics.js?v=20261119up"></script>
   <script src="js/schemcalc.js?v=20261112rate"></script>
@@ -4495,7 +4539,7 @@
   <script src="js/harvesters.js?v=20261117ux2"></script>
   <script src="js/factories.js?v=20261118stk"></script>
   <script src="js/factories-ready.js?v=20261103dh"></script>
-  <script src="js/factories-stock.js?v=20261118stk"></script>
+  <script src="js/factories-stock.js?v=20261120min"></script>
   <script src="js/freshness.js?v=20261119"></script>
   <script src="js/customers.js?v=20261117follow"></script>
   <script src="js/characters.js?v=20261022es"></script>
@@ -4528,10 +4572,10 @@
   <script src="js/home-fund.js?v=20261117fund13"></script>
   <script src="js/rwatch.js?v=20261118soon"></script>
   <script src="js/mailsetup.js?v=20261019a"></script>
-  <script src="js/ideas.js?v=20261112blk"></script>
+  <script src="js/ideas.js?v=20261120shr"></script>
   <script src="js/priceguide.js?v=20261117ux3"></script>
   <script src="js/vendor-upkeep.js?v=20261112sel"></script>
-  <script src="js/navbadges.js?v=20261119pills"></script>
-  <script src="js/app.js?v=20261118fundsb"></script>
+  <script src="js/navbadges.js?v=20261120pills"></script>
+  <script src="js/app.js?v=20261120min"></script>
 </body>
 </html>

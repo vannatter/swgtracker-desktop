@@ -10,7 +10,7 @@
 // seeing a flag twice.
 const PAGE_BADGES = {
   components: { tag: 'updated', since: '2026-11-05' },
-  ideas: { tag: 'updated', since: '2026-11-06' },
+  ideas: { tag: 'updated', since: '2026-11-20' },
   quests: { tag: 'updated', since: '2026-11-05' },
   settings: { tag: 'updated', since: '2026-11-07' },
   prices: { tag: 'updated', since: '2026-11-16' },
@@ -24,9 +24,9 @@ const PAGE_BADGES = {
   isd: { tag: 'updated', since: '2026-11-17' },
   sales: { tag: 'updated', since: '2026-11-12' },
   myschematics: { tag: 'updated', since: '2026-11-19' },
-  resources: { tag: 'updated', since: '2026-11-18' },
+  resources: { tag: 'updated', since: '2026-11-20' },
   alerts: { tag: 'updated', since: '2026-11-18' },
-  stockpile: { tag: 'updated', since: '2026-11-18' },
+  stockpile: { tag: 'updated', since: '2026-11-20' },
   factories: { tag: 'updated', since: '2026-11-18' },
 };
 const NAV_BADGE_DAYS = 30;

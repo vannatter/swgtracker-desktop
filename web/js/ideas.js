@@ -117,6 +117,7 @@ function ideaCardHtml(it) {
         <button class="idea-cmt-btn${ideaState.threadOpen.has(id) ? ' active' : ''}" data-icmt="${id}"
           title="${ideaState.threadOpen.has(id) ? 'Hide comments' : 'Show comments'}"><i class="fa-${safeInt(it.comment_count) ? 'solid' : 'regular'} fa-comment"></i>
           ${safeInt(it.comment_count) ? fmtNum(it.comment_count) : 'Comment'}</button>
+        <button class="idea-cmt-btn idea-share-btn" data-ishare="${id}" title="Copy a link to this idea — it opens on swgtracker.com"><i class="fa-solid fa-share-nodes"></i> Share</button>
       </div>
       ${desc ? `<div class="idea-desc${long && !open ? ' idea-clamp' : ''}">${escapeHtml(desc)}</div>
         ${long ? `<button class="idea-more" data-imore="${id}">${open ? 'Show less' : 'Show more'}</button>` : ''}` : ''}
@@ -375,6 +376,13 @@ async function ideaAdmin(data, okMsg) {
   loadIdeas();
 }
 
+// Share: the idea's own link on the website (it opens with that idea in view)
+async function ideaShare(id) {
+  const url = 'https://swgtracker.com/ideas.php?id=' + safeInt(id);
+  try { await navigator.clipboard.writeText(url); toast('Link copied — paste it anywhere to share this idea'); }
+  catch (_) { toast('Copy this link: ' + url, false); }
+}
+
 function initIdeas() {
   let t = null;
   $('#ideas-search').addEventListener('input', () => { clearTimeout(t); t = setTimeout(loadIdeas, 300); });
@@ -390,9 +398,10 @@ function initIdeas() {
   $('#ideas-list').addEventListener('click', async (e) => {
     if (e.target.closest('[data-ishipped]')) { ideaState.shippedOpen = !ideaState.shippedOpen; renderIdeas(); return; }
     if (e.target.closest('[data-iblocked]')) { ideaState.blockedOpen = !ideaState.blockedOpen; renderIdeas(); return; }
-    const b = e.target.closest('[data-ivote],[data-imore],[data-iedit],[data-idel],[data-ipin],[data-ilabel],[data-icmt],[data-icmtpost],[data-icmtdel]');
+    const b = e.target.closest('[data-ivote],[data-imore],[data-iedit],[data-idel],[data-ipin],[data-ilabel],[data-icmt],[data-icmtpost],[data-icmtdel],[data-ishare]');
     if (!b) return;
     const it = (id) => ideaState.ideas.find((i) => String(i.id) === id);
+    if (b.dataset.ishare) { ideaShare(b.dataset.ishare); return; }
     if (b.dataset.icmt) {
       const id = b.dataset.icmt;
       if (ideaState.threadOpen.has(id)) { ideaState.threadOpen.delete(id); renderIdeas(); return; }

@@ -402,6 +402,7 @@ async function syncStockpile() {
   stkState.selection.clear();
   stkState.mySchems = null; stkState._mySchemsPromise = null; // refresh the Schem counts too
   stkLoadTreeOrder(); // taxonomy order for the Type sort (no-op once cached)
+  if (typeof stkMinSweep === 'function') stkMinSweep(); // stockpile alerts: strip + any fresh drop
   // sticky Type-sort mode
   api().get_config().then((cfg) => {
     const v = cfg.ok && cfg.data && cfg.data.stk_typesort;
@@ -520,6 +521,7 @@ async function pushStockUpdate(item, stock) {
   item.stock = stock; // optimistic — grid already shows the new value
   try {
     const res = await api().update_stockpile(item.stockpile_id, stock);
+    if (res.ok && typeof stkMinSoon === 'function') stkMinSoon(); // stockpile alerts re-judge
     $('#stk-status').textContent = res.ok
       ? `Stock updated — ${item.name}: ${fmtNum(stock)}`
       : `Failed to update ${item.name}: ${res.error || 'server error'}`;

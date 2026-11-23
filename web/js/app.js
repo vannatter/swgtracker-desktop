@@ -662,7 +662,7 @@ async function pollBundleState() {
   if (st?.source === 'bundle' && st.active_version && !_bundlePending) {
     const b = $('#bundle-id');
     b.hidden = false;
-    b.innerHTML = `<i class="fa-solid fa-cloud-arrow-down"></i>ui ${escapeHtml(st.active_version)}`;
+    b.innerHTML = `<i class="fa-solid fa-cloud"></i>ui ${escapeHtml(st.active_version)}`; // plain grey cloud: nothing waiting
     b.title = `Interface delivered as update ${st.active_version} — click to check for updates`;
   }
   if (st?.pending) {

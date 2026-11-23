@@ -701,31 +701,36 @@ function renderRdTable() {
   } else { // used
     head = rdSortableTh('Schematic', 'schematicName', 'col-name')
       + rdSortableTh('As', 'resourceClassName', 'col-text')
+      + rdSortableTh('Quality', 'quality')
       + rdSortableTh('Rank', 'ranking');
-    // rank-ascending default front-loads the #1 rows, which reads as "it says
-    // #1 for everything" (Philosophy's report) — the distribution line shows
-    // the real spread, and the meaning of Rank gets said out loud
-    const dist = {};
-    (d.used_ins || []).forEach((u) => { const r = safeInt(u.ranking); dist[r] = (dist[r] || 0) + 1; });
-    const distTxt = Object.keys(dist).map(Number).sort((a, b) => a - b)
-      .map((r) => `<b class="${rankClass(r)}">#${r}</b> in ${fmtNum(dist[r])}`).join(' · ');
+    // Ranks are all-time now (the site's includes/used_in.php): against every
+    // resource of the slot's class ever recorded, not just what's in spawn —
+    // the lone spawn of a class used to read "#1" at 550 quality (Oogie)
+    const all = d.used_ins || [];
+    const top10 = all.filter((u) => safeInt(u.ranking) <= 10).length;
+    const top100 = all.filter((u) => safeInt(u.ranking) <= 100).length;
     const note = $('#rd-tabnote');
-    note.hidden = !distTxt;
-    note.innerHTML = distTxt
-      ? `Rank = where this resource places among <b>currently spawned</b> resources of the needed class, per schematic — ${distTxt}`
+    note.hidden = !all.length;
+    note.innerHTML = all.length
+      ? `Rank = where this resource places among <b>every</b> resource of the needed class the site has recorded, in spawn or not, scored on that schematic's weights — <b class="q-great">top 10</b> in ${fmtNum(top10)} · top 100 in ${fmtNum(top100)}`
       : '';
     const uses = rdSorted(
-      [...(d.used_ins || [])].sort((a, b) => safeInt(a.ranking) - safeInt(b.ranking)), {
+      [...all].sort((a, b) => safeInt(a.ranking) - safeInt(b.ranking)), {
         schematicName: (u) => lc(u.schematicName),
         resourceClassName: (u) => lc(u.resourceClassName),
+        quality: (u) => Number(u.quality) || 0,
         ranking: (u) => safeInt(u.ranking),
       });
-    body = uses.map((u) => `
+    body = uses.map((u) => {
+      const q = Number(u.quality) || 0;
+      return `
       <tr data-schem="${escapeHtml(String(u.schematicId || ''))}" data-sname="${escapeHtml(u.schematicName || '')}">
         <td class="col-name res-name">${escapeHtml(u.schematicName || '')}</td>
         <td class="col-text res-type">${escapeHtml(u.resourceClassName || '')}</td>
-        <td class="stat ${rankClass(safeInt(u.ranking))}">#${safeInt(u.ranking)}</td>
-      </tr>`).join('');
+        <td class="stat ${qualityClass(q / 10)}">${u.quality != null ? q.toFixed(1) : '—'}</td>
+        <td class="stat ${rankClass(safeInt(u.ranking))}">#${fmtNum(safeInt(u.ranking))}${u.pool ? ` <span class="rd-of">of ${fmtNum(u.pool)}</span>` : ''}</td>
+      </tr>`;
+    }).join('');
     emptyMsg = 'No schematics currently rank this resource.';
   }
 

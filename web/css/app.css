@@ -755,6 +755,7 @@ td.lab-dim { opacity: .45; }
 
 /* resource detail: Used In tab's rank-distribution note */
 .rd-tabnote { font-size: 12px; color: var(--text-muted); margin: 6px 2px 8px; }
+.rd-of { font-weight: 400; font-size: 11px; color: var(--text-muted); } /* Used In: "#113 of 227" */
 .rd-tabnote b { font-weight: 700; }
 
 /* My Customers scorecard hosts the Insights customer card as PAGE content —

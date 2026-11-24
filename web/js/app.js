@@ -77,6 +77,7 @@ const PAGE_LOADERS = {
   planetmap: () => loadPlanetMap(),
   professions: () => loadProfessions(),
   titles: () => loadTitles(),
+  stables: () => loadStables(),
   pets: () => loadPets(),
   creatures: () => loadCreatures(),
   specials: () => loadSpecials(),
@@ -1369,6 +1370,7 @@ async function boot() {
   initSchematics();
   initStockpile();
   initStkMinimums();
+  initStables();
   initWishlist();
   initMySchematics();
   initSales();

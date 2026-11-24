@@ -15,6 +15,7 @@ const HOME_SECTIONS = [
 ];
 // the built-in At a Glance tiles (hide any you don't care about)
 const HOME_GLANCE = [
+  { key: 'review', name: 'Community Review' },       // only shows while schematics are waiting on YOUR confirmation
   { key: 'reputation', name: 'Your Reputation' },   // yours, not the site's (api/prefs.php rep — Canda's #53)
   { key: 'hottest_resource', name: 'Hottest Resource' },
   { key: 'hottest_schematic', name: 'Hottest Schematic' },
@@ -283,6 +284,12 @@ async function loadHome(force = false) {
       .then((r) => { homeState.dash = r.ok ? r.data : null; homeState.dashErr = r.ok ? null : (r.error || 'failed to load'); })
       .catch((e) => { homeState.dash = null; homeState.dashErr = String(e); }));
   }
+  if (want('glance') && !l.glanceHidden.has('review')) {
+    // community schematics / corrections awaiting verification (same queue as Schematics → Review)
+    jobs.push(apiFetch('GET', 'api/user_schematics.php', { params: { action: 'review' } })
+      .then((r) => { homeState.review = r.ok && r.data && Array.isArray(r.data.items) ? r.data.items : null; })
+      .catch(() => { homeState.review = null; }));
+  }
   if (want('spawns')) {
     jobs.push(apiFetch('GET', 'api/resources.php', { params: { status: 'active', sort: 'id', order: 'DESC', perpage: l.spawnsN, page: 1 } })
       .then((r) => { homeState.spawns = r.ok ? ((r.data && r.data.results) || []) : null; homeState.spawnsErr = r.ok ? null : (r.error || 'failed to load'); })
@@ -407,7 +414,7 @@ function homeCardsWrap(view, gridCls, cardsHtml) {
 const HM_TILE_ICONS = {
   'hottest resource': 'fa-fire', 'hottest schematic': 'fa-scroll', 'top scored active': 'fa-trophy',
   'biggest city mover': 'fa-city', 'biggest guild mover': 'fa-shield-halved', 'gcw tracker': 'fa-scale-balanced',
-  'active resources': 'fa-gem', 'today’s pulse': 'fa-heart-pulse', 'your reputation': 'fa-star',
+  'active resources': 'fa-gem', 'today’s pulse': 'fa-heart-pulse', 'your reputation': 'fa-star', 'community review': 'fa-user-check',
 };
 const hmPlain = (html) => String(html || '').replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').trim();
 function homeTile(label, value, sub, badge, extra = '', attrs = '') {
@@ -472,6 +479,17 @@ function homeGlanceHtml() {
           last ? `<div class="hm-gcw-now"><span class="hm-imp">${fmtNum(last.imperial)} Imp</span><span class="hm-reb">${fmtNum(last.rebel)} Reb</span></div>` : ''),
         active_count: () => homeTile('Active Resources', fmtNum(safeInt(d.active_count)), 'currently in spawn', ''),
         reputation: () => homeRepTile(),
+        review: () => {
+          // what still needs YOUR eyes (not yours, not confirmed yet) — no tile when there's nothing
+          const todo = (homeState.review || []).filter((i) => !i.mine && !i.voted);
+          if (!todo.length) return '';
+          const fixes = todo.filter((i) => i.fixes).length;
+          const names = todo.slice(0, 2).map((i) => `<span class="hm-schem" data-hmschem="${safeInt(i.id)}" data-hmschemname="${escapeHtml(i.name)}">${escapeHtml(i.name)}</span>`).join(', ')
+            + (todo.length > 2 ? ` +${todo.length - 2} more` : '');
+          const badge = [fixes ? `${fixes} correction${fixes === 1 ? '' : 's'}` : '', todo.length - fixes ? `${todo.length - fixes} new` : ''].filter(Boolean).join(' · ');
+          return homeTile('Community Review', `${todo.length} to review`, names, badge, '',
+            `data-hmreview="${safeInt(todo[0].id)}" data-hmreviewname="${escapeHtml(todo[0].name)}" title="Community schematics waiting on your confirmation — open one, check it against its proof and confirm"`);
+        },
         pulse: () => homeTile('Today’s Pulse', `<div class="hm-mini">${(pulse.history || []).length > 1
             ? gxSpark(pulse.history, { w: 240, h: 48, color: 'var(--accent)', fill: true })
             : '<div class="settings-sub">no pulse samples yet today</div>'}</div>`, '', '',
@@ -1092,6 +1110,8 @@ function initHome() {
     if (e.target.closest('[data-hmrep]')) { showPage('settings'); return; }
     const schem = e.target.closest('[data-hmschem]');
     if (schem) { openSchematicPage(safeInt(schem.dataset.hmschem), schem.dataset.hmschemname); return; }
+    const rev = e.target.closest('[data-hmreview]'); // the rest of the review tile opens the first one waiting
+    if (rev) { openSchematicPage(safeInt(rev.dataset.hmreview), rev.dataset.hmreviewname); return; }
     const guild = e.target.closest('[data-hmguild]');
     if (guild) { openGxDetail('guild', { abbrev: guild.dataset.hmguild, name: guild.dataset.hmgname }); return; }
     const city = e.target.closest('[data-hmcity]');

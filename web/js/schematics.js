@@ -606,7 +606,7 @@ function renderSchematicPage(s) {
   // label ("Reaction Medium") against the class ("Reactive Gas") in the proof
   $('#scd-resneeded').innerHTML = neededAll.map((r) => {
     const hid = safeInt(r.units) <= 0;
-    return `<div class="scd-line${hid ? ' scd-hiddenrow' : ''}"><span class="scd-eqty" data-eqty="${escapeHtml(String(r.id ?? ''))}" title="${hid ? 'Hidden by a community edit (qty 0) — click to set a quantity and bring it back' : 'Community-editable — click to fix the quantity'}">${safeInt(r.units)}</span> of <span class="scd-restype">${escapeHtml(r.resourceName || '')}</span>${(r.desc || '').trim()
+    return `<div class="scd-line${hid ? ' scd-hiddenrow' : ''}" data-ri="${neededAll.indexOf(r)}"><span class="scd-eqty" data-eqty="${escapeHtml(String(r.id ?? ''))}" title="${hid ? 'Hidden by a community edit (qty 0) — click to set a quantity and bring it back' : 'Community-editable — click to fix the quantity'}">${safeInt(r.units)}</span> of <span class="scd-restype">${escapeHtml(r.resourceName || '')}</span>${(r.desc || '').trim()
       ? ` <span class="scd-slotlabel">(${escapeHtml(r.desc)})</span>` : ''}${hid ? ' <span class="scd-hidden-tag">hidden</span>' : ''}</div>`;
   }).join('') + (needed.length ? `<div class="scd-line scd-total"><span id="scd-restotal">${total}</span> Total Resource Units</div>` : '<div class="scd-line">None</div>');
 
@@ -657,6 +657,106 @@ function renderSchematicPage(s) {
   updateScdMustafarBtn();
   // what you hold in My Components per slot (components.js) — quiet when you don't use it
   if (typeof cmpSchematicHoldings === 'function') cmpSchematicHoldings(s);
+}
+
+// ---- a community correction under review: show what it changes ----
+// Loads the schematic it would replace and marks every difference on this page —
+// changed numbers/names carry a "was …" note, new lines a "new" tag, and lines the
+// correction drops are listed struck through — so reviewers can check exactly the
+// changed parts against the proof instead of re-reading the whole recipe.
+// Returns the number of changes (or -1 when the original couldn't be loaded).
+async function scdShowFixDiff(origId, sid) {
+  let res;
+  try { res = await api().get_schematic(origId); } catch (_) { return -1; }
+  const o = res.ok && res.data ? (res.data.schematic || res.data) : null;
+  const s = scdState.schematic;
+  if (!o || !o.schematicName || !s || String(scdState.id) !== String(sid)) return -1;
+  let n = 0;
+  const norm = (x) => String(x ?? '').replace(/\s+/g, ' ').trim().toLowerCase(); // the original data has stray double spaces
+  const was = (txt) => ` <span class="scd-was" title="What the schematic it replaces says">was ${escapeHtml(String(txt))}</span>`;
+  const mark = (el, old) => { if (!el) return; el.classList.add('scd-chg'); el.insertAdjacentHTML('afterend', was(old)); n++; };
+
+  if (norm(o.schematicName) !== norm(s.schematicName)) mark($('#scd-name'), o.schematicName);
+  if (norm(o.schematicDescription) !== norm(s.schematicDescription)) {
+    $('#scd-desc').classList.add('scd-chg'); n++;
+    $('#scd-desc').insertAdjacentHTML('afterend', `<div class="scd-was scd-was-block">was: ${escapeHtml(o.schematicDescription || '(none)')}</div>`);
+  }
+  if (safeInt(o.crateSize) !== safeInt(s.crateSize)) mark($('#scd-meta [data-eqty="crateSize"]'), safeInt(o.crateSize) || 'none');
+  if (o.expBenefit != null && s.expBenefit != null && safeInt(o.expBenefit) !== safeInt(s.expBenefit)) {
+    mark($('#scd-benefit .benefits'), safeInt(o.expBenefit) ? 'benefits' : 'no benefit');
+  }
+
+  // pair lines by slot label (resources) / name (components), falling back to position
+  const pair = (oldList, newList, key) => {
+    const used = new Set(), out = new Map();
+    newList.forEach((x, i) => {
+      let j = oldList.findIndex((y, k) => !used.has(k) && key(y) && key(y) === key(x));
+      if (j < 0 && oldList[i] && !used.has(i) && oldList.length === newList.length) j = i;
+      if (j >= 0) { used.add(j); out.set(i, oldList[j]); }
+    });
+    return { out, gone: oldList.filter((_, k) => !used.has(k)) };
+  };
+  const newTag = '<span class="scd-new-tag" title="Not in the schematic it replaces">new</span>';
+
+  const oRes = (o.resourcesNeeded || []).filter((r) => safeInt(r.units) > 0);
+  const sRes = s.resourcesNeeded || [];
+  const rp = pair(oRes, sRes, (r) => norm(r.desc) || norm(r.resourceName));
+  sRes.forEach((r, i) => {
+    const line = $(`#scd-resneeded [data-ri="${i}"]`);
+    if (!line || safeInt(r.units) <= 0) return;
+    const old = rp.out.get(i);
+    if (!old) { line.classList.add('scd-chg-line'); line.insertAdjacentHTML('beforeend', ' ' + newTag); n++; return; }
+    if (safeInt(old.units) !== safeInt(r.units)) mark(line.querySelector('.scd-eqty'), safeInt(old.units));
+    if (norm(old.resourceName) !== norm(r.resourceName)) mark(line.querySelector('.scd-restype'), old.resourceName);
+    if (norm(old.desc) !== norm(r.desc) && (old.desc || r.desc)) mark(line.querySelector('.scd-slotlabel') || line.querySelector('.scd-restype'), `(${old.desc || 'no label'})`);
+  });
+  const total = $('#scd-resneeded .scd-total');
+  rp.gone.forEach((r) => {
+    n++;
+    const html = `<div class="scd-line scd-gone" title="In the schematic it replaces — this correction drops it">${safeInt(r.units)} of ${escapeHtml(r.resourceName || '')}${r.desc ? ` (${escapeHtml(r.desc)})` : ''} <span class="scd-gone-tag">removed</span></div>`;
+    if (total) total.insertAdjacentHTML('beforebegin', html); else $('#scd-resneeded').insertAdjacentHTML('beforeend', html);
+  });
+
+  const oComp = (o.componentTypes || []).filter((c) => safeInt(c.number) > 0);
+  const sComp = s.componentTypes || [];
+  const cp = pair(oComp, sComp, (c) => norm(c.desc));
+  const kindOf = (c) => (c.optional === 'yes' ? 'optional' : safeInt(c.number) < 2 ? '' : c.similar === 'yes' ? 'similar' : 'exact');
+  sComp.forEach((c, i) => {
+    const line = $(`#scd-components [data-ci="${i}"]`);
+    if (!line || safeInt(c.number) <= 0) return;
+    const old = cp.out.get(i);
+    if (!old) { line.classList.add('scd-chg-line'); line.insertAdjacentHTML('beforeend', ' ' + newTag); n++; return; }
+    if (safeInt(old.number) !== safeInt(c.number)) mark(line.querySelector('.scd-eqty'), safeInt(old.number));
+    // exact/similar only exists at 2+ (and optional is its own thing) — a count change alone isn't a kind change
+    if (kindOf(old) !== kindOf(c) && (old.optional === 'yes' || c.optional === 'yes' || (safeInt(old.number) >= 2 && safeInt(c.number) >= 2))) {
+      const k = line.querySelector('.scd-match');
+      if (k) mark(k, kindOf(old) || 'required');
+      else { line.classList.add('scd-chg-line'); line.insertAdjacentHTML('beforeend', was(kindOf(old) || 'required')); n++; }
+    }
+    if (norm(old.desc) !== norm(c.desc)) mark(line.querySelector('.scd-complink, .scd-catlink') || line.lastElementChild, old.desc);
+  });
+  cp.gone.forEach((c) => {
+    n++;
+    $('#scd-components').insertAdjacentHTML('beforeend', `<div class="scd-line scd-gone" title="In the schematic it replaces — this correction drops it">${c.optional === 'yes' ? 'Optional' : 'Requires'} ${safeInt(c.number)} ${escapeHtml(c.desc || '')} <span class="scd-gone-tag">removed</span></div>`);
+  });
+
+  // experimentation lines ("Experimental Durability CD=50% OQ=50%") — weights live in the text
+  const oF = (o.formula || []).map((f) => f.formulaDescription || '');
+  const sF = (s.formula || []).map((f) => f.formulaDescription || '');
+  const head = (t) => norm(t).replace(/\s+[a-z]{2}=.*$/, ''); // "experimental durability"
+  sF.forEach((t, i) => {
+    if (oF.some((x) => norm(x) === norm(t))) return;
+    const lab = $(`#scd-formulas label[for="scd-f${i}"]`);
+    const old = oF.find((x) => head(x) === head(t));
+    if (!lab) return;
+    if (old) mark(lab, old.slice(old.search(/\s[A-Z]{2}=/) + 1) || old);
+    else { lab.classList.add('scd-chg'); lab.insertAdjacentHTML('beforeend', ' ' + newTag); n++; }
+  });
+  oF.filter((x) => !sF.some((t) => head(t) === head(x))).forEach((x) => {
+    n++;
+    $('#scd-formulas').insertAdjacentHTML('beforeend', `<div class="scd-formula scd-gone" title="In the schematic it replaces — this correction drops it">${escapeHtml(x)} <span class="scd-gone-tag">removed</span></div>`);
+  });
+  return n;
 }
 
 function updateScdMustafarBtn() {

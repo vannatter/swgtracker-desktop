@@ -8,7 +8,7 @@
        every dialog showed at once on launch (Oogie) -->
   <link href="vendor/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="vendor/fontawesome/css/all.min.css">
-  <link rel="stylesheet" href="css/app.css?v=20261123chip">
+  <link rel="stylesheet" href="css/app.css?v=20261124qfilt2">
   <link rel="stylesheet" href="css/share.css?v=20261022x">
   <link rel="stylesheet" href="css/quests.css?v=20261105qc">
 </head>
@@ -67,6 +67,7 @@
         <li class="nav-item nav-group-item" data-page="titles" data-group="galaxy"><i class="fa-solid fa-id-badge"></i> Titles</li>
         <li class="nav-item nav-group-item" data-page="restree" data-group="galaxy"><i class="fa-solid fa-sitemap"></i> Resource Tree</li>
         <li class="nav-group-head" data-navgroup="beasts"><i class="fa-solid fa-paw"></i> Beasts <i class="fa-solid fa-caret-down nav-group-caret"></i><span class="nav-group-dot" hidden></span></li>
+        <li class="nav-item nav-group-item" data-page="stables" data-group="beasts"><i class="fa-solid fa-horse-head"></i> Stables</li>
         <li class="nav-item nav-group-item" data-page="pets" data-group="beasts"><i class="fa-solid fa-dog"></i> Pets</li>
         <li class="nav-item nav-group-item" data-page="creatures" data-group="beasts"><i class="fa-solid fa-dragon"></i> Creatures</li>
         <li class="nav-item nav-group-item" data-page="specials" data-group="beasts"><i class="fa-solid fa-bolt"></i> Specials</li>
@@ -2166,6 +2167,18 @@
       </section>
 
       <!-- Beasts: the website's Beast Master section (pets.php / creatures.php / specials.php + detail pages + calculators) -->
+      <!-- Stables: the player's own pets standing around a 3D stable (stables.js, api/stables.php) -->
+      <section id="page-stables" class="page">
+        <div class="page-head">
+          <h1 id="stab-title">Stables</h1>
+          <i class="fa-solid fa-circle-info info-tip" title="Your own pets, standing around your stable. Add each pet you own with the colour you gave it, its level, incubation stats, specials trained and more. Turn the line-up with the arrows, ← / → or a sideways swipe. Saved to your swgtracker.com account — private unless you share it."></i>
+          <button class="btn btn-icon" data-refresh="stables" title="Reload from swgtracker.com"><i class="fa-solid fa-rotate-right"></i></button>
+          <button id="stab-share-btn" class="btn btn-sm btn-outline-secondary" title="Rename your stable or share it with a link"><i class="fa-solid fa-share-nodes"></i> Share</button>
+          <button id="stab-add-btn" class="btn btn-sm btn-accent" title="Add a pet to your stable"><i class="fa-solid fa-plus"></i> Add pet</button>
+        </div>
+        <div id="stab-root" class="stab-root"></div>
+      </section>
+
       <section id="page-pets" class="page">
         <div class="page-head">
           <h1>Pets</h1>
@@ -2300,7 +2313,7 @@
           <button id="quests-reload" class="btn btn-icon" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
           <button id="quests-submit" class="btn btn-sm btn-accent" title="Add a quest the datapad is missing — it goes live as unverified until two players confirm it"><i class="fa-solid fa-plus"></i> Submit a quest</button>
         </div>
-        <div class="res-filterrow beast-filterrow">
+        <div class="res-filterrow beast-filterrow q-filterrow">
           <select id="quests-category" class="form-select filter-select beast-sel" title="Category"><option value="">All categories</option></select>
           <select id="quests-planet" class="form-select filter-select beast-sel" title="Planet a step sends you to"></select>
           <span class="q-lvl" title="Recommended level range">
@@ -2313,7 +2326,7 @@
             <option value="">Solo &amp; group</option><option value="solo">Solo</option><option value="group">Group</option>
           </select>
           <select id="quests-repeat" class="form-select filter-select beast-sel" title="Repeatable">
-            <option value="">Any</option><option value="1">Repeatable</option><option value="0">One-time</option>
+            <option value="">Once or repeat</option><option value="1">Repeatable</option><option value="0">One-time</option>
           </select>
           <select id="quests-community" class="form-select filter-select beast-sel" title="Community-submitted quests">
             <option value="">All quests</option><option value="submitted">Community quests</option><option value="unverified">Needs confirming</option>
@@ -3724,7 +3737,7 @@
             <input id="ms-path" type="text" class="form-control filter-input" autocomplete="off" placeholder="Choose or paste the mail folder">
             <button id="ms-browse" type="button" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-folder-open"></i> Browse</button>
           </div>
-          <label class="harv-wp-opt ms-auto"><input type="checkbox" id="ms-auto"> <span>Start watching automatically whenever the app opens</span></label>
+          <label class="harv-wp-opt ms-autostart"><input type="checkbox" id="ms-auto"> <span>Start watching automatically whenever the app opens</span></label>
           <div id="ms-err-3" class="ms-err"></div>
           <div class="ms-actions"><button id="ms-save" type="button" class="btn btn-sm btn-accent"><i class="fa-solid fa-play"></i> Save &amp; start watching</button></div>
         </div>
@@ -4515,7 +4528,7 @@
   <script src="js/share-card.js?v=20261022y"></script>
   <script src="js/share-wizard.js?v=20261022es"></script>
   <script src="js/resource.js?v=20261122used"></script>
-  <script src="js/schematics.js?v=20261116fix"></script>
+  <script src="js/schematics.js?v=20261124diff"></script>
   <script src="js/stockpile.js?v=20261120min"></script>
   <script src="js/stockpile-summary.js?v=20261118muted"></script>
   <script src="js/stockpile-min.js?v=20261120min"></script>
@@ -4555,7 +4568,7 @@
   <script src="js/aliases.js?v=20261022es"></script>
   <script src="js/community_macros.js?v=20261022es"></script>
   <script src="js/galaxy.js?v=20261026ca"></script>
-  <script src="js/schembuilder.js?v=20261116fix"></script>
+  <script src="js/schembuilder.js?v=20261124diff"></script>
   <script src="js/scanner.js?v=20261022ro"></script>
   <script src="js/topspawns.js?v=20261107seen"></script>
   <script src="js/restree_data.js?v=20261016a"></script>
@@ -4565,17 +4578,18 @@
   <script src="js/shortcuts.js?v=20261022qa"></script>
   <script src="js/navlayout.js?v=20261016a"></script>
   <script src="js/beasts.js?v=20261022es"></script>
+  <script src="js/stables.js?v=20261124wide"></script>
   <script src="js/quests.js?v=20261106map"></script>
   <script src="js/beastcalc.js?v=20261016a"></script>
   <script src="js/decor.js?v=20261027h4"></script>
-  <script src="js/home.js?v=20261117fund"></script>
+  <script src="js/home.js?v=20261124review"></script>
   <script src="js/home-fund.js?v=20261117fund13"></script>
   <script src="js/rwatch.js?v=20261118soon"></script>
   <script src="js/mailsetup.js?v=20261019a"></script>
   <script src="js/ideas.js?v=20261120shr"></script>
   <script src="js/priceguide.js?v=20261117ux3"></script>
   <script src="js/vendor-upkeep.js?v=20261112sel"></script>
-  <script src="js/navbadges.js?v=20261121pill"></script>
-  <script src="js/app.js?v=20261123chip"></script>
+  <script src="js/navbadges.js?v=20261124stab"></script>
+  <script src="js/app.js?v=20261124stab"></script>
 </body>
 </html>

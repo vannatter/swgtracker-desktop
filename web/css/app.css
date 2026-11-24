@@ -4151,7 +4151,7 @@ tr.gx-rowlink:hover .gx-detail-link { color: var(--text-hover); } /* hover brigh
 .ms-list { margin: 8px 0 0; padding-left: 18px; color: var(--text-primary); display: flex; flex-direction: column; gap: 4px; }
 .ms-pathrow { display: flex; gap: 6px; margin-top: 10px; }
 .ms-pathrow input { flex: 1; max-width: none; }
-.ms-auto { margin-top: 10px; }
+.ms-autostart { margin-top: 10px; } /* not .ms-auto — that's Bootstrap's margin-left:auto utility, and this pushed every 'Pinned' toggle down 10px */
 .ms-err { color: var(--accent); font-size: 12px; margin-top: 8px; }
 .ms-err:empty { display: none; }
 .ms-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
@@ -5741,3 +5741,174 @@ body.inv-pdragging, body.inv-pdragging * { cursor: grabbing !important; user-sel
 .stk-min-tell .sp-field-label { margin: 0; }
 .stk-min-status { margin-right: auto; align-self: center; }
 #stk-min-class-menu { left: 0; right: 0; width: auto; }
+
+/* ---- Stables (stables.js): the player's pets standing around a 3D stable ---- */
+.stab-root { display: flex; flex-direction: column; gap: 12px; }
+.stab-stage { position: relative; height: 480px; overflow: hidden; outline: none; border-radius: 10px;
+  background: none; } /* plain — just the pets */
+.stab-slots { position: absolute; inset: 0; container-type: size; } /* slot spacing scales with the stage (cqw) */
+.stab-slot { --x: 0cqw; --y: 0cqh; --s: 1; position: absolute; left: 50%; bottom: 3%; width: 34cqw; height: 88cqh;
+  transform: translateX(calc(-50% + var(--x))) translateY(var(--y)) scale(var(--s)); transform-origin: 50% 100%;
+  transition: transform .55s cubic-bezier(.3, .7, .2, 1), opacity .45s ease, filter .45s ease; cursor: pointer; }
+/* a semicircle: the front pet low and big, neighbours stepping up and back round the arc, overlapping */
+.stab-slot[data-pos="0"] { z-index: 9; cursor: default; }
+.stab-slot[data-pos="-1"], .stab-slot[data-pos="1"] { --s: .84; --y: -7cqh; z-index: 8; }
+.stab-slot[data-pos="-1"] { --x: -16cqw; } .stab-slot[data-pos="1"] { --x: 16cqw; }
+.stab-slot[data-pos="-2"], .stab-slot[data-pos="2"] { --s: .7; --y: -15cqh; z-index: 7; }
+.stab-slot[data-pos="-2"] { --x: -27cqw; } .stab-slot[data-pos="2"] { --x: 27cqw; }
+.stab-slot[data-pos="-3"], .stab-slot[data-pos="3"] { --s: .58; --y: -21cqh; z-index: 6; }
+.stab-slot[data-pos="-3"] { --x: -36cqw; } .stab-slot[data-pos="3"] { --x: 36cqw; }
+.stab-slot[data-pos="-4"], .stab-slot[data-pos="4"] { --s: .48; --y: -25cqh; opacity: 0; z-index: 5; }
+.stab-slot[data-pos="-4"] { --x: -46cqw; } .stab-slot[data-pos="4"] { --x: 46cqw; }
+/* focus on the pet up front: the rest dim and fade the further round the arc they stand */
+.stab-slot .stab-model { transition: opacity .45s ease, filter .45s ease; }
+.stab-slot[data-pos="-1"] .stab-model, .stab-slot[data-pos="1"] .stab-model { opacity: .82; filter: brightness(.72) saturate(.85); }
+.stab-slot[data-pos="-2"] .stab-model, .stab-slot[data-pos="2"] .stab-model { opacity: .6; filter: brightness(.55) saturate(.7); }
+.stab-slot[data-pos="-3"] .stab-model, .stab-slot[data-pos="3"] .stab-model { opacity: .4; filter: brightness(.45) saturate(.6); }
+.stab-slot:not([data-pos="0"]):not(.stab-tag):hover .stab-model { opacity: .95; filter: none; }
+.stab-tags { z-index: 15; pointer-events: none; } /* labels above every pet */
+.stab-tag { cursor: default; }
+.stab-tag:not([data-pos="0"]) .stab-plate { opacity: .75; }
+.stab-model { position: absolute; inset: -25% -70% calc(34px - 25%) -70%; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+/* the canvas is far wider than the slot so a pet turned side-on never clips at its edges (it overlaps neighbours instead);
+   it takes no clicks, so the slot box under it does — click a side pet to bring it forward */
+.stab-model swg-creature { display: block; width: 100%; height: 100%; transition: transform .3s ease; } /* stabGround() slides it down onto the floor */
+.stab-nomodel { font-size: 64px; color: rgba(255, 255, 255, .14); }
+.stab-plate { position: absolute; left: 50%; bottom: 0; transform: translateX(-50%); white-space: nowrap; max-width: 100%;
+  display: flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 12px; font-size: 13px; font-weight: 600;
+  color: var(--text-hover); background: rgba(10, 12, 16, .6); }
+.stab-slot[data-pos="-1"] .stab-plate, .stab-slot[data-pos="1"] .stab-plate { font-size: 15px; }
+.stab-slot[data-pos="-2"] .stab-plate, .stab-slot[data-pos="2"] .stab-plate { font-size: 18px; }
+.stab-slot[data-pos="-3"] .stab-plate, .stab-slot[data-pos="3"] .stab-plate { font-size: 21px; } /* scaled down with the slot — keep it readable */
+.stab-plate-name { overflow: hidden; text-overflow: ellipsis; }
+.stab-plate-dot, .stab-chip-dot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; border: 1px solid rgba(0, 0, 0, .5);
+  background: rgba(255, 255, 255, .15); }
+.stab-arrow { position: absolute; top: 50%; transform: translateY(-50%); z-index: 8; width: 38px; height: 38px; border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, .15); background: rgba(10, 8, 6, .55); color: #eee; display: flex; align-items: center; justify-content: center; }
+.stab-arrow:hover { background: var(--accent); border-color: var(--accent); }
+.stab-arrow-l { left: 12px; } .stab-arrow-r { right: 12px; }
+.stab-stage-empty { position: absolute; inset: 0; z-index: 6; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 12px; color: var(--text-muted); font-size: 15px; }
+.stab-stage-empty > i, .stab-empty > i { font-size: 54px; opacity: .35; }
+.stab-empty { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 60px 0; color: var(--text-muted); }
+/* every pet as a chip, to jump around a big stable */
+.stab-strip { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.stab-strip::-webkit-scrollbar { display: none; }
+.stab-chip { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 14px; font-size: 12px;
+  background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border); }
+.stab-chip:hover { border-color: var(--text-muted); }
+.stab-chip.active { border-color: var(--accent); color: #fff; background: rgba(226, 67, 80, .15); }
+.stab-fav { color: #f5c542; font-size: .9em; }
+/* the front pet's card */
+.stab-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+.stab-card-head { display: flex; align-items: flex-start; gap: 14px; }
+.stab-card-swatch { width: 40px; height: 40px; border-radius: 8px; flex: 0 0 auto; border: 1px solid rgba(255, 255, 255, .15);
+  background: repeating-linear-gradient(45deg, #3a3d4a 0 6px, #2c2f3a 6px 12px); }
+.stab-card-title { flex: 1; min-width: 0; }
+.stab-card-title h2 { font-size: 20px; margin: 0; color: var(--text-hover); }
+.stab-card-sub { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+.stab-card-sub a { color: var(--text-primary); cursor: pointer; text-decoration: underline dotted; }
+.stab-card-sub a:hover { color: var(--accent); }
+.stab-roles { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.stab-role { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: rgba(255, 255, 255, .06); border: 1px solid var(--border); }
+.stab-card-actions { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+.stab-card-actions .btn-icon { margin-left: 0; }
+.stab-card-body { display: grid; grid-template-columns: minmax(200px, 1fr) minmax(200px, 1fr) minmax(260px, 2fr); gap: 18px; margin-top: 14px; }
+.stab-col h6 { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); margin: 0 0 6px; }
+.stab-col h6 + .stab-stat { border-top: 0; }
+.stab-col .stab-notes + h6, .stab-specs + h6 { margin-top: 12px; }
+.stab-stat { display: flex; justify-content: space-between; gap: 10px; padding: 4px 0; font-size: 13px; border-top: 1px solid rgba(255, 255, 255, .04); }
+.stab-stat span { color: var(--text-muted); }
+.stab-stat b { color: var(--text-hover); font-weight: 600; }
+.stab-none { color: var(--text-muted); font-weight: 400; }
+.stab-specs { display: flex; flex-wrap: wrap; gap: 5px; }
+.stab-spec { font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid var(--border); color: var(--text-muted); }
+.stab-spec.on { color: var(--q-fair); border-color: rgba(136, 251, 165, .35); background: rgba(136, 251, 165, .06); }
+.stab-notes { font-size: 13px; white-space: pre-wrap; color: var(--text-primary); }
+@media (max-width: 1100px) { .stab-card-body { grid-template-columns: 1fr 1fr; } .stab-col-wide { grid-column: 1 / -1; } }
+/* add / edit dialog */
+.key-gate-card.stab-ed-card { width: min(1180px, 94vw); max-width: none; max-height: 90vh; overflow-y: auto; } /* .sp-card caps dialogs at 720px */
+.stab-ed-top { display: flex; gap: 16px; margin-bottom: 10px; }
+.stab-ed-preview { width: 300px; height: 220px; flex: 0 0 auto; border-radius: 8px; display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(ellipse at 50% 85%, #3a2c1e, #17130f 70%); border: 1px solid var(--border); }
+.stab-ed-preview swg-creature { display: block; width: 100%; height: 100%; }
+.stab-ed-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.stab-ed-row { display: flex; gap: 10px; } .stab-ed-row > :first-child { flex: 1; }
+.stab-ed-narrow { flex: 0 0 120px; width: 120px; }
+#stab-ed-lyase { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
+#stab-ed-lyase .sp-field-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stab-ed-swatches { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; max-height: 92px; overflow-y: auto; }
+.stab-sw-row { display: flex; flex-wrap: wrap; gap: 3px; }
+.stab-sw { width: 18px; height: 18px; border-radius: 3px; cursor: pointer; border: 1px solid rgba(0, 0, 0, .5); display: inline-flex; align-items: center; justify-content: center; }
+.stab-sw:hover { outline: 2px solid #fff; outline-offset: -1px; }
+.stab-sw.sel { outline: 2px solid var(--accent); outline-offset: 1px; }
+.stab-sw-def { background: var(--bg-input); color: var(--text-muted); font-size: 10px; }
+.stab-ed-grid { display: grid; grid-template-columns: 1.1fr 1.1fr .8fr 1.2fr; gap: 20px; margin-bottom: 10px; }
+@media (max-width: 1000px) { .stab-ed-grid { grid-template-columns: 1fr 1fr; } }
+.stab-ed-sec h6 { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); margin: 6px 0; }
+.stab-ed-sec .inv-add-field { margin-bottom: 6px; }
+.stab-ed-checks { display: flex; flex-direction: column; gap: 3px; max-height: 210px; overflow-y: auto; }
+.stab-ed-check { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-primary); cursor: pointer; margin: 2px 0; }
+.stab-ed-notes { resize: vertical; min-height: 44px; }
+.stab-share-card { width: min(480px, 94vw); }
+.stab-sh-pub { margin: 10px 0; }
+.stab-sh-link { display: flex; gap: 8px; margin-bottom: 8px; } .stab-sh-link input { flex: 1; }
+#stab-share-btn.is-on { border-color: var(--q-fair); color: var(--q-fair); }
+/* hover popup over a pet */
+.stab-pop { position: absolute; z-index: 20; width: 300px; padding: 10px 12px; border-radius: 10px; pointer-events: none;
+  background: rgba(22, 24, 32, .94); border: 1px solid rgba(255, 255, 255, .12); box-shadow: 0 10px 30px rgba(0, 0, 0, .55);
+  backdrop-filter: blur(6px); animation: stabPopIn .16s ease-out; font-size: 12px; }
+@keyframes stabPopIn { from { opacity: 0; transform: translateY(6px) scale(.97); } to { opacity: 1; transform: none; } }
+.stab-pop-head { display: flex; align-items: center; gap: 6px; font-size: 15px; color: var(--text-hover); }
+.stab-pop-sub { color: var(--text-muted); margin: 1px 0 8px; }
+.stab-pop-grid > div { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; border-top: 1px solid rgba(255, 255, 255, .05); }
+.stab-pop-grid > div:first-child { border-top: 0; }
+.stab-pop-grid span { color: var(--text-muted); } .stab-pop-grid b { color: var(--text-hover); font-weight: 600; }
+.stab-pop .stab-roles { margin-top: 8px; }
+.stab-pop-foot { margin-top: 8px; font-size: 11px; color: var(--accent-hover); }
+.stab-ed-notes { width: 100%; max-width: none; } /* .filter-input caps its width */
+.stab-pop-grid { display: grid; grid-template-columns: 1fr 1fr; column-gap: 14px; } /* wide and short, so it fits over the head */
+.stab-pop-grid > div:nth-child(2) { border-top: 0; }
+/* status: wanted pets stand in the stable as ghosts, incubating ones a little muted */
+/* solid, uncoloured "statue" — see-through read as a rendering bug where pets overlap */
+.stab-slot[data-status="wanted"] .stab-model { filter: grayscale(1) contrast(.8) brightness(.6) !important; }
+.stab-slot[data-status="wanted"][data-pos="0"] .stab-model { filter: grayscale(1) contrast(.85) brightness(.9) !important; }
+.stab-slot[data-status="incubating"] .stab-model { filter: saturate(.55) !important; }
+.stab-tag[data-status="wanted"] .stab-plate { border: 1px dashed rgba(255, 255, 255, .35); background: rgba(10, 12, 16, .35); font-style: italic; }
+.stab-tag[data-status="wanted"] .stab-plate-name::after { content: ' · wanted'; font-weight: 400; color: var(--text-muted); }
+.stab-tag[data-status="incubating"] .stab-plate-name::after { content: ' · incubating'; font-weight: 400; color: var(--text-muted); }
+.stab-st-wanted { color: #ff8fb1; border-color: rgba(255, 143, 177, .35); }
+.stab-st-incubating { color: var(--q-accept); border-color: rgba(255, 159, 67, .35); }
+.stab-pop-st { margin-top: 8px; font-size: 11px; }
+.stab-chip-st { font-size: 10px; color: var(--text-muted); }
+.stab-bar { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.stab-bar .stab-strip { flex: 1; min-width: 0; }
+.stab-filter, .stab-ed-status { display: inline-flex; flex: 0 0 auto; padding: 2px; border-radius: 16px; background: var(--bg-card); border: 1px solid var(--border); }
+.stab-filter[hidden] { display: none; }
+.stab-fbtn { border: 0; background: transparent; color: var(--text-muted); font-size: 12px; padding: 3px 10px; border-radius: 14px; white-space: nowrap; }
+.stab-fbtn span { opacity: .6; margin-left: 2px; }
+.stab-fbtn:hover { color: var(--text-hover); }
+.stab-fbtn.active { background: var(--accent); color: #fff; }
+.stab-ed-status { align-self: flex-start; }
+.stab-ed-card.is-wanted .stab-ed-grid h6::after { content: ' (hoped for)'; text-transform: none; letter-spacing: 0; font-weight: 400; }
+/* community correction under review: what it changes vs the schematic it replaces */
+.scd-chg { background: rgba(255, 193, 7, .18); box-shadow: 0 0 0 2px rgba(255, 193, 7, .18); border-radius: 3px; color: #ffd36b !important; }
+.scd-chg-line { background: rgba(255, 193, 7, .1); border-radius: 4px; box-shadow: -6px 0 0 rgba(255, 193, 7, .1), 6px 0 0 rgba(255, 193, 7, .1); }
+.scd-was { font-size: 11px; color: var(--text-muted); text-decoration: line-through; text-decoration-color: rgba(255, 255, 255, .35); margin-left: 4px; white-space: nowrap; }
+.scd-was-block { display: block; margin: 2px 0 6px; white-space: normal; font-size: 12px; }
+.scd-new-tag, .scd-gone-tag { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; padding: 1px 6px; border-radius: 8px; margin-left: 4px; text-decoration: none; display: inline-block; }
+.scd-new-tag { color: #ffd36b; border: 1px solid rgba(255, 211, 107, .45); }
+.scd-gone-tag { color: #ff8a8a; border: 1px solid rgba(255, 138, 138, .4); }
+.scd-gone { color: var(--text-muted); text-decoration: line-through; text-decoration-color: rgba(255, 138, 138, .6); }
+.scd-gone .scd-gone-tag { text-decoration: none; }
+.sb-vb-diff { font-size: 12px; margin-top: 3px; color: var(--text-primary); }
+.sb-vb-diff .scd-chg { padding: 0 4px; }
+.hm-tile[data-hmreview] { cursor: pointer; border-color: rgba(255, 193, 7, .35); }
+.hm-tile[data-hmreview] .hm-tile-value { color: #ffd36b; }
+/* Quests filter row: one tidy row — long option lists (Category, Planet) no longer stretch their selects */
+.q-filterrow { gap: 8px; }
+.q-filterrow .beast-sel { flex: 0 1 auto; min-width: 0; text-overflow: ellipsis; }
+.q-filterrow #quests-category, .q-filterrow #quests-planet { max-width: 165px; }
+.q-filterrow .q-lvl { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; }
+.q-filterrow .q-lvl-in { width: 62px; }
+.q-filterrow .pin-toggle { white-space: nowrap; flex: 0 0 auto; }

@@ -810,8 +810,20 @@ async function sbRenderVerifyBar(schematicId, isCommunity) {
             <span>${escapeHtml(f.note)}</span> <span class="stat_off">— ${escapeHtml(f.by)}</span></div>`).join('')}
           ${st.mine ? '<div class="sb-flaghint stat_off">Reviewers flagged issues — retract, fix them in your draft, and resubmit.</div>' : ''}
         </div>` : ''}`;
+    if (st.fixes && typeof scdShowFixDiff === 'function') sbFixDiffNote(bar, st.fixes, schematicId);
   }
   bar.hidden = false;
+}
+
+// under the correction's title: how many changes vs the original are highlighted below
+async function sbFixDiffNote(bar, fixes, sid) {
+  const n = await scdShowFixDiff(fixes.id, sid);
+  if (String(bar.dataset.sid) !== String(sid)) return;
+  const info = bar.querySelector('.sb-vb-info');
+  if (!info || n < 0) return;
+  info.insertAdjacentHTML('beforeend', n
+    ? `<div class="sb-vb-diff"><span class="scd-chg">${n} change${n === 1 ? '' : 's'}</span> from the original ${n === 1 ? 'is' : 'are'} highlighted below — check ${n === 1 ? 'it' : 'them'} against the proof</div>`
+    : `<div class="sb-vb-diff stat_off">No recipe differences from ${escapeHtml(fixes.name)} — the proof should show what it fixes</div>`);
 }
 
 // ---- wiring ----
